@@ -9,7 +9,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 
 export const metadata: Metadata = {
-  title: "BiztosHely – Autizmus- és ADHD-barát helyek iránytűje",
+  title: "VédettSarok – Autizmus- és ADHD-barát helyek iránytűje",
   description:
     "Közösségi helykereső és értékelő alkalmazás autizmus- és ADHD-barát helyekhez magyar családoknak.",
 };

@@ -22,7 +22,7 @@ export default async function HomePage() {
           Autizmus- és ADHD-barát helyek iránytűje
         </h1>
         <p className="mt-4 max-w-2xl text-base text-gray-600 sm:text-lg">
-          A BiztosHely autizmus- és ADHD-barát helyek iránytűje, amely közösségi tapasztalatok
+          A VédettSarok autizmus- és ADHD-barát helyek iránytűje, amely közösségi tapasztalatok
           alapján segít megtalálni a nyugodtabb, elfogadóbb és szenzorosan kevésbé terhelő
           helyeket — éttermeket, játszóházakat, fejlesztőházakat és sok mást. Nem orvosi vagy
           diagnosztikai eszköz: valódi családok valódi tapasztalatai.

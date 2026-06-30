@@ -3,13 +3,13 @@
 import { useId } from "react";
 
 /**
- * BiztosHely márkajelzés — két védelmező figura ölel körbe egy házat és iránytűt.
+ * VédettSarok márkajelzés — két védelmező figura ölel körbe egy házat és iránytűt.
  * Vektoros (SVG) ikon, hogy minden méretben éles maradjon.
  */
 export default function Logo({
   size = 40,
   className,
-  title = "BiztosHely",
+  title = "VédettSarok",
 }: {
   size?: number;
   className?: string;

@@ -5,7 +5,7 @@ export default function Footer() {
     <footer className="border-t border-gray-200 bg-white">
       <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
         <p className="text-sm text-gray-600">
-          A BiztosHely közösségi tapasztalatok alapján működik — nem orvosi, diagnosztikai
+          A VédettSarok közösségi tapasztalatok alapján működik — nem orvosi, diagnosztikai
           vagy terápiás eszköz. Minden gyermek és felnőtt más: indulás előtt mindig érdemes
           előzetesen rákérdezni az aktuális körülményekre.
         </p>
@@ -20,7 +20,7 @@ export default function Footer() {
             Hely beküldése
           </Link>
         </div>
-        <p className="mt-4 text-xs text-gray-400">© 2026 BiztosHely</p>
+        <p className="mt-4 text-xs text-gray-400">© 2026 VédettSarok</p>
       </div>
     </footer>
   );
