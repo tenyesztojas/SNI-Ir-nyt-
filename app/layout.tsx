@@ -21,7 +21,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="hu">
-      <body className="flex min-h-screen flex-col bg-sni-bg font-sans antialiased">
+      <body className="flex min-h-screen flex-col bg-gray-100 font-sans antialiased">
         <Header />
         <main className="flex-1">{children}</main>
         <Footer />

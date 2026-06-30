@@ -7,13 +7,11 @@ html {
 }
 
 body {
-  background-color: #FAF8F4;
+  background-color: #F2F2F2;
   color: #2E2E2E;
 }
 
-/* Nyugodt, kiszámítható mozgás: tiszteletben tartjuk, ha valaki a
-   rendszerében kikapcsolta az animációkat (érzékenyebb felhasználóknak
-   ez különösen fontos). */
+/* Nyugodt, kiszámítható mozgás */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -26,23 +24,23 @@ body {
 }
 
 .btn-primary {
-  @apply inline-flex items-center justify-center gap-2 rounded-xl2 bg-gradient-to-br from-sni-brand-teal via-sni-brand-blue to-sni-brand-navy px-6 py-3 text-base font-semibold text-white shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:shadow-softHover focus:outline-none focus-visible:ring-2 focus-visible:ring-sni-brand-teal focus-visible:ring-offset-2 focus-visible:ring-offset-sni-bg active:translate-y-0 active:shadow-soft;
+  @apply inline-flex items-center justify-center gap-2 rounded-full bg-sni-brand-teal px-6 py-3 text-base font-bold text-white shadow-md transition-all duration-200 hover:bg-sni-brand-blue hover:shadow-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-sni-brand-teal focus-visible:ring-offset-2 active:scale-95;
 }
 
 .btn-secondary {
-  @apply inline-flex items-center justify-center gap-2 rounded-xl2 bg-sni-green px-6 py-3 text-base font-semibold text-sni-text shadow-soft transition-all duration-200 hover:-translate-y-0.5 hover:bg-sni-green/80 hover:shadow-softHover focus:outline-none focus-visible:ring-2 focus-visible:ring-sni-greendark focus-visible:ring-offset-2 focus-visible:ring-offset-sni-bg active:translate-y-0 active:shadow-soft;
+  @apply inline-flex items-center justify-center gap-2 rounded-full border-2 border-sni-brand-teal bg-white px-6 py-3 text-base font-bold text-sni-brand-blue shadow-sm transition-all duration-200 hover:bg-sni-brand-teal/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-sni-brand-teal active:scale-95;
 }
 
 .input-field {
-  @apply w-full rounded-xl2 border border-gray-300 bg-white px-4 py-2.5 text-base text-sni-text placeholder:text-gray-400 transition-shadow duration-200 focus:border-sni-brand-blue focus:outline-none focus:ring-2 focus:ring-sni-brand-teal/30;
+  @apply w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-base text-gray-900 placeholder:text-gray-400 shadow-sm transition-shadow duration-200 focus:border-sni-brand-teal focus:outline-none focus:ring-2 focus:ring-sni-brand-teal/30;
 }
 
 .card {
-  @apply rounded-xl2 border border-gray-200 bg-white p-5 shadow-soft transition-all duration-200;
+  @apply rounded-2xl border border-gray-100 bg-white p-5 shadow-soft transition-all duration-200;
 }
 
 a.card:hover,
 button.card:hover,
 .card.card-hoverable:hover {
-  @apply -translate-y-0.5 border-sni-brand-teal/30 shadow-softHover;
+  @apply -translate-y-1 border-sni-brand-teal/30 shadow-softHover;
 }

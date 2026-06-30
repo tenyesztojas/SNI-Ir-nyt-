@@ -2,10 +2,6 @@
 
 import { useId } from "react";
 
-/**
- * VédettSarok márkajelzés — két védelmező figura ölel körbe egy házat és iránytűt.
- * Vektoros (SVG) ikon, hogy minden méretben éles maradjon.
- */
 export default function Logo({
   size = 40,
   className,
@@ -19,7 +15,6 @@ export default function Logo({
   const tealGradId = `bh-teal-${uid}`;
   const needleGradId = `bh-needle-${uid}`;
 
-  // Csak a jelkép (mark) rész, a szöveges wordmark nélkül
   const vbW = 570;
   const vbH = 700;
 
@@ -45,11 +40,9 @@ export default function Logo({
         </linearGradient>
       </defs>
 
-      {/* fejek */}
       <circle cx="597" cy="217" r="45" fill="#006FBE" />
       <circle cx="851" cy="217" r="45" fill={`url(#${tealGradId})`} />
 
-      {/* védelmező figurák / szív-pajzs */}
       <path
         d="M650 308 C562 295 482 354 464 453 C446 551 500 658 604 746 C644 780 683 806 724 837 C704 770 694 690 688 611 C682 515 675 410 650 308 Z"
         fill="#006FBE"
@@ -59,23 +52,18 @@ export default function Logo({
         fill={`url(#${tealGradId})`}
       />
 
-      {/* belső kar-ívek */}
       <path d="M607 328 C645 327 680 346 709 382" fill="none" stroke="#006FBE" strokeWidth="26" strokeLinecap="round" />
       <path d="M841 328 C803 327 768 346 739 382" fill="none" stroke={`url(#${tealGradId})`} strokeWidth="26" strokeLinecap="round" />
 
-      {/* tető */}
       <path d="M566 423 L724 296 L882 423" fill="none" stroke="#16C3C1" strokeWidth="28" strokeLinecap="round" strokeLinejoin="round" />
-      {/* ház falak */}
       <path d="M587 446 L587 545" fill="none" stroke="#006FBE" strokeWidth="18" strokeLinecap="round" />
       <path d="M861 446 L861 545" fill="none" stroke="#006FBE" strokeWidth="18" strokeLinecap="round" />
 
-      {/* ablak */}
       <rect x="699" y="405" width="22" height="22" rx="2" fill="#006FBE" />
       <rect x="727" y="405" width="22" height="22" rx="2" fill="#006FBE" />
       <rect x="699" y="433" width="22" height="22" rx="2" fill="#006FBE" />
       <rect x="727" y="433" width="22" height="22" rx="2" fill="#006FBE" />
 
-      {/* iránytű tű */}
       <path d="M724 486 L757 661 L724 706 L691 661 Z" fill={`url(#${needleGradId})`} />
       <circle cx="724" cy="626" r="22" fill="#ffffff" />
       <circle cx="724" cy="626" r="10" fill="#1B67B6" />
