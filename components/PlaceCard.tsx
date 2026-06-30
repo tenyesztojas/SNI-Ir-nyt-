@@ -37,7 +37,7 @@ export default function PlaceCard({
         className={`relative flex h-44 items-center justify-center bg-gradient-to-br ${gradient}`}
       >
         <span className="text-6xl drop-shadow" aria-hidden>
-          {category?.icon ?? "\u{1F4CD}"}
+          {category?.icon ?? "📍"}
         </span>
         {category && (
           <span className="absolute bottom-3 left-3 inline-flex items-center gap-1.5 rounded-full bg-white/90 px-3 py-1 text-xs font-bold text-sni-brand-navy shadow-sm backdrop-blur-sm">
@@ -57,7 +57,7 @@ export default function PlaceCard({
         <p className="line-clamp-2 text-sm leading-relaxed text-gray-600">{place.description}</p>
         <div className="mt-auto pt-2">
           <p className="line-clamp-2 rounded-xl bg-emerald-50 px-3 py-2 text-xs leading-relaxed text-emerald-800">
-            <span className="font-semibold">\u2713 </span>
+            <span className="font-semibold">✓ </span>
             {place.whyFriendly}
           </p>
         </div>
