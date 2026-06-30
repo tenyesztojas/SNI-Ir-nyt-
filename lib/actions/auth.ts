@@ -71,3 +71,32 @@ export async function signOutAction(): Promise<void> {
   revalidatePath("/", "layout");
   redirect("/");
 }
+
+export type ProfileActionState = { error?: string; success?: boolean } | null;
+
+export async function updateProfileAction(
+  _prevState: ProfileActionState,
+  formData: FormData
+): Promise<ProfileActionState> {
+  const supabase = createClient();
+  const { data: userData } = await supabase.auth.getUser();
+  if (!userData.user) return { error: "Nem vagy bejelentkezve." };
+
+  const firstName = String(formData.get("firstName") ?? "").trim();
+  const showFirstName = formData.get("showFirstName") === "on";
+  const displayName = String(formData.get("displayName") ?? "").trim();
+
+  const update: Record<string, unknown> = { show_first_name: showFirstName };
+  if (firstName) update.first_name = firstName;
+  if (displayName.length >= 2) update.display_name = displayName;
+
+  const { error } = await supabase
+    .from("profiles")
+    .update(update)
+    .eq("id", userData.user.id);
+
+  if (error) return { error: "Nem sikerült menteni. Próbáld újra." };
+
+  revalidatePath("/profil");
+  return { success: true };
+}

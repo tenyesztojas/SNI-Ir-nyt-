@@ -36,7 +36,15 @@ type ReviewRow = {
   would_return: boolean;
   status: Review["status"];
   created_at: string;
-  profiles?: { display_name: string } | { display_name: string }[] | null;
+  profiles?: {
+    display_name: string;
+    first_name: string | null;
+    show_first_name: boolean;
+  } | {
+    display_name: string;
+    first_name: string | null;
+    show_first_name: boolean;
+  }[] | null;
 };
 
 type ReportRow = {
@@ -79,7 +87,9 @@ function mapPlace(row: PlaceRow): Place {
 
 function authorName(profiles: ReviewRow["profiles"]): string {
   const profile = Array.isArray(profiles) ? profiles[0] : profiles;
-  return profile?.display_name ?? "Közösségi tag";
+  if (!profile) return "Közösségi tag";
+  if (profile.show_first_name && profile.first_name) return profile.first_name;
+  return profile.display_name ?? "Közösségi tag";
 }
 
 function mapReview(row: ReviewRow): Review {
@@ -136,8 +146,6 @@ export async function getCategoryBySlug(slug: string): Promise<Category | undefi
   return categories.find((c) => c.slug === slug);
 }
 
-// Az összes hely, amit a jelenlegi felhasználó láthat (RLS dönti el): minden
-// jóváhagyott + a saját beküldései, bármilyen státusszal.
 export async function getVisiblePlaces(): Promise<Place[]> {
   const supabase = createClient();
   const { data, error } = await supabase.from("places").select("*").order("name");
@@ -175,11 +183,13 @@ export async function getPendingPlaces(): Promise<Place[]> {
   return (data ?? []).map(mapPlace);
 }
 
+const PROFILE_SELECT = "display_name, first_name, show_first_name";
+
 export async function getApprovedReviewsForPlace(placeId: string): Promise<Review[]> {
   const supabase = createClient();
   const { data, error } = await supabase
     .from("reviews")
-    .select("*, profiles(display_name)")
+    .select(`*, profiles(${PROFILE_SELECT})`)
     .eq("place_id", placeId)
     .eq("status", "approved")
     .order("created_at", { ascending: false });
@@ -191,7 +201,7 @@ export async function getPendingReviews(): Promise<Review[]> {
   const supabase = createClient();
   const { data, error } = await supabase
     .from("reviews")
-    .select("*, profiles(display_name)")
+    .select(`*, profiles(${PROFILE_SELECT})`)
     .eq("status", "pending")
     .order("created_at");
   if (error) throw error;
@@ -213,14 +223,12 @@ export async function getOwnReviews(userId: string): Promise<Review[]> {
   const supabase = createClient();
   const { data, error } = await supabase
     .from("reviews")
-    .select("*, profiles(display_name)")
+    .select(`*, profiles(${PROFILE_SELECT})`)
     .eq("author_id", userId)
     .order("created_at", { ascending: false });
   if (error) throw error;
   return (data ?? []).map(mapReview);
 }
-
-// 1.1 fázis: kedvencek -------------------------------------------------------
 
 export async function getFavoritePlaceIds(userId: string): Promise<string[]> {
   const supabase = createClient();
@@ -257,8 +265,6 @@ export async function getFavoritePlaces(userId: string): Promise<Place[]> {
     .filter((p): p is Place => p !== null);
 }
 
-// 1.1 fázis: hibajelentés -----------------------------------------------------
-
 export async function getPendingReports(): Promise<ReportWithPlace[]> {
   const supabase = createClient();
   const { data, error } = await supabase
@@ -292,12 +298,18 @@ export async function getCurrentUserAndProfile(): Promise<{
 
   const { data: profileRow } = await supabase
     .from("profiles")
-    .select("id, display_name, role")
+    .select("id, display_name, role, first_name, show_first_name")
     .eq("id", user.id)
     .maybeSingle();
 
   const profile: Profile | null = profileRow
-    ? { id: profileRow.id, displayName: profileRow.display_name, role: profileRow.role }
+    ? {
+        id: profileRow.id,
+        displayName: profileRow.display_name,
+        role: profileRow.role,
+        firstName: profileRow.first_name ?? undefined,
+        showFirstName: profileRow.show_first_name ?? false,
+      }
     : null;
 
   return { user: { id: user.id, email: user.email }, profile };

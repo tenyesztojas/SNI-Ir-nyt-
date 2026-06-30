@@ -1,5 +1,5 @@
 export type PlaceStatus = "pending" | "approved" | "rejected" | "archived";
-export type ReviewStatus = "pending" | "approved" | "rejected";
+export type ReviewStatus = "pending" | "approved" | "rejected" | "redacted";
 export type UserRole = "user" | "admin";
 export type ReportType = "hibas_adat" | "nem_mukodik" | "nem_megfelelo_tartalom" | "egyeb";
 export type ReportStatus = "pending" | "resolved" | "dismissed";
@@ -14,7 +14,7 @@ export interface Place {
   id: string;
   slug: string;
   name: string;
-  category: string; // Category.slug
+  category: string;
   city: string;
   postalCode?: string;
   address: string;
@@ -34,7 +34,7 @@ export interface Review {
   placeId: string;
   authorId?: string | null;
   authorName: string;
-  overallRating: number; // 1-5
+  overallRating: number;
   noiseRating: number;
   crowdRating: number;
   staffEmpathyRating: number;
@@ -52,6 +52,8 @@ export interface Profile {
   id: string;
   displayName: string;
   role: UserRole;
+  firstName?: string;
+  showFirstName: boolean;
 }
 
 export interface Report {
