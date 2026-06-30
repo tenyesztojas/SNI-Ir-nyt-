@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 220">
+  <defs>
+    <linearGradient id="g" x1="10%" y1="0%" x2="90%" y2="100%">
+      <stop offset="0%" stop-color="#34D8C3" />
+      <stop offset="55%" stop-color="#1C8AA8" />
+      <stop offset="100%" stop-color="#123A5C" />
+    </linearGradient>
+  </defs>
+
+  <path d="M110,6 C150,6 180,18 196,36 L196,108 C196,156 164,192 110,212 C56,192 24,156 24,108 L24,36 C40,18 70,6 110,6 Z" fill="url(#g)" />
+  <path d="M110,21.6 C144,21.6 169.5,31.8 183.1,47.1 L183.1,108.3 C183.1,149.1 155.9,179.7 110,196.7 C64.1,179.7 36.9,149.1 36.9,108.3 L36.9,47.1 C50.5,31.8 76,21.6 110,21.6 Z" fill="#FFFFFF" />
+
+  <circle cx="110" cy="92" r="40" fill="none" stroke="url(#g)" stroke-width="2.5" stroke-dasharray="6 5" opacity="0.85" />
+  <path d="M58,92 L72,86 L72,98 Z" fill="url(#g)" />
+  <path d="M162,92 L148,86 L148,98 Z" fill="url(#g)" />
+
+  <path d="M110,26 L119,88 L110,98 L101,88 Z" fill="#34D8C3" />
+  <path d="M101,88 L119,88 L110,118 Z" fill="#123A5C" />
+  <circle cx="110" cy="90" r="6" fill="#FFFFFF" stroke="#123A5C" stroke-width="2.5" />
+
+  <path d="M48,192 C48,176 68,166 110,166 C152,166 172,176 172,192 C172,200 160,202 151,197 C141,204 126,199 110,201 C94,199 79,204 69,197 C60,202 48,200 48,192 Z" fill="#123A5C" />
+
+  <circle cx="76" cy="130" r="15" fill="#34D8C3" />
+  <path d="M56,180 L56,150 A20,20 0 0 1 96,150 L96,180 Z" fill="#34D8C3" />
+
+  <circle cx="144" cy="130" r="15" fill="#1C8AA8" />
+  <path d="M124,180 L124,150 A20,20 0 0 1 164,150 L164,180 Z" fill="#1C8AA8" />
+
+  <circle cx="110" cy="150" r="11" fill="#123A5C" />
+  <path d="M94,194 L94,178 A16,16 0 0 1 126,178 L126,194 Z" fill="#123A5C" />
+</svg>

@@ -1,0 +1,41 @@
+-- SNI Iránytű — geokódolt koordináták (automatikusan generálva)
+-- Futtatás: Supabase SQL Editor, a Role legördülő legyen "postgres" (ne "anon").
+
+update public.places set latitude = 47.5449633, longitude = 19.086294 where slug = 'autista-mintahaz-heim-pal-adtc';
+update public.places set latitude = 47.0715547, longitude = 18.0257971 where slug = 'balatonibob-szabadidopark';
+update public.places set latitude = 48.1137616, longitude = 20.6720241 where slug = 'barathegyi-panzio-barathegyi-majorsag';
+update public.places set latitude = 48.1016897, longitude = 20.7868541 where slug = 'batyu-teka-tobb-mint-etterem';
+update public.places set latitude = 47.5113442, longitude = 19.0766576 where slug = 'benczur-kert-jatszoter';
+update public.places set latitude = 47.4978789, longitude = 19.0402383 where slug = 'checkpoint-rendelo';
+update public.places set latitude = 47.4912925, longitude = 19.0579302 where slug = 'code-zero';
+update public.places set latitude = 47.5285073, longitude = 19.0372218 where slug = 'csodak-palotaja';
+update public.places set latitude = 47.4978789, longitude = 19.0402383 where slug = 'egyenlo-kavezo';
+update public.places set latitude = 47.5217447, longitude = 19.1300733 where slug = 'erdei-kucko-jatszohaz';
+update public.places set latitude = 47.5179866, longitude = 19.0775069 where slug = 'fovarosi-allat-es-novenykert';
+update public.places set latitude = 47.3517438, longitude = 19.1988679 where slug = 'galopp-major-csarda';
+update public.places set latitude = 46.2153036, longitude = 20.4731404 where slug = 'hagymatikum-gyogyfurdo';
+update public.places set latitude = 45.8518077, longitude = 18.238444 where slug = 'harkanyi-gyogyfurdo';
+update public.places set latitude = 47.1878931, longitude = 18.4115267 where slug = 'hatpottyos-etterem';
+update public.places set latitude = 47.5170748, longitude = 19.0040953 where slug = 'hungarodental-junior-smile-teeth-rendelo';
+update public.places set latitude = 47.4530804, longitude = 19.097642 where slug = 'kapcsolat-lovasterapia-kozpont';
+update public.places set latitude = 46.2853372, longitude = 17.7254175 where slug = 'katica-tanya-elmenykozpont';
+update public.places set latitude = 47.6683971, longitude = 19.6743874 where slug = 'keviczky-ferenc-fodrasz';
+update public.places set latitude = 47.4923398, longitude = 19.0121705 where slug = 'kis-lepesek-alapitvany-aba-terapias-kozpont';
+update public.places set latitude = 47.5042232, longitude = 19.0882525 where slug = 'kockacsoki-kockapont-kozossegi-kavezo';
+update public.places set latitude = 47.4596775, longitude = 19.0514933 where slug = 'kolyok-obol-jatszohaz';
+update public.places set latitude = 46.9096235, longitude = 19.6815426 where slug = 'kutyaval-egy-mosolyert-alapitvany';
+update public.places set latitude = 47.7204807, longitude = 19.0897099 where slug = 'leanyfalui-termalfurdo';
+update public.places set latitude = 47.4987563, longitude = 19.0565689 where slug = 'minipolisz';
+update public.places set latitude = 47.5366682, longitude = 19.0872154 where slug = 'mosoly-fejlesztohaz';
+update public.places set latitude = 47.4894767, longitude = 19.0784665 where slug = 'nem-adom-fel-cafe-es-bar';
+update public.places set latitude = 47.4978789, longitude = 19.0402383 where slug = 'pindur-pandur-jatszohaz';
+update public.places set latitude = 47.4875074, longitude = 19.0686006 where slug = 'semmelweis-egyetem-fok-arc-allcsont-szajsebeszeti-es-fogaszati-klinika';
+update public.places set latitude = 47.5313314, longitude = 19.0395379 where slug = 'sobuda-kristalyso-barlang';
+update public.places set latitude = 47.9529297, longitude = 19.5971421 where slug = 'toldi-haz-alsotold';
+update public.places set latitude = 47.4075557, longitude = 19.0201907 where slug = 'tropicarium-es-oceanarium-budapest';
+update public.places set latitude = 47.0925035, longitude = 17.894196 where slug = 'veszpremi-allatkert';
+update public.places set latitude = 47.596006, longitude = 19.348297 where slug = 'godolloi-kiralyi-kastely';
+update public.places set latitude = 46.9013, longitude = 19.7082 where slug = 'kecskemeti-vadaskert';
+update public.places set latitude = 47.646333, longitude = 20.66115 where slug = 'tisza-tavi-okocentrum';
+update public.places set latitude = 47.47662138357716, longitude = 19.045823587856965 where slug = 'mano-fejleszto-es-terapias-kozpont';
+update public.places set latitude = 47.51431019655344, longitude = 19.056441093185537 where slug = 'nemzetkozi-cseperedo-alapitvany';
