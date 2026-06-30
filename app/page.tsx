@@ -19,13 +19,13 @@ export default async function HomePage() {
 
         <div className="relative mx-auto max-w-5xl px-4 pt-10 pb-6 sm:px-6 sm:pt-16">
         <h1 className="text-3xl font-bold leading-tight text-sni-text sm:text-4xl">
-          Autizmus- és SNI-barát helyek térképe családoknak
+          Autizmus- és ADHD-barát helyek iránytűje
         </h1>
         <p className="mt-4 max-w-2xl text-base text-gray-600 sm:text-lg">
-          Az SNI Iránytű közösségi tapasztalatok alapján segít megtalálni a nyugodtabb,
-          elfogadóbb és szenzorosan kevésbé terhelő helyeket — éttermeket, játszóházakat,
-          fejlesztőházakat és sok mást. Nem orvosi vagy diagnosztikai eszköz: valódi családok
-          valódi tapasztalatai.
+          A BiztosHely autizmus- és ADHD-barát helyek iránytűje, amely közösségi tapasztalatok
+          alapján segít megtalálni a nyugodtabb, elfogadóbb és szenzorosan kevésbé terhelő
+          helyeket — éttermeket, játszóházakat, fejlesztőházakat és sok mást. Nem orvosi vagy
+          diagnosztikai eszköz: valódi családok valódi tapasztalatai.
         </p>
 
         <form action="/helyek" method="get" className="mt-8 flex flex-col gap-3 sm:flex-row">

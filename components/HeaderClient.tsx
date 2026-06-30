@@ -31,7 +31,7 @@ export default function HeaderClient({
         <Link href="/" className="flex items-center gap-2" onClick={() => setOpen(false)}>
           <Logo size={36} />
           <span className="bg-gradient-to-br from-sni-brand-teal via-sni-brand-blue to-sni-brand-navy bg-clip-text text-lg font-bold text-transparent">
-            SNI Iránytű
+            BiztosHely
           </span>
         </Link>
 

@@ -3,88 +3,82 @@
 import { useId } from "react";
 
 /**
- * SNI Iránytű márkajelzés — pajzs (biztonság) + iránytű (irányadás) +
- * családi figura + támogató kéz (gondoskodás).
- *
- * Vektoros (SVG) ikon, hogy minden méretben éles maradjon (header, favicon,
- * app ikon), és könnyen átszínezhető legyen sötét/világos háttéren is.
+ * BiztosHely márkajelzés — két védelmező figura ölel körbe egy házat és iránytűt.
+ * Vektoros (SVG) ikon, hogy minden méretben éles maradjon.
  */
 export default function Logo({
   size = 40,
   className,
-  title = "SNI Iránytű",
+  title = "BiztosHely",
 }: {
   size?: number;
   className?: string;
   title?: string;
 }) {
   const uid = useId().replace(/[:]/g, "");
-  const gradId = `sni-logo-grad-${uid}`;
+  const tealGradId = `bh-teal-${uid}`;
+  const needleGradId = `bh-needle-${uid}`;
+
+  // Csak a jelkép (mark) rész, a szöveges wordmark nélkül
+  const vbW = 570;
+  const vbH = 700;
 
   return (
     <svg
-      viewBox="0 0 200 220"
+      viewBox={`450 150 ${vbW} ${vbH}`}
       width={size}
-      height={(size * 220) / 200}
+      height={Math.round((size * vbH) / vbW)}
       className={className}
       role="img"
       aria-label={title}
     >
       <defs>
-        <linearGradient id={gradId} x1="10%" y1="0%" x2="90%" y2="100%">
-          <stop offset="0%" stopColor="#34D8C3" />
-          <stop offset="55%" stopColor="#1C8AA8" />
-          <stop offset="100%" stopColor="#123A5C" />
+        <linearGradient id={tealGradId} x1="770" y1="160" x2="1030" y2="720" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#19C8C2" />
+          <stop offset="1" stopColor="#11B5B0" />
+        </linearGradient>
+        <linearGradient id={needleGradId} x1="698" y1="495" x2="754" y2="690" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stopColor="#14C2BF" />
+          <stop offset="0.48" stopColor="#12BDBC" />
+          <stop offset="0.50" stopColor="#0C77BF" />
+          <stop offset="1" stopColor="#0058AA" />
         </linearGradient>
       </defs>
 
-      {/* pajzs külső kontúr */}
+      {/* fejek */}
+      <circle cx="597" cy="217" r="45" fill="#006FBE" />
+      <circle cx="851" cy="217" r="45" fill={`url(#${tealGradId})`} />
+
+      {/* védelmező figurák / szív-pajzs */}
       <path
-        d="M100,6 C140,6 170,18 186,36 L186,108 C186,156 154,192 100,212 C46,192 14,156 14,108 L14,36 C30,18 60,6 100,6 Z"
-        fill={`url(#${gradId})`}
+        d="M650 308 C562 295 482 354 464 453 C446 551 500 658 604 746 C644 780 683 806 724 837 C704 770 694 690 688 611 C682 515 675 410 650 308 Z"
+        fill="#006FBE"
       />
-      {/* pajzs belső (fehér) terület */}
       <path
-        d="M100,21.6 C134,21.6 159.5,31.8 173.1,47.1 L173.1,108.3 C173.1,149.1 145.9,179.7 100,196.7 C54.1,179.7 26.9,149.1 26.9,108.3 L26.9,47.1 C40.5,31.8 66,21.6 100,21.6 Z"
-        fill="#FFFFFF"
+        d="M798 308 C886 295 966 354 984 453 C1002 551 948 658 844 746 C804 780 765 806 724 837 C744 770 754 690 760 611 C766 515 773 410 798 308 Z"
+        fill={`url(#${tealGradId})`}
       />
 
-      {/* iránytű gyűrű */}
-      <circle
-        cx="100"
-        cy="92"
-        r="40"
-        fill="none"
-        stroke={`url(#${gradId})`}
-        strokeWidth="2.5"
-        strokeDasharray="6 5"
-        opacity="0.85"
-      />
-      <path d="M48,92 L62,86 L62,98 Z" fill={`url(#${gradId})`} />
-      <path d="M152,92 L138,86 L138,98 Z" fill={`url(#${gradId})`} />
+      {/* belső kar-ívek */}
+      <path d="M607 328 C645 327 680 346 709 382" fill="none" stroke="#006FBE" strokeWidth="26" strokeLinecap="round" />
+      <path d="M841 328 C803 327 768 346 739 382" fill="none" stroke={`url(#${tealGradId})`} strokeWidth="26" strokeLinecap="round" />
 
-      {/* tűhegy (kétszínű) */}
-      <path d="M100,26 L109,88 L100,98 L91,88 Z" fill="#34D8C3" />
-      <path d="M91,88 L109,88 L100,118 Z" fill="#123A5C" />
-      <circle cx="100" cy="90" r="6" fill="#FFFFFF" stroke="#123A5C" strokeWidth="2.5" />
+      {/* tető */}
+      <path d="M566 423 L724 296 L882 423" fill="none" stroke="#16C3C1" strokeWidth="28" strokeLinecap="round" strokeLinejoin="round" />
+      {/* ház falak */}
+      <path d="M587 446 L587 545" fill="none" stroke="#006FBE" strokeWidth="18" strokeLinecap="round" />
+      <path d="M861 446 L861 545" fill="none" stroke="#006FBE" strokeWidth="18" strokeLinecap="round" />
 
-      {/* támogató kéz */}
-      <path
-        d="M38,192 C38,176 58,166 100,166 C142,166 162,176 162,192 C162,200 150,202 141,197 C131,204 116,199 100,201 C84,199 69,204 59,197 C50,202 38,200 38,192 Z"
-        fill="#123A5C"
-      />
+      {/* ablak */}
+      <rect x="699" y="405" width="22" height="22" rx="2" fill="#006FBE" />
+      <rect x="727" y="405" width="22" height="22" rx="2" fill="#006FBE" />
+      <rect x="699" y="433" width="22" height="22" rx="2" fill="#006FBE" />
+      <rect x="727" y="433" width="22" height="22" rx="2" fill="#006FBE" />
 
-      {/* bal felnőtt figura */}
-      <circle cx="66" cy="130" r="15" fill="#34D8C3" />
-      <path d="M46,180 L46,150 A20,20 0 0 1 86,150 L86,180 Z" fill="#34D8C3" />
-
-      {/* jobb felnőtt figura */}
-      <circle cx="134" cy="130" r="15" fill="#1C8AA8" />
-      <path d="M114,180 L114,150 A20,20 0 0 1 154,150 L154,180 Z" fill="#1C8AA8" />
-
-      {/* gyermek figura */}
-      <circle cx="100" cy="150" r="11" fill="#123A5C" />
-      <path d="M84,194 L84,178 A16,16 0 0 1 116,178 L116,194 Z" fill="#123A5C" />
+      {/* iránytű tű */}
+      <path d="M724 486 L757 661 L724 706 L691 661 Z" fill={`url(#${needleGradId})`} />
+      <circle cx="724" cy="626" r="22" fill="#ffffff" />
+      <circle cx="724" cy="626" r="10" fill="#1B67B6" />
     </svg>
   );
 }

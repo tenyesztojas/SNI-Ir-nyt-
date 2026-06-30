@@ -9,9 +9,9 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 
 export const metadata: Metadata = {
-  title: "SNI Iránytű – Autizmus- és SNI-barát helyek térképe",
+  title: "BiztosHely – Autizmus- és ADHD-barát helyek iránytűje",
   description:
-    "Közösségi helykereső és értékelő alkalmazás autizmus- és SNI-barát helyekhez magyar családoknak.",
+    "Közösségi helykereső és értékelő alkalmazás autizmus- és ADHD-barát helyekhez magyar családoknak.",
 };
 
 export default function RootLayout({
