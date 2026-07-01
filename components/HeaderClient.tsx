@@ -11,6 +11,7 @@ const TUDASBAZIS = [
   { href: "/tudasbazis/emelt-csaladi-potlek", label: "Emelt családi pótlék igénylése" },
   { href: "/tudasbazis/mak-kartya", label: "MÁK-kártya igénylése" },
   { href: "/tudasbazis/gyod", label: "GYOD igénylése" },
+  { href: "/tudasbazis/sni-tajekoztato", label: "SNI tájékoztató" },
 ];
 
 const navLinks = [

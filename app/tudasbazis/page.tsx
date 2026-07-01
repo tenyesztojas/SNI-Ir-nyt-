@@ -7,6 +7,7 @@ const ITEMS = [
   { href: "/tudasbazis/emelt-csaladi-potlek", label: "Emelt családi pótlék igénylése", desc: "Ki igényelheti, hogyan kell benyújtani a kérelmet." },
   { href: "/tudasbazis/mak-kartya", label: "MÁK-kártya igénylése", desc: "A jogosultság igazolása és az igénylés menete." },
   { href: "/tudasbazis/gyod", label: "GYOD igénylése", desc: "Gyermekek Otthongondozási Díja: feltételek és benyújtás." },
+  { href: "/tudasbazis/sni-tajekoztato", label: "SNI tájékoztató", desc: "Mi a sajátos nevelési igény, és mit jelent autizmussal vagy ADHD-val érintett gyermekek számára?" },
 ];
 
 export default function TudasbazisPage() {
