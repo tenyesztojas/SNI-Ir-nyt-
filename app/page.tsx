@@ -84,15 +84,15 @@ export default async function HomePage() {
       <section className="mx-auto max-w-5xl px-4 py-12 sm:px-6">
         <h2 className="text-xl font-bold text-gray-900">Böngéssz kategória szerint</h2>
         <p className="mt-1 text-sm text-gray-500">Válassz egy kategóriát a szűrt találatokhoz</p>
-        <div className="mt-5 grid grid-cols-4 gap-4">
+        <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
           {categories.map((c) => (
             <Link
               key={c.slug}
               href={`/helyek?kategoria=${c.slug}`}
-              className="flex flex-col items-center gap-2 rounded-2xl border border-gray-100 bg-white p-4 text-center shadow-soft transition-all duration-200 hover:-translate-y-1 hover:border-sni-brand-teal/40 hover:shadow-softHover"
+              className="flex flex-col items-center justify-center gap-2 rounded-2xl border border-gray-100 bg-white px-2 py-5 text-center shadow-soft transition-all duration-200 hover:-translate-y-1 hover:border-sni-brand-teal/40 hover:shadow-softHover min-h-[110px]"
             >
-              <span className="text-3xl leading-none" aria-hidden>{c.icon}</span>
-              <span className="text-xs font-semibold leading-tight text-gray-700">{c.name}</span>
+              <span className="text-4xl leading-none" aria-hidden>{c.icon}</span>
+              <span className="line-clamp-2 text-[11px] font-semibold leading-tight text-gray-700">{c.name}</span>
             </Link>
           ))}
         </div>
