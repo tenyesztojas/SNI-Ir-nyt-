@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient as createServerSupabase } from "@/lib/supabase/server";
 import { createClient } from "@supabase/supabase-js";
-import { resend } from "@/lib/resend";
+import { getResend } from "@/lib/resend";
 
 function supabaseAdmin() {
   return createClient(
@@ -79,6 +79,7 @@ export async function POST(request: Request) {
   }));
 
   // 100-as kötegekben küld (Resend limit)
+  const resend = getResend();
   let sent = 0;
   for (let i = 0; i < emails.length; i += 100) {
     await resend.batch.send(emails.slice(i, i + 100));
