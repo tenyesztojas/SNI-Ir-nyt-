@@ -18,6 +18,7 @@ const navLinks = [
   { href: "/helyek", label: "Helyek keresése" },
   { href: "/uj-hely", label: "Hely beküldése" },
   { href: "/kedvencek", label: "Kedvenceim" },
+  { href: "/rolunk", label: "Rólunk" },
 ];
 
 export default function HeaderClient({

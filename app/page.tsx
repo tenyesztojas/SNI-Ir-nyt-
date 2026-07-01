@@ -20,11 +20,12 @@ export default async function HomePage() {
             🏠 Biztonságos helyek minden családnak
           </div>
           <h1 className="text-3xl font-extrabold leading-tight text-white sm:text-5xl">
-            Találd meg a számodra<br className="hidden sm:block" /> barátságos helyeket
+            VédettSarok —<br className="hidden sm:block" /> itt biztonságban vagy!
           </h1>
-          <p className="mx-auto mt-5 max-w-xl text-base text-white/80 sm:text-lg">
-            Autizmus- és ADHD-barát éttermek, játszóházak, fejlesztők és sok más —
-            valódi családok tapasztalatai alapján.
+          <p className="mx-auto mt-5 max-w-2xl text-base text-white/80 sm:text-lg">
+            Közösségi térkép és tudástár autizmussal és ADHD-val érintett családoknak,
+            szülőknek és szakembereknek, hogy könnyebb legyen biztonságos,
+            kiszámítható helyeket találni.
           </p>
 
           <form
