@@ -18,7 +18,9 @@ const navLinks = [
   { href: "/helyek", label: "Helyek keresése" },
   { href: "/uj-hely", label: "Hely beküldése" },
   { href: "/kedvencek", label: "Kedvenceim" },
+  { href: "/programajanlok", label: "Programajánló", newTab: true },
   { href: "/rolunk", label: "Rólunk" },
+  { href: "/kapcsolat", label: "Kapcsolat" },
 ];
 
 export default function HeaderClient({
@@ -35,7 +37,7 @@ export default function HeaderClient({
   const [tbMobileOpen, setTbMobileOpen] = useState(false);
   const tbRef = useRef<HTMLDivElement>(null);
 
-  const links = isAdmin ? [...navLinks, { href: "/admin", label: "Admin" }] : navLinks;
+  const links = isAdmin ? [...navLinks, { href: "/admin", label: "Admin", newTab: false }] : navLinks;
 
   // Kattintáson kívül zárja be a desktop dropdownt
   useEffect(() => {
@@ -71,6 +73,8 @@ export default function HeaderClient({
             <Link
               key={link.href}
               href={link.href}
+              target={link.newTab ? "_blank" : undefined}
+              rel={link.newTab ? "noopener noreferrer" : undefined}
               className="rounded-full px-4 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-100 hover:text-sni-brand-blue"
             >
               {link.label}
@@ -160,6 +164,8 @@ export default function HeaderClient({
               <Link
                 key={link.href}
                 href={link.href}
+                target={link.newTab ? "_blank" : undefined}
+                rel={link.newTab ? "noopener noreferrer" : undefined}
                 onClick={() => setMobileOpen(false)}
                 className="rounded-xl px-4 py-3 text-base font-semibold text-gray-700 hover:bg-gray-50 hover:text-sni-brand-blue"
               >

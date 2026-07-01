@@ -28,6 +28,9 @@ export default function Footer() {
                 <Link href="/kedvencek" className="text-gray-500 hover:text-sni-brand-blue hover:underline">
                   Kedvenceim
                 </Link>
+                <Link href="/programajanlok" className="text-gray-500 hover:text-sni-brand-blue hover:underline">
+                  Programajánló
+                </Link>
               </div>
             </div>
             <div>
@@ -38,6 +41,20 @@ export default function Footer() {
                 </Link>
                 <Link href="/profil" className="text-gray-500 hover:text-sni-brand-blue hover:underline">
                   Profilom
+                </Link>
+              </div>
+            </div>
+            <div>
+              <p className="font-bold text-gray-900">Egyéb</p>
+              <div className="mt-2 flex flex-col gap-1.5">
+                <Link href="/kapcsolat" className="text-gray-500 hover:text-sni-brand-blue hover:underline">
+                  Kapcsolat
+                </Link>
+                <Link href="/rolunk" className="text-gray-500 hover:text-sni-brand-blue hover:underline">
+                  Rólunk
+                </Link>
+                <Link href="/adatkezelesi-tajekoztato" className="text-gray-500 hover:text-sni-brand-blue hover:underline">
+                  Adatkezelési tájékoztató
                 </Link>
               </div>
             </div>

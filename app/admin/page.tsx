@@ -49,6 +49,9 @@ export default async function AdminOverviewPage() {
         <Link href="/admin/hirlevel" className="btn-secondary inline-flex items-center gap-2">
           <Mail size={16} /> Hírlevél küldése
         </Link>
+        <Link href="/admin/programok" className="btn-secondary">
+          Programajánlók kezelése
+        </Link>
       </div>
     </div>
   );
