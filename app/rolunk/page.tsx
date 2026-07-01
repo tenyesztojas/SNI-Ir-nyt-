@@ -40,7 +40,7 @@ export default function RolunkPage() {
           A webapplikációban ajánlhatók például éttermek, kávézók, játszóterek, játszóházak, fodrászok, orvosi rendelők,
           fogorvosok, fejlesztőhelyek, múzeumok, szállások, kirándulóhelyek és családi programok. A cél nem egy általános
           értékelőoldal létrehozása, hanem egy speciális, bizalmi tér, ahol a legfontosabb kérdés az:{" "}
-          <em>„El tudok-e ide menni nyugodtabban a gyermekemmel vagy érintettként?"</em>
+          <em>&bdquo;El tudok-e ide menni nyugodtabban a gyermekemmel vagy érintettként?&rdquo;</em>
         </p>
 
         <p>
