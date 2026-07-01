@@ -6,7 +6,7 @@ import { LogIn, Mail, ChevronDown } from "lucide-react";
 import { signInAction, signUpAction, AuthActionState } from "@/lib/actions/auth";
 import GitHubLoginButton from "@/components/auth/GitHubLoginButton";
 import GoogleLoginButton from "@/components/auth/GoogleLoginButton";
-import FacebookLoginButton from "@/components/auth/FacebookLoginButton";
+
 
 function SubmitButton({ label }: { label: string }) {
   const { pending } = useFormStatus();
@@ -36,7 +36,6 @@ export default function LoginPage() {
       <div className="mt-6 flex flex-col gap-3">
         <GitHubLoginButton />
         <GoogleLoginButton />
-        <FacebookLoginButton />
       </div>
 
       <div className="mt-5 flex items-center gap-3 text-xs text-gray-400">

@@ -28,7 +28,7 @@ export default function HeaderClient({
     <header className="sticky top-0 z-40 bg-white shadow-md">
       <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3 sm:px-6">
         <Link href="/" className="flex items-center" onClick={() => setOpen(false)}>
-          <img src="/logo.png" alt="VédettSarok" className="h-14 w-auto" />
+          <img src="/logo.png" alt="VédettSarok" className="h-10 w-auto max-w-[180px]" />
         </Link>
 
         <nav className="hidden items-center gap-1 sm:flex">
