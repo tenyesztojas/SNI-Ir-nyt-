@@ -84,7 +84,7 @@ export default async function HomePage() {
       <section className="mx-auto max-w-5xl px-4 py-12 sm:px-6">
         <h2 className="text-xl font-bold text-gray-900">Böngéssz kategória szerint</h2>
         <p className="mt-1 text-sm text-gray-500">Válassz egy kategóriát a szűrt találatokhoz</p>
-        <div className="mt-5 grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6">
+        <div className="mt-5 grid grid-cols-4 gap-4">
           {categories.map((c) => (
             <Link
               key={c.slug}
