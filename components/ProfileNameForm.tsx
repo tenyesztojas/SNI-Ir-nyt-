@@ -17,10 +17,12 @@ export default function ProfileNameForm({
   displayName,
   firstName,
   showFirstName,
+  newsletterSubscribed,
 }: {
   displayName: string;
   firstName: string;
   showFirstName: boolean;
+  newsletterSubscribed: boolean;
 }) {
   const [state, formAction] = useFormState<ProfileActionState, FormData>(
     updateProfileAction,
@@ -46,7 +48,7 @@ export default function ProfileNameForm({
       {/* Keresztnév */}
       <div>
         <label className="block text-sm font-medium text-gray-700">
-          Keresztnév (opcionális — csak ha szeretnéd megjeleníteni)
+          Keresztnév (opcionális)
         </label>
         <input
           name="firstName"
@@ -57,26 +59,30 @@ export default function ProfileNameForm({
         />
       </div>
 
-      {/* Toggle */}
+      {/* Keresztnév toggle */}
       <label className="flex cursor-pointer items-center gap-3">
         <div className="relative">
-          <input
-            type="checkbox"
-            name="showFirstName"
-            defaultChecked={showFirstName}
-            className="sr-only peer"
-          />
+          <input type="checkbox" name="showFirstName" defaultChecked={showFirstName} className="sr-only peer" />
           <div className="h-6 w-11 rounded-full bg-gray-200 transition-colors peer-checked:bg-sni-brand-teal" />
           <div className="absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform peer-checked:translate-x-5" />
         </div>
-        <span className="text-sm font-medium text-gray-700">
-          Keresztnevet mutasd az értékeléseken
-        </span>
+        <span className="text-sm font-medium text-gray-700">Keresztnevet mutasd az értékeléseken</span>
       </label>
 
-      {state?.error && (
-        <p className="text-sm text-red-600">{state.error}</p>
-      )}
+      <div className="border-t border-gray-100 pt-4">
+        <p className="text-sm font-semibold text-gray-700 mb-2">Hírlevél</p>
+        <label className="flex cursor-pointer items-center gap-3">
+          <div className="relative">
+            <input type="checkbox" name="newsletterSubscribed" defaultChecked={newsletterSubscribed} className="sr-only peer" />
+            <div className="h-6 w-11 rounded-full bg-gray-200 transition-colors peer-checked:bg-sni-brand-teal" />
+            <div className="absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform peer-checked:translate-x-5" />
+          </div>
+          <span className="text-sm font-medium text-gray-700">Feliratkozva a VédettSarok hírlevélre</span>
+        </label>
+        <p className="mt-1.5 text-xs text-gray-400 pl-14">A kapcsoló kikapcsolásával bármikor leiratkozhatsz.</p>
+      </div>
+
+      {state?.error && <p className="text-sm text-red-600">{state.error}</p>}
       {state?.success && (
         <p className="flex items-center gap-2 text-sm text-emerald-700">
           <CheckCircle2 size={16} /> Sikeresen mentve!

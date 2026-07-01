@@ -54,6 +54,7 @@ export interface Profile {
   role: UserRole;
   firstName?: string;
   showFirstName: boolean;
+  newsletterSubscribed: boolean;
 }
 
 export interface Report {

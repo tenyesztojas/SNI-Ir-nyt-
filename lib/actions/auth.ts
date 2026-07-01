@@ -13,16 +13,12 @@ export async function signInAction(
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
 
-  if (!email || !password) {
-    return { error: "Add meg az emailt és a jelszót." };
-  }
+  if (!email || !password) return { error: "Add meg az emailt és a jelszót." };
 
   const supabase = createClient();
   const { error } = await supabase.auth.signInWithPassword({ email, password });
 
-  if (error) {
-    return { error: "Hibás email vagy jelszó." };
-  }
+  if (error) return { error: "Hibás email vagy jelszó." };
 
   revalidatePath("/", "layout");
   redirect("/profil");
@@ -35,13 +31,10 @@ export async function signUpAction(
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
   const displayName = String(formData.get("displayName") ?? "").trim();
+  const noNewsletter = formData.get("noNewsletter") === "on";
 
-  if (!email || !password || !displayName) {
-    return { error: "Tölts ki minden mezőt." };
-  }
-  if (password.length < 6) {
-    return { error: "A jelszó legalább 6 karakter legyen." };
-  }
+  if (!email || !password || !displayName) return { error: "Tölts ki minden mezőt." };
+  if (password.length < 6) return { error: "A jelszó legalább 6 karakter legyen." };
 
   const supabase = createClient();
   const { data, error } = await supabase.auth.signUp({
@@ -51,10 +44,18 @@ export async function signUpAction(
   });
 
   if (error) {
-    if (error.message.toLowerCase().includes("already registered")) {
+    if (error.message.toLowerCase().includes("already registered"))
       return { error: "Ezzel az emaillel már van regisztráció." };
-    }
     return { error: "Nem sikerült a regisztráció. Próbáld újra." };
+  }
+
+  // Ha az e-mailes regisztráció létrehozta a profilt, beállítjuk a newsletter preferenciát
+  if (data.user && !noNewsletter === false) {
+    // noNewsletter = true → newsletter_subscribed = false
+    await supabase
+      .from("profiles")
+      .update({ newsletter_subscribed: !noNewsletter })
+      .eq("id", data.user.id);
   }
 
   if (!data.session) {
@@ -85,8 +86,12 @@ export async function updateProfileAction(
   const firstName = String(formData.get("firstName") ?? "").trim();
   const showFirstName = formData.get("showFirstName") === "on";
   const displayName = String(formData.get("displayName") ?? "").trim();
+  const newsletterSubscribed = formData.get("newsletterSubscribed") === "on";
 
-  const update: Record<string, unknown> = { show_first_name: showFirstName };
+  const update: Record<string, unknown> = {
+    show_first_name: showFirstName,
+    newsletter_subscribed: newsletterSubscribed,
+  };
   if (firstName) update.first_name = firstName;
   if (displayName.length >= 2) update.display_name = displayName;
 

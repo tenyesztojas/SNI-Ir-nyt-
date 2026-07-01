@@ -40,7 +40,6 @@ export default async function ProfilePage() {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
-      {/* Fejléc */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-center gap-3">
           <UserCircle className="text-sni-brand-blue" size={36} />
@@ -58,20 +57,19 @@ export default async function ProfilePage() {
         </form>
       </div>
 
-      {/* Névbeállítások */}
       <div className="mt-8 rounded-2xl border border-gray-100 bg-white p-6 shadow-soft">
-        <h2 className="text-lg font-bold text-gray-900">Névbeállítások</h2>
+        <h2 className="text-lg font-bold text-gray-900">Névbeállítások és hírlevél</h2>
         <p className="mt-1 text-sm text-gray-500">
-          Válaszd meg, mi jelenjen meg az értékeléseiden.
+          Válaszd meg, mi jelenjen meg az értékeléseiden, és kezelj hírlevél-feliratkozásodat.
         </p>
         <ProfileNameForm
           displayName={profile?.displayName ?? ""}
           firstName={profile?.firstName ?? ""}
           showFirstName={profile?.showFirstName ?? false}
+          newsletterSubscribed={profile?.newsletterSubscribed ?? true}
         />
       </div>
 
-      {/* Beküldött helyek */}
       <section className="mt-8">
         <h2 className="text-lg font-bold text-gray-900">Beküldött helyek ({places.length})</h2>
         {places.length === 0 ? (
@@ -84,16 +82,13 @@ export default async function ProfilePage() {
                   <p className="font-semibold text-gray-900">{p.name}</p>
                   <p className="text-sm text-gray-500">{p.city}</p>
                 </div>
-                <span className="text-sm font-medium text-sni-brand-blue">
-                  {placeStatusLabel[p.status] ?? p.status}
-                </span>
+                <span className="text-sm font-medium text-sni-brand-blue">{placeStatusLabel[p.status] ?? p.status}</span>
               </div>
             ))}
           </div>
         )}
       </section>
 
-      {/* Értékelések */}
       <section className="mt-8">
         <h2 className="text-lg font-bold text-gray-900">Értékelések ({reviews.length})</h2>
         {reviews.length === 0 ? (
@@ -106,9 +101,7 @@ export default async function ProfilePage() {
                   <p className="font-semibold text-gray-900">{r.title}</p>
                   <p className="text-sm text-gray-500">Összbenyomás: {r.overallRating}/5</p>
                 </div>
-                <span className="text-sm font-medium text-sni-brand-blue">
-                  {reviewStatusLabel[r.status] ?? r.status}
-                </span>
+                <span className="text-sm font-medium text-sni-brand-blue">{reviewStatusLabel[r.status] ?? r.status}</span>
               </div>
             ))}
           </div>
