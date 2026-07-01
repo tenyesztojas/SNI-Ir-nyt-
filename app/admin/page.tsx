@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ShieldCheck, MapPin, Star, Flag } from "lucide-react";
+import { ShieldCheck, MapPin, Star, Flag, Mail } from "lucide-react";
 import { getApprovedPlaces, getPendingPlaces, getPendingReviews, getPendingReports } from "@/lib/data";
 
 export default async function AdminOverviewPage() {
@@ -45,6 +45,9 @@ export default async function AdminOverviewPage() {
         </Link>
         <Link href="/admin/jelzesek" className="btn-secondary">
           Hibajelentések kezelése
+        </Link>
+        <Link href="/admin/hirlevel" className="btn-secondary inline-flex items-center gap-2">
+          <Mail size={16} /> Hírlevél küldése
         </Link>
       </div>
     </div>
