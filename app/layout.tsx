@@ -12,6 +12,10 @@ export const metadata: Metadata = {
   title: "VédettSarok – Autizmus- és ADHD-barát helyek iránytűje",
   description:
     "Közösségi helykereső és értékelő alkalmazás autizmus- és ADHD-barát helyekhez magyar családoknak.",
+  icons: {
+    icon: "/favicon.ico",
+    apple: "/apple-touch-icon.png",
+  },
 };
 
 export default function RootLayout({
