@@ -6,7 +6,7 @@ import { newPlaceSchema, NewPlaceInput } from "@/lib/schemas";
 import { slugify, randomSuffix } from "@/lib/slugify";
 import { isCurrentUserAdmin } from "@/lib/data";
 
-export async function submitPlace(input: NewPlaceInput): Promise<{ error?: string }> {
+export async function submitPlace(input: NewPlaceInput, images: string[] = []): Promise<{ error?: string }> {
   const parsed = newPlaceSchema.safeParse(input);
   if (!parsed.success) {
     return { error: "Hibás vagy hiányos adatok." };
@@ -35,6 +35,7 @@ export async function submitPlace(input: NewPlaceInput): Promise<{ error?: strin
       description: data.description,
       why_friendly: data.whyFriendly,
       own_experience: data.ownExperience,
+      images: images.length > 0 ? images : null,
       status: "pending",
       created_by: user.id,
     });

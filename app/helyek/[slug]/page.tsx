@@ -82,17 +82,44 @@ export default async function PlaceDetailPage({ params }: { params: { slug: stri
   return (
     <div>
       {/* Photo hero */}
-      <div className={`relative flex h-56 items-center justify-center bg-gradient-to-br ${gradient} sm:h-72`}>
-        <span className="text-8xl drop-shadow-lg" aria-hidden>{category?.icon ?? "📍"}</span>
-        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/30 to-transparent px-4 py-4 sm:px-8">
-          <Link
-            href="/helyek"
-            className="inline-flex items-center gap-1.5 rounded-full bg-white/90 px-4 py-1.5 text-sm font-semibold text-gray-800 shadow-sm backdrop-blur-sm hover:bg-white"
-          >
-            <ArrowLeft size={15} /> Vissza
-          </Link>
+      {place.images && place.images.length > 0 ? (
+        <div className="relative h-56 sm:h-72 bg-gray-900 overflow-hidden">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={place.images[0]}
+            alt={place.name}
+            className="w-full h-full object-cover opacity-90"
+          />
+          {place.images.length > 1 && (
+            <div className="absolute bottom-16 right-4 flex gap-1.5 sm:bottom-14">
+              {place.images.slice(1).map((url, i) => (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  key={i}
+                  src={url}
+                  alt=""
+                  className="h-14 w-14 rounded-lg object-cover border-2 border-white shadow-md cursor-pointer hover:opacity-90"
+                  onClick={() => window.open(url, "_blank")}
+                />
+              ))}
+            </div>
+          )}
+          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/40 to-transparent px-4 py-4 sm:px-8">
+            <Link href="/helyek" className="inline-flex items-center gap-1.5 rounded-full bg-white/90 px-4 py-1.5 text-sm font-semibold text-gray-800 shadow-sm backdrop-blur-sm hover:bg-white">
+              <ArrowLeft size={15} /> Vissza
+            </Link>
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className={`relative flex h-56 items-center justify-center bg-gradient-to-br ${gradient} sm:h-72`}>
+          <span className="text-8xl drop-shadow-lg" aria-hidden>{category?.icon ?? "📍"}</span>
+          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/30 to-transparent px-4 py-4 sm:px-8">
+            <Link href="/helyek" className="inline-flex items-center gap-1.5 rounded-full bg-white/90 px-4 py-1.5 text-sm font-semibold text-gray-800 shadow-sm backdrop-blur-sm hover:bg-white">
+              <ArrowLeft size={15} /> Vissza
+            </Link>
+          </div>
+        </div>
+      )}
 
       <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
         {place.status !== "approved" && (
@@ -224,6 +251,20 @@ export default async function PlaceDetailPage({ params }: { params: { slug: stri
                     <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
                       <span className="font-semibold">Mire figyelj: </span>{r.warningText}
                     </p>
+                  )}
+                  {r.images && r.images.length > 0 && (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {r.images.map((url, i) => (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          key={i}
+                          src={url}
+                          alt={`Kép ${i + 1}`}
+                          className="h-20 w-20 rounded-lg object-cover border border-gray-200 cursor-pointer hover:opacity-90"
+                          onClick={() => window.open(url, "_blank")}
+                        />
+                      ))}
+                    </div>
                   )}
                 </div>
               ))}

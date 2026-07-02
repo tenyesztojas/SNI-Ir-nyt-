@@ -7,7 +7,8 @@ import { isCurrentUserAdmin } from "@/lib/data";
 
 export async function submitReview(
   placeId: string,
-  input: ReviewInput
+  input: ReviewInput,
+  images: string[] = []
 ): Promise<{ error?: string }> {
   const parsed = reviewSchema.safeParse(input);
   if (!parsed.success) {
@@ -35,6 +36,7 @@ export async function submitReview(
     positive_text: data.positiveText,
     warning_text: data.warningText || null,
     would_return: data.wouldReturn === "igen",
+    images: images.length > 0 ? images : null,
     status: "pending",
   });
 

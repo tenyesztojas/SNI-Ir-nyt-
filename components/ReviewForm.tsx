@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CheckCircle2, AlertTriangle, X } from "lucide-react";
@@ -8,12 +8,14 @@ import { reviewSchema, ReviewInput } from "@/lib/schemas";
 import RatingInput from "@/components/RatingInput";
 import { submitReview } from "@/lib/actions/reviews";
 import { checkReviewForSensitiveContent } from "@/lib/reviews/validation";
+import ImageUpload, { ImageUploadRef } from "@/components/ImageUpload";
 
 export default function ReviewForm({ placeId, placeName }: { placeId: string; placeName: string }) {
   const [submitted, setSubmitted] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
   const [showSensitiveWarning, setShowSensitiveWarning] = useState(false);
   const [pendingData, setPendingData] = useState<ReviewInput | null>(null);
+  const imgRef = useRef<ImageUploadRef>(null);
 
   const {
     control,
@@ -25,7 +27,8 @@ export default function ReviewForm({ placeId, placeName }: { placeId: string; pl
 
   async function sendReview(data: ReviewInput) {
     setServerError(null);
-    const result = await submitReview(placeId, data);
+    const images = imgRef.current ? await imgRef.current.uploadAll() : [];
+    const result = await submitReview(placeId, data, images);
     if (result?.error) {
       setServerError(result.error);
       return;
@@ -162,6 +165,10 @@ export default function ReviewForm({ placeId, placeName }: { placeId: string; pl
         <div>
           <label className="block text-sm font-medium text-gray-700">Mire figyeljen más család?</label>
           <textarea {...register("warningText")} rows={3} className="input-field mt-1.5" />
+        </div>
+
+        <div>
+          <ImageUpload ref={imgRef} folder="reviews" onUploadComplete={() => {}} />
         </div>
 
         <div>

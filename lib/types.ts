@@ -25,6 +25,7 @@ export interface Place {
   description: string;
   whyFriendly: string;
   ownExperience?: string;
+  images?: string[] | null;
   status: PlaceStatus;
   createdBy?: string | null;
 }
@@ -44,6 +45,7 @@ export interface Review {
   positiveText: string;
   warningText: string;
   wouldReturn: boolean;
+  images?: string[] | null;
   createdAt: string;
   status: ReviewStatus;
 }

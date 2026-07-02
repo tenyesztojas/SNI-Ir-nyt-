@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { CheckCircle2 } from "lucide-react";
@@ -9,10 +9,12 @@ import { Category } from "@/lib/types";
 import RatingInput from "@/components/RatingInput";
 import Disclaimer from "@/components/Disclaimer";
 import { submitPlace } from "@/lib/actions/places";
+import ImageUpload, { ImageUploadRef } from "@/components/ImageUpload";
 
 export default function NewPlaceForm({ categories }: { categories: Category[] }) {
   const [submitted, setSubmitted] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
+  const imgRef = useRef<ImageUploadRef>(null);
   const {
     register,
     control,
@@ -23,7 +25,8 @@ export default function NewPlaceForm({ categories }: { categories: Category[] })
 
   async function onSubmit(data: NewPlaceInput) {
     setServerError(null);
-    const result = await submitPlace(data);
+    const images = imgRef.current ? await imgRef.current.uploadAll() : [];
+    const result = await submitPlace(data, images);
     if (result?.error) {
       setServerError(result.error);
       return;
@@ -167,6 +170,10 @@ export default function NewPlaceForm({ categories }: { categories: Category[] })
               )}
             />
           </div>
+        </div>
+
+        <div>
+          <ImageUpload ref={imgRef} folder="places" onUploadComplete={() => {}} />
         </div>
 
         <div>

@@ -16,6 +16,7 @@ type PlaceRow = {
   description: string;
   why_friendly: string;
   own_experience: string | null;
+  images: string[] | null;
   status: Place["status"];
   created_by: string | null;
 };
@@ -34,6 +35,7 @@ type ReviewRow = {
   positive_text: string;
   warning_text: string | null;
   would_return: boolean;
+  images: string[] | null;
   status: Review["status"];
   created_at: string;
   profiles?: {
@@ -80,6 +82,7 @@ function mapPlace(row: PlaceRow): Place {
     description: row.description,
     whyFriendly: row.why_friendly,
     ownExperience: row.own_experience ?? undefined,
+    images: row.images ?? null,
     status: row.status,
     createdBy: row.created_by,
   };
@@ -108,6 +111,7 @@ function mapReview(row: ReviewRow): Review {
     positiveText: row.positive_text,
     warningText: row.warning_text ?? "",
     wouldReturn: row.would_return,
+    images: row.images ?? null,
     createdAt: row.created_at,
     status: row.status,
   };
