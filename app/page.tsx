@@ -1,10 +1,21 @@
 import Link from "next/link";
-import { Search, MapPin, HeartHandshake, ArrowRight } from "lucide-react";
+import { Search, MapPin, HeartHandshake, ArrowRight, CalendarDays, ExternalLink } from "lucide-react";
 import { getCategories, getApprovedPlaces } from "@/lib/data";
+import { createClient } from "@/lib/supabase/server";
 import PlaceCard from "@/components/PlaceCard";
 
 export default async function HomePage() {
-  const [categories, places] = await Promise.all([getCategories(), getApprovedPlaces()]);
+  const supabase = createClient();
+  const [categories, places, { data: programs }] = await Promise.all([
+    getCategories(),
+    getApprovedPlaces(),
+    supabase
+      .from("programs")
+      .select("id, name, location, event_date, description, url")
+      .eq("status", "approved")
+      .order("created_at", { ascending: false })
+      .limit(3),
+  ]);
   const categoryBySlug = new Map(categories.map((c) => [c.slug, c]));
   const featuredPlaces = places.slice(0, 6);
 
@@ -98,6 +109,56 @@ export default async function HomePage() {
           ))}
         </div>
       </section>
+
+      {/* PROGRAMAJÁNLÓ */}
+      {programs && programs.length > 0 && (
+        <section className="mx-auto max-w-5xl px-4 pb-4 pt-2 sm:px-6">
+          <div className="rounded-3xl bg-gradient-to-br from-violet-50 to-indigo-50 border border-indigo-100 p-6 sm:p-8">
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                  <CalendarDays size={22} className="text-indigo-500" />
+                  Programajánló
+                </h2>
+                <p className="mt-0.5 text-sm text-gray-500">Autizmus- és ADHD-barát közelgő programok</p>
+              </div>
+              <Link
+                href="/programajanlok"
+                target="_blank"
+                className="flex items-center gap-1 text-sm font-bold text-indigo-600 hover:text-indigo-800 transition-colors"
+              >
+                Összes program <ArrowRight size={16} />
+              </Link>
+            </div>
+
+            <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {programs.map((p) => (
+                <div
+                  key={p.id}
+                  className="flex flex-col gap-2 rounded-2xl bg-white border border-indigo-100 px-4 py-4 shadow-soft"
+                >
+                  <p className="font-bold text-gray-900 leading-snug">{p.name}</p>
+                  <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-gray-500">
+                    <span className="flex items-center gap-1"><MapPin size={12} />{p.location}</span>
+                    <span className="flex items-center gap-1"><CalendarDays size={12} />{p.event_date}</span>
+                  </div>
+                  <p className="text-sm text-gray-600 line-clamp-2">{p.description}</p>
+                  {p.url && (
+                    <a
+                      href={p.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-auto flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:underline"
+                    >
+                      <ExternalLink size={12} /> Részletek
+                    </a>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* FEATURED PLACES */}
       {featuredPlaces.length > 0 && (
