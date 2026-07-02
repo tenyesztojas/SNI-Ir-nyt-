@@ -78,7 +78,7 @@ export default async function HomePage() {
 
           <div className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-white/70">
             <span>
-              <strong className="font-bold text-white">{places.length}+</strong> hely az adatbázisban
+              <strong className="font-bold text-white">{Math.floor(places.length / 5) * 5}+</strong> hely az adatbázisban
             </span>
             <span className="hidden sm:inline">·</span>
             <span>
