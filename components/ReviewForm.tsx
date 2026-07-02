@@ -168,7 +168,7 @@ export default function ReviewForm({ placeId, placeName }: { placeId: string; pl
         </div>
 
         <div>
-          <ImageUpload ref={imgRef} folder="reviews" onUploadComplete={() => {}} />
+          <ImageUpload ref={imgRef} folder="reviews" />
         </div>
 
         <div>

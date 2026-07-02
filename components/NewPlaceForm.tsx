@@ -173,7 +173,7 @@ export default function NewPlaceForm({ categories }: { categories: Category[] })
         </div>
 
         <div>
-          <ImageUpload ref={imgRef} folder="places" onUploadComplete={() => {}} />
+          <ImageUpload ref={imgRef} folder="places" />
         </div>
 
         <div>
