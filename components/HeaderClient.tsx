@@ -63,8 +63,8 @@ export default function HeaderClient({
     <header className="sticky top-0 z-40 bg-white shadow-md">
       <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3 sm:px-6">
         {/* Logó */}
-        <Link href="/" className="flex items-center" onClick={() => setMobileOpen(false)}>
-          <img src="/logo.png" alt="VédettSarok" className="h-12 w-auto" />
+        <Link href="/" className="flex shrink-0 items-center" onClick={() => setMobileOpen(false)}>
+          <img src="/logo.png" alt="VédettSarok" className="h-10 w-auto" />
         </Link>
 
         {/* Desktop navigáció */}
