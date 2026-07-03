@@ -1,27 +1,29 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { Search, SlidersHorizontal } from "lucide-react";
 import { Category } from "@/lib/types";
 
 function QInput({ cities, defaultValue }: { cities: string[]; defaultValue: string }) {
   const [value, setValue] = useState(defaultValue);
   const [open, setOpen] = useState(false);
-  const [pos, setPos] = useState({ top: 0, left: 0, width: 0 });
+  const [pos, setPos] = useState({ top: 0, left: 0, width: 200 });
   const inputRef = useRef<HTMLInputElement>(null);
   const timer = useRef<number | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => { setMounted(true); }, []);
 
   const suggestions = value.trim().length >= 2
     ? cities.filter((c) => c.toLowerCase().includes(value.toLowerCase())).slice(0, 8)
     : [];
 
-  function show() {
-    if (timer.current !== null) window.clearTimeout(timer.current);
-    if (inputRef.current && suggestions.length > 0) {
+  function updatePos() {
+    if (inputRef.current) {
       const r = inputRef.current.getBoundingClientRect();
       setPos({ top: r.bottom + 4, left: r.left, width: r.width });
     }
-    setOpen(true);
   }
 
   function hide() {
@@ -35,35 +37,24 @@ function QInput({ cities, defaultValue }: { cities: string[]; defaultValue: stri
   }
 
   return (
-    <div className="flex flex-1 items-center rounded-xl border border-gray-200 bg-white shadow-sm transition-shadow focus-within:border-sni-brand-teal focus-within:ring-2 focus-within:ring-sni-brand-teal/30">
-      {!value && <Search className="ml-3.5 shrink-0 text-gray-400" size={18} />}
-      <input
-        ref={inputRef}
-        type="text"
-        name="q"
-        value={value}
-        placeholder="Hely neve vagy város..."
-        className="w-full bg-transparent py-3 text-base text-gray-900 placeholder:text-gray-400 focus:outline-none"
-        style={{ paddingLeft: value ? "1rem" : "0.5rem", paddingRight: "1rem" }}
-        autoComplete="off"
-        onChange={(e) => { setValue(e.target.value); }}
-        onKeyUp={() => {
-          if (inputRef.current) {
-            const r = inputRef.current.getBoundingClientRect();
-            setPos({ top: r.bottom + 4, left: r.left, width: r.width });
-          }
-          setOpen(true);
-        }}
-        onFocus={() => {
-          if (inputRef.current) {
-            const r = inputRef.current.getBoundingClientRect();
-            setPos({ top: r.bottom + 4, left: r.left, width: r.width });
-          }
-          setOpen(true);
-        }}
-        onBlur={hide}
-      />
-      {open && suggestions.length > 0 && (
+    <>
+      <div className="flex flex-1 items-center rounded-xl border border-gray-200 bg-white shadow-sm transition-shadow focus-within:border-sni-brand-teal focus-within:ring-2 focus-within:ring-sni-brand-teal/30">
+        {!value && <Search className="ml-3.5 shrink-0 text-gray-400" size={18} />}
+        <input
+          ref={inputRef}
+          type="text"
+          name="q"
+          value={value}
+          placeholder="Hely neve vagy város..."
+          className="w-full bg-transparent py-3 text-base text-gray-900 placeholder:text-gray-400 focus:outline-none"
+          style={{ paddingLeft: value ? "1rem" : "0.5rem", paddingRight: "1rem" }}
+          autoComplete="off"
+          onChange={(e) => { setValue(e.target.value); updatePos(); setOpen(true); }}
+          onFocus={() => { updatePos(); setOpen(true); }}
+          onBlur={hide}
+        />
+      </div>
+      {mounted && open && suggestions.length > 0 && createPortal(
         <ul
           style={{
             position: "fixed",
@@ -71,22 +62,33 @@ function QInput({ cities, defaultValue }: { cities: string[]; defaultValue: stri
             left: pos.left,
             width: pos.width,
             zIndex: 99999,
+            listStyle: "none",
+            margin: 0,
+            padding: "4px 0",
+            background: "white",
+            border: "1px solid #e5e7eb",
+            borderRadius: "12px",
+            boxShadow: "0 10px 25px rgba(0,0,0,0.15)",
+            maxHeight: "224px",
+            overflowY: "auto",
           }}
-          className="max-h-56 overflow-y-auto rounded-xl border border-gray-200 bg-white py-1 shadow-xl"
         >
           {suggestions.map((c) => (
             <li
               key={c}
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => pick(c)}
-              className="cursor-pointer px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-sni-brand-blue"
+              style={{ padding: "10px 16px", cursor: "pointer", fontSize: "14px", color: "#374151" }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "#f9fafb")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "white")}
             >
               {c}
             </li>
           ))}
-        </ul>
+        </ul>,
+        document.body
       )}
-    </div>
+    </>
   );
 }
 
