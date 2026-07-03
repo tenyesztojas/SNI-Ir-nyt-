@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Search, SlidersHorizontal } from "lucide-react";
 import { Category } from "@/lib/types";
 
@@ -13,15 +13,13 @@ function CityAutocomplete({
 }) {
   const [value, setValue] = useState(defaultValue);
   const [open, setOpen] = useState(false);
+  const skipBlur = useRef(false);
 
-  const matches = cities.filter((c) =>
-    c.toLowerCase().includes(value.toLowerCase())
-  ).slice(0, 10);
-
-  function select(city: string) {
-    setValue(city);
-    setOpen(false);
-  }
+  const matches = value.trim()
+    ? cities
+        .filter((c) => c.toLowerCase().includes(value.toLowerCase()))
+        .slice(0, 10)
+    : [];
 
   return (
     <div className="relative sm:w-44">
@@ -32,17 +30,23 @@ function CityAutocomplete({
         placeholder="Összes település"
         className="input-field w-full"
         autoComplete="off"
-        onChange={(e) => { setValue(e.target.value); setOpen(true); }}
-        onFocus={() => setOpen(true)}
-        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        onChange={(e) => {
+          setValue(e.target.value);
+          setOpen(true);
+        }}
+        onBlur={() => {
+          if (!skipBlur.current) setOpen(false);
+          skipBlur.current = false;
+        }}
       />
-      {open && matches.length > 0 && value.length > 0 && (
-        <ul className="absolute left-0 top-full z-[100] mt-1 max-h-52 w-48 overflow-auto rounded-xl border border-gray-200 bg-white shadow-xl">
+      {open && matches.length > 0 && (
+        <ul className="absolute left-0 top-full z-[200] mt-1 w-48 max-h-60 overflow-auto rounded-xl border border-gray-200 bg-white py-1 shadow-xl">
           {matches.map((c) => (
             <li
               key={c}
-              onMouseDown={() => select(c)}
-              className="cursor-pointer px-4 py-2.5 text-sm text-gray-700 hover:bg-sni-brand-teal/10 hover:text-sni-brand-blue"
+              onMouseDown={() => { skipBlur.current = true; }}
+              onClick={() => { setValue(c); setOpen(false); }}
+              className="cursor-pointer px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-sni-brand-blue"
             >
               {c}
             </li>
