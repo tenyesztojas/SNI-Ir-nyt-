@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { Search, MapPin, HeartHandshake, ArrowRight, CalendarDays, ExternalLink } from "lucide-react";
+import { MapPin, HeartHandshake, ArrowRight, CalendarDays, ExternalLink } from "lucide-react";
 import { getCategories, getApprovedPlaces, citiesFromPlaces } from "@/lib/data";
 import { createClient } from "@/lib/supabase/server";
 import PlaceCard from "@/components/PlaceCard";
+import HeroSearchForm from "@/components/HeroSearchForm";
 
 export default async function HomePage() {
   const supabase = createClient();
@@ -41,60 +42,7 @@ export default async function HomePage() {
             elfogadó és kiszámítható helyeket találni.
           </p>
 
-          <form
-            action="/helyek"
-            method="get"
-            className="mt-8 overflow-hidden rounded-2xl bg-white p-2 shadow-2xl sm:flex sm:gap-2"
-          >
-            <div className="relative flex-1">
-              <Search
-                className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
-                size={20}
-              />
-              <input
-                type="text"
-                name="q"
-                list="hero-q-cities"
-                placeholder="Hely neve vagy város..."
-                className="w-full rounded-xl border-0 py-3.5 pl-12 pr-4 text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-sni-brand-teal/50"
-              />
-              <datalist id="hero-q-cities">
-                {cities.map((c) => (
-                  <option key={c} value={c} />
-                ))}
-              </datalist>
-            </div>
-            <select
-              name="kategoria"
-              defaultValue=""
-              className="mt-2 w-full rounded-xl border border-gray-200 bg-white py-3.5 px-4 text-gray-700 focus:outline-none focus:ring-2 focus:ring-sni-brand-teal/50 sm:mt-0 sm:w-48"
-            >
-              <option value="">Minden kategória</option>
-              {categories.map((c) => (
-                <option key={c.slug} value={c.slug}>
-                  {c.icon} {c.name}
-                </option>
-              ))}
-            </select>
-            <input
-              type="text"
-              name="telepules"
-              list="hero-cities"
-              placeholder="Város..."
-              className="mt-2 w-full rounded-xl border border-gray-200 bg-white py-3.5 px-4 text-gray-700 focus:outline-none focus:ring-2 focus:ring-sni-brand-teal/50 sm:mt-0 sm:w-40"
-            />
-            <datalist id="hero-cities">
-              {cities.map((c) => (
-                <option key={c} value={c} />
-              ))}
-            </datalist>
-            <button
-              type="submit"
-              className="mt-2 w-full rounded-xl bg-sni-brand-teal px-8 py-3.5 font-bold text-white transition-colors hover:bg-sni-brand-blue sm:mt-0 sm:w-auto"
-            >
-              Keresés
-            </button>
-          </form>
+          <HeroSearchForm categories={categories} cities={cities} />
 
           <div className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-white/70">
             <span>
