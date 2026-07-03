@@ -39,10 +39,10 @@ export default function RootLayout({
           }}
         />
         {/* Google Analytics */}
-        <script async src="https://www.googletagmanager.com/gtag/js?id=G-EQHRKC67GJ" />
+        <script async src="https://www.googletagmanager.com/gtag/js?id=G-8PMY0KDXZF" />
         <script
           dangerouslySetInnerHTML={{
-            __html: `window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-EQHRKC67GJ');`,
+            __html: `window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-8PMY0KDXZF');`,
           }}
         />
       </head>
