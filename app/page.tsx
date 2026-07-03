@@ -36,7 +36,7 @@ export default async function HomePage() {
           <p className="mx-auto mt-5 max-w-2xl text-base text-white/80 sm:text-lg">
             Közösségi térkép és tudástár autizmussal és ADHD-val érintett családoknak,
             szülőknek és szakembereknek, hogy könnyebb legyen biztonságos,
-            kiszámítható helyeket találni.
+            elfogadó és kiszámítható helyeket találni.
           </p>
 
           <form

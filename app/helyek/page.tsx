@@ -1,6 +1,6 @@
-import { Search, SlidersHorizontal } from "lucide-react";
 import ViewToggle from "@/components/ViewToggle";
 import PlaceCard from "@/components/PlaceCard";
+import PlacesSearchForm from "@/components/PlacesSearchForm";
 import { getCategories, getApprovedPlaces, citiesFromPlaces } from "@/lib/data";
 
 function normalize(s: string) {
@@ -37,38 +37,13 @@ export default async function HelyekPage({
       <div className="border-b border-gray-200 bg-white shadow-sm">
         <div className="mx-auto max-w-5xl px-4 py-5 sm:px-6">
           <h1 className="text-2xl font-bold text-gray-900">Helyek keresése</h1>
-          <form action="/helyek" method="get" className="mt-4 flex flex-col gap-3 sm:flex-row">
-            <div className="relative flex-1">
-              <Search
-                className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"
-                size={18}
-              />
-              <input
-                type="text"
-                name="q"
-                defaultValue={q}
-                placeholder="Település vagy hely neve..."
-                className="input-field pl-10"
-              />
-            </div>
-            <select name="kategoria" defaultValue={kategoria} className="input-field sm:w-52">
-              <option value="">Összes kategória</option>
-              {categories.map((c) => (
-                <option key={c.slug} value={c.slug}>
-                  {c.icon} {c.name}
-                </option>
-              ))}
-            </select>
-            <select name="telepules" defaultValue={telepules} className="input-field sm:w-44">
-              <option value="">Összes település</option>
-              {cities.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
-            <button type="submit" className="btn-primary sm:px-6">
-              <SlidersHorizontal size={16} /> Szűrés
-            </button>
-          </form>
+          <PlacesSearchForm
+            categories={categories}
+            cities={cities}
+            defaultQ={q}
+            defaultKategoria={kategoria}
+            defaultTelepules={telepules}
+          />
         </div>
       </div>
 
