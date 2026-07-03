@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Search, MapPin, HeartHandshake, ArrowRight, CalendarDays, ExternalLink } from "lucide-react";
-import { getCategories, getApprovedPlaces } from "@/lib/data";
+import { getCategories, getApprovedPlaces, citiesFromPlaces } from "@/lib/data";
 import { createClient } from "@/lib/supabase/server";
 import PlaceCard from "@/components/PlaceCard";
 
@@ -18,6 +18,7 @@ export default async function HomePage() {
   ]);
   const programs = programsResult.data ?? [];
   const categoryBySlug = new Map(categories.map((c) => [c.slug, c]));
+  const cities = citiesFromPlaces(places);
   const featuredPlaces = places.slice(0, 6);
 
   return (
@@ -60,13 +61,23 @@ export default async function HomePage() {
             <select
               name="kategoria"
               defaultValue=""
-              className="mt-2 w-full rounded-xl border border-gray-200 bg-white py-3.5 px-4 text-gray-700 focus:outline-none focus:ring-2 focus:ring-sni-brand-teal/50 sm:mt-0 sm:w-52"
+              className="mt-2 w-full rounded-xl border border-gray-200 bg-white py-3.5 px-4 text-gray-700 focus:outline-none focus:ring-2 focus:ring-sni-brand-teal/50 sm:mt-0 sm:w-48"
             >
               <option value="">Minden kategória</option>
               {categories.map((c) => (
                 <option key={c.slug} value={c.slug}>
                   {c.icon} {c.name}
                 </option>
+              ))}
+            </select>
+            <select
+              name="telepules"
+              defaultValue=""
+              className="mt-2 w-full rounded-xl border border-gray-200 bg-white py-3.5 px-4 text-gray-700 focus:outline-none focus:ring-2 focus:ring-sni-brand-teal/50 sm:mt-0 sm:w-40"
+            >
+              <option value="">Minden város</option>
+              {cities.map((c) => (
+                <option key={c} value={c}>{c}</option>
               ))}
             </select>
             <button
