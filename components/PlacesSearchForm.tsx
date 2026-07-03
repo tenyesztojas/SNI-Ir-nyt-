@@ -15,10 +15,11 @@ function CityAutocomplete({
   const [open, setOpen] = useState(false);
   const skipBlur = useRef(false);
 
-  const matches = value.trim()
-    ? cities
-        .filter((c) => c.toLowerCase().includes(value.toLowerCase()))
-        .slice(0, 10)
+  const matches = open
+    ? (value.trim()
+        ? cities.filter((c) => c.toLowerCase().includes(value.toLowerCase()))
+        : cities
+      ).slice(0, 10)
     : [];
 
   return (
@@ -34,6 +35,7 @@ function CityAutocomplete({
           setValue(e.target.value);
           setOpen(true);
         }}
+        onFocus={() => setOpen(true)}
         onBlur={() => {
           if (!skipBlur.current) setOpen(false);
           skipBlur.current = false;

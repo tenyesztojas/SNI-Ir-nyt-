@@ -6,7 +6,7 @@ import PlaceCard from "@/components/PlaceCard";
 
 export default async function HomePage() {
   const supabase = createClient();
-  const [categories, places, { data: programs }] = await Promise.all([
+  const [categories, places, programsResult] = await Promise.all([
     getCategories(),
     getApprovedPlaces(),
     supabase
@@ -16,6 +16,7 @@ export default async function HomePage() {
       .order("created_at", { ascending: false })
       .limit(3),
   ]);
+  const programs = programsResult.data ?? [];
   const categoryBySlug = new Map(categories.map((c) => [c.slug, c]));
   const featuredPlaces = places.slice(0, 6);
 
