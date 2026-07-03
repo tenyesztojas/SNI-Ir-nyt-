@@ -15,14 +15,14 @@ function CityCombobox({
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0, width: 0 });
   const inputRef = useRef<HTMLInputElement>(null);
-  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const closeTimer = useRef<number | null>(null);
 
   const suggestions = value.trim()
     ? cities.filter((c) => c.toLowerCase().includes(value.toLowerCase())).slice(0, 10)
     : cities.slice(0, 10);
 
   function openDrop() {
-    if (closeTimer.current) clearTimeout(closeTimer.current);
+    if (closeTimer.current !== null) window.clearTimeout(closeTimer.current);
     if (inputRef.current) {
       const r = inputRef.current.getBoundingClientRect();
       setPos({ top: r.bottom + 4, left: r.left, width: Math.max(r.width, 192) });
@@ -31,11 +31,11 @@ function CityCombobox({
   }
 
   function closeDrop() {
-    closeTimer.current = setTimeout(() => setOpen(false), 150);
+    closeTimer.current = window.setTimeout(() => setOpen(false), 150);
   }
 
   function pick(city: string) {
-    if (closeTimer.current) clearTimeout(closeTimer.current);
+    if (closeTimer.current !== null) window.clearTimeout(closeTimer.current);
     setValue(city);
     setOpen(false);
   }
@@ -98,7 +98,6 @@ export default function PlacesSearchForm({
 
   return (
     <form action="/helyek" method="get" className="mt-4 flex flex-col gap-3 sm:flex-row">
-      {/* Szöveges kereső */}
       <div className="flex flex-1 items-center rounded-xl border border-gray-200 bg-white shadow-sm transition-shadow focus-within:border-sni-brand-teal focus-within:ring-2 focus-within:ring-sni-brand-teal/30">
         {!q && <Search className="ml-3.5 shrink-0 text-gray-400" size={18} />}
         <input
@@ -112,7 +111,6 @@ export default function PlacesSearchForm({
         />
       </div>
 
-      {/* Kategória */}
       <select name="kategoria" defaultValue={defaultKategoria} className="input-field sm:w-52">
         <option value="">Összes kategória</option>
         {categories.map((c) => (
@@ -122,7 +120,6 @@ export default function PlacesSearchForm({
         ))}
       </select>
 
-      {/* Város autocomplete */}
       <CityCombobox cities={cities} defaultValue={defaultTelepules} />
 
       <button type="submit" className="btn-primary sm:px-6">
