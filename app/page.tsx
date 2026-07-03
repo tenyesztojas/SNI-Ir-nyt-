@@ -70,16 +70,18 @@ export default async function HomePage() {
                 </option>
               ))}
             </select>
-            <select
+            <input
+              type="text"
               name="telepules"
-              defaultValue=""
+              list="hero-cities"
+              placeholder="Város..."
               className="mt-2 w-full rounded-xl border border-gray-200 bg-white py-3.5 px-4 text-gray-700 focus:outline-none focus:ring-2 focus:ring-sni-brand-teal/50 sm:mt-0 sm:w-40"
-            >
-              <option value="">Minden város</option>
+            />
+            <datalist id="hero-cities">
               {cities.map((c) => (
-                <option key={c} value={c}>{c}</option>
+                <option key={c} value={c} />
               ))}
-            </select>
+            </datalist>
             <button
               type="submit"
               className="mt-2 w-full rounded-xl bg-sni-brand-teal px-8 py-3.5 font-bold text-white transition-colors hover:bg-sni-brand-blue sm:mt-0 sm:w-auto"

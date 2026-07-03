@@ -45,15 +45,22 @@ export default function PlacesSearchForm({
         ))}
       </select>
 
-      {/* Település */}
-      <select name="telepules" defaultValue={defaultTelepules} className="input-field sm:w-44">
-        <option value="">Összes település</option>
-        {cities.map((c) => (
-          <option key={c} value={c}>
-            {c}
-          </option>
-        ))}
-      </select>
+      {/* Település autocomplete */}
+      <div className="sm:w-44">
+        <input
+          type="text"
+          name="telepules"
+          defaultValue={defaultTelepules}
+          list="cities-datalist"
+          placeholder="Összes település"
+          className="input-field w-full"
+        />
+        <datalist id="cities-datalist">
+          {cities.map((c) => (
+            <option key={c} value={c} />
+          ))}
+        </datalist>
+      </div>
 
       <button type="submit" className="btn-primary sm:px-6">
         <SlidersHorizontal size={16} /> Szűrés
