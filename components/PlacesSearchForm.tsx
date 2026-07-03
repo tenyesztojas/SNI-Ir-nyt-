@@ -21,12 +21,10 @@ export default function PlacesSearchForm({
 
   return (
     <form action="/helyek" method="get" className="mt-4 flex flex-col gap-3 sm:flex-row">
-      <div className="relative flex-1">
+      {/* Szöveges kereső – nagyító eltűnik gépeléskor */}
+      <div className="flex flex-1 items-center rounded-xl border border-gray-200 bg-white shadow-sm focus-within:border-sni-brand-teal focus-within:ring-2 focus-within:ring-sni-brand-teal/30 transition-shadow">
         {!q && (
-          <Search
-            className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400"
-            size={18}
-          />
+          <Search className="ml-3.5 shrink-0 text-gray-400" size={18} />
         )}
         <input
           type="text"
@@ -34,7 +32,8 @@ export default function PlacesSearchForm({
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Település vagy hely neve..."
-          className={`input-field transition-all ${!q ? "pl-10" : "pl-4"}`}
+          className="w-full bg-transparent py-3 text-base text-gray-900 placeholder:text-gray-400 focus:outline-none"
+          style={{ paddingLeft: q ? "1rem" : "0.5rem", paddingRight: "1rem" }}
         />
       </div>
 
@@ -47,14 +46,14 @@ export default function PlacesSearchForm({
         ))}
       </select>
 
-      <div className="relative sm:w-44">
+      {/* Városmező datalist autocomplete-tel */}
+      <div className="sm:w-44">
         <input
           list="cities-list"
           name="telepules"
           defaultValue={defaultTelepules}
           placeholder="Összes település"
           className="input-field w-full"
-          autoComplete="off"
         />
         <datalist id="cities-list">
           {cities.map((c) => (
