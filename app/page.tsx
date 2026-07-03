@@ -54,9 +54,15 @@ export default async function HomePage() {
               <input
                 type="text"
                 name="q"
+                list="hero-q-cities"
                 placeholder="Hely neve vagy város..."
                 className="w-full rounded-xl border-0 py-3.5 pl-12 pr-4 text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-sni-brand-teal/50"
               />
+              <datalist id="hero-q-cities">
+                {cities.map((c) => (
+                  <option key={c} value={c} />
+                ))}
+              </datalist>
             </div>
             <select
               name="kategoria"
