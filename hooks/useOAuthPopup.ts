@@ -11,7 +11,7 @@ export function useOAuthPopup() {
 
   const openOAuthPopup = useCallback(async (provider: "github" | "google") => {
     const supabase = createClient();
-    const redirectTo = `${window.location.origin}/auth/callback?popup=1`;
+    const redirectTo = `${window.location.origin}/auth/popup`;
 
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider,
