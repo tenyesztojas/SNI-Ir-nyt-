@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ShieldCheck, MapPin, Star, Flag, Mail } from "lucide-react";
+import { ShieldCheck, MapPin, Star, Flag, Mail, Users } from "lucide-react";
 import { getApprovedPlaces, getPendingPlaces, getPendingReviews, getPendingReports } from "@/lib/data";
 
 export default async function AdminOverviewPage() {
@@ -14,7 +14,7 @@ export default async function AdminOverviewPage() {
     { label: "Jóváhagyott hely", value: places.length, icon: MapPin },
     { label: "Jóváhagyásra váró hely", value: pendingPlaces.length, icon: ShieldCheck },
     { label: "Jóváhagyásra váró értékelés", value: pendingReviews.length, icon: Star },
-    { label: "Nyitott hibajelentés", value: pendingReports.length, icon: Flag },
+    { label: "Nyitott hibajeléntés", value: pendingReports.length, icon: Flag },
   ];
 
   return (
@@ -44,13 +44,16 @@ export default async function AdminOverviewPage() {
           Értékelések moderálása
         </Link>
         <Link href="/admin/jelzesek" className="btn-secondary">
-          Hibajelentések kezelése
+          Hibajeléntések kezelése
         </Link>
         <Link href="/admin/hirlevel" className="btn-secondary inline-flex items-center gap-2">
           <Mail size={16} /> Hírlevél küldése
         </Link>
         <Link href="/admin/programok" className="btn-secondary">
           Programajánlók kezelése
+        </Link>
+        <Link href="/admin/felhasznalok" className="btn-secondary inline-flex items-center gap-2">
+          <Users size={16} /> Felhasználók
         </Link>
       </div>
     </div>
