@@ -2,9 +2,12 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { generateDisplayName } from "@/lib/utils/display-name";
 
+const POPUP_MESSAGE = "supabase:auth_complete";
+
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
+  const isPopup = searchParams.get("popup") === "1";
 
   if (code) {
     const supabase = createClient();
@@ -38,6 +41,26 @@ export async function GET(request: Request) {
         .from("profiles")
         .update(updatePayload)
         .eq("id", user.id);
+    }
+
+    if (isPopup) {
+      // Popup ablakban: kuldj uzenetet a szulo ablaknak, majd csukd be
+      return new NextResponse(
+        `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>
+<script>
+  try {
+    if (window.opener && window.opener.location.origin === window.location.origin) {
+      window.opener.postMessage("${POPUP_MESSAGE}", window.location.origin);
+    } else {
+      window.location.replace("/profil");
+    }
+  } catch(e) {
+    window.location.replace("/profil");
+  }
+<\/script>
+</body></html>`,
+        { headers: { "Content-Type": "text/html; charset=utf-8" } }
+      );
     }
   }
 
