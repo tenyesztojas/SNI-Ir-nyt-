@@ -24,9 +24,9 @@ export default function LoginPage() {
 
   return (
     <div className="mx-auto max-w-md px-4 py-12 sm:px-6">
-      <h1 className="text-2xl font-extrabold text-gray-900">Udv a VedettSaroknal</h1>
+      <h1 className="text-2xl font-extrabold text-gray-900">Üdv a VédettSaroknál</h1>
       <p className="mt-1.5 text-sm text-gray-500">
-        Lepj be e-maillel vagy regisztralj uj fiokot.
+        Lépj be e-maillel vagy regisztrálj új fiókot.
       </p>
 
       {/* E-mailes belépés */}
@@ -37,7 +37,7 @@ export default function LoginPage() {
         >
           <span className="flex items-center gap-2">
             <Mail size={17} className="text-gray-400" />
-            Belepes e-maillel
+            Belépés e-maillel
           </span>
           <ChevronDown
             size={17}
@@ -54,7 +54,7 @@ export default function LoginPage() {
                   mode === "belepes" ? "bg-white shadow-sm text-sni-brand-navy" : "text-gray-500 hover:text-gray-700"
                 }`}
               >
-                Belepes
+                Belépés
               </button>
               <button
                 onClick={() => setMode("regisztracio")}
@@ -62,7 +62,7 @@ export default function LoginPage() {
                   mode === "regisztracio" ? "bg-white shadow-sm text-sni-brand-navy" : "text-gray-500 hover:text-gray-700"
                 }`}
               >
-                Regisztracio
+                Regisztráció
               </button>
             </div>
 
@@ -75,16 +75,16 @@ export default function LoginPage() {
                   <input type="email" name="email" className="input-field mt-1.5" required />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Jelszo</label>
+                  <label className="block text-sm font-medium text-gray-700">Jelszó</label>
                   <input type="password" name="password" className="input-field mt-1.5" required minLength={6} />
                 </div>
                 {state?.error && <p className="text-sm text-red-600">{state.error}</p>}
-                <SubmitButton label="Belepes" />
+                <SubmitButton label="Belépés" />
               </form>
             ) : (
               <form action={signUpFormAction} className="flex flex-col gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Becenev</label>
+                  <label className="block text-sm font-medium text-gray-700">Becenév</label>
                   <input name="displayName" className="input-field mt-1.5" placeholder="Pl. Anna" required />
                 </div>
                 <div>
@@ -92,11 +92,11 @@ export default function LoginPage() {
                   <input type="email" name="email" className="input-field mt-1.5" required />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Jelszo</label>
+                  <label className="block text-sm font-medium text-gray-700">Jelszó</label>
                   <input type="password" name="password" className="input-field mt-1.5" required minLength={6} />
                 </div>
 
-                {/* Hirlevel opt-out */}
+                {/* Hírlevél opt-out */}
                 <div className="rounded-xl bg-blue-50 px-4 py-3">
                   <label className="flex items-start gap-3 cursor-pointer">
                     <input
@@ -105,17 +105,17 @@ export default function LoginPage() {
                       className="mt-0.5 h-4 w-4 rounded border-gray-300 accent-sni-brand-teal"
                     />
                     <span className="text-sm text-gray-700">
-                      Nem kerek hirlevelet
+                      Nem kérek hírlevelet
                     </span>
                   </label>
                   <p className="mt-1.5 text-xs text-gray-500 pl-7">
-                    Alapertelmezeskent feliratkozol a VedettSarok hírlevélre.
-                    A hirlevelrol barmikor leiratkozhatsz a profilodban.
+                    Alapértelmezésként feliratkozol a VédettSarok hírlevélre.
+                    A hírlevélről bármikor leiratkozhatsz a profilodban.
                   </p>
                 </div>
 
                 {state?.error && <p className="text-sm text-red-600">{state.error}</p>}
-                <SubmitButton label="Regisztracio" />
+                <SubmitButton label="Regisztráció" />
               </form>
             )}
           </div>
@@ -123,7 +123,7 @@ export default function LoginPage() {
       </div>
 
       <p className="mt-6 text-center text-xs text-gray-400">
-        A hirlevelrol barmikor leiratkozhatsz a profilodban.
+        A hírlevélről bármikor leiratkozhatsz a profilodban.
       </p>
     </div>
   );

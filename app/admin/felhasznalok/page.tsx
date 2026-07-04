@@ -35,20 +35,20 @@ export default async function AdminUsersPage() {
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
       <Link href="/admin" className="text-sm text-sni-brand-blue hover:underline">
-        Vissza az admin attekinteshez
+        Vissza az admin áttekintéshez
       </Link>
       <div className="mt-3 flex items-center gap-3">
         <Users className="text-sni-brand-blue" size={28} />
         <h1 className="text-2xl font-bold text-sni-text">
-          Felhasznalok ({profiles?.length ?? 0} fo)
+          Felhasználók ({profiles?.length ?? 0} fő)
         </h1>
       </div>
 
       {!hasEmail && (
         <div className="mt-4 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
-          Email-cimek es regisztracio datuma csak akkor jelenik meg, ha a{" "}
-          <strong>SUPABASE_SERVICE_ROLE_KEY</strong> kornyezeti valtozo be van allitva Vercelben.
-          Addig a Supabase Dashboard Authentication menupont alatt lathatod a reszleteket.
+          Email-címek és regisztráció dátuma csak akkor jelenik meg, ha a{" "}
+          <strong>SUPABASE_SERVICE_ROLE_KEY</strong> környezeti változó be van állítva Vercelben.
+          Addig a Supabase Dashboard Authentication menüpont alatt láthatod a részleteket.
         </div>
       )}
 
@@ -56,11 +56,11 @@ export default async function AdminUsersPage() {
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-left text-xs font-semibold uppercase text-gray-500">
             <tr>
-              <th className="px-4 py-3">Nev</th>
+              <th className="px-4 py-3">Név</th>
               {hasEmail && <th className="px-4 py-3">Email</th>}
               <th className="px-4 py-3">Szerep</th>
-              <th className="px-4 py-3">Hirlevel</th>
-              {hasEmail && <th className="px-4 py-3">Regisztralt</th>}
+              <th className="px-4 py-3">Hírlevél</th>
+              {hasEmail && <th className="px-4 py-3">Regisztrált</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
