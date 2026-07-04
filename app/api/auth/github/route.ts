@@ -15,9 +15,8 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${origin}/belepes?error=github_denied`);
   }
 
-  // Mindig a fo domain-t hasznaluk (www nelkul)
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? origin;
-  const redirectUri = `${siteUrl}/api/auth/github`;
+  // Rogzitett redirect URI - mindig www nelkul
+  const redirectUri = "https://vedettsarok.hu/api/auth/github";
 
   if (!code) {
     // 1. lazep: atiranyitas a GitHub-ra
