@@ -15,9 +15,12 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${origin}/belepes?error=github_denied`);
   }
 
+  // Mindig a fo domain-t hasznaluk (www nelkul)
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? origin;
+  const redirectUri = `${siteUrl}/api/auth/github`;
+
   if (!code) {
     // 1. lazep: atiranyitas a GitHub-ra
-    const redirectUri = `${origin}/api/auth/github`;
     const githubUrl = new URL("https://github.com/login/oauth/authorize");
     githubUrl.searchParams.set("client_id", CLIENT_ID);
     githubUrl.searchParams.set("redirect_uri", redirectUri);
@@ -27,8 +30,6 @@ export async function GET(request: Request) {
 
   // 2. lazep: callback a GitHub-tol
   try {
-    const redirectUri = `${origin}/api/auth/github`;
-
     // GitHub access token csere
     const tokenRes = await fetch("https://github.com/login/oauth/access_token", {
       method: "POST",
