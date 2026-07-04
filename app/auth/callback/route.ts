@@ -14,18 +14,15 @@ export async function GET(request: Request) {
       const user = data.user;
       const isGitHub = user.app_metadata?.provider === "github";
 
-      // Meglévő profil lekérése
       const { data: profile } = await supabase
         .from("profiles")
         .select("display_name")
         .eq("id", user.id)
         .maybeSingle();
 
-      // GitHub-felhasználóknál a trigger generic "FelhasználóXXXXX" nevet ad;
-      // cseréljük le szép pseudonym névre az első belépéskor.
       const isGenericName =
         !profile?.display_name ||
-        /^Felhasználó\d+$/.test(profile.display_name) ||
+        /^Felhasznalo\d+$/.test(profile.display_name) ||
         profile.display_name === user.email?.split("@")[0];
 
       const updatePayload: Record<string, unknown> = {
@@ -44,6 +41,5 @@ export async function GET(request: Request) {
     }
   }
 
-  // Sikeres belépés → profil oldal; hiba → belépési oldal
   return NextResponse.redirect(`${origin}/profil`);
 }
