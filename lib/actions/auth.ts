@@ -49,9 +49,7 @@ export async function signUpAction(
     return { error: "Nem sikerült a regisztráció. Próbáld újra." };
   }
 
-  // Ha az e-mailes regisztráció létrehozta a profilt, beállítjuk a newsletter preferenciát
   if (data.user && !noNewsletter === false) {
-    // noNewsletter = true → newsletter_subscribed = false
     await supabase
       .from("profiles")
       .update({ newsletter_subscribed: !noNewsletter })
@@ -64,6 +62,39 @@ export async function signUpAction(
 
   revalidatePath("/", "layout");
   redirect("/profil");
+}
+
+export async function changePasswordAction(
+  _prevState: AuthActionState,
+  formData: FormData
+): Promise<AuthActionState> {
+  const currentPassword = String(formData.get("currentPassword") ?? "");
+  const newPassword = String(formData.get("newPassword") ?? "");
+  const confirmPassword = String(formData.get("confirmPassword") ?? "");
+
+  if (!currentPassword || !newPassword || !confirmPassword)
+    return { error: "Tölts ki minden mezőt." };
+  if (newPassword.length < 6)
+    return { error: "Az új jelszó legalább 6 karakter legyen." };
+  if (newPassword !== confirmPassword)
+    return { error: "A két jelszó nem egyezik." };
+
+  const supabase = createClient();
+  const { data: userData } = await supabase.auth.getUser();
+  if (!userData.user?.email) return { error: "Nem vagy bejelentkezve." };
+
+  // Jelenlegi jelszó ellenőrzése
+  const { error: verifyError } = await supabase.auth.signInWithPassword({
+    email: userData.user.email,
+    password: currentPassword,
+  });
+  if (verifyError) return { error: "A jelenlegi jelszó helytelen." };
+
+  // Új jelszó beállítása
+  const { error } = await supabase.auth.updateUser({ password: newPassword });
+  if (error) return { error: "Nem sikerült a jelszóváltoztatás. Próbáld újra." };
+
+  return { info: "Jelszó sikeresen megváltoztatva." };
 }
 
 export async function signOutAction(): Promise<void> {

@@ -3,6 +3,7 @@ import { UserCircle } from "lucide-react";
 import { getCurrentUserAndProfile, getOwnPlaces, getOwnReviews } from "@/lib/data";
 import { signOutAction } from "@/lib/actions/auth";
 import ProfileNameForm from "@/components/ProfileNameForm";
+import PasswordChangeForm from "@/components/PasswordChangeForm";
 
 const placeStatusLabel: Record<string, string> = {
   pending: "Jóváhagyásra vár",
@@ -69,6 +70,8 @@ export default async function ProfilePage() {
           newsletterSubscribed={profile?.newsletterSubscribed ?? true}
         />
       </div>
+
+      <PasswordChangeForm />
 
       <section className="mt-8">
         <h2 className="text-lg font-bold text-gray-900">Beküldött helyek ({places.length})</h2>
