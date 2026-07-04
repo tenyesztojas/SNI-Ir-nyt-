@@ -6,12 +6,13 @@ import { Github } from "lucide-react";
 export default function GitHubLoginButton() {
   async function handleLogin() {
     const supabase = createClient();
-    await supabase.auth.signInWithOAuth({
+    const { error } = await supabase.auth.signInWithOAuth({
       provider: "github",
       options: {
         redirectTo: `${window.location.origin}/auth/callback`,
       },
     });
+    if (error) alert("GitHub hiba: " + error.message);
   }
 
   return (
