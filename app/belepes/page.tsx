@@ -4,9 +4,6 @@ import { useState } from "react";
 import { useFormState, useFormStatus } from "react-dom";
 import { LogIn, Mail, ChevronDown } from "lucide-react";
 import { signInAction, signUpAction, AuthActionState } from "@/lib/actions/auth";
-import GitHubLoginButton from "@/components/auth/GitHubLoginButton";
-import GoogleLoginButton from "@/components/auth/GoogleLoginButton";
-
 
 function SubmitButton({ label }: { label: string }) {
   const { pending } = useFormStatus();
@@ -19,7 +16,7 @@ function SubmitButton({ label }: { label: string }) {
 
 export default function LoginPage() {
   const [mode, setMode] = useState<"belepes" | "regisztracio">("belepes");
-  const [showEmail, setShowEmail] = useState(false);
+  const [showEmail, setShowEmail] = useState(true);
   const [signInState, signInFormAction] = useFormState<AuthActionState, FormData>(signInAction, null);
   const [signUpState, signUpFormAction] = useFormState<AuthActionState, FormData>(signUpAction, null);
 
@@ -27,32 +24,20 @@ export default function LoginPage() {
 
   return (
     <div className="mx-auto max-w-md px-4 py-12 sm:px-6">
-      <h1 className="text-2xl font-extrabold text-gray-900">Üdv a VédettSaroknál</h1>
+      <h1 className="text-2xl font-extrabold text-gray-900">Udv a VedettSaroknal</h1>
       <p className="mt-1.5 text-sm text-gray-500">
-        Belépéshez közösségi fiókot ajánlunk — nem tároljuk a valódi nevedet.
+        Lepj be e-maillel vagy regisztralj uj fiokot.
       </p>
 
-      {/* Social OAuth gombok */}
-      <div className="mt-6 flex flex-col gap-3">
-        <GitHubLoginButton />
-        <GoogleLoginButton />
-      </div>
-
-      <div className="mt-5 flex items-center gap-3 text-xs text-gray-400">
-        <div className="h-px flex-1 bg-gray-200" />
-        vagy
-        <div className="h-px flex-1 bg-gray-200" />
-      </div>
-
-      {/* E-mailes belépés – kinyitható panel */}
-      <div className="mt-4">
+      {/* E-mailes belépés */}
+      <div className="mt-6">
         <button
           onClick={() => setShowEmail((v) => !v)}
           className="flex w-full items-center justify-between rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-700 shadow-soft hover:border-sni-brand-teal/40"
         >
           <span className="flex items-center gap-2">
             <Mail size={17} className="text-gray-400" />
-            Belépés e-maillel
+            Belepes e-maillel
           </span>
           <ChevronDown
             size={17}
@@ -69,7 +54,7 @@ export default function LoginPage() {
                   mode === "belepes" ? "bg-white shadow-sm text-sni-brand-navy" : "text-gray-500 hover:text-gray-700"
                 }`}
               >
-                Belépés
+                Belepes
               </button>
               <button
                 onClick={() => setMode("regisztracio")}
@@ -77,7 +62,7 @@ export default function LoginPage() {
                   mode === "regisztracio" ? "bg-white shadow-sm text-sni-brand-navy" : "text-gray-500 hover:text-gray-700"
                 }`}
               >
-                Regisztráció
+                Regisztracio
               </button>
             </div>
 
@@ -90,16 +75,16 @@ export default function LoginPage() {
                   <input type="email" name="email" className="input-field mt-1.5" required />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Jelszó</label>
+                  <label className="block text-sm font-medium text-gray-700">Jelszo</label>
                   <input type="password" name="password" className="input-field mt-1.5" required minLength={6} />
                 </div>
                 {state?.error && <p className="text-sm text-red-600">{state.error}</p>}
-                <SubmitButton label="Belépés" />
+                <SubmitButton label="Belepes" />
               </form>
             ) : (
               <form action={signUpFormAction} className="flex flex-col gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Becenév</label>
+                  <label className="block text-sm font-medium text-gray-700">Becenev</label>
                   <input name="displayName" className="input-field mt-1.5" placeholder="Pl. Anna" required />
                 </div>
                 <div>
@@ -107,11 +92,11 @@ export default function LoginPage() {
                   <input type="email" name="email" className="input-field mt-1.5" required />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">Jelszó</label>
+                  <label className="block text-sm font-medium text-gray-700">Jelszo</label>
                   <input type="password" name="password" className="input-field mt-1.5" required minLength={6} />
                 </div>
 
-                {/* Hírlevél opt-out */}
+                {/* Hirlevel opt-out */}
                 <div className="rounded-xl bg-blue-50 px-4 py-3">
                   <label className="flex items-start gap-3 cursor-pointer">
                     <input
@@ -120,17 +105,17 @@ export default function LoginPage() {
                       className="mt-0.5 h-4 w-4 rounded border-gray-300 accent-sni-brand-teal"
                     />
                     <span className="text-sm text-gray-700">
-                      Nem kérek hírlevelet
+                      Nem kerek hirlevelet
                     </span>
                   </label>
                   <p className="mt-1.5 text-xs text-gray-500 pl-7">
-                    Alapértelmezésként feliratkozol a VédettSarok hírlevélre.
-                    A hírlevélről bármikor leiratkozhatsz a profilodban.
+                    Alapertelmezeskent feliratkozol a VedettSarok hírlevélre.
+                    A hirlevelrol barmikor leiratkozhatsz a profilodban.
                   </p>
                 </div>
 
                 {state?.error && <p className="text-sm text-red-600">{state.error}</p>}
-                <SubmitButton label="Regisztráció" />
+                <SubmitButton label="Regisztracio" />
               </form>
             )}
           </div>
@@ -138,8 +123,7 @@ export default function LoginPage() {
       </div>
 
       <p className="mt-6 text-center text-xs text-gray-400">
-        Közösségi belépéskor nem tároljuk a valódi nevedet, e-mail-címedet
-        vagy profilképedet. Véletlenszerű álnevet kapsz. A hírlevélről bármikor leiratkozhatsz.
+        A hirlevelrol barmikor leiratkozhatsz a profilodban.
       </p>
     </div>
   );
