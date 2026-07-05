@@ -14,7 +14,7 @@ export default async function AdminOverviewPage() {
     { label: "Jóváhagyott hely", value: places.length, icon: MapPin },
     { label: "Jóváhagyásra váró hely", value: pendingPlaces.length, icon: ShieldCheck },
     { label: "Jóváhagyásra váró értékelés", value: pendingReviews.length, icon: Star },
-    { label: "Nyitott hibajeléntés", value: pendingReports.length, icon: Flag },
+    { label: "Nyitott hibajelentés", value: pendingReports.length, icon: Flag },
   ];
 
   return (
@@ -38,13 +38,16 @@ export default async function AdminOverviewPage() {
 
       <div className="mt-6 flex flex-wrap gap-3">
         <Link href="/admin/helyek" className="btn-primary">
-          Beküldött helyek kezelése
+          Beküldött helyek jóváhagyása
+        </Link>
+        <Link href="/admin/helyek/osszes" className="btn-secondary inline-flex items-center gap-2">
+          <MapPin size={16} /> Összes hely szerkesztése
         </Link>
         <Link href="/admin/ertekelesek" className="btn-secondary">
           Értékelések moderálása
         </Link>
         <Link href="/admin/jelzesek" className="btn-secondary">
-          Hibajeléntések kezelése
+          Hibajelentések kezelése
         </Link>
         <Link href="/admin/hirlevel" className="btn-secondary inline-flex items-center gap-2">
           <Mail size={16} /> Hírlevél küldése
