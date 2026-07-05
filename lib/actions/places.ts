@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { newPlaceSchema, NewPlaceInput } from "@/lib/schemas";
 import { slugify, randomSuffix } from "@/lib/slugify";
 import { isCurrentUserAdmin } from "@/lib/data";
@@ -64,8 +65,9 @@ export async function decidePlace(
   const isAdmin = await isCurrentUserAdmin();
   if (!isAdmin) return { error: "Nincs jogosultságod ehhez a művelethez." };
 
-  const supabase = createClient();
-  const { error } = await supabase.from("places").update({ status: decision }).eq("id", placeId);
+  // Service role kliens: megkerüli az RLS-t
+  const admin = createAdminClient();
+  const { error } = await admin.from("places").update({ status: decision }).eq("id", placeId);
   if (error) return { error: "Nem sikerült a státusz frissítése." };
 
   revalidatePath("/admin/helyek");
@@ -78,9 +80,10 @@ export async function adminDeletePlace(placeId: string): Promise<{ error?: strin
   const isAdmin = await isCurrentUserAdmin();
   if (!isAdmin) return { error: "Nincs jogosultságod ehhez a művelethez." };
 
-  const supabase = createClient();
-  const { error } = await supabase.from("places").delete().eq("id", placeId);
-  if (error) return { error: "Nem sikerült törölni a helyet." };
+  // Service role kliens: megkerüli az RLS-t
+  const admin = createAdminClient();
+  const { error } = await admin.from("places").delete().eq("id", placeId);
+  if (error) return { error: "Nem sikerült törölni a helyet. (" + error.message + ")" };
 
   revalidatePath("/admin/helyek");
   revalidatePath("/admin/helyek/osszes");
@@ -109,8 +112,9 @@ export async function adminUpdatePlace(
   const isAdmin = await isCurrentUserAdmin();
   if (!isAdmin) return { error: "Nincs jogosultságod ehhez a művelethez." };
 
-  const supabase = createClient();
-  const { error } = await supabase
+  // Service role kliens: megkerüli az RLS-t
+  const admin = createAdminClient();
+  const { error } = await admin
     .from("places")
     .update({
       name: values.name,
@@ -126,7 +130,7 @@ export async function adminUpdatePlace(
     })
     .eq("id", placeId);
 
-  if (error) return { error: "Nem sikerült menteni a helyet." };
+  if (error) return { error: "Nem sikerült menteni a helyet. (" + error.message + ")" };
 
   revalidatePath("/admin/helyek");
   revalidatePath("/admin/helyek/osszes");
