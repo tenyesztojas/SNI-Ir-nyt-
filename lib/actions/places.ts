@@ -121,6 +121,13 @@ export async function adminDeletePlace(placeId: string): Promise<{ error?: strin
   if (!isAdmin) return { error: "Nincs jogosultságod ehhez a művelethez." };
 
   const admin = createAdminClient();
+
+  // Kapcsolódó rekordok törlése (foreign key constraint miatt)
+  await admin.from("reviews").delete().eq("place_id", placeId);
+  await admin.from("favorites").delete().eq("place_id", placeId);
+  await admin.from("reports").delete().eq("place_id", placeId);
+
+  // Maga a hely törlése
   const { error } = await admin.from("places").delete().eq("id", placeId);
   if (error) return { error: "Nem sikerült törölni a helyet. (" + error.message + ")" };
 
