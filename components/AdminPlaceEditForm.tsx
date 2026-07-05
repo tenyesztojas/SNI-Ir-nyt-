@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Save, CheckCircle } from "lucide-react";
+import { Save, CheckCircle, MapPin } from "lucide-react";
 import { Place, Category } from "@/lib/types";
 import { adminUpdatePlace } from "@/lib/actions/places";
 
@@ -17,6 +17,7 @@ export default function AdminPlaceEditForm({
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [regeocode, setRegeocode] = useState(false);
 
   const [values, setValues] = useState({
     name: place.name,
@@ -29,6 +30,8 @@ export default function AdminPlaceEditForm({
     whyFriendly: place.whyFriendly,
     ownExperience: place.ownExperience ?? "",
     status: place.status,
+    latitude: place.latitude != null ? String(place.latitude) : "",
+    longitude: place.longitude != null ? String(place.longitude) : "",
   });
 
   function set(field: string, value: string) {
@@ -41,31 +44,25 @@ export default function AdminPlaceEditForm({
     e.preventDefault();
     setError(null);
     startTransition(async () => {
-      const result = await adminUpdatePlace(place.id, values);
+      const result = await adminUpdatePlace(place.id, { ...values, regeocode });
       if (result?.error) { setError(result.error); return; }
       setSuccess(true);
+      setRegeocode(false);
     });
   }
+
+  const hasCoords = values.latitude && values.longitude;
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-5">
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <label className="block text-sm font-medium text-gray-700">Név</label>
-          <input
-            className="input-field mt-1.5"
-            value={values.name}
-            onChange={(e) => set("name", e.target.value)}
-            required
-          />
+          <input className="input-field mt-1.5" value={values.name} onChange={(e) => set("name", e.target.value)} required />
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700">Kategória</label>
-          <select
-            className="input-field mt-1.5"
-            value={values.category}
-            onChange={(e) => set("category", e.target.value)}
-          >
+          <select className="input-field mt-1.5" value={values.category} onChange={(e) => set("category", e.target.value)}>
             {categories.map((c) => (
               <option key={c.slug} value={c.slug}>{c.name}</option>
             ))}
@@ -73,45 +70,23 @@ export default function AdminPlaceEditForm({
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700">Város</label>
-          <input
-            className="input-field mt-1.5"
-            value={values.city}
-            onChange={(e) => set("city", e.target.value)}
-            required
-          />
+          <input className="input-field mt-1.5" value={values.city} onChange={(e) => set("city", e.target.value)} required />
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700">Cím</label>
-          <input
-            className="input-field mt-1.5"
-            value={values.address}
-            onChange={(e) => set("address", e.target.value)}
-            required
-          />
+          <input className="input-field mt-1.5" value={values.address} onChange={(e) => set("address", e.target.value)} required />
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700">Telefon</label>
-          <input
-            className="input-field mt-1.5"
-            value={values.phone}
-            onChange={(e) => set("phone", e.target.value)}
-          />
+          <input className="input-field mt-1.5" value={values.phone} onChange={(e) => set("phone", e.target.value)} />
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700">Weboldal</label>
-          <input
-            className="input-field mt-1.5"
-            value={values.website}
-            onChange={(e) => set("website", e.target.value)}
-          />
+          <input className="input-field mt-1.5" value={values.website} onChange={(e) => set("website", e.target.value)} />
         </div>
         <div className="sm:col-span-2">
           <label className="block text-sm font-medium text-gray-700">Státusz</label>
-          <select
-            className="input-field mt-1.5"
-            value={values.status}
-            onChange={(e) => set("status", e.target.value)}
-          >
+          <select className="input-field mt-1.5" value={values.status} onChange={(e) => set("status", e.target.value)}>
             <option value="approved">Jóváhagyva</option>
             <option value="pending">Függőben</option>
             <option value="rejected">Elutasítva</option>
@@ -122,29 +97,59 @@ export default function AdminPlaceEditForm({
 
       <div>
         <label className="block text-sm font-medium text-gray-700">Leírás</label>
-        <textarea
-          className="input-field mt-1.5 h-24 resize-none"
-          value={values.description}
-          onChange={(e) => set("description", e.target.value)}
-          required
-        />
+        <textarea className="input-field mt-1.5 h-24 resize-none" value={values.description} onChange={(e) => set("description", e.target.value)} required />
       </div>
       <div>
         <label className="block text-sm font-medium text-gray-700">Miért befogadó?</label>
-        <textarea
-          className="input-field mt-1.5 h-24 resize-none"
-          value={values.whyFriendly}
-          onChange={(e) => set("whyFriendly", e.target.value)}
-          required
-        />
+        <textarea className="input-field mt-1.5 h-24 resize-none" value={values.whyFriendly} onChange={(e) => set("whyFriendly", e.target.value)} required />
       </div>
       <div>
         <label className="block text-sm font-medium text-gray-700">Saját tapasztalat (opcionális)</label>
-        <textarea
-          className="input-field mt-1.5 h-20 resize-none"
-          value={values.ownExperience}
-          onChange={(e) => set("ownExperience", e.target.value)}
-        />
+        <textarea className="input-field mt-1.5 h-20 resize-none" value={values.ownExperience} onChange={(e) => set("ownExperience", e.target.value)} />
+      </div>
+
+      {/* Térkép koordináták */}
+      <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <MapPin size={16} className="text-sni-brand-blue" />
+          <span className="text-sm font-semibold text-gray-700">Térkép koordináták</span>
+          {hasCoords ? (
+            <span className="ml-auto text-xs text-emerald-600 font-medium">✓ Megvan</span>
+          ) : (
+            <span className="ml-auto text-xs text-amber-600 font-medium">⚠ Hiányzik – nem jelenik meg a térképen</span>
+          )}
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label className="block text-xs font-medium text-gray-600">Szélességi fok (lat)</label>
+            <input
+              className="input-field mt-1"
+              placeholder="pl. 47.4979"
+              value={values.latitude}
+              onChange={(e) => set("latitude", e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600">Hosszúsági fok (lng)</label>
+            <input
+              className="input-field mt-1"
+              placeholder="pl. 19.0402"
+              value={values.longitude}
+              onChange={(e) => set("longitude", e.target.value)}
+            />
+          </div>
+        </div>
+        <label className="mt-3 flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={regeocode}
+            onChange={(e) => setRegeocode(e.target.checked)}
+            className="h-4 w-4 rounded border-gray-300 accent-sni-brand-teal"
+          />
+          <span className="text-sm text-gray-700">
+            Koordináták lekérése Google Maps-ből mentéskor (felülírja a fenti értékeket)
+          </span>
+        </label>
       </div>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
@@ -158,11 +163,7 @@ export default function AdminPlaceEditForm({
         <button type="submit" disabled={isPending} className="btn-primary">
           <Save size={16} /> {isPending ? "Mentés..." : "Mentés"}
         </button>
-        <button
-          type="button"
-          onClick={() => router.push("/admin/helyek/osszes")}
-          className="btn-secondary"
-        >
+        <button type="button" onClick={() => router.push("/admin/helyek/osszes")} className="btn-secondary">
           Vissza
         </button>
       </div>

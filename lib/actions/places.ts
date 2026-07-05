@@ -7,19 +7,38 @@ import { newPlaceSchema, NewPlaceInput } from "@/lib/schemas";
 import { slugify, randomSuffix } from "@/lib/slugify";
 import { isCurrentUserAdmin } from "@/lib/data";
 
+// --- Google Maps Geocoding ---
+async function geocodeAddress(address: string, city: string): Promise<{ lat: number; lng: number } | null> {
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+  if (!apiKey) return null;
+
+  const query = encodeURIComponent(`${address}, ${city}, Magyarország`);
+  const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${query}&key=${apiKey}&language=hu`;
+
+  try {
+    const res = await fetch(url, { cache: "no-store" });
+    const json = await res.json();
+    if (json.status === "OK" && json.results?.[0]) {
+      const loc = json.results[0].geometry.location;
+      return { lat: loc.lat, lng: loc.lng };
+    }
+    console.warn("Geocoding sikertelen:", json.status, address, city);
+    return null;
+  } catch (err) {
+    console.error("Geocoding hiba:", err);
+    return null;
+  }
+}
+
 export async function submitPlace(input: NewPlaceInput, images: string[] = []): Promise<{ error?: string }> {
   const parsed = newPlaceSchema.safeParse(input);
-  if (!parsed.success) {
-    return { error: "Hibás vagy hiányos adatok." };
-  }
+  if (!parsed.success) return { error: "Hibás vagy hiányos adatok." };
   const data = parsed.data;
 
   const supabase = createClient();
   const { data: userData } = await supabase.auth.getUser();
   const user = userData.user;
-  if (!user) {
-    return { error: "A hely beküldéséhez be kell jelentkezned." };
-  }
+  if (!user) return { error: "A hely beküldéséhez be kell jelentkezned." };
 
   const baseSlug = slugify(data.name) || "hely";
   let slug = baseSlug;
@@ -65,9 +84,30 @@ export async function decidePlace(
   const isAdmin = await isCurrentUserAdmin();
   if (!isAdmin) return { error: "Nincs jogosultságod ehhez a művelethez." };
 
-  // Service role kliens: megkerüli az RLS-t
   const admin = createAdminClient();
-  const { error } = await admin.from("places").update({ status: decision }).eq("id", placeId);
+
+  // Ha jóváhagyás: geocoding, ha még nincs koordináta
+  let coords: { latitude: number; longitude: number } | Record<string, never> = {};
+  if (decision === "approved") {
+    const { data: place } = await admin
+      .from("places")
+      .select("address, city, latitude, longitude")
+      .eq("id", placeId)
+      .single();
+
+    if (place && !place.latitude && place.address && place.city) {
+      const geo = await geocodeAddress(place.address, place.city);
+      if (geo) {
+        coords = { latitude: geo.lat, longitude: geo.lng };
+      }
+    }
+  }
+
+  const { error } = await admin
+    .from("places")
+    .update({ status: decision, ...coords })
+    .eq("id", placeId);
+
   if (error) return { error: "Nem sikerült a státusz frissítése." };
 
   revalidatePath("/admin/helyek");
@@ -80,7 +120,6 @@ export async function adminDeletePlace(placeId: string): Promise<{ error?: strin
   const isAdmin = await isCurrentUserAdmin();
   if (!isAdmin) return { error: "Nincs jogosultságod ehhez a művelethez." };
 
-  // Service role kliens: megkerüli az RLS-t
   const admin = createAdminClient();
   const { error } = await admin.from("places").delete().eq("id", placeId);
   if (error) return { error: "Nem sikerült törölni a helyet. (" + error.message + ")" };
@@ -103,6 +142,9 @@ export type AdminPlaceUpdate = {
   whyFriendly: string;
   ownExperience?: string;
   status: string;
+  latitude?: string;
+  longitude?: string;
+  regeocode?: boolean;
 };
 
 export async function adminUpdatePlace(
@@ -112,8 +154,18 @@ export async function adminUpdatePlace(
   const isAdmin = await isCurrentUserAdmin();
   if (!isAdmin) return { error: "Nincs jogosultságod ehhez a művelethez." };
 
-  // Service role kliens: megkerüli az RLS-t
   const admin = createAdminClient();
+
+  // Koordináták meghatározása
+  let lat: number | null = values.latitude ? parseFloat(values.latitude) : null;
+  let lng: number | null = values.longitude ? parseFloat(values.longitude) : null;
+
+  // Ha "újrageokódolás" be van kapcsolva, frissítjük Google-lel
+  if (values.regeocode && values.address && values.city) {
+    const geo = await geocodeAddress(values.address, values.city);
+    if (geo) { lat = geo.lat; lng = geo.lng; }
+  }
+
   const { error } = await admin
     .from("places")
     .update({
@@ -127,6 +179,8 @@ export async function adminUpdatePlace(
       why_friendly: values.whyFriendly,
       own_experience: values.ownExperience || null,
       status: values.status,
+      latitude: lat,
+      longitude: lng,
     })
     .eq("id", placeId);
 
