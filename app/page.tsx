@@ -150,25 +150,6 @@ export default async function HomePage() {
         </section>
       )}
 
-      {/* PARTNER */}
-      <section className="mx-auto max-w-5xl px-4 pb-4 pt-10 sm:px-6">
-        <div className="flex flex-col items-center gap-4 rounded-3xl border border-gray-100 bg-white px-6 py-8 shadow-soft sm:flex-row sm:justify-center sm:gap-8">
-          <p className="text-sm font-semibold text-gray-500 whitespace-nowrap">Szakmai tanácsadó partnerünk:</p>
-          <a
-            href="https://www.vadaskertiskola.hu/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="transition-opacity hover:opacity-75"
-          >
-            <img
-              src="https://files.site.forpsi.com/8f/e1/8fe1f8dc-27e2-4b90-8fbe-c37cb77711d6.png"
-              alt="Vadaskert Általános Iskola"
-              className="h-12 w-auto object-contain"
-            />
-          </a>
-        </div>
-      </section>
-
       {/* CTA */}
       <section className="mx-auto max-w-5xl px-4 py-12 sm:px-6">
         <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-sni-brand-navy to-sni-brand-blue p-8 text-center sm:p-12">
@@ -188,6 +169,25 @@ export default async function HomePage() {
               Helyek böngészése
             </Link>
           </div>
+        </div>
+      </section>
+
+      {/* PARTNER */}
+      <section className="mx-auto max-w-5xl px-4 pb-12 pt-2 sm:px-6">
+        <div className="flex flex-col items-center gap-4 rounded-3xl border border-gray-100 bg-white px-6 py-8 shadow-soft sm:flex-row sm:justify-center sm:gap-8">
+          <p className="text-sm font-semibold text-gray-500 whitespace-nowrap">Szakmai tanácsadó partnerünk:</p>
+          <a
+            href="https://www.vadaskertiskola.hu/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="transition-opacity hover:opacity-75"
+          >
+            <img
+              src="https://files.site.forpsi.com/8f/e1/8fe1f8dc-27e2-4b90-8fbe-c37cb77711d6.png"
+              alt="Vadaskert Általános Iskola"
+              className="h-12 w-auto object-contain"
+            />
+          </a>
         </div>
       </section>
     </div>
