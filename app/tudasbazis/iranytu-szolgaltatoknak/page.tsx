@@ -58,7 +58,7 @@ export default function Page() {
           Egy rövid bemutatkozó videó jelentősen csökkentheti az ismeretlen helyzetből fakadó bizonytalanságot.
         </p>
         <p className="mt-2 text-gray-700 leading-relaxed">
-          A lényeg az őszinteség. Például egy ilyen mondat segíthet a bizonytalanság leküzdésében: <em>„Hétköznap 10 és 12 óra között általában kevesebb vendégünk van. Hétvégén a tér zsúfoltabb és hangosabb lehet."</em>
+          A lényeg az őszinteség. Például egy ilyen mondat segíthet a bizonytalanság leküzdésében: <em>„Hétköznap 10 és 12 óra között általában kevesebb vendégünk van. Hétvégén a tér zsúfoltabb és hangosabb lehet.&rdquo;</em>
         </p>
       </div>
 
