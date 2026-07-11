@@ -8,6 +8,7 @@ const ITEMS = [
   { href: "/tudasbazis/mak-kartya", label: "MÁK-kártya igénylése", desc: "A jogosultság igazolása és az igénylés menete." },
   { href: "/tudasbazis/gyod", label: "GYOD igénylése", desc: "Gyermekek Otthongondozási Díja: feltételek és benyújtás." },
   { href: "/tudasbazis/sni-tajekoztato", label: "SNI tájékoztató", desc: "Mi a sajátos nevelési igény, és mit jelent autizmussal vagy ADHD-val érintett gyermekek számára?" },
+  { href: "/tudasbazis/iranytu-szolgaltatoknak", label: "Iránytű szolgáltatóknak", desc: "Így válhatsz SNI-baráttá: kiszámíthatóság, szenzoros szempontok, kommunikáció." },
 ];
 
 export default function TudasbazisPage() {
