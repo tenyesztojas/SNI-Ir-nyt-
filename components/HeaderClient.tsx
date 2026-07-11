@@ -12,6 +12,7 @@ const TUDASBAZIS = [
   { href: "/tudasbazis/mak-kartya", label: "MÁK-kártya igénylése" },
   { href: "/tudasbazis/gyod", label: "GYOD igénylése" },
   { href: "/tudasbazis/sni-tajekoztato", label: "SNI tájékoztató" },
+  { href: "/tudasbazis/iranytu-szolgaltatoknak", label: "Iránytű szolgáltatóknak" },
 ];
 
 const navLinks = [
