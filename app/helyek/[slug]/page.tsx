@@ -94,13 +94,13 @@ export default async function PlaceDetailPage({ params }: { params: { slug: stri
             <div className="absolute bottom-16 right-4 flex gap-1.5 sm:bottom-14">
               {place.images.slice(1).map((url, i) => (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  key={i}
-                  src={url}
-                  alt=""
-                  className="h-14 w-14 rounded-lg object-cover border-2 border-white shadow-md cursor-pointer hover:opacity-90"
-                  onClick={() => window.open(url, "_blank")}
-                />
+                <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                  <img
+                    src={url}
+                    alt=""
+                    className="h-14 w-14 rounded-lg object-cover border-2 border-white shadow-md cursor-pointer hover:opacity-90"
+                  />
+                </a>
               ))}
             </div>
           )}
@@ -256,13 +256,13 @@ export default async function PlaceDetailPage({ params }: { params: { slug: stri
                     <div className="mt-3 flex flex-wrap gap-2">
                       {r.images.map((url, i) => (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          key={i}
-                          src={url}
-                          alt={`Kép ${i + 1}`}
-                          className="h-20 w-20 rounded-lg object-cover border border-gray-200 cursor-pointer hover:opacity-90"
-                          onClick={() => window.open(url, "_blank")}
-                        />
+                        <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                          <img
+                            src={url}
+                            alt={`Kép ${i + 1}`}
+                            className="h-20 w-20 rounded-lg object-cover border border-gray-200 cursor-pointer hover:opacity-90"
+                          />
+                        </a>
                       ))}
                     </div>
                   )}
