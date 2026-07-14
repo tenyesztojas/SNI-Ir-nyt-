@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { CheckCircle2, Heart, Share2, Copy, Check } from "lucide-react";
+import { CheckCircle2, Heart, Copy, Check } from "lucide-react";
 import { newPlaceSchema, NewPlaceInput } from "@/lib/schemas";
 import { Category } from "@/lib/types";
 import RatingInput from "@/components/RatingInput";
@@ -14,32 +14,41 @@ import ImageUpload, { ImageUploadRef } from "@/components/ImageUpload";
 const SHARE_URL = "https://vedettsarok.hu/uj-hely";
 const SHARE_TEXT = "Ajánlj te is egy autizmus- és SNI-barát helyet a VédettSarok közösségnek! 🏠";
 
-function ThankYouModal({ onClose }: { onClose: () => void }) {
-  const [copied, setCopied] = useState(false);
-  const canShare = typeof navigator !== "undefined" && typeof (navigator as { share?: unknown }).share === "function";
+function FacebookIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5" aria-hidden>
+      <path d="M24 12.073C24 5.405 18.627 0 12 0S0 5.405 0 12.073C0 18.1 4.388 23.094 10.125 24v-8.437H7.078v-3.49h3.047V9.41c0-3.025 1.792-4.697 4.533-4.697 1.312 0 2.686.236 2.686.236v2.97h-1.514c-1.491 0-1.956.93-1.956 1.886v2.268h3.328l-.532 3.49h-2.796V24C19.612 23.094 24 18.1 24 12.073z"/>
+    </svg>
+  );
+}
 
-  async function handleShare() {
-    if (canShare) {
-      try {
-        await (navigator as { share: (data: object) => Promise<void> }).share({
-          title: "VédettSarok",
-          text: SHARE_TEXT,
-          url: SHARE_URL,
-        });
-      } catch {
-        // user cancelled
-      }
-    } else {
-      await navigator.clipboard.writeText(`${SHARE_TEXT}\n${SHARE_URL}`);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
-    }
+function InstagramIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5" aria-hidden>
+      <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/>
+    </svg>
+  );
+}
+
+function ThankYouModal({ onClose }: { onClose: () => void }) {
+  const [igCopied, setIgCopied] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
+
+  function shareFacebook() {
+    const url = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(SHARE_URL)}&quote=${encodeURIComponent(SHARE_TEXT)}`;
+    window.open(url, "_blank", "width=600,height=400,noopener,noreferrer");
   }
 
-  function ShareLabel() {
-    if (copied) return <span className="flex items-center gap-2"><Check size={18} /> Másolva!</span>;
-    if (canShare) return <span className="flex items-center gap-2"><Share2 size={18} /> Megosztom</span>;
-    return <span className="flex items-center gap-2"><Copy size={18} /> Link másolása</span>;
+  async function shareInstagram() {
+    await navigator.clipboard.writeText(SHARE_URL);
+    setIgCopied(true);
+    setTimeout(() => setIgCopied(false), 3000);
+  }
+
+  async function copyLink() {
+    await navigator.clipboard.writeText(`${SHARE_TEXT}\n${SHARE_URL}`);
+    setLinkCopied(true);
+    setTimeout(() => setLinkCopied(false), 2500);
   }
 
   return (
@@ -65,16 +74,42 @@ function ThankYouModal({ onClose }: { onClose: () => void }) {
           </p>
         </div>
 
-        <button
-          onClick={handleShare}
-          className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-sni-brand-teal px-4 py-3 font-bold text-white transition-opacity hover:opacity-90"
-        >
-          <ShareLabel />
-        </button>
+        <div className="mt-4 flex flex-col gap-2.5">
+          {/* Facebook */}
+          <button
+            onClick={shareFacebook}
+            className="flex w-full items-center justify-center gap-2.5 rounded-2xl px-4 py-3 font-bold text-white transition-opacity hover:opacity-90"
+            style={{ backgroundColor: "#1877F2" }}
+          >
+            <FacebookIcon />
+            Megosztom Facebookon
+          </button>
+
+          {/* Instagram */}
+          <button
+            onClick={shareInstagram}
+            className="flex w-full items-center justify-center gap-2.5 rounded-2xl px-4 py-3 font-bold text-white transition-opacity hover:opacity-90"
+            style={{ background: "linear-gradient(135deg, #833AB4 0%, #E1306C 50%, #F77737 100%)" }}
+          >
+            <InstagramIcon />
+            {igCopied ? "Link másolva – illeszd be!" : "Megosztom Instagramon"}
+          </button>
+
+          {/* Link copy */}
+          <button
+            onClick={copyLink}
+            className="flex w-full items-center justify-center gap-2 rounded-2xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50"
+          >
+            {linkCopied
+              ? <span className="flex items-center gap-2"><Check size={16} /> Másolva!</span>
+              : <span className="flex items-center gap-2"><Copy size={16} /> Link másolása</span>
+            }
+          </button>
+        </div>
 
         <button
           onClick={onClose}
-          className="mt-3 w-full rounded-2xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-50"
+          className="mt-3 w-full rounded-2xl px-4 py-2.5 text-sm font-semibold text-gray-400 transition-colors hover:text-gray-600"
         >
           Bezárás
         </button>
