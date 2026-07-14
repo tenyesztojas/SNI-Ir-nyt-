@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, Heart, Share2, Copy, Check } from "lucide-react";
 import { newPlaceSchema, NewPlaceInput } from "@/lib/schemas";
 import { Category } from "@/lib/types";
 import RatingInput from "@/components/RatingInput";
@@ -11,8 +11,81 @@ import Disclaimer from "@/components/Disclaimer";
 import { submitPlace } from "@/lib/actions/places";
 import ImageUpload, { ImageUploadRef } from "@/components/ImageUpload";
 
+const SHARE_URL = "https://vedettsarok.hu/uj-hely";
+const SHARE_TEXT = "Ajánlj te is egy autizmus- és SNI-barát helyet a VédettSarok közösségnek! 🏠";
+
+function ThankYouModal({ onClose }: { onClose: () => void }) {
+  const [copied, setCopied] = useState(false);
+  const canShare = typeof navigator !== "undefined" && typeof (navigator as { share?: unknown }).share === "function";
+
+  async function handleShare() {
+    if (canShare) {
+      try {
+        await (navigator as { share: (data: object) => Promise<void> }).share({
+          title: "VédettSarok",
+          text: SHARE_TEXT,
+          url: SHARE_URL,
+        });
+      } catch {
+        // user cancelled
+      }
+    } else {
+      await navigator.clipboard.writeText(`${SHARE_TEXT}\n${SHARE_URL}`);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    }
+  }
+
+  function ShareLabel() {
+    if (copied) return <span className="flex items-center gap-2"><Check size={18} /> Másolva!</span>;
+    if (canShare) return <span className="flex items-center gap-2"><Share2 size={18} /> Megosztom</span>;
+    return <span className="flex items-center gap-2"><Copy size={18} /> Link másolása</span>;
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 backdrop-blur-sm"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="w-full max-w-sm rounded-3xl bg-white p-8 shadow-2xl text-center">
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-50">
+          <Heart className="text-emerald-500" size={32} fill="currentColor" />
+        </div>
+
+        <h2 className="mt-5 text-xl font-extrabold text-gray-900">
+          Köszönjük! Egy helyet ajánlottál.
+        </h2>
+        <p className="mt-2 text-sm leading-relaxed text-gray-600">
+          Lehet, hogy ezzel egy másik családnak segítettél elindulni.
+        </p>
+
+        <div className="mt-5 rounded-2xl bg-sni-brand-navy/5 px-5 py-4">
+          <p className="text-sm font-semibold text-sni-brand-navy">
+            Meghívsz még 3 embert, hogy ők is ajánljanak egy helyet?
+          </p>
+        </div>
+
+        <button
+          onClick={handleShare}
+          className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-sni-brand-teal px-4 py-3 font-bold text-white transition-opacity hover:opacity-90"
+        >
+          <ShareLabel />
+        </button>
+
+        <button
+          onClick={onClose}
+          className="mt-3 w-full rounded-2xl border border-gray-200 px-4 py-2.5 text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-50"
+        >
+          Bezárás
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function NewPlaceForm({ categories }: { categories: Category[] }) {
   const [submitted, setSubmitted] = useState(false);
+  const [showModal, setShowModal] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
   const imgRef = useRef<ImageUploadRef>(null);
   const {
@@ -31,22 +104,26 @@ export default function NewPlaceForm({ categories }: { categories: Category[] })
       setServerError(result.error);
       return;
     }
-    setSubmitted(true);
     reset();
+    setSubmitted(true);
+    setShowModal(true);
   }
 
   if (submitted) {
     return (
-      <div className="mx-auto max-w-2xl px-4 py-16 text-center sm:px-6">
-        <CheckCircle2 className="mx-auto text-sni-greendark" size={48} />
-        <h1 className="mt-4 text-2xl font-bold text-sni-text">Köszönjük a beküldést!</h1>
-        <p className="mt-2 text-gray-600">
-          A hely admin jóváhagyás után válik publikussá.
-        </p>
-        <button onClick={() => setSubmitted(false)} className="btn-primary mt-6">
-          Még egy hely beküldése
-        </button>
-      </div>
+      <>
+        {showModal && <ThankYouModal onClose={() => setShowModal(false)} />}
+        <div className="mx-auto max-w-2xl px-4 py-16 text-center sm:px-6">
+          <CheckCircle2 className="mx-auto text-sni-greendark" size={48} />
+          <h1 className="mt-4 text-2xl font-bold text-sni-text">Köszönjük a beküldést!</h1>
+          <p className="mt-2 text-gray-600">
+            A hely admin jóváhagyás után válik publikussá.
+          </p>
+          <button onClick={() => setSubmitted(false)} className="btn-primary mt-6">
+            Még egy hely beküldése
+          </button>
+        </div>
+      </>
     );
   }
 
