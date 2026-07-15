@@ -3,10 +3,10 @@ import { Category, Place, Review, Profile, Report } from "@/lib/types";
 
 // Magyar ékezetes karaktereket alapbetűkre cseréli rendezéshez
 function huNormalize(s: string): string {
-  return s.toLowerCase()
+  return (s ?? "").trim().toLowerCase()
     .replace(/[áÁ]/g, "a").replace(/[éÉ]/g, "e").replace(/[íÍ]/g, "i")
-    .replace(/[óÓ]/g, "o").replace(/[öÖőŐ]/g, "o")
-    .replace(/[úÚ]/g, "u").replace(/[üÜűŰ]/g, "u");
+    .replace(/[óÓőŐ]/g, "o").replace(/[öÖ]/g, "o")
+    .replace(/[úÚűŰ]/g, "u").replace(/[üÜ]/g, "u");
 }
 function huSort(a: string, b: string): number {
   return huNormalize(a).localeCompare(huNormalize(b));
@@ -169,9 +169,15 @@ export async function getVisiblePlaces(): Promise<Place[]> {
 }
 
 export async function getApprovedPlaces(): Promise<Place[]> {
-  const places = await getVisiblePlaces();
-  return places
-    .filter((p) => p.status === "approved")
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("places")
+    .select("*")
+    .eq("status", "approved")
+    .order("name");
+  if (error) throw error;
+  return (data ?? [])
+    .map(mapPlace)
     .sort((a, b) => huSort(a.name, b.name));
 }
 
