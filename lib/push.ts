@@ -1,14 +1,22 @@
 import webpush from "web-push";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-webpush.setVapidDetails(
-  "mailto:holvay.csaba@gmail.com",
-  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
-  process.env.VAPID_PRIVATE_KEY!
-);
+let vapidInitialized = false;
+
+function initVapid() {
+  if (vapidInitialized) return;
+  const pub = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+  const priv = process.env.VAPID_PRIVATE_KEY;
+  if (!pub || !priv) return;
+  webpush.setVapidDetails("mailto:holvay.csaba@gmail.com", pub, priv);
+  vapidInitialized = true;
+}
 
 export async function sendAdminPush(title: string, body: string, url = "/admin") {
   try {
+    initVapid();
+    if (!vapidInitialized) return;
+
     const admin = createAdminClient();
     const { data: subs } = await admin
       .from("push_subscriptions")
@@ -27,7 +35,6 @@ export async function sendAdminPush(title: string, body: string, url = "/admin")
           );
         } catch (err: unknown) {
           const status = (err as { statusCode?: number }).statusCode;
-          // Remove expired/unregistered subscriptions
           if (status === 410 || status === 404) {
             await admin.from("push_subscriptions").delete().eq("endpoint", sub.endpoint);
           }
