@@ -159,7 +159,9 @@ export async function getVisiblePlaces(): Promise<Place[]> {
 
 export async function getApprovedPlaces(): Promise<Place[]> {
   const places = await getVisiblePlaces();
-  return places.filter((p) => p.status === "approved");
+  return places
+    .filter((p) => p.status === "approved")
+    .sort((a, b) => a.name.localeCompare(b.name, "hu"));
 }
 
 export async function getPlaceBySlug(slug: string): Promise<Place | undefined> {
