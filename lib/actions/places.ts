@@ -144,6 +144,79 @@ export async function adminDeletePlace(placeId: string): Promise<{ error?: strin
   return {};
 }
 
+export type AdminCreatePlaceInput = {
+  name: string;
+  category: string;
+  city: string;
+  address: string;
+  phone?: string;
+  website?: string;
+  description: string;
+  whyFriendly: string;
+  ownExperience?: string;
+};
+
+export async function adminCreatePlace(
+  input: AdminCreatePlaceInput,
+  images: string[] = []
+): Promise<{ error?: string; slug?: string }> {
+  const isAdmin = await isCurrentUserAdmin();
+  if (!isAdmin) return { error: "Nincs jogosultságod ehhez a művelethez." };
+
+  if (!input.name || input.name.length < 2) return { error: "Add meg a hely nevét." };
+  if (!input.category) return { error: "Válassz kategóriát." };
+  if (!input.city || input.city.length < 2) return { error: "Add meg a települést." };
+  if (!input.address || input.address.length < 3) return { error: "Add meg a pontos címet." };
+  if (!input.description || input.description.length < 5) return { error: "Adj meg egy leírást." };
+  if (!input.whyFriendly || input.whyFriendly.length < 5) return { error: "Írd le, miért autizmus/SNI-barát." };
+
+  const admin = createAdminClient();
+  const supabase = createClient();
+  const { data: userData } = await supabase.auth.getUser();
+
+  const baseSlug = slugify(input.name.trim()) || "hely";
+  let slug = baseSlug;
+
+  const geo = await geocodeAddress(input.address, input.city);
+
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const { error } = await admin.from("places").insert({
+      slug,
+      name: input.name.trim(),
+      category: input.category,
+      city: input.city,
+      address: input.address,
+      phone: input.phone || null,
+      website: input.website || null,
+      description: input.description,
+      why_friendly: input.whyFriendly,
+      own_experience: input.ownExperience || null,
+      images: images.length > 0 ? images : null,
+      status: "approved",
+      created_by: userData.user?.id ?? null,
+      latitude: geo?.lat ?? null,
+      longitude: geo?.lng ?? null,
+    });
+
+    if (!error) {
+      revalidatePath("/admin/helyek");
+      revalidatePath("/admin/helyek/osszes");
+      revalidatePath("/helyek");
+      revalidatePath("/");
+      return { slug };
+    }
+
+    if (error.code === "23505") {
+      slug = `${baseSlug}-${randomSuffix()}`;
+      continue;
+    }
+
+    return { error: "Nem sikerült létrehozni a helyet. (" + error.message + ")" };
+  }
+
+  return { error: "Nem sikerült létrehozni a helyet." };
+}
+
 export type AdminPlaceUpdate = {
   name: string;
   category: string;
@@ -169,11 +242,9 @@ export async function adminUpdatePlace(
 
   const admin = createAdminClient();
 
-  // Koordináták meghatározása
   let lat: number | null = values.latitude ? parseFloat(values.latitude) : null;
   let lng: number | null = values.longitude ? parseFloat(values.longitude) : null;
 
-  // Ha "újrageokódolás" be van kapcsolva, frissítjük Google-lel
   if (values.regeocode && values.address && values.city) {
     const geo = await geocodeAddress(values.address, values.city);
     if (geo) { lat = geo.lat; lng = geo.lng; }

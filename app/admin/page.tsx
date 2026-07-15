@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ShieldCheck, MapPin, Star, Flag, Mail, Users } from "lucide-react";
+import { ShieldCheck, MapPin, Star, Flag, Mail, Users, PlusCircle } from "lucide-react";
 import { getApprovedPlaces, getPendingPlaces, getPendingReviews, getPendingReports } from "@/lib/data";
 import PushNotifButton from "@/components/PushNotifButton";
 
@@ -42,7 +42,10 @@ export default async function AdminOverviewPage() {
       </div>
 
       <div className="mt-4 flex flex-wrap gap-3">
-        <Link href="/admin/helyek" className="btn-primary">
+        <Link href="/admin/helyek/uj" className="btn-primary inline-flex items-center gap-2">
+          <PlusCircle size={16} /> Új hely felvitele
+        </Link>
+        <Link href="/admin/helyek" className="btn-secondary">
           Beküldött helyek jóváhagyása
         </Link>
         <Link href="/admin/helyek/osszes" className="btn-secondary inline-flex items-center gap-2">
