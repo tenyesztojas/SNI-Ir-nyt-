@@ -35,21 +35,27 @@ export default function PushNotifButton() {
   async function subscribe() {
     setStatus("loading");
     try {
+      console.log("[Push] VAPID key:", PUBLIC_VAPID_KEY);
+      console.log("[Push] Notification permission:", Notification.permission);
       const reg = await navigator.serviceWorker.ready;
+      console.log("[Push] SW ready:", reg.active?.state);
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(PUBLIC_VAPID_KEY),
       });
+      console.log("[Push] Subscribed:", sub.endpoint);
 
       const subJson = sub.toJSON() as { endpoint: string; keys: { p256dh: string; auth: string } };
-      await fetch("/api/push/subscribe", {
+      const res = await fetch("/api/push/subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(subJson),
       });
+      console.log("[Push] API response:", res.status);
 
       setStatus("subscribed");
-    } catch {
+    } catch (err) {
+      console.error("[Push] Subscribe error:", err);
       setStatus(Notification.permission === "denied" ? "denied" : "unsubscribed");
     }
   }
