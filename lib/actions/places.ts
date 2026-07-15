@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { newPlaceSchema, NewPlaceInput } from "@/lib/schemas";
 import { slugify, randomSuffix } from "@/lib/slugify";
 import { isCurrentUserAdmin } from "@/lib/data";
+import { sendAdminPush } from "@/lib/push";
 
 // --- Google Maps Geocoding ---
 async function geocodeAddress(address: string, city: string): Promise<{ lat: number; lng: number } | null> {
@@ -63,6 +64,11 @@ export async function submitPlace(input: NewPlaceInput, images: string[] = []): 
     if (!error) {
       revalidatePath("/admin/helyek");
       revalidatePath("/profil");
+      await sendAdminPush(
+        "Uj hely bekuldes",
+        `${data.name} - ${data.city}`,
+        "/admin/helyek"
+      );
       return {};
     }
 

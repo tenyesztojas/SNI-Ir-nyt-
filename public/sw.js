@@ -39,3 +39,38 @@ self.addEventListener("fetch", (e) => {
       .catch(() => caches.match(e.request).then((r) => r || caches.match(OFFLINE_URL)))
   );
 });
+
+// Push értesítés fogadása
+self.addEventListener("push", (e) => {
+  let data = { title: "VédettSarok", body: "Új beküldés érkezett!", url: "/admin" };
+  try {
+    if (e.data) data = { ...data, ...e.data.json() };
+  } catch {}
+
+  e.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: "/icon-192.png",
+      badge: "/icon-192.png",
+      tag: "admin-notification",
+      renotify: true,
+      data: { url: data.url },
+    })
+  );
+});
+
+// Értesítésre kattintás → admin oldal megnyitása
+self.addEventListener("notificationclick", (e) => {
+  e.notification.close();
+  const targetUrl = e.notification.data?.url ?? "/admin";
+  e.waitUntil(
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if (client.url.includes(targetUrl) && "focus" in client) {
+          return client.focus();
+        }
+      }
+      return clients.openWindow(targetUrl);
+    })
+  );
+});

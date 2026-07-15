@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ShieldCheck, MapPin, Star, Flag, Mail, Users } from "lucide-react";
 import { getApprovedPlaces, getPendingPlaces, getPendingReviews, getPendingReports } from "@/lib/data";
+import PushNotifButton from "@/components/PushNotifButton";
 
 export default async function AdminOverviewPage() {
   const [places, pendingPlaces, pendingReviews, pendingReports] = await Promise.all([
@@ -36,7 +37,11 @@ export default async function AdminOverviewPage() {
         ))}
       </div>
 
-      <div className="mt-6 flex flex-wrap gap-3">
+      <div className="mt-6">
+        <PushNotifButton />
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-3">
         <Link href="/admin/helyek" className="btn-primary">
           Beküldött helyek jóváhagyása
         </Link>

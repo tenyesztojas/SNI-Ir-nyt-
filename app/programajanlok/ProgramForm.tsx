@@ -34,6 +34,17 @@ export default function ProgramForm() {
       return;
     }
 
+    // Admin push értesítés
+    fetch("/api/push/notify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: "📅 Új programajánlás",
+        body: `${name} - ${location}`,
+        url: "/admin/programok",
+      }),
+    }).catch(() => {});
+
     setStatus("success");
     setName(""); setLocation(""); setEventDate("");
     setDescription(""); setUrl(""); setContact("");
