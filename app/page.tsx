@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import Link from "next/link";
 import { MapPin, HeartHandshake, ArrowRight, CalendarDays, ExternalLink } from "lucide-react";
 import { getCategories, getApprovedPlaces, citiesFromPlaces } from "@/lib/data";

@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import ViewToggle from "@/components/ViewToggle";
 import PlaceCard from "@/components/PlaceCard";
 import PlacesSearchForm from "@/components/PlacesSearchForm";
