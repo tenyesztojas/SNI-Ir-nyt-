@@ -1,4 +1,4 @@
-const CACHE = "vedettsarok-v1";
+const CACHE = "vedettsarok-v2";
 const OFFLINE_URL = "/";
 
 const PRECACHE = [
