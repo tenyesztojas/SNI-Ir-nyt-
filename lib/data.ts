@@ -1,6 +1,17 @@
 import { createClient } from "@/lib/supabase/server";
 import { Category, Place, Review, Profile, Report } from "@/lib/types";
 
+// Magyar ékezetes karaktereket alapbetűkre cseréli rendezéshez
+function huNormalize(s: string): string {
+  return s.toLowerCase()
+    .replace(/[áÁ]/g, "a").replace(/[éÉ]/g, "e").replace(/[íÍ]/g, "i")
+    .replace(/[óÓ]/g, "o").replace(/[öÖőŐ]/g, "o")
+    .replace(/[úÚ]/g, "u").replace(/[üÜűŰ]/g, "u");
+}
+function huSort(a: string, b: string): number {
+  return huNormalize(a).localeCompare(huNormalize(b));
+}
+
 type PlaceRow = {
   id: string;
   slug: string;
@@ -161,7 +172,7 @@ export async function getApprovedPlaces(): Promise<Place[]> {
   const places = await getVisiblePlaces();
   return places
     .filter((p) => p.status === "approved")
-    .sort((a, b) => a.name.localeCompare(b.name, "hu"));
+    .sort((a, b) => huSort(a.name, b.name));
 }
 
 export async function getPlaceBySlug(slug: string): Promise<Place | undefined> {
@@ -290,7 +301,7 @@ export async function getPendingReports(): Promise<ReportWithPlace[]> {
 }
 
 export function citiesFromPlaces(places: Place[]): string[] {
-  return Array.from(new Set(places.map((p) => p.city))).sort((a, b) => a.localeCompare(b, "hu"));
+  return Array.from(new Set(places.map((p) => p.city))).sort((a, b) => huSort(a, b));
 }
 
 export async function getCurrentUserAndProfile(): Promise<{
