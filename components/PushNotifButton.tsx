@@ -16,6 +16,7 @@ type Status = "unsupported" | "loading" | "subscribed" | "unsubscribed" | "denie
 
 export default function PushNotifButton() {
   const [status, setStatus] = useState<Status>("loading");
+  const [debugMsg, setDebugMsg] = useState("");
 
   useEffect(() => {
     if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
@@ -34,34 +35,36 @@ export default function PushNotifButton() {
 
   async function subscribe() {
     setStatus("loading");
+    setDebugMsg("");
     try {
-      console.log("[Push] VAPID key:", PUBLIC_VAPID_KEY);
-      console.log("[Push] Notification permission:", Notification.permission);
+      if (!PUBLIC_VAPID_KEY) throw new Error("VAPID kulcs hiányzik");
+      setDebugMsg("SW betöltés...");
       const reg = await navigator.serviceWorker.ready;
-      console.log("[Push] SW ready:", reg.active?.state);
+      setDebugMsg("Feliratkozás...");
       const sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(PUBLIC_VAPID_KEY),
       });
-      console.log("[Push] Subscribed:", sub.endpoint);
-
+      setDebugMsg("Mentés...");
       const subJson = sub.toJSON() as { endpoint: string; keys: { p256dh: string; auth: string } };
       const res = await fetch("/api/push/subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(subJson),
       });
-      console.log("[Push] API response:", res.status);
-
+      if (!res.ok) throw new Error("API hiba: " + res.status);
+      setDebugMsg("");
       setStatus("subscribed");
     } catch (err) {
-      console.error("[Push] Subscribe error:", err);
+      const msg = err instanceof Error ? err.message : String(err);
+      setDebugMsg("Hiba: " + msg);
       setStatus(Notification.permission === "denied" ? "denied" : "unsubscribed");
     }
   }
 
   async function unsubscribe() {
     setStatus("loading");
+    setDebugMsg("");
     try {
       const reg = await navigator.serviceWorker.ready;
       const sub = await reg.pushManager.getSubscription();
@@ -82,42 +85,47 @@ export default function PushNotifButton() {
   if (status === "unsupported") return null;
 
   return (
-    <div className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-white px-5 py-4 shadow-soft">
-      <div className="flex-1">
-        <p className="font-semibold text-gray-900 text-sm">Push értesítések (PWA)</p>
-        <p className="mt-0.5 text-xs text-gray-500">
-          {status === "subscribed"
-            ? "Értesítést kapsz minden új hely- és programbeküldésről."
-            : status === "denied"
-            ? "A böngésző letiltotta az értesítéseket. Engedélyezd a beállításokban."
-            : "Engedélyezd, hogy értesítést kapj minden új beküldésről."}
-        </p>
+    <div>
+      <div className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-white px-5 py-4 shadow-soft">
+        <div className="flex-1">
+          <p className="font-semibold text-gray-900 text-sm">Push értesítések (PWA)</p>
+          <p className="mt-0.5 text-xs text-gray-500">
+            {status === "subscribed"
+              ? "Értesítést kapsz minden új hely- és programbeküldésről."
+              : status === "denied"
+              ? "A böngésző letiltotta az értesítéseket. Engedélyezd a beállításokban."
+              : "Engedélyezd, hogy értesítést kapj minden új beküldésről."}
+          </p>
+        </div>
+
+        {status === "loading" && (
+          <Loader2 size={20} className="animate-spin text-gray-400" />
+        )}
+
+        {status === "subscribed" && (
+          <button
+            onClick={unsubscribe}
+            className="flex items-center gap-1.5 rounded-xl border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-50 transition-colors"
+          >
+            <BellOff size={14} /> Kikapcsol
+          </button>
+        )}
+
+        {status === "unsubscribed" && (
+          <button
+            onClick={subscribe}
+            className="flex items-center gap-1.5 rounded-xl bg-sni-brand-teal px-3 py-2 text-xs font-semibold text-white hover:opacity-90 transition-opacity"
+          >
+            <Bell size={14} /> Bekapcsol
+          </button>
+        )}
+
+        {status === "denied" && (
+          <span className="text-xs text-gray-400 italic">Letiltva</span>
+        )}
       </div>
-
-      {status === "loading" && (
-        <Loader2 size={20} className="animate-spin text-gray-400" />
-      )}
-
-      {status === "subscribed" && (
-        <button
-          onClick={unsubscribe}
-          className="flex items-center gap-1.5 rounded-xl border border-gray-200 px-3 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-50 transition-colors"
-        >
-          <BellOff size={14} /> Kikapcsol
-        </button>
-      )}
-
-      {status === "unsubscribed" && (
-        <button
-          onClick={subscribe}
-          className="flex items-center gap-1.5 rounded-xl bg-sni-brand-teal px-3 py-2 text-xs font-semibold text-white hover:opacity-90 transition-opacity"
-        >
-          <Bell size={14} /> Bekapcsol
-        </button>
-      )}
-
-      {status === "denied" && (
-        <span className="text-xs text-gray-400 italic">Letiltva</span>
+      {debugMsg && (
+        <p className="mt-2 text-xs text-red-600 break-all">{debugMsg}</p>
       )}
     </div>
   );
