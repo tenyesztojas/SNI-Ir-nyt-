@@ -1,32 +1,29 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { createClient as createAdminClient } from "@supabase/supabase-js";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { Users } from "lucide-react";
+import UserActions from "./UserActions";
 
 export default async function AdminUsersPage() {
   const supabase = createClient();
+  const { data: { user: currentUser } } = await supabase.auth.getUser();
+
   const { data: profiles } = await supabase
     .from("profiles")
     .select("id, display_name, role, newsletter_subscribed")
     .order("display_name");
 
   let authUsers: { id: string; email: string; created_at: string }[] = [];
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (serviceRoleKey && process.env.NEXT_PUBLIC_SUPABASE_URL) {
-    try {
-      const adminClient = createAdminClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL,
-        serviceRoleKey
-      );
-      const { data } = await adminClient.auth.admin.listUsers({ perPage: 1000 });
-      authUsers = (data?.users ?? []).map((u) => ({
-        id: u.id,
-        email: u.email ?? "",
-        created_at: u.created_at,
-      }));
-    } catch {
-      // service role key not set
-    }
+  try {
+    const admin = createAdminClient();
+    const { data } = await admin.auth.admin.listUsers({ perPage: 1000 });
+    authUsers = (data?.users ?? []).map((u) => ({
+      id: u.id,
+      email: u.email ?? "",
+      created_at: u.created_at,
+    }));
+  } catch {
+    // service role key not set
   }
 
   const authMap = new Map(authUsers.map((u) => [u.id, u]));
@@ -46,9 +43,8 @@ export default async function AdminUsersPage() {
 
       {!hasEmail && (
         <div className="mt-4 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
-          Email-címek és regisztráció dátuma csak akkor jelenik meg, ha a{" "}
-          <strong>SUPABASE_SERVICE_ROLE_KEY</strong> környezeti változó be van állítva Vercelben.
-          Addig a Supabase Dashboard Authentication menüpont alatt láthatod a részleteket.
+          Email-címek csak akkor jelennek meg, ha a{" "}
+          <strong>SUPABASE_SERVICE_ROLE_KEY</strong> be van állítva Vercelben.
         </div>
       )}
 
@@ -61,6 +57,7 @@ export default async function AdminUsersPage() {
               <th className="px-4 py-3">Szerep</th>
               <th className="px-4 py-3">Hírlevél</th>
               {hasEmail && <th className="px-4 py-3">Regisztrált</th>}
+              <th className="px-4 py-3">Műveletek</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -95,6 +92,15 @@ export default async function AdminUsersPage() {
                         : "—"}
                     </td>
                   )}
+                  <td className="px-4 py-3">
+                    <UserActions
+                      userId={p.id}
+                      displayName={p.display_name ?? ""}
+                      email={auth?.email ?? ""}
+                      role={p.role ?? "member"}
+                      isSelf={p.id === currentUser?.id}
+                    />
+                  </td>
                 </tr>
               );
             })}
