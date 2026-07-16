@@ -144,6 +144,20 @@ export async function adminDeletePlace(placeId: string): Promise<{ error?: strin
   return {};
 }
 
+export async function searchPlacesByName(
+  query: string
+): Promise<Array<{ id: string; name: string; city: string; slug: string }>> {
+  if (!query || query.trim().length < 3) return [];
+  const supabase = createClient();
+  const { data } = await supabase
+    .from("places")
+    .select("id, name, city, slug")
+    .eq("status", "approved")
+    .ilike("name", `%${query.trim()}%`)
+    .limit(4);
+  return data ?? [];
+}
+
 export type AdminCreatePlaceInput = {
   name: string;
   category: string;

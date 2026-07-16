@@ -1,14 +1,15 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { useForm, Controller } from "react-hook-form";
+import { useRef, useState, useEffect } from "react";
+import { useForm, Controller, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { CheckCircle2, Heart, Copy, Check } from "lucide-react";
+import { CheckCircle2, Heart, Copy, Check, AlertTriangle, Star } from "lucide-react";
+import Link from "next/link";
 import { newPlaceSchema, NewPlaceInput } from "@/lib/schemas";
 import { Category } from "@/lib/types";
 import RatingInput from "@/components/RatingInput";
 import Disclaimer from "@/components/Disclaimer";
-import { submitPlace } from "@/lib/actions/places";
+import { submitPlace, searchPlacesByName } from "@/lib/actions/places";
 import ImageUpload, { ImageUploadRef } from "@/components/ImageUpload";
 
 const SHARE_URL = "https://vedettsarok.hu/uj-hely";
@@ -118,10 +119,14 @@ function ThankYouModal({ onClose }: { onClose: () => void }) {
   );
 }
 
+type DuplicatePlace = { id: string; name: string; city: string; slug: string };
+
 export default function NewPlaceForm({ categories }: { categories: Category[] }) {
   const [submitted, setSubmitted] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
+  const [duplicates, setDuplicates] = useState<DuplicatePlace[]>([]);
+  const [duplicateDismissed, setDuplicateDismissed] = useState(false);
   const imgRef = useRef<ImageUploadRef>(null);
   const {
     register,
@@ -130,6 +135,19 @@ export default function NewPlaceForm({ categories }: { categories: Category[] })
     reset,
     formState: { errors, isSubmitting },
   } = useForm<NewPlaceInput>({ resolver: zodResolver(newPlaceSchema) });
+
+  const watchedName = useWatch({ control, name: "name" });
+
+  useEffect(() => {
+    setDuplicateDismissed(false);
+    const q = (watchedName ?? "").trim();
+    if (q.length < 3) { setDuplicates([]); return; }
+    const timer = setTimeout(async () => {
+      const results = await searchPlacesByName(q);
+      setDuplicates(results);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [watchedName]);
 
   async function onSubmit(data: NewPlaceInput) {
     setServerError(null);
@@ -182,6 +200,46 @@ export default function NewPlaceForm({ categories }: { categories: Category[] })
           <label className="block text-sm font-medium text-sni-text">Hely neve*</label>
           <input {...register("name")} className="input-field mt-1.5" placeholder="Pl. Csodaszarvas Játszóház" />
           {errors.name && <p className="mt-1 text-sm text-sni-warn">{errors.name.message}</p>}
+
+          {duplicates.length > 0 && !duplicateDismissed && (
+            <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="mt-0.5 shrink-0 text-amber-500" size={18} />
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-amber-800">
+                    Ez a hely már szerepelhet az adatbázisban!
+                  </p>
+                  <p className="mt-0.5 text-xs text-amber-700">
+                    Ha megtalálod az alábbiak közt, inkább írj értékelést — azzal is sokat segítesz más családoknak.
+                  </p>
+                  <ul className="mt-3 flex flex-col gap-2">
+                    {duplicates.map((d) => (
+                      <li key={d.id} className="flex items-center justify-between gap-3 rounded-lg bg-white px-3 py-2 shadow-sm border border-amber-100">
+                        <span className="text-sm font-medium text-gray-800">
+                          {d.name}
+                          <span className="ml-1.5 text-xs font-normal text-gray-500">– {d.city}</span>
+                        </span>
+                        <Link
+                          href={`/ertekeles/${d.id}`}
+                          className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-sni-brand-teal px-3 py-1.5 text-xs font-bold text-white hover:opacity-90"
+                        >
+                          <Star size={12} />
+                          Értékelés írása
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                  <button
+                    type="button"
+                    onClick={() => setDuplicateDismissed(true)}
+                    className="mt-3 text-xs text-amber-600 underline hover:text-amber-800"
+                  >
+                    Nem ugyanaz a hely — folytatom a beküldést
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         <div>
