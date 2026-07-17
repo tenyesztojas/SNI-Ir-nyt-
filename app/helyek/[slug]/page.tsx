@@ -1,4 +1,5 @@
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { notFound } from "next/navigation";
 import { Phone, Globe, MapPin, Star, CheckCircle2, ArrowLeft } from "lucide-react";
 import {
@@ -13,6 +14,15 @@ import CategoryBadge from "@/components/CategoryBadge";
 import Disclaimer from "@/components/Disclaimer";
 import FavoriteButton from "@/components/FavoriteButton";
 import ReportButton from "@/components/ReportButton";
+
+const PlaceDetailMap = dynamic(() => import("@/components/PlaceDetailMapInner"), {
+  ssr: false,
+  loading: () => (
+    <div className="mt-6 flex h-56 items-center justify-center rounded-2xl bg-gray-100 text-sm text-gray-400 sm:h-64">
+      Térkép betöltése...
+    </div>
+  ),
+});
 
 function Stars({ rating, size = 16 }: { rating: number; size?: number }) {
   return (
@@ -152,6 +162,17 @@ export default async function PlaceDetailPage({ params }: { params: { slug: stri
           </Link>
         </div>
 
+        {/* Map */}
+        {typeof place.latitude === "number" && typeof place.longitude === "number" && (
+          <div className="mt-6">
+            <PlaceDetailMap
+              lat={place.latitude}
+              lng={place.longitude}
+              categoryEmoji={category?.icon ?? "📍"}
+            />
+          </div>
+        )}
+
         {/* Description */}
         <div className="mt-8 rounded-2xl border border-gray-100 bg-white p-6 shadow-soft">
           <h2 className="text-lg font-bold text-gray-900">Leírás</h2>
@@ -255,11 +276,11 @@ export default async function PlaceDetailPage({ params }: { params: { slug: stri
                   {r.images && r.images.length > 0 && (
                     <div className="mt-3 flex flex-wrap gap-2">
                       {r.images.map((url, i) => (
-                        // eslint-disable-next-line @next/next/no-img-element
                         <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
                             src={url}
-                            alt={`Kép ${i + 1}`}
+                            alt={`Kep ${i + 1}`}
                             className="h-20 w-20 rounded-lg object-cover border border-gray-200 cursor-pointer hover:opacity-90"
                           />
                         </a>
