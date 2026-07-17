@@ -111,8 +111,8 @@ export default function AdminNewPlaceForm({ categories }: { categories: Category
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700">Weboldal</label>
-          <input name="website" type="url" className="input-field mt-1.5" placeholder="https://..." />
+          <label className="block text-sm font-medium text-gray-700">Weboldal vagy e-mail</label>
+          <input name="website" type="text" className="input-field mt-1.5" placeholder="https://... vagy pelda@gmail.com" />
         </div>
 
         <div>

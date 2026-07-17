@@ -272,8 +272,8 @@ export default function NewPlaceForm({ categories }: { categories: Category[] })
 
         <div className="grid gap-5 sm:grid-cols-2">
           <div>
-            <label className="block text-sm font-medium text-sni-text">Weboldal</label>
-            <input {...register("website")} className="input-field mt-1.5" placeholder="https://..." />
+            <label className="block text-sm font-medium text-sni-text">Weboldal vagy e-mail</label>
+            <input {...register("website")} className="input-field mt-1.5" placeholder="https://... vagy pelda@gmail.com" />
           </div>
           <div>
             <label className="block text-sm font-medium text-sni-text">Telefonszám</label>

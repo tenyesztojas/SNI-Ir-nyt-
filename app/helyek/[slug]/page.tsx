@@ -1,7 +1,7 @@
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { notFound } from "next/navigation";
-import { Phone, Globe, MapPin, Star, CheckCircle2, ArrowLeft } from "lucide-react";
+import { Phone, Globe, Mail, MapPin, Star, CheckCircle2, ArrowLeft } from "lucide-react";
 import {
   getPlaceBySlug,
   getCategoryBySlug,
@@ -19,10 +19,16 @@ const PlaceDetailMap = dynamic(() => import("@/components/PlaceDetailMapInner"),
   ssr: false,
   loading: () => (
     <div className="mt-6 flex h-56 items-center justify-center rounded-2xl bg-gray-100 text-sm text-gray-400 sm:h-64">
-      Térkép betöltése...
+      Terkep betoltese...
     </div>
   ),
 });
+
+function websiteHref(value: string): string {
+  if (value.includes("@")) return `mailto:${value}`;
+  if (/^https?:\/\//i.test(value)) return value;
+  return `https://${value}`;
+}
 
 function Stars({ rating, size = 16 }: { rating: number; size?: number }) {
   return (
@@ -103,8 +109,8 @@ export default async function PlaceDetailPage({ params }: { params: { slug: stri
           {place.images.length > 1 && (
             <div className="absolute bottom-16 right-4 flex gap-1.5 sm:bottom-14">
               {place.images.slice(1).map((url, i) => (
-                // eslint-disable-next-line @next/next/no-img-element
                 <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={url}
                     alt=""
@@ -122,7 +128,7 @@ export default async function PlaceDetailPage({ params }: { params: { slug: stri
         </div>
       ) : (
         <div className={`relative flex h-56 items-center justify-center bg-gradient-to-br ${gradient} sm:h-72`}>
-          <span className="text-8xl drop-shadow-lg" aria-hidden>{category?.icon ?? "📍"}</span>
+          <span className="text-8xl drop-shadow-lg" aria-hidden>{category?.icon ?? "\uD83D\uDCCD"}</span>
           <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/30 to-transparent px-4 py-4 sm:px-8">
             <Link href="/helyek" className="inline-flex items-center gap-1.5 rounded-full bg-white/90 px-4 py-1.5 text-sm font-semibold text-gray-800 shadow-sm backdrop-blur-sm hover:bg-white">
               <ArrowLeft size={15} /> Vissza
@@ -134,7 +140,7 @@ export default async function PlaceDetailPage({ params }: { params: { slug: stri
       <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
         {place.status !== "approved" && (
           <div className="mb-5 rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            Ez a hely még jóváhagyásra vár — addig csak te és az adminok látják.
+            Ez a hely meg jovahagyasra var — addig csak te es az adminok latjak.
           </div>
         )}
 
@@ -148,7 +154,7 @@ export default async function PlaceDetailPage({ params }: { params: { slug: stri
               <div className="mt-2 flex items-center gap-2">
                 <Stars rating={avg} />
                 <span className="text-sm font-semibold text-gray-700">{avg.toFixed(1)}</span>
-                <span className="text-sm text-gray-400">({reviews.length} értékelés)</span>
+                <span className="text-sm text-gray-400">({reviews.length} ertekeles)</span>
               </div>
             )}
           </div>
@@ -158,7 +164,7 @@ export default async function PlaceDetailPage({ params }: { params: { slug: stri
         <div className="mt-5 flex flex-wrap gap-3">
           <FavoriteButton placeId={place.id} placeName={place.name} initialActive={initialFavorite} />
           <Link href={`/ertekeles/${place.id}`} className="btn-primary">
-            <Star size={17} /> Értékelést írok
+            <Star size={17} /> Ertekelest irok
           </Link>
         </div>
 
@@ -168,17 +174,17 @@ export default async function PlaceDetailPage({ params }: { params: { slug: stri
             <PlaceDetailMap
               lat={place.latitude}
               lng={place.longitude}
-              categoryEmoji={category?.icon ?? "📍"}
+              categoryEmoji={category?.icon ?? "\uD83D\uDCCD"}
             />
           </div>
         )}
 
         {/* Description */}
         <div className="mt-8 rounded-2xl border border-gray-100 bg-white p-6 shadow-soft">
-          <h2 className="text-lg font-bold text-gray-900">Leírás</h2>
+          <h2 className="text-lg font-bold text-gray-900">Leiras</h2>
           <p className="mt-2 leading-relaxed text-gray-700">{place.description}</p>
 
-          <h2 className="mt-6 text-lg font-bold text-gray-900">Miért autizmus/ADHD-barát?</h2>
+          <h2 className="mt-6 text-lg font-bold text-gray-900">Miert autizmus/ADHD-barat?</h2>
           <div className="mt-2 flex items-start gap-2 rounded-xl bg-emerald-50 px-4 py-3">
             <CheckCircle2 size={18} className="mt-0.5 shrink-0 text-emerald-600" />
             <p className="leading-relaxed text-emerald-900">{place.whyFriendly}</p>
@@ -197,9 +203,16 @@ export default async function PlaceDetailPage({ params }: { params: { slug: stri
             )}
             {place.website && (
               <div className="flex items-center gap-2">
-                <Globe size={15} className="shrink-0 text-sni-brand-teal" />
+                {place.website.includes("@")
+                  ? <Mail size={15} className="shrink-0 text-sni-brand-teal" />
+                  : <Globe size={15} className="shrink-0 text-sni-brand-teal" />}
                 <dd>
-                  <a href={place.website} target="_blank" rel="noopener noreferrer" className="truncate text-sni-brand-blue hover:underline">
+                  <a
+                    href={websiteHref(place.website)}
+                    target={place.website.includes("@") ? undefined : "_blank"}
+                    rel="noopener noreferrer"
+                    className="truncate text-sni-brand-blue hover:underline"
+                  >
                     {place.website}
                   </a>
                 </dd>
@@ -212,7 +225,7 @@ export default async function PlaceDetailPage({ params }: { params: { slug: stri
         <div className="mt-6 rounded-2xl border border-gray-100 bg-white p-6 shadow-soft">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-lg font-bold text-gray-900">
-              Vélemények
+              Velemenyek
               {reviews.length > 0 && (
                 <span className="ml-2 rounded-full bg-gray-100 px-2.5 py-0.5 text-sm font-semibold text-gray-600">
                   {reviews.length}
@@ -232,9 +245,9 @@ export default async function PlaceDetailPage({ params }: { params: { slug: stri
             <div className="mt-4 space-y-2 rounded-xl bg-gray-50 p-4">
               {[
                 { label: "Zajszint", key: "noiseRating" as const },
-                { label: "Zsúfoltság", key: "crowdRating" as const },
-                { label: "Személyzet empátiája", key: "staffEmpathyRating" as const },
-                { label: "Biztonságérzet", key: "safetyRating" as const },
+                { label: "Zsufoltság", key: "crowdRating" as const },
+                { label: "Szemelyzet empatiaja", key: "staffEmpathyRating" as const },
+                { label: "Biztonsagerzet", key: "safetyRating" as const },
                 { label: "Csendes sarok", key: "quietSpaceRating" as const },
               ].map(({ label, key }) => {
                 const a = reviews.reduce((s, r) => s + r[key], 0) / reviews.length;
@@ -245,9 +258,9 @@ export default async function PlaceDetailPage({ params }: { params: { slug: stri
 
           {reviews.length === 0 ? (
             <div className="mt-4 text-center">
-              <p className="text-3xl">💬</p>
-              <p className="mt-2 font-semibold text-gray-700">Még nincs értékelés</p>
-              <p className="mt-1 text-sm text-gray-500">Legyél az első, aki megosztja a tapasztalatát!</p>
+              <p className="text-3xl">\uD83D\uDCAC</p>
+              <p className="mt-2 font-semibold text-gray-700">Meg nincs ertekeles</p>
+              <p className="mt-1 text-sm text-gray-500">Legyel az elso, aki megosztja a tapasztalatát!</p>
             </div>
           ) : (
             <div className="mt-5 space-y-5">
@@ -261,7 +274,7 @@ export default async function PlaceDetailPage({ params }: { params: { slug: stri
                         <span className="text-xs text-gray-500">{r.authorName}</span>
                         {r.wouldReturn && (
                           <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">
-                            Visszatérne
+                            Visszaterne
                           </span>
                         )}
                       </div>
@@ -293,7 +306,7 @@ export default async function PlaceDetailPage({ params }: { params: { slug: stri
           )}
 
           <Link href={`/ertekeles/${place.id}`} className="btn-secondary mt-5 inline-flex">
-            <Star size={17} /> Értékelés írása
+            <Star size={17} /> Ertekeles irasa
           </Link>
         </div>
 
