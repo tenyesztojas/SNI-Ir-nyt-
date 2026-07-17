@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { Users, UserPlus } from "lucide-react";
+import { Users, UserPlus, Mail, MailX } from "lucide-react";
 import UserActions from "./UserActions";
 
 export default async function AdminUsersPage() {
@@ -53,30 +53,47 @@ export default async function AdminUsersPage() {
         </div>
       )}
 
-      <div className="mt-6 overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
-        <table className="w-full text-sm">
+      <div className="mt-6 rounded-xl border border-gray-200 bg-white shadow-sm">
+        <table className="w-full table-fixed text-sm">
+          <colgroup>
+            <col className="w-[22%]" />
+            {hasEmail && <col className="w-[28%]" />}
+            <col className="w-[10%]" />
+            <col className="w-[8%]" />
+            {hasEmail && <col className="w-[14%]" />}
+            <col />
+          </colgroup>
           <thead className="bg-gray-50 text-left text-xs font-semibold uppercase text-gray-500">
             <tr>
-              <th className="px-4 py-3">Név</th>
-              {hasEmail && <th className="px-4 py-3">Email</th>}
-              <th className="px-4 py-3">Szerep</th>
-              <th className="px-4 py-3">Hírlevél</th>
-              {hasEmail && <th className="px-4 py-3">Regisztrált</th>}
-              <th className="px-4 py-3">Műveletek</th>
+              <th className="px-3 py-3">Név</th>
+              {hasEmail && <th className="px-3 py-3">Email</th>}
+              <th className="px-3 py-3">Szerep</th>
+              <th className="px-3 py-3 text-center" title="Hírlevél-feliratkozás">Hírl.</th>
+              {hasEmail && <th className="px-3 py-3">Regisztrált</th>}
+              <th className="px-3 py-3">Műveletek</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {(profiles ?? []).map((p) => {
               const auth = authMap.get(p.id);
+              const regDate = auth?.created_at
+                ? new Date(auth.created_at).toLocaleDateString("hu-HU", {
+                    year: "2-digit",
+                    month: "2-digit",
+                    day: "2-digit",
+                  })
+                : "—";
               return (
                 <tr key={p.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 font-medium text-gray-900">
+                  <td className="px-3 py-2.5 font-medium text-gray-900 truncate" title={p.display_name ?? ""}>
                     {p.display_name ?? "—"}
                   </td>
                   {hasEmail && (
-                    <td className="px-4 py-3 text-gray-600">{auth?.email ?? "—"}</td>
+                    <td className="px-3 py-2.5 text-gray-500 truncate" title={auth?.email ?? ""}>
+                      {auth?.email ?? "—"}
+                    </td>
                   )}
-                  <td className="px-4 py-3">
+                  <td className="px-3 py-2.5">
                     {p.role === "admin" ? (
                       <span className="rounded-full bg-sni-brand-teal/10 px-2 py-0.5 text-xs font-bold text-sni-brand-teal">
                         admin
@@ -87,17 +104,15 @@ export default async function AdminUsersPage() {
                       </span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-gray-600">
-                    {p.newsletter_subscribed ? "igen" : "nem"}
+                  <td className="px-3 py-2.5 text-center">
+                    {p.newsletter_subscribed
+                      ? <Mail size={14} className="mx-auto text-sni-brand-teal" />
+                      : <MailX size={14} className="mx-auto text-gray-300" />}
                   </td>
                   {hasEmail && (
-                    <td className="px-4 py-3 text-gray-500">
-                      {auth?.created_at
-                        ? new Date(auth.created_at).toLocaleDateString("hu-HU")
-                        : "—"}
-                    </td>
+                    <td className="px-3 py-2.5 text-xs text-gray-500">{regDate}</td>
                   )}
-                  <td className="px-4 py-3">
+                  <td className="px-3 py-2.5">
                     <UserActions
                       userId={p.id}
                       displayName={p.display_name ?? ""}
