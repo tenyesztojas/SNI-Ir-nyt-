@@ -13,7 +13,7 @@ export async function submitReview(
 ): Promise<{ error?: string }> {
   const parsed = reviewSchema.safeParse(input);
   if (!parsed.success) {
-    return { error: "Hibas vagy hianyos adatok." };
+    return { error: "Hibás vagy hiányos adatok." };
   }
   const data = parsed.data;
 
@@ -21,7 +21,7 @@ export async function submitReview(
   const { data: userData } = await supabase.auth.getUser();
   const user = userData.user;
   if (!user) {
-    return { error: "Az ertekeles bekuldéséhez be kell jelentkezned." };
+    return { error: "Az értékelés beküldéséhez be kell jelentkezned." };
   }
 
   const { error } = await supabase.from("reviews").insert({
@@ -42,7 +42,7 @@ export async function submitReview(
   });
 
   if (error) {
-    return { error: "Nem sikerult az ertekeles bekuldése. Probald ujra." };
+    return { error: "Nem sikerült az értékelés beküldése. Próbáld újra." };
   }
 
   const { data: place } = await supabase
@@ -52,8 +52,8 @@ export async function submitReview(
     .single();
 
   await sendAdminPush(
-    "Uj ertekeles erkezett",
-    place?.name ? `${place.name} – jovahagyasra var` : "Jovahagyasra var",
+    "Új értékelés érkezett",
+    place?.name ? `${place.name} – jóváhagyásra vár` : "Jóváhagyásra vár",
     "/admin/ertekelesek"
   );
 
@@ -68,14 +68,14 @@ export async function decideReview(
 ): Promise<{ error?: string }> {
   const isAdmin = await isCurrentUserAdmin();
   if (!isAdmin) {
-    return { error: "Nincs jogosultsagod ehhez a muvelethez." };
+    return { error: "Nincs jogosultságod ehhez a művelethez." };
   }
 
   const supabase = createClient();
   const { error } = await supabase.from("reviews").update({ status: decision }).eq("id", reviewId);
 
   if (error) {
-    return { error: "Nem sikerult a statusz frissitése." };
+    return { error: "Nem sikerült a státusz frissítése." };
   }
 
   revalidatePath("/admin/ertekelesek");

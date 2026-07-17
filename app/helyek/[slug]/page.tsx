@@ -19,7 +19,7 @@ const PlaceDetailMap = dynamic(() => import("@/components/PlaceDetailMapInner"),
   ssr: false,
   loading: () => (
     <div className="mt-6 flex h-56 items-center justify-center rounded-2xl bg-gray-100 text-sm text-gray-400 sm:h-64">
-      Terkep betoltese...
+      Térkép betöltése...
     </div>
   ),
 });
@@ -53,7 +53,7 @@ function RatingBar({ label, value }: { label: string; value: number }) {
   const pct = Math.round((value / 5) * 100);
   return (
     <div className="flex items-center gap-3 text-sm">
-      <span className="w-36 shrink-0 text-gray-600">{label}</span>
+      <span className="w-40 shrink-0 text-gray-600">{label}</span>
       <div className="h-2 flex-1 overflow-hidden rounded-full bg-gray-100">
         <div className="h-full rounded-full bg-sni-brand-teal" style={{ width: `${pct}%` }} />
       </div>
@@ -94,53 +94,24 @@ export default async function PlaceDetailPage({ params }: { params: { slug: stri
   const initialFavorite = user ? await isPlaceFavorited(user.id, place.id) : false;
   const avg = avgRating(reviews);
   const gradient = pickGradient(place.slug ?? place.name);
+  const images = place.images ?? [];
 
   return (
     <div>
-      {/* Photo hero */}
-      {place.images && place.images.length > 0 ? (
-        <div className="relative h-56 sm:h-72 bg-gray-900 overflow-hidden">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={place.images[0]}
-            alt={place.name}
-            className="w-full h-full object-cover opacity-90"
-          />
-          {place.images.length > 1 && (
-            <div className="absolute bottom-16 right-4 flex gap-1.5 sm:bottom-14">
-              {place.images.slice(1).map((url, i) => (
-                <a key={i} href={url} target="_blank" rel="noopener noreferrer">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={url}
-                    alt=""
-                    className="h-14 w-14 rounded-lg object-cover border-2 border-white shadow-md cursor-pointer hover:opacity-90"
-                  />
-                </a>
-              ))}
-            </div>
-          )}
-          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/40 to-transparent px-4 py-4 sm:px-8">
-            <Link href="/helyek" className="inline-flex items-center gap-1.5 rounded-full bg-white/90 px-4 py-1.5 text-sm font-semibold text-gray-800 shadow-sm backdrop-blur-sm hover:bg-white">
-              <ArrowLeft size={15} /> Vissza
-            </Link>
-          </div>
+      {/* Hero — mindig gradiens, a kép a leírás elején jelenik meg */}
+      <div className={`relative flex h-48 items-center justify-center bg-gradient-to-br ${gradient} sm:h-64`}>
+        <span className="text-8xl drop-shadow-lg" aria-hidden>{category?.icon ?? "📍"}</span>
+        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/30 to-transparent px-4 py-4 sm:px-8">
+          <Link href="/helyek" className="inline-flex items-center gap-1.5 rounded-full bg-white/90 px-4 py-1.5 text-sm font-semibold text-gray-800 shadow-sm backdrop-blur-sm hover:bg-white">
+            <ArrowLeft size={15} /> Vissza
+          </Link>
         </div>
-      ) : (
-        <div className={`relative flex h-56 items-center justify-center bg-gradient-to-br ${gradient} sm:h-72`}>
-          <span className="text-8xl drop-shadow-lg" aria-hidden>{category?.icon ?? "\uD83D\uDCCD"}</span>
-          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/30 to-transparent px-4 py-4 sm:px-8">
-            <Link href="/helyek" className="inline-flex items-center gap-1.5 rounded-full bg-white/90 px-4 py-1.5 text-sm font-semibold text-gray-800 shadow-sm backdrop-blur-sm hover:bg-white">
-              <ArrowLeft size={15} /> Vissza
-            </Link>
-          </div>
-        </div>
-      )}
+      </div>
 
       <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
         {place.status !== "approved" && (
           <div className="mb-5 rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            Ez a hely meg jovahagyasra var — addig csak te es az adminok latjak.
+            Ez a hely még jóváhagyásra vár — addig csak te és az adminok látják.
           </div>
         )}
 
@@ -154,7 +125,7 @@ export default async function PlaceDetailPage({ params }: { params: { slug: stri
               <div className="mt-2 flex items-center gap-2">
                 <Stars rating={avg} />
                 <span className="text-sm font-semibold text-gray-700">{avg.toFixed(1)}</span>
-                <span className="text-sm text-gray-400">({reviews.length} ertekeles)</span>
+                <span className="text-sm text-gray-400">({reviews.length} értékelés)</span>
               </div>
             )}
           </div>
@@ -164,27 +135,48 @@ export default async function PlaceDetailPage({ params }: { params: { slug: stri
         <div className="mt-5 flex flex-wrap gap-3">
           <FavoriteButton placeId={place.id} placeName={place.name} initialActive={initialFavorite} />
           <Link href={`/ertekeles/${place.id}`} className="btn-primary">
-            <Star size={17} /> Ertekelest irok
+            <Star size={17} /> Értékelést írok
           </Link>
         </div>
 
-        {/* Map */}
+        {/* Térkép */}
         {typeof place.latitude === "number" && typeof place.longitude === "number" && (
           <div className="mt-6">
             <PlaceDetailMap
               lat={place.latitude}
               lng={place.longitude}
-              categoryEmoji={category?.icon ?? "\uD83D\uDCCD"}
+              categoryEmoji={category?.icon ?? "📍"}
             />
           </div>
         )}
 
-        {/* Description */}
-        <div className="mt-8 rounded-2xl border border-gray-100 bg-white p-6 shadow-soft">
-          <h2 className="text-lg font-bold text-gray-900">Leiras</h2>
+        {/* Leírás és képek */}
+        <div className="mt-6 rounded-2xl border border-gray-100 bg-white p-6 shadow-soft">
+
+          {/* Képek a leírás elején */}
+          {images.length > 0 && (
+            <div className={`mb-5 ${images.length === 1 ? "flex justify-center" : "grid grid-cols-2 gap-2 sm:grid-cols-3"}`}>
+              {images.map((url, i) => (
+                <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={url}
+                    alt={`${place.name} – ${i + 1}. kép`}
+                    className={`rounded-xl object-cover border border-gray-100 shadow-sm hover:opacity-90 transition-opacity ${
+                      images.length === 1
+                        ? "max-h-72 max-w-full w-auto"
+                        : "w-full h-40"
+                    }`}
+                  />
+                </a>
+              ))}
+            </div>
+          )}
+
+          <h2 className="text-lg font-bold text-gray-900">Leírás</h2>
           <p className="mt-2 leading-relaxed text-gray-700">{place.description}</p>
 
-          <h2 className="mt-6 text-lg font-bold text-gray-900">Miert autizmus/ADHD-barat?</h2>
+          <h2 className="mt-6 text-lg font-bold text-gray-900">Miért autizmus/ADHD-barát?</h2>
           <div className="mt-2 flex items-start gap-2 rounded-xl bg-emerald-50 px-4 py-3">
             <CheckCircle2 size={18} className="mt-0.5 shrink-0 text-emerald-600" />
             <p className="leading-relaxed text-emerald-900">{place.whyFriendly}</p>
@@ -221,11 +213,11 @@ export default async function PlaceDetailPage({ params }: { params: { slug: stri
           </dl>
         </div>
 
-        {/* Reviews */}
+        {/* Értékelések */}
         <div className="mt-6 rounded-2xl border border-gray-100 bg-white p-6 shadow-soft">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-lg font-bold text-gray-900">
-              Velemenyek
+              Vélemények
               {reviews.length > 0 && (
                 <span className="ml-2 rounded-full bg-gray-100 px-2.5 py-0.5 text-sm font-semibold text-gray-600">
                   {reviews.length}
@@ -244,11 +236,11 @@ export default async function PlaceDetailPage({ params }: { params: { slug: stri
           {reviews.length > 0 && (
             <div className="mt-4 space-y-2 rounded-xl bg-gray-50 p-4">
               {[
-                { label: "Zajszint", key: "noiseRating" as const },
-                { label: "Zsufoltság", key: "crowdRating" as const },
-                { label: "Szemelyzet empatiaja", key: "staffEmpathyRating" as const },
-                { label: "Biztonsagerzet", key: "safetyRating" as const },
-                { label: "Csendes sarok", key: "quietSpaceRating" as const },
+                { label: "Zajszint kezelhetősége", key: "noiseRating" as const },
+                { label: "Zsúfoltság kezelhetősége", key: "crowdRating" as const },
+                { label: "Személyzet empátiája", key: "staffEmpathyRating" as const },
+                { label: "Biztonságérzet", key: "safetyRating" as const },
+                { label: "Csendes sarok elérhetősége", key: "quietSpaceRating" as const },
               ].map(({ label, key }) => {
                 const a = reviews.reduce((s, r) => s + r[key], 0) / reviews.length;
                 return <RatingBar key={key} label={label} value={Math.round(a * 10) / 10} />;
@@ -258,9 +250,9 @@ export default async function PlaceDetailPage({ params }: { params: { slug: stri
 
           {reviews.length === 0 ? (
             <div className="mt-4 text-center">
-              <p className="text-3xl">\uD83D\uDCAC</p>
-              <p className="mt-2 font-semibold text-gray-700">Meg nincs ertekeles</p>
-              <p className="mt-1 text-sm text-gray-500">Legyel az elso, aki megosztja a tapasztalatát!</p>
+              <p className="text-3xl">💬</p>
+              <p className="mt-2 font-semibold text-gray-700">Még nincs értékelés</p>
+              <p className="mt-1 text-sm text-gray-500">Legyél az első, aki megosztja a tapasztalatát!</p>
             </div>
           ) : (
             <div className="mt-5 space-y-5">
@@ -274,7 +266,7 @@ export default async function PlaceDetailPage({ params }: { params: { slug: stri
                         <span className="text-xs text-gray-500">{r.authorName}</span>
                         {r.wouldReturn && (
                           <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">
-                            Visszaterne
+                            Visszatérne
                           </span>
                         )}
                       </div>
@@ -293,7 +285,7 @@ export default async function PlaceDetailPage({ params }: { params: { slug: stri
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
                             src={url}
-                            alt={`Kep ${i + 1}`}
+                            alt={`Kép ${i + 1}`}
                             className="h-20 w-20 rounded-lg object-cover border border-gray-200 cursor-pointer hover:opacity-90"
                           />
                         </a>
@@ -306,7 +298,7 @@ export default async function PlaceDetailPage({ params }: { params: { slug: stri
           )}
 
           <Link href={`/ertekeles/${place.id}`} className="btn-secondary mt-5 inline-flex">
-            <Star size={17} /> Ertekeles irasa
+            <Star size={17} /> Értékelés írása
           </Link>
         </div>
 
