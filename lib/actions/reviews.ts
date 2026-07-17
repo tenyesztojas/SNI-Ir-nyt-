@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { reviewSchema, ReviewInput } from "@/lib/schemas";
 import { isCurrentUserAdmin } from "@/lib/data";
+import { sendAdminPush } from "@/lib/push";
 
 export async function submitReview(
   placeId: string,
@@ -12,7 +13,7 @@ export async function submitReview(
 ): Promise<{ error?: string }> {
   const parsed = reviewSchema.safeParse(input);
   if (!parsed.success) {
-    return { error: "Hibás vagy hiányos adatok." };
+    return { error: "Hibas vagy hianyos adatok." };
   }
   const data = parsed.data;
 
@@ -20,7 +21,7 @@ export async function submitReview(
   const { data: userData } = await supabase.auth.getUser();
   const user = userData.user;
   if (!user) {
-    return { error: "Az értékelés beküldéséhez be kell jelentkezned." };
+    return { error: "Az ertekeles bekuldéséhez be kell jelentkezned." };
   }
 
   const { error } = await supabase.from("reviews").insert({
@@ -41,8 +42,20 @@ export async function submitReview(
   });
 
   if (error) {
-    return { error: "Nem sikerült az értékelés beküldése. Próbáld újra." };
+    return { error: "Nem sikerult az ertekeles bekuldése. Probald ujra." };
   }
+
+  const { data: place } = await supabase
+    .from("places")
+    .select("name")
+    .eq("id", placeId)
+    .single();
+
+  await sendAdminPush(
+    "Uj ertekeles erkezett",
+    place?.name ? `${place.name} – jovahagyasra var` : "Jovahagyasra var",
+    "/admin/ertekelesek"
+  );
 
   revalidatePath("/admin/ertekelesek");
   revalidatePath("/profil");
@@ -55,14 +68,14 @@ export async function decideReview(
 ): Promise<{ error?: string }> {
   const isAdmin = await isCurrentUserAdmin();
   if (!isAdmin) {
-    return { error: "Nincs jogosultságod ehhez a művelethez." };
+    return { error: "Nincs jogosultsagod ehhez a muvelethez." };
   }
 
   const supabase = createClient();
   const { error } = await supabase.from("reviews").update({ status: decision }).eq("id", reviewId);
 
   if (error) {
-    return { error: "Nem sikerült a státusz frissítése." };
+    return { error: "Nem sikerult a statusz frissitése." };
   }
 
   revalidatePath("/admin/ertekelesek");
