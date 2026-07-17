@@ -6,7 +6,7 @@ export default function AdminCreateUserPage() {
   return (
     <div className="mx-auto max-w-lg px-4 py-8 sm:px-6">
       <Link href="/admin/felhasznalok" className="text-sm text-sni-brand-blue hover:underline">
-        ← Felhasználók
+        ← Vissza a felhasználókhoz
       </Link>
       <div className="mt-3 flex items-center gap-3">
         <UserPlus className="text-sni-brand-teal" size={26} />

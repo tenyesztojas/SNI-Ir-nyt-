@@ -79,7 +79,7 @@ export default function AdminCreateUserForm() {
           required
         />
         <p className="mt-1 text-xs text-gray-400">
-          Ezzel tud majd bejelentkezni. Nem szükséges hozzá valódi postaláda — a megerősítést átugorjuk.
+          Ezzel tud majd bejelentkezni. Email-megerősítést átugorjuk — azonnal aktív a fiók.
         </p>
       </div>
 
@@ -107,7 +107,7 @@ export default function AdminCreateUserForm() {
           </button>
         </div>
         <p className="mt-1 text-xs text-gray-400">
-          Add meg a jelszót szóban vagy papíron. A felhasználó profilja alatt bármikor megváltoztathatja.
+          Add meg szóban vagy papíron. A felhasználó a profilján bármikor megváltoztathatja.
         </p>
       </div>
 

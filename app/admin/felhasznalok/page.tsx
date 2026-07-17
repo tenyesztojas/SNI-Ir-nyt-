@@ -23,7 +23,7 @@ export default async function AdminUsersPage() {
       created_at: u.created_at,
     }));
   } catch {
-    // service role key not set
+    // service role key nincs beállítva
   }
 
   const authMap = new Map(authUsers.map((u) => [u.id, u]));
@@ -32,24 +32,24 @@ export default async function AdminUsersPage() {
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
       <Link href="/admin" className="text-sm text-sni-brand-blue hover:underline">
-        Vissza az admin attekinteshez
+        Vissza az admin áttekintéshez
       </Link>
       <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <Users className="text-sni-brand-blue" size={28} />
           <h1 className="text-2xl font-bold text-sni-text">
-            Felhasznalok ({profiles?.length ?? 0} fo)
+            Felhasználók ({profiles?.length ?? 0} fő)
           </h1>
         </div>
         <Link href="/admin/felhasznalok/uj" className="btn-primary inline-flex items-center gap-2">
-          <UserPlus size={16} /> Uj felhasznalo felvetele
+          <UserPlus size={16} /> Új felhasználó felvitele
         </Link>
       </div>
 
       {!hasEmail && (
         <div className="mt-4 rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
-          Email-cimek csak akkor jelennek meg, ha a{" "}
-          <strong>SUPABASE_SERVICE_ROLE_KEY</strong> be van allitva Vercelben.
+          Email-címek csak akkor jelennek meg, ha a{" "}
+          <strong>SUPABASE_SERVICE_ROLE_KEY</strong> be van állítva Vercelben.
         </div>
       )}
 
@@ -57,12 +57,12 @@ export default async function AdminUsersPage() {
         <table className="w-full text-sm">
           <thead className="bg-gray-50 text-left text-xs font-semibold uppercase text-gray-500">
             <tr>
-              <th className="px-4 py-3">Nev</th>
+              <th className="px-4 py-3">Név</th>
               {hasEmail && <th className="px-4 py-3">Email</th>}
               <th className="px-4 py-3">Szerep</th>
-              <th className="px-4 py-3">Hirlevél</th>
-              {hasEmail && <th className="px-4 py-3">Regisztralt</th>}
-              <th className="px-4 py-3">Muveletek</th>
+              <th className="px-4 py-3">Hírlevél</th>
+              {hasEmail && <th className="px-4 py-3">Regisztrált</th>}
+              <th className="px-4 py-3">Műveletek</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">

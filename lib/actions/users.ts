@@ -11,14 +11,14 @@ export async function adminCreateUser(input: {
   password: string;
 }): Promise<{ error?: string }> {
   const isAdmin = await isCurrentUserAdmin();
-  if (!isAdmin) return { error: "Nincs jogosultságod ehhez a muvelethez." };
+  if (!isAdmin) return { error: "Nincs jogosultságod ehhez a művelethez." };
 
   if (!input.displayName || input.displayName.trim().length < 2)
-    return { error: "Add meg a felhasznalo nevet (min. 2 karakter)." };
+    return { error: "Add meg a felhasználó nevét (min. 2 karakter)." };
   if (!input.email || !input.email.includes("@"))
-    return { error: "Ervenyes email-cim szukseges." };
+    return { error: "Érvényes email-cím szükséges." };
   if (!input.password || input.password.length < 8)
-    return { error: "A jelszo legalabb 8 karakter legyen." };
+    return { error: "A jelszó legalább 8 karakter legyen." };
 
   const admin = createAdminClient();
 
@@ -31,7 +31,7 @@ export async function adminCreateUser(input: {
 
   if (error) {
     if (error.message.includes("already been registered"))
-      return { error: "Ez az email-cim mar regisztralt." };
+      return { error: "Ez az email-cím már regisztrált." };
     return { error: error.message };
   }
 
@@ -48,13 +48,32 @@ export async function adminCreateUser(input: {
   return {};
 }
 
+export async function adminResetUserPassword(
+  userId: string,
+  newPassword: string
+): Promise<{ error?: string }> {
+  const isAdmin = await isCurrentUserAdmin();
+  if (!isAdmin) return { error: "Nincs jogosultságod ehhez a művelethez." };
+
+  if (!newPassword || newPassword.length < 8)
+    return { error: "A jelszó legalább 8 karakter legyen." };
+
+  const admin = createAdminClient();
+  const { error } = await admin.auth.admin.updateUserById(userId, {
+    password: newPassword,
+  });
+
+  if (error) return { error: error.message };
+  return {};
+}
+
 export async function deleteUser(userId: string): Promise<{ error?: string }> {
   const isAdmin = await isCurrentUserAdmin();
   if (!isAdmin) return { error: "Nincs jogosultságod." };
 
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (user?.id === userId) return { error: "Sajat magadat nem torölheted." };
+  if (user?.id === userId) return { error: "Saját magadat nem törölheted." };
 
   const admin = createAdminClient();
   const { error } = await admin.auth.admin.deleteUser(userId);
@@ -73,7 +92,7 @@ export async function changeUserRole(
 
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (user?.id === userId) return { error: "Sajat szerepkoroded nem valtoztathatod." };
+  if (user?.id === userId) return { error: "Saját szerepkörödet nem változtathatod." };
 
   const admin = createAdminClient();
   const { error } = await admin.from("profiles").update({ role }).eq("id", userId);
