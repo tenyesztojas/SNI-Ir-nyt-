@@ -3,10 +3,11 @@ export const dynamic = "force-dynamic";
 import ViewToggle from "@/components/ViewToggle";
 import PlaceCard from "@/components/PlaceCard";
 import PlacesSearchForm from "@/components/PlacesSearchForm";
-import { getCategories, getApprovedPlaces, citiesFromPlaces } from "@/lib/data";
+import NearbyPlacesPanel from "@/components/NearbyPlacesPanel";
+import { getCategories, getApprovedPlaces, citiesFromPlaces, getCurrentUserAndProfile } from "@/lib/data";
 
 function normalize(s: string) {
-  return s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
 
 export default async function HelyekPage({
@@ -18,7 +19,12 @@ export default async function HelyekPage({
   const kategoria = searchParams.kategoria ?? "";
   const telepules = searchParams.telepules ?? "";
 
-  const [categories, places] = await Promise.all([getCategories(), getApprovedPlaces()]);
+  const [categories, places, { user }] = await Promise.all([
+    getCategories(),
+    getApprovedPlaces(),
+    getCurrentUserAndProfile(),
+  ]);
+
   const cities = citiesFromPlaces(places);
   const categoryBySlug = new Map(categories.map((c) => [c.slug, c]));
 
@@ -38,7 +44,12 @@ export default async function HelyekPage({
     <div>
       <div className="border-b border-gray-200 bg-white shadow-sm">
         <div className="mx-auto max-w-5xl px-4 py-5 sm:px-6">
-          <h1 className="text-2xl font-bold text-gray-900">Helyek keresése</h1>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <h1 className="text-2xl font-bold text-gray-900">Helyek keresése</h1>
+            {user && (
+              <NearbyPlacesPanel places={places} categories={categories} />
+            )}
+          </div>
           <PlacesSearchForm
             categories={categories}
             cities={cities}
