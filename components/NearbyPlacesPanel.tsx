@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Navigation, X, MapPin, Loader2 } from "lucide-react";
+import { Navigation, X, MapPin, Loader2, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { Place, Category } from "@/lib/types";
 
@@ -18,6 +18,9 @@ function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): nu
 }
 
 type PlaceWithDist = Place & { distKm: number };
+type Step = "pick" | "loading" | "results" | "error";
+const RADII = [5, 10, 20, 50] as const;
+type Radius = (typeof RADII)[number];
 
 export default function NearbyPlacesPanel({
   places,
@@ -27,21 +30,33 @@ export default function NearbyPlacesPanel({
   categories: Category[];
 }) {
   const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [step, setStep] = useState<Step>("pick");
+  const [radius, setRadius] = useState<Radius | null>(null);
   const [results, setResults] = useState<PlaceWithDist[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   const categoryBySlug = new Map(categories.map((c) => [c.slug, c]));
 
-  function findNearby() {
-    setError(null);
-    setLoading(true);
+  function handleOpen() {
+    setStep("pick");
+    setRadius(null);
     setResults([]);
+    setError(null);
     setOpen(true);
+  }
+
+  function handleClose() {
+    setOpen(false);
+  }
+
+  function pickRadius(r: Radius) {
+    setRadius(r);
+    setStep("loading");
+    setError(null);
 
     if (!navigator.geolocation) {
       setError("A böngésző nem támogatja a helymeghatározást.");
-      setLoading(false);
+      setStep("error");
       return;
     }
 
@@ -54,10 +69,10 @@ export default function NearbyPlacesPanel({
             ...p,
             distKm: haversineKm(latitude, longitude, p.latitude!, p.longitude!),
           }))
-          .filter((p) => p.distKm <= 10)
+          .filter((p) => p.distKm <= r)
           .sort((a, b) => a.distKm - b.distKm);
         setResults(nearby);
-        setLoading(false);
+        setStep("results");
       },
       (err) => {
         setError(
@@ -65,7 +80,7 @@ export default function NearbyPlacesPanel({
             ? "A helymeghatározás engedélyezése szükséges. Engedélyezd a böngészőben, majd próbáld újra."
             : "Nem sikerült lekérni a helyzetedet. Próbáld újra."
         );
-        setLoading(false);
+        setStep("error");
       },
       { timeout: 10000 }
     );
@@ -74,7 +89,7 @@ export default function NearbyPlacesPanel({
   return (
     <>
       <button
-        onClick={findNearby}
+        onClick={handleOpen}
         className="btn-secondary inline-flex items-center gap-2"
         type="button"
       >
@@ -85,14 +100,30 @@ export default function NearbyPlacesPanel({
       {open && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 backdrop-blur-sm sm:items-center">
           <div className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-2xl bg-white shadow-2xl">
+
             {/* Fejléc */}
             <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
               <div className="flex items-center gap-2">
+                {step === "results" && (
+                  <button
+                    type="button"
+                    onClick={() => { setStep("pick"); setRadius(null); }}
+                    className="mr-1 rounded-lg p-1 text-gray-400 hover:bg-gray-100"
+                    aria-label="Vissza"
+                  >
+                    <ArrowLeft size={17} />
+                  </button>
+                )}
                 <Navigation size={18} className="text-sni-brand-teal" />
-                <h2 className="font-bold text-gray-900">10 km-en belül</h2>
+                <h2 className="font-bold text-gray-900">
+                  {step === "pick" && "Mekkora körzetben keresünk?"}
+                  {step === "loading" && "Helymeghatározás..."}
+                  {step === "results" && `${radius} km-en belül`}
+                  {step === "error" && "Hiba történt"}
+                </h2>
               </div>
               <button
-                onClick={() => setOpen(false)}
+                onClick={handleClose}
                 className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100"
                 type="button"
                 aria-label="Bezárás"
@@ -102,34 +133,71 @@ export default function NearbyPlacesPanel({
             </div>
 
             {/* Tartalom */}
-            <div className="flex-1 overflow-y-auto px-5 py-4">
-              {loading && (
+            <div className="flex-1 overflow-y-auto px-5 py-5">
+
+              {/* Sugárválasztó */}
+              {step === "pick" && (
+                <div className="grid grid-cols-2 gap-3">
+                  {RADII.map((r) => (
+                    <button
+                      key={r}
+                      type="button"
+                      onClick={() => pickRadius(r)}
+                      className="flex flex-col items-center justify-center gap-1 rounded-2xl border-2 border-gray-100 bg-gray-50 py-7 font-bold text-gray-700 transition-colors hover:border-sni-brand-teal hover:bg-sni-brand-teal/5 hover:text-sni-brand-teal"
+                    >
+                      <span className="text-3xl font-extrabold text-sni-brand-teal">{r}</span>
+                      <span className="text-sm font-semibold text-gray-500">km-en belül</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Betöltés */}
+              {step === "loading" && (
                 <div className="flex flex-col items-center gap-3 py-12 text-gray-500">
                   <Loader2 size={32} className="animate-spin text-sni-brand-teal" />
                   <p className="text-sm">Helymeghatározás folyamatban...</p>
                 </div>
               )}
 
-              {error && !loading && (
-                <div className="rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-700">
-                  {error}
+              {/* Hiba */}
+              {step === "error" && (
+                <div className="space-y-4">
+                  <div className="rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-700">
+                    {error}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { setStep("pick"); setRadius(null); }}
+                    className="btn-secondary w-full"
+                  >
+                    Vissza a kereséshez
+                  </button>
                 </div>
               )}
 
-              {!loading && !error && results.length === 0 && (
-                <div className="py-12 text-center">
+              {/* Eredmények */}
+              {step === "results" && results.length === 0 && (
+                <div className="py-10 text-center">
                   <p className="text-4xl">📍</p>
-                  <p className="mt-2 font-semibold text-gray-700">Nincs hely 10 km-en belül</p>
-                  <p className="mt-1 text-sm text-gray-500">
-                    Az adatbázisban lévő helyek egyike sem található 10 km-es körzetedben.
+                  <p className="mt-2 font-semibold text-gray-700">
+                    Nincs hely {radius} km-en belül
                   </p>
+                  <p className="mt-1 text-sm text-gray-500">Próbálj nagyobb sugarú keresést!</p>
+                  <button
+                    type="button"
+                    onClick={() => { setStep("pick"); setRadius(null); }}
+                    className="btn-secondary mt-5"
+                  >
+                    Sugár módosítása
+                  </button>
                 </div>
               )}
 
-              {!loading && results.length > 0 && (
+              {step === "results" && results.length > 0 && (
                 <div className="space-y-3">
-                  <p className="text-sm text-gray-500 mb-3">
-                    <strong className="text-gray-800">{results.length} hely</strong> található 10 km-en belül
+                  <p className="mb-3 text-sm text-gray-500">
+                    <strong className="text-gray-800">{results.length} hely</strong> található {radius} km-en belül
                   </p>
                   {results.map((p) => {
                     const cat = categoryBySlug.get(p.category);
@@ -141,7 +209,7 @@ export default function NearbyPlacesPanel({
                       <Link
                         key={p.id}
                         href={`/helyek/${p.slug}`}
-                        onClick={() => setOpen(false)}
+                        onClick={handleClose}
                         className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 transition-colors hover:bg-gray-100"
                       >
                         <span className="text-2xl" aria-hidden>{cat?.icon ?? "📍"}</span>
@@ -150,9 +218,7 @@ export default function NearbyPlacesPanel({
                           <p className="flex items-center gap-1 text-xs text-gray-500">
                             <MapPin size={11} />
                             {p.city}
-                            {cat && (
-                              <span className="ml-1 text-gray-400">· {cat.name}</span>
-                            )}
+                            {cat && <span className="ml-1 text-gray-400">· {cat.name}</span>}
                           </p>
                         </div>
                         <span className="shrink-0 rounded-full bg-sni-brand-teal/10 px-2.5 py-1 text-xs font-bold text-sni-brand-teal">
@@ -163,6 +229,7 @@ export default function NearbyPlacesPanel({
                   })}
                 </div>
               )}
+
             </div>
           </div>
         </div>
