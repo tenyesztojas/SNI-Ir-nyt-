@@ -82,3 +82,28 @@ export async function decideReview(
   revalidatePath("/helyek");
   return {};
 }
+
+export async function adminEditAndApproveReview(
+  reviewId: string,
+  fields: { title: string; positiveText: string; warningText?: string }
+): Promise<{ error?: string }> {
+  const isAdmin = await isCurrentUserAdmin();
+  if (!isAdmin) return { error: "Nincs jogosultságod ehhez a művelethez." };
+
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("reviews")
+    .update({
+      title: fields.title,
+      positive_text: fields.positiveText,
+      warning_text: fields.warningText || null,
+      status: "approved",
+    })
+    .eq("id", reviewId);
+
+  if (error) return { error: "Nem sikerült menteni. (" + error.message + ")" };
+
+  revalidatePath("/admin/ertekelesek");
+  revalidatePath("/helyek");
+  return {};
+}

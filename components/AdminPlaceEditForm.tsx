@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useRef, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Save, CheckCircle, MapPin } from "lucide-react";
+import { Save, CheckCircle, MapPin, X, ImageIcon } from "lucide-react";
 import { Place, Category } from "@/lib/types";
 import { adminUpdatePlace } from "@/lib/actions/places";
+import ImageUpload, { ImageUploadRef } from "@/components/ImageUpload";
 
 export default function AdminPlaceEditForm({
   place,
@@ -18,6 +19,7 @@ export default function AdminPlaceEditForm({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [regeocode, setRegeocode] = useState(false);
+  const imgRef = useRef<ImageUploadRef>(null);
 
   const [values, setValues] = useState({
     name: place.name,
@@ -34,6 +36,14 @@ export default function AdminPlaceEditForm({
     longitude: place.longitude != null ? String(place.longitude) : "",
   });
 
+  // Meglévő képek kezelése
+  const [existingImages, setExistingImages] = useState<string[]>(place.images ?? []);
+
+  function removeExistingImage(url: string) {
+    setExistingImages((prev) => prev.filter((u) => u !== url));
+    setSuccess(false);
+  }
+
   function set(field: string, value: string) {
     setValues((prev) => ({ ...prev, [field]: value }));
     setSuccess(false);
@@ -44,7 +54,13 @@ export default function AdminPlaceEditForm({
     e.preventDefault();
     setError(null);
     startTransition(async () => {
-      const result = await adminUpdatePlace(place.id, { ...values, regeocode });
+      const newImages = imgRef.current ? await imgRef.current.uploadAll() : [];
+      const allImages = [...existingImages, ...newImages];
+      const result = await adminUpdatePlace(place.id, {
+        ...values,
+        regeocode,
+        images: allImages.length > 0 ? allImages : null,
+      });
       if (result?.error) { setError(result.error); return; }
       setSuccess(true);
       setRegeocode(false);
@@ -108,7 +124,44 @@ export default function AdminPlaceEditForm({
         <textarea className="input-field mt-1.5 h-20 resize-none" value={values.ownExperience} onChange={(e) => set("ownExperience", e.target.value)} />
       </div>
 
-      {/* Térkép koordináták */}
+      {/* Képkezelés */}
+      <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
+        <div className="mb-3 flex items-center gap-2">
+          <ImageIcon size={16} className="text-sni-brand-blue" />
+          <span className="text-sm font-semibold text-gray-700">Képek</span>
+          <span className="ml-auto text-xs text-gray-400">{existingImages.length} meglévő kép</span>
+        </div>
+
+        {/* Meglévő képek */}
+        {existingImages.length > 0 && (
+          <div className="mb-4 flex flex-wrap gap-3">
+            {existingImages.map((url, i) => (
+              <div key={i} className="relative group">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={url}
+                  alt={`Kép ${i + 1}`}
+                  className="h-24 w-24 rounded-xl object-cover border border-gray-200"
+                />
+                <button
+                  type="button"
+                  onClick={() => removeExistingImage(url)}
+                  className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-white opacity-0 shadow group-hover:opacity-100 transition-opacity"
+                  title="Kép eltávolítása"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Új kép feltöltése */}
+        <p className="mb-2 text-xs font-medium text-gray-500">Új kép hozzáadása:</p>
+        <ImageUpload ref={imgRef} folder="places" />
+      </div>
+
+      {/* Koordináták */}
       <div className="rounded-2xl border border-gray-200 bg-gray-50 p-4">
         <div className="flex items-center gap-2 mb-3">
           <MapPin size={16} className="text-sni-brand-blue" />
@@ -122,21 +175,11 @@ export default function AdminPlaceEditForm({
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <label className="block text-xs font-medium text-gray-600">Szélességi fok (lat)</label>
-            <input
-              className="input-field mt-1"
-              placeholder="pl. 47.4979"
-              value={values.latitude}
-              onChange={(e) => set("latitude", e.target.value)}
-            />
+            <input className="input-field mt-1" placeholder="pl. 47.4979" value={values.latitude} onChange={(e) => set("latitude", e.target.value)} />
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-600">Hosszúsági fok (lng)</label>
-            <input
-              className="input-field mt-1"
-              placeholder="pl. 19.0402"
-              value={values.longitude}
-              onChange={(e) => set("longitude", e.target.value)}
-            />
+            <input className="input-field mt-1" placeholder="pl. 19.0402" value={values.longitude} onChange={(e) => set("longitude", e.target.value)} />
           </div>
         </div>
         <label className="mt-3 flex items-center gap-2 cursor-pointer">
@@ -146,9 +189,7 @@ export default function AdminPlaceEditForm({
             onChange={(e) => setRegeocode(e.target.checked)}
             className="h-4 w-4 rounded border-gray-300 accent-sni-brand-teal"
           />
-          <span className="text-sm text-gray-700">
-            Koordináták lekérése Google Maps-ből mentéskor (felülírja a fenti értékeket)
-          </span>
+          <span className="text-sm text-gray-700">Koordináták lekérése Google Maps-ből mentéskor</span>
         </label>
       </div>
 

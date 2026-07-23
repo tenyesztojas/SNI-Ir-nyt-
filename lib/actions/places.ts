@@ -245,6 +245,7 @@ export type AdminPlaceUpdate = {
   latitude?: string;
   longitude?: string;
   regeocode?: boolean;
+  images?: string[] | null;
 };
 
 export async function adminUpdatePlace(
@@ -279,6 +280,7 @@ export async function adminUpdatePlace(
       status: values.status,
       latitude: lat,
       longitude: lng,
+      ...(values.images !== undefined ? { images: values.images } : {}),
     })
     .eq("id", placeId);
 
@@ -286,6 +288,48 @@ export async function adminUpdatePlace(
 
   revalidatePath("/admin/helyek");
   revalidatePath("/admin/helyek/osszes");
+  revalidatePath("/helyek");
+  revalidatePath("/");
+  return {};
+}
+
+export async function adminEditAndApprovePlace(
+  placeId: string,
+  fields: { name: string; description: string; whyFriendly: string; ownExperience?: string }
+): Promise<{ error?: string }> {
+  const isAdmin = await isCurrentUserAdmin();
+  if (!isAdmin) return { error: "Nincs jogosultságod ehhez a művelethez." };
+
+  const admin = createAdminClient();
+
+  // Geocoding ha még nincs koordináta
+  const { data: existing } = await admin
+    .from("places")
+    .select("address, city, latitude")
+    .eq("id", placeId)
+    .single();
+
+  let coords: Record<string, unknown> = {};
+  if (existing && !existing.latitude && existing.address && existing.city) {
+    const geo = await geocodeAddress(existing.address, existing.city);
+    if (geo) coords = { latitude: geo.lat, longitude: geo.lng };
+  }
+
+  const { error } = await admin
+    .from("places")
+    .update({
+      name: fields.name,
+      description: fields.description,
+      why_friendly: fields.whyFriendly,
+      own_experience: fields.ownExperience || null,
+      status: "approved",
+      ...coords,
+    })
+    .eq("id", placeId);
+
+  if (error) return { error: "Nem sikerült menteni. (" + error.message + ")" };
+
+  revalidatePath("/admin/helyek");
   revalidatePath("/helyek");
   revalidatePath("/");
   return {};
