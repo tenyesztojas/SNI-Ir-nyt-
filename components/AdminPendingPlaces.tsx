@@ -105,13 +105,20 @@ export default function AdminPendingPlaces({
                   <UserCircle size={13} />
                   {p.submitter.displayName}
                 </span>
-                <a
-                  href={`mailto:${p.submitter.email}`}
-                  className="flex items-center gap-1 text-blue-600 hover:underline"
-                >
-                  <Mail size={12} />
-                  {p.submitter.email}
-                </a>
+                {p.submitter.email.includes("@") ? (
+                  <a
+                    href={`mailto:${p.submitter.email}`}
+                    className="flex items-center gap-1 text-blue-600 hover:underline"
+                  >
+                    <Mail size={12} />
+                    {p.submitter.email}
+                  </a>
+                ) : (
+                  <span className="flex items-center gap-1 text-blue-400 italic">
+                    <Mail size={12} />
+                    {p.submitter.email}
+                  </span>
+                )}
               </div>
             )}
 

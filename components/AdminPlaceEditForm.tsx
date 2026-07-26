@@ -79,13 +79,20 @@ export default function AdminPlaceEditForm({
             <UserCircle size={15} />
             {place.submitter.displayName}
           </span>
-          <a
-            href={`mailto:${place.submitter.email}`}
-            className="flex items-center gap-1.5 text-blue-600 hover:underline"
-          >
-            <Mail size={14} />
-            {place.submitter.email}
-          </a>
+          {place.submitter.email.includes("@") ? (
+            <a
+              href={`mailto:${place.submitter.email}`}
+              className="flex items-center gap-1.5 text-blue-600 hover:underline"
+            >
+              <Mail size={14} />
+              {place.submitter.email}
+            </a>
+          ) : (
+            <span className="flex items-center gap-1 text-blue-500 italic">
+              <Mail size={14} />
+              {place.submitter.email}
+            </span>
+          )}
         </div>
       )}
     <form onSubmit={handleSubmit} className="flex flex-col gap-5">

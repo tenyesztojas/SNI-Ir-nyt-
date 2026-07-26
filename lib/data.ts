@@ -349,19 +349,19 @@ export async function isCurrentUserAdmin(): Promise<boolean> {
 
 async function fetchSubmitterInfo(
   userId: string | null | undefined
-): Promise<{ displayName: string; email: string } | null> {
-  if (!userId) return null;
+): Promise<{ displayName: string; email: string }> {
+  if (!userId) return { displayName: "–", email: "Adminisztrátor vagy importált adat" };
   try {
     const admin = createAdminClient();
     const [{ data: profileData }, { data: authData }] = await Promise.all([
       admin.from("profiles").select("display_name").eq("id", userId).maybeSingle(),
       admin.auth.admin.getUserById(userId),
     ]);
-    const displayName = profileData?.display_name ?? "Névtelen";
-    const email = authData.user?.email ?? "–";
+    const displayName = profileData?.display_name ?? "Névtelen felhasználó";
+    const email = authData.user?.email ?? "Nincs e-mail adat";
     return { displayName, email };
   } catch {
-    return null;
+    return { displayName: "Azonosítatlan", email: "Lekérdezési hiba" };
   }
 }
 
