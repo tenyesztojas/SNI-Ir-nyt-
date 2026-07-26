@@ -2,7 +2,7 @@
 
 import { useState, useRef, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Save, CheckCircle, MapPin, X, ImageIcon } from "lucide-react";
+import { Save, CheckCircle, MapPin, X, ImageIcon, UserCircle, Mail } from "lucide-react";
 import { Place, Category } from "@/lib/types";
 import { adminUpdatePlace } from "@/lib/actions/places";
 import ImageUpload, { ImageUploadRef } from "@/components/ImageUpload";
@@ -70,6 +70,24 @@ export default function AdminPlaceEditForm({
   const hasCoords = values.latitude && values.longitude;
 
   return (
+    <>
+      {/* Beküldő */}
+      {place.submitter && (
+        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+          <span className="font-semibold text-blue-700">Beküldő:</span>
+          <span className="flex items-center gap-1.5">
+            <UserCircle size={15} />
+            {place.submitter.displayName}
+          </span>
+          <a
+            href={`mailto:${place.submitter.email}`}
+            className="flex items-center gap-1.5 text-blue-600 hover:underline"
+          >
+            <Mail size={14} />
+            {place.submitter.email}
+          </a>
+        </div>
+      )}
     <form onSubmit={handleSubmit} className="flex flex-col gap-5">
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
@@ -209,5 +227,6 @@ export default function AdminPlaceEditForm({
         </button>
       </div>
     </form>
+    </>
   );
 }

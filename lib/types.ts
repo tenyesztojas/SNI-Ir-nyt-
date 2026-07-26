@@ -28,6 +28,7 @@ export interface Place {
   images?: string[] | null;
   status: PlaceStatus;
   createdBy?: string | null;
+  submitter?: { displayName: string; email: string } | null;
 }
 
 export interface Review {

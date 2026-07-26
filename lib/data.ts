@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { Category, Place, Review, Profile, Report } from "@/lib/types";
 
 // Magyar ékezetes karaktereket alapbetűkre cseréli rendezéshez
@@ -342,4 +343,52 @@ export async function getCurrentUserAndProfile(): Promise<{
 export async function isCurrentUserAdmin(): Promise<boolean> {
   const { profile } = await getCurrentUserAndProfile();
   return profile?.role === "admin";
+}
+
+// --- Admin: beküldő azonosítása (profil neve + e-mail) ---
+
+async function fetchSubmitterInfo(
+  userId: string | null | undefined
+): Promise<{ displayName: string; email: string } | null> {
+  if (!userId) return null;
+  try {
+    const admin = createAdminClient();
+    const [{ data: profileData }, { data: authData }] = await Promise.all([
+      admin.from("profiles").select("display_name").eq("id", userId).maybeSingle(),
+      admin.auth.admin.getUserById(userId),
+    ]);
+    const displayName = profileData?.display_name ?? "Névtelen";
+    const email = authData.user?.email ?? "–";
+    return { displayName, email };
+  } catch {
+    return null;
+  }
+}
+
+export async function getPendingPlacesWithSubmitter(): Promise<Place[]> {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("places")
+    .select("*")
+    .eq("status", "pending")
+    .order("created_at");
+  if (error) throw error;
+
+  const places = (data ?? []).map(mapPlace);
+
+  // Beküldők lekérése párhuzamosan
+  const submitters = await Promise.all(
+    places.map((p) => fetchSubmitterInfo(p.createdBy))
+  );
+  return places.map((p, i) => ({ ...p, submitter: submitters[i] }));
+}
+
+export async function getPlaceByIdWithSubmitter(id: string): Promise<Place | undefined> {
+  const admin = createAdminClient();
+  const { data, error } = await admin.from("places").select("*").eq("id", id).maybeSingle();
+  if (error) throw error;
+  if (!data) return undefined;
+  const place = mapPlace(data);
+  place.submitter = await fetchSubmitterInfo(place.createdBy);
+  return place;
 }

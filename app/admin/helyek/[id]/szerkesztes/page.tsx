@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getPlaceById, getCategories, isCurrentUserAdmin } from "@/lib/data";
+import { getPlaceByIdWithSubmitter, getCategories, isCurrentUserAdmin } from "@/lib/data";
 import { redirect, notFound } from "next/navigation";
 import AdminPlaceEditForm from "@/components/AdminPlaceEditForm";
 
@@ -8,7 +8,7 @@ export default async function AdminPlaceEditPage({ params }: { params: { id: str
   if (!isAdmin) redirect("/");
 
   const [place, categories] = await Promise.all([
-    getPlaceById(params.id),
+    getPlaceByIdWithSubmitter(params.id),
     getCategories(),
   ]);
 

@@ -1,9 +1,12 @@
 import Link from "next/link";
-import { getPendingPlaces, getCategories } from "@/lib/data";
+import { getPendingPlacesWithSubmitter, getCategories } from "@/lib/data";
 import AdminPendingPlaces from "@/components/AdminPendingPlaces";
 
 export default async function AdminPlacesPage() {
-  const [pendingPlaces, categories] = await Promise.all([getPendingPlaces(), getCategories()]);
+  const [pendingPlaces, categories] = await Promise.all([
+    getPendingPlacesWithSubmitter(),
+    getCategories(),
+  ]);
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6">

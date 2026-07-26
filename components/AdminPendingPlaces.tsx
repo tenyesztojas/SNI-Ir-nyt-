@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Check, X, Pencil, ChevronDown, ChevronUp } from "lucide-react";
+import { Check, X, Pencil, ChevronDown, ChevronUp, UserCircle, Mail } from "lucide-react";
 import { Place, Category } from "@/lib/types";
 import CategoryBadge from "./CategoryBadge";
 import { decidePlace, adminEditAndApprovePlace } from "@/lib/actions/places";
@@ -97,6 +97,23 @@ export default function AdminPendingPlaces({
                 </button>
               </div>
             </div>
+
+            {/* Beküldő */}
+            {p.submitter && (
+              <div className="mt-2 flex flex-wrap items-center gap-3 rounded-xl bg-blue-50 px-3 py-2 text-xs text-blue-800">
+                <span className="flex items-center gap-1.5 font-medium">
+                  <UserCircle size={13} />
+                  {p.submitter.displayName}
+                </span>
+                <a
+                  href={`mailto:${p.submitter.email}`}
+                  className="flex items-center gap-1 text-blue-600 hover:underline"
+                >
+                  <Mail size={12} />
+                  {p.submitter.email}
+                </a>
+              </div>
+            )}
 
             {/* Tartalom (összecsukható) */}
             {isExpanded && !isEditing && (
