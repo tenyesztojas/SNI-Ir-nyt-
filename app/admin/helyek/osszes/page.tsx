@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getVisiblePlaces, getCategories, isCurrentUserAdmin } from "@/lib/data";
 import { redirect } from "next/navigation";
 import AdminAllPlaces from "@/components/AdminAllPlaces";
+import CsvExportButton from "@/components/CsvExportButton";
 
 export default async function AdminAllPlacesPage() {
   const isAdmin = await isCurrentUserAdmin();
@@ -14,10 +15,11 @@ export default async function AdminAllPlacesPage() {
       <Link href="/admin" className="text-sm text-sni-brand-blue hover:underline">
         ← Admin áttekintés
       </Link>
-      <div className="mt-3 flex items-center justify-between gap-3">
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-sni-text">
           Összes hely ({places.length})
         </h1>
+        <CsvExportButton places={places} categories={categories} />
       </div>
       <p className="mt-1 text-sm text-gray-500">
         Szerkesztés, törlés, státuszváltás – minden hely egyben.
