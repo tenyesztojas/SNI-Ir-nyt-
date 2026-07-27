@@ -10,6 +10,7 @@ import { Category } from "@/lib/types";
 import RatingInput from "@/components/RatingInput";
 import Disclaimer from "@/components/Disclaimer";
 import { submitPlace, searchPlacesByName } from "@/lib/actions/places";
+import { EUROPEAN_COUNTRIES } from "@/lib/countries";
 import ImageUpload, { ImageUploadRef } from "@/components/ImageUpload";
 
 const SHARE_URL = "https://vedettsarok.hu/uj-hely";
@@ -268,6 +269,16 @@ export default function NewPlaceForm({ categories }: { categories: Category[] })
             <input {...register("city")} className="input-field mt-1.5" placeholder="Pl. Szeged" />
             {errors.city && <p className="mt-1 text-sm text-sni-warn">{errors.city.message}</p>}
           </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-sni-text">Ország*</label>
+          <select {...register("country")} className="input-field mt-1.5">
+            {EUROPEAN_COUNTRIES.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+          {errors.country && <p className="mt-1 text-sm text-sni-warn">{errors.country.message}</p>}
         </div>
 
         <div className="grid gap-5 sm:grid-cols-2">

@@ -6,6 +6,7 @@ import { Save, CheckCircle, MapPin, X, ImageIcon, UserCircle, Mail } from "lucid
 import { Place, Category } from "@/lib/types";
 import { adminUpdatePlace } from "@/lib/actions/places";
 import ImageUpload, { ImageUploadRef } from "@/components/ImageUpload";
+import { EUROPEAN_COUNTRIES } from "@/lib/countries";
 
 export default function AdminPlaceEditForm({
   place,
@@ -26,6 +27,7 @@ export default function AdminPlaceEditForm({
     category: place.category,
     city: place.city,
     address: place.address,
+    country: place.country ?? "Magyarország",
     phone: place.phone ?? "",
     website: place.website ?? "",
     description: place.description,
@@ -116,6 +118,14 @@ export default function AdminPlaceEditForm({
         <div>
           <label className="block text-sm font-medium text-gray-700">Cím</label>
           <input className="input-field mt-1.5" value={values.address} onChange={(e) => set("address", e.target.value)} required />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700">Ország</label>
+          <select className="input-field mt-1.5" value={values.country} onChange={(e) => set("country", e.target.value)}>
+            {EUROPEAN_COUNTRIES.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700">Telefon</label>

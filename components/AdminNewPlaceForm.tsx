@@ -6,6 +6,7 @@ import { CheckCircle2, Loader2 } from "lucide-react";
 import { Category } from "@/lib/types";
 import { adminCreatePlace, AdminCreatePlaceInput } from "@/lib/actions/places";
 import ImageUpload, { ImageUploadRef } from "@/components/ImageUpload";
+import { EUROPEAN_COUNTRIES } from "@/lib/countries";
 
 export default function AdminNewPlaceForm({ categories }: { categories: Category[] }) {
   const router = useRouter();
@@ -27,6 +28,7 @@ export default function AdminNewPlaceForm({ categories }: { categories: Category
       address: fd.get("address") as string,
       phone: fd.get("phone") as string,
       website: fd.get("website") as string,
+      country: fd.get("country") as string || "Magyarország",
       description: fd.get("description") as string,
       whyFriendly: fd.get("whyFriendly") as string,
       ownExperience: fd.get("ownExperience") as string,
@@ -108,6 +110,15 @@ export default function AdminNewPlaceForm({ categories }: { categories: Category
         <div className="sm:col-span-2">
           <label className="block text-sm font-medium text-gray-700">Cím *</label>
           <input name="address" required minLength={3} className="input-field mt-1.5" placeholder="Utca, házszám" />
+        </div>
+
+        <div className="sm:col-span-2">
+          <label className="block text-sm font-medium text-gray-700">Ország *</label>
+          <select name="country" required className="input-field mt-1.5" defaultValue="Magyarország">
+            {EUROPEAN_COUNTRIES.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
         </div>
 
         <div>

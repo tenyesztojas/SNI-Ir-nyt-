@@ -9,11 +9,11 @@ import { isCurrentUserAdmin } from "@/lib/data";
 import { sendAdminPush } from "@/lib/push";
 
 // --- Google Maps Geocoding ---
-async function geocodeAddress(address: string, city: string): Promise<{ lat: number; lng: number } | null> {
+async function geocodeAddress(address: string, city: string, country = "Magyarország"): Promise<{ lat: number; lng: number } | null> {
   const apiKey = process.env.GOOGLE_MAPS_API_KEY;
   if (!apiKey) return null;
 
-  const query = encodeURIComponent(`${address}, ${city}, Magyarország`);
+  const query = encodeURIComponent(`${address}, ${city}, ${country}`);
   const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${query}&key=${apiKey}&language=hu`;
 
   try {
@@ -57,6 +57,7 @@ export async function submitPlace(input: NewPlaceInput, images: string[] = []): 
       why_friendly: data.whyFriendly,
       own_experience: data.ownExperience,
       images: images.length > 0 ? images : null,
+      country: data.country ?? "Magyarország",
       status: "pending",
       created_by: user.id,
     });
@@ -162,6 +163,7 @@ export type AdminCreatePlaceInput = {
   name: string;
   category: string;
   city: string;
+  country?: string;
   address: string;
   phone?: string;
   website?: string;
@@ -191,7 +193,7 @@ export async function adminCreatePlace(
   const baseSlug = slugify(input.name.trim()) || "hely";
   let slug = baseSlug;
 
-  const geo = await geocodeAddress(input.address, input.city);
+  const geo = await geocodeAddress(input.address, input.city, input.country ?? "Magyarország");
 
   for (let attempt = 0; attempt < 5; attempt++) {
     const { error } = await admin.from("places").insert({
@@ -199,6 +201,7 @@ export async function adminCreatePlace(
       name: input.name.trim(),
       category: input.category,
       city: input.city,
+      country: input.country ?? "Magyarország",
       address: input.address,
       phone: input.phone || null,
       website: input.website || null,
@@ -235,6 +238,7 @@ export type AdminPlaceUpdate = {
   name: string;
   category: string;
   city: string;
+  country?: string;
   address: string;
   phone?: string;
   website?: string;
@@ -271,6 +275,7 @@ export async function adminUpdatePlace(
       name: values.name,
       category: values.category,
       city: values.city,
+      country: values.country ?? "Magyarország",
       address: values.address,
       phone: values.phone || null,
       website: values.website || null,
@@ -311,7 +316,7 @@ export async function adminEditAndApprovePlace(
 
   let coords: Record<string, unknown> = {};
   if (existing && !existing.latitude && existing.address && existing.city) {
-    const geo = await geocodeAddress(existing.address, existing.city);
+    const geo = await geocodeAddress(existing.address, existing.city, (existing as { country?: string }).country ?? "Magyarország");
     if (geo) coords = { latitude: geo.lat, longitude: geo.lng };
   }
 

@@ -10,6 +10,7 @@ export const newPlaceSchema = z.object({
   category: z.string().min(1, "Válassz kategóriát."),
   address: z.string().min(3, "Add meg a pontos címet."),
   city: z.string().min(2, "Add meg a települést."),
+  country: z.string().min(2, "Válassz országot.").default("Magyarország"),
   website: z.string().optional().or(z.literal("")),
   phone: z.string().optional().or(z.literal("")),
   description: z.string().min(10, "Írj legalább egy rövid, pár mondatos leírást."),

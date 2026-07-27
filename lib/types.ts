@@ -16,6 +16,7 @@ export interface Place {
   name: string;
   category: string;
   city: string;
+  country?: string;
   postalCode?: string;
   address: string;
   latitude?: number;

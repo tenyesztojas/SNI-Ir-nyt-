@@ -19,6 +19,7 @@ type PlaceRow = {
   name: string;
   category: string;
   city: string;
+  country: string | null;
   postal_code: string | null;
   address: string;
   latitude: number | null;
@@ -85,6 +86,7 @@ function mapPlace(row: PlaceRow): Place {
     name: row.name,
     category: row.category,
     city: row.city,
+    country: row.country ?? "Magyarország",
     postalCode: row.postal_code ?? undefined,
     address: row.address,
     latitude: row.latitude ?? undefined,

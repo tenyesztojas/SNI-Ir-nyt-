@@ -185,7 +185,7 @@ export default async function PlaceDetailPage({ params }: { params: { slug: stri
           <dl className="mt-6 space-y-2 text-sm text-gray-600">
             <div className="flex items-start gap-2">
               <MapPin size={15} className="mt-0.5 shrink-0 text-sni-brand-teal" />
-              <dd>{place.address}, {place.city}{place.postalCode ? ` (${place.postalCode})` : ""}</dd>
+              <dd>{place.address}, {place.city}{place.postalCode ? ` (${place.postalCode})` : ""}{place.country && place.country !== "Magyarország" ? `, ${place.country}` : ""}</dd>
             </div>
             {place.phone && (
               <div className="flex items-center gap-2">
