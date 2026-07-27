@@ -313,6 +313,11 @@ export function citiesFromPlaces(places: Place[]): string[] {
   return Array.from(new Set(places.map((p) => p.city))).sort((a, b) => huSort(a, b));
 }
 
+export function countriesFromPlaces(places: Place[]): string[] {
+  const all = [...new Set(places.map((p) => p.country ?? "Magyarország"))];
+  return all.sort((a, b) => a === "Magyarország" ? -1 : b === "Magyarország" ? 1 : a.localeCompare(b, "hu"));
+}
+
 export async function getCurrentUserAndProfile(): Promise<{
   user: { id: string; email?: string } | null;
   profile: Profile | null;

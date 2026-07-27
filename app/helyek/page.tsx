@@ -4,7 +4,7 @@ import ViewToggle from "@/components/ViewToggle";
 import PlaceCard from "@/components/PlaceCard";
 import PlacesSearchForm from "@/components/PlacesSearchForm";
 import NearbyPlacesPanel from "@/components/NearbyPlacesPanel";
-import { getCategories, getApprovedPlaces, citiesFromPlaces, getCurrentUserAndProfile } from "@/lib/data";
+import { getCategories, getApprovedPlaces, citiesFromPlaces, countriesFromPlaces, getCurrentUserAndProfile } from "@/lib/data";
 
 function normalize(s: string) {
   return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
@@ -13,11 +13,12 @@ function normalize(s: string) {
 export default async function HelyekPage({
   searchParams,
 }: {
-  searchParams: { q?: string; kategoria?: string; telepules?: string };
+  searchParams: { q?: string; kategoria?: string; telepules?: string; orszag?: string };
 }) {
   const q = searchParams.q?.trim() ?? "";
   const kategoria = searchParams.kategoria ?? "";
   const telepules = searchParams.telepules ?? "";
+  const orszag = searchParams.orszag ?? "";
 
   const [categories, places, { user }] = await Promise.all([
     getCategories(),
@@ -26,6 +27,7 @@ export default async function HelyekPage({
   ]);
 
   const cities = citiesFromPlaces(places);
+  const countries = countriesFromPlaces(places);
   const categoryBySlug = new Map(categories.map((c) => [c.slug, c]));
 
   const filtered = places.filter((p) => {
@@ -35,10 +37,11 @@ export default async function HelyekPage({
       normalize(p.city).includes(normalize(q));
     const matchesCategory = kategoria === "" || p.category === kategoria;
     const matchesCity = telepules === "" || p.city === telepules;
-    return matchesQ && matchesCategory && matchesCity;
+    const matchesOrszag = orszag === "" || (p.country ?? "Magyarország") === orszag;
+    return matchesQ && matchesCategory && matchesCity && matchesOrszag;
   });
 
-  const isFiltered = q !== "" || kategoria !== "" || telepules !== "";
+  const isFiltered = q !== "" || kategoria !== "" || telepules !== "" || orszag !== "";
 
   return (
     <div>
@@ -53,9 +56,11 @@ export default async function HelyekPage({
           <PlacesSearchForm
             categories={categories}
             cities={cities}
+            countries={countries}
             defaultQ={q}
             defaultKategoria={kategoria}
             defaultTelepules={telepules}
+            defaultOrszag={orszag}
           />
         </div>
       </div>

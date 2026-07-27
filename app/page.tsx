@@ -2,13 +2,14 @@ export const dynamic = "force-dynamic";
 
 import Link from "next/link";
 import { MapPin, HeartHandshake, ArrowRight, CalendarDays, ExternalLink } from "lucide-react";
-import { getCategories, getApprovedPlaces, citiesFromPlaces, getCurrentUserAndProfile } from "@/lib/data";
+import { getCategories, getApprovedPlaces, citiesFromPlaces, countriesFromPlaces, getCurrentUserAndProfile } from "@/lib/data";
 import { createClient } from "@/lib/supabase/server";
 import PlaceCard from "@/components/PlaceCard";
 import HeroSearchForm from "@/components/HeroSearchForm";
 import NearbyPlacesPanel from "@/components/NearbyPlacesPanel";
 
-export default async function HomePage() {
+export default async function HomePage({ searchParams }: { searchParams?: { orszag?: string } }) {
+  const orszag = searchParams?.orszag ?? "";
   const supabase = createClient();
   const [categories, places, programsResult, { user }] = await Promise.all([
     getCategories(),
@@ -24,7 +25,8 @@ export default async function HomePage() {
   const programs = programsResult.data ?? [];
   const categoryBySlug = new Map(categories.map((c) => [c.slug, c]));
   const cities = citiesFromPlaces(places);
-  const featuredPlaces = places.slice(0, 6);
+  const countries = countriesFromPlaces(places);
+  const featuredPlaces = (orszag ? places.filter((p) => (p.country ?? "Magyarország") === orszag) : places).slice(0, 6);
 
   return (
     <div>
@@ -143,14 +145,27 @@ export default async function HomePage() {
       {featuredPlaces.length > 0 && (
         <section className="bg-gray-50 py-12">
           <div className="mx-auto max-w-5xl px-4 sm:px-6">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h2 className="text-xl font-bold text-gray-900">Helyek a közösségtől</h2>
                 <p className="mt-0.5 text-sm text-gray-500">Közösségi tapasztalatok alapján ajánlott helyek</p>
               </div>
-              <Link href="/helyek" className="flex items-center gap-1 text-sm font-bold text-sni-brand-blue transition-colors hover:text-sni-brand-teal">
-                Összes hely <ArrowRight size={16} />
-              </Link>
+              <div className="flex items-center gap-3">
+                {countries.length > 1 && (
+                  <form method="get" className="flex items-center gap-2">
+                    <select name="orszag" defaultValue={orszag} className="input-field py-1.5 text-sm sm:w-40">
+                      <option value="">Összes ország</option>
+                      {countries.map((c) => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                    <button type="submit" className="rounded-lg bg-sni-brand-teal px-3 py-1.5 text-sm font-bold text-white hover:bg-sni-brand-blue">OK</button>
+                  </form>
+                )}
+                <Link href="/helyek" className="flex items-center gap-1 text-sm font-bold text-sni-brand-blue transition-colors hover:text-sni-brand-teal">
+                  Összes hely <ArrowRight size={16} />
+                </Link>
+              </div>
             </div>
             <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {featuredPlaces.map((p) => (

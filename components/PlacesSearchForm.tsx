@@ -95,15 +95,19 @@ function QInput({ cities, defaultValue }: { cities: string[]; defaultValue: stri
 export default function PlacesSearchForm({
   categories,
   cities,
+  countries,
   defaultQ,
   defaultKategoria,
   defaultTelepules,
+  defaultOrszag,
 }: {
   categories: Category[];
   cities: string[];
+  countries: string[];
   defaultQ: string;
   defaultKategoria: string;
   defaultTelepules: string;
+  defaultOrszag: string;
 }) {
   return (
     <form action="/helyek" method="get" className="mt-4 flex flex-col gap-3 sm:flex-row">
@@ -124,6 +128,15 @@ export default function PlacesSearchForm({
           <option key={c} value={c}>{c}</option>
         ))}
       </select>
+
+      {countries.length > 1 && (
+        <select name="orszag" defaultValue={defaultOrszag} className="input-field sm:w-44">
+          <option value="">Összes ország</option>
+          {countries.map((c) => (
+            <option key={c} value={c}>{c}</option>
+          ))}
+        </select>
+      )}
 
       <button type="submit" className="btn-primary sm:px-6">
         <SlidersHorizontal size={16} /> Szűrés
