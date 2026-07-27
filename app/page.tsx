@@ -2,14 +2,15 @@ export const dynamic = "force-dynamic";
 
 import Link from "next/link";
 import { MapPin, HeartHandshake, ArrowRight, CalendarDays, ExternalLink } from "lucide-react";
-import { getCategories, getApprovedPlaces, citiesFromPlaces } from "@/lib/data";
+import { getCategories, getApprovedPlaces, citiesFromPlaces, getCurrentUserAndProfile } from "@/lib/data";
 import { createClient } from "@/lib/supabase/server";
 import PlaceCard from "@/components/PlaceCard";
 import HeroSearchForm from "@/components/HeroSearchForm";
+import NearbyPlacesPanel from "@/components/NearbyPlacesPanel";
 
 export default async function HomePage() {
   const supabase = createClient();
-  const [categories, places, programsResult] = await Promise.all([
+  const [categories, places, programsResult, { user }] = await Promise.all([
     getCategories(),
     getApprovedPlaces(),
     supabase
@@ -18,6 +19,7 @@ export default async function HomePage() {
       .eq("status", "approved")
       .order("created_at", { ascending: false })
       .limit(3),
+    getCurrentUserAndProfile(),
   ]);
   const programs = programsResult.data ?? [];
   const categoryBySlug = new Map(categories.map((c) => [c.slug, c]));
@@ -45,6 +47,13 @@ export default async function HomePage() {
           </p>
 
           <HeroSearchForm categories={categories} cities={cities} />
+
+          {/* Közelség gomb – csak bejelentkezett usernek */}
+          {user && (
+            <div className="mt-4 flex justify-center">
+              <NearbyPlacesPanel places={places} categories={categories} />
+            </div>
+          )}
 
           <div className="mt-6 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-white/70">
             <span>
