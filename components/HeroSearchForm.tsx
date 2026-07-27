@@ -98,9 +98,11 @@ function QInput({ cities }: { cities: string[] }) {
 export default function HeroSearchForm({
   categories,
   cities,
+  countries = [],
 }: {
   categories: Category[];
   cities: string[];
+  countries?: string[];
 }) {
   return (
     <form
@@ -133,6 +135,18 @@ export default function HeroSearchForm({
           <option key={c} value={c} />
         ))}
       </datalist>
+      {countries.length > 1 && (
+        <select
+          name="orszag"
+          defaultValue=""
+          className="mt-2 w-full rounded-xl border border-gray-200 bg-white py-3.5 px-4 text-gray-700 focus:outline-none focus:ring-2 focus:ring-sni-brand-teal/50 sm:mt-0 sm:w-44"
+        >
+          <option value="">Összes ország</option>
+          {countries.map((c) => (
+            <option key={c} value={c}>{c}</option>
+          ))}
+        </select>
+      )}
       <button
         type="submit"
         className="mt-2 w-full rounded-xl bg-sni-brand-teal px-8 py-3.5 font-bold text-white transition-colors hover:bg-sni-brand-blue sm:mt-0 sm:w-auto"

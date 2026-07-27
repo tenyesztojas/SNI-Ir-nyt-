@@ -48,7 +48,7 @@ export default async function HomePage({ searchParams }: { searchParams?: { orsz
             elfogadó és kiszámítható helyeket találni.
           </p>
 
-          <HeroSearchForm categories={categories} cities={cities} />
+          <HeroSearchForm categories={categories} cities={cities} countries={countries} />
 
           {/* Közelség gomb – csak bejelentkezett usernek */}
           {user && (
