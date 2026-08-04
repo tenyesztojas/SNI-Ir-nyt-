@@ -258,20 +258,28 @@ export default async function PlaceDetailPage({ params }: { params: { slug: stri
             <div className="mt-5 space-y-5">
               {reviews.map((r) => (
                 <div key={r.id} className="border-t border-gray-100 pt-5 first:border-t-0 first:pt-0">
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    <div>
-                      <h3 className="font-bold text-gray-900">{r.title}</h3>
-                      <div className="mt-1 flex items-center gap-2">
-                        <Stars rating={r.overallRating} size={14} />
-                        <span className="text-xs text-gray-500">{r.authorName}</span>
+                  {/* Értékelő neve + csillagok */}
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sni-brand-teal/15 font-bold text-sni-brand-teal text-sm">
+                      {r.authorName.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-semibold text-gray-900 text-sm">{r.authorName}</span>
                         {r.wouldReturn && (
                           <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">
                             Visszatérne
                           </span>
                         )}
                       </div>
+                      <div className="mt-0.5 flex items-center gap-2">
+                        <Stars rating={r.overallRating} size={13} />
+                        <span className="text-xs text-gray-400">{r.createdAt ? new Date(r.createdAt).toLocaleDateString("hu-HU", { year: "numeric", month: "long", day: "numeric" }) : ""}</span>
+                      </div>
+                      <h3 className="mt-1.5 font-bold text-gray-900">{r.title}</h3>
                     </div>
                   </div>
+                  <div className="mt-2 pl-12">
                   <p className="mt-2 text-sm leading-relaxed text-gray-700">{r.positiveText}</p>
                   {r.warningText && (
                     <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
@@ -292,6 +300,7 @@ export default async function PlaceDetailPage({ params }: { params: { slug: stri
                       ))}
                     </div>
                   )}
+                  </div>{/* /pl-12 */}
                 </div>
               ))}
             </div>
