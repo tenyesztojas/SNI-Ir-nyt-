@@ -109,7 +109,7 @@ export default async function PlaceDetailPage({ params }: { params: { slug: stri
       </div>
 
       <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
-        {place.status !== "approved" && (
+        {place.status !== "approved" && place.status !== "published" && (
           <div className="mb-5 rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
             Ez a hely még jóváhagyásra vár — addig csak te és az adminok látják.
           </div>
