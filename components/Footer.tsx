@@ -53,6 +53,9 @@ export default function Footer() {
                 <Link href="/rolunk" className="text-gray-500 hover:text-sni-brand-blue hover:underline">
                   Rólunk
                 </Link>
+                <Link href="/aszf" className="text-gray-500 hover:text-sni-brand-blue hover:underline">
+                  Általános Szerződési Feltételek
+                </Link>
                 <Link href="/adatkezelesi-tajekoztato" className="text-gray-500 hover:text-sni-brand-blue hover:underline">
                   Adatkezelési tájékoztató
                 </Link>
