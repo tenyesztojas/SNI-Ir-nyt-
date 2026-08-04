@@ -280,6 +280,10 @@ export default async function PlaceDetailPage({ params }: { params: { slug: stri
                     </div>
                   </div>
                   <div className="mt-2 pl-12">
+                  <p className="mt-1 text-xs text-gray-400 italic">
+                    Ez az értékelés a felhasználó saját tapasztalatán alapul, nem az oldal üzemeltetőjének véleménye.
+                    Automatikus technikai ellenőrzésen esett át, emberi jóváhagyás nélkül.
+                  </p>
                   <p className="mt-2 text-sm leading-relaxed text-gray-700">{r.positiveText}</p>
                   {r.warningText && (
                     <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">

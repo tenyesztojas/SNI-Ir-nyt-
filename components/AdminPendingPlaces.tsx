@@ -1,12 +1,12 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Check, X, Pencil, ChevronDown, ChevronUp, UserCircle, Mail } from "lucide-react";
+import { Trash2, Pencil, Check, ChevronDown, ChevronUp, UserCircle, Mail, Flag } from "lucide-react";
 import { Place, Category } from "@/lib/types";
 import CategoryBadge from "./CategoryBadge";
-import { decidePlace, adminEditAndApprovePlace } from "@/lib/actions/places";
+import { removePlace, adminEditAndApprovePlace } from "@/lib/actions/places";
 
-type Item = Place & { decision: "approved" | "rejected" | null };
+type Item = Place & { removed?: boolean };
 
 export default function AdminPendingPlaces({
   initial,
@@ -15,9 +15,7 @@ export default function AdminPendingPlaces({
   initial: Place[];
   categories: Category[];
 }) {
-  const [items, setItems] = useState<Item[]>(
-    initial.map((p) => ({ ...p, decision: null }))
-  );
+  const [items, setItems] = useState<Item[]>(initial.map((p) => ({ ...p, removed: false })));
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValues, setEditValues] = useState<{
     name: string; description: string; whyFriendly: string; ownExperience: string;
@@ -38,21 +36,20 @@ export default function AdminPendingPlaces({
     setExpandedId(p.id);
   }
 
-  function cancelEdit() {
-    setEditingId(null);
-  }
+  function cancelEdit() { setEditingId(null); }
 
-  function decide(id: string, decision: "approved" | "rejected") {
+  function handleRemove(id: string) {
+    if (!confirm("Biztosan eltávolítod ezt a helyet? Ez visszafordíthatatlan.")) return;
     setError(null);
     startTransition(async () => {
-      const result = await decidePlace(id, decision);
+      const result = await removePlace(id, null, "Admin manuálisan eltávolította");
       if (result?.error) { setError(result.error); return; }
-      setItems((prev) => prev.map((p) => (p.id === id ? { ...p, decision } : p)));
-      if (editingId === id) setEditingId(null);
+      setItems((prev) => prev.map((p) => (p.id === id ? { ...p, removed: true } : p)));
+      setTimeout(() => setItems((prev) => prev.filter((p) => p.id !== id)), 800);
     });
   }
 
-  function saveAndApprove(id: string) {
+  function saveEdit(id: string) {
     setError(null);
     startTransition(async () => {
       const result = await adminEditAndApprovePlace(id, {
@@ -62,13 +59,20 @@ export default function AdminPendingPlaces({
         ownExperience: editValues.ownExperience,
       });
       if (result?.error) { setError(result.error); return; }
-      setItems((prev) => prev.map((p) => (p.id === id ? { ...p, decision: "approved" } : p)));
+      setItems((prev) =>
+        prev.map((p) =>
+          p.id === id
+            ? { ...p, name: editValues.name, description: editValues.description,
+                whyFriendly: editValues.whyFriendly, ownExperience: editValues.ownExperience }
+            : p
+        )
+      );
       setEditingId(null);
     });
   }
 
   if (items.length === 0) {
-    return <p className="text-gray-500">Nincs jóváhagyásra váró hely.</p>;
+    return <p className="text-gray-500">Nincs felhasználó által beküldött hely.</p>;
   }
 
   return (
@@ -79,12 +83,20 @@ export default function AdminPendingPlaces({
         const isExpanded = expandedId === p.id;
 
         return (
-          <div key={p.id} className="card">
+          <div
+            key={p.id}
+            className={`card transition-opacity ${p.removed ? "opacity-30" : ""}`}
+          >
             {/* Fejléc */}
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <h3 className="font-semibold text-sni-text">{p.name}</h3>
                 <p className="text-sm text-gray-500">{p.city} · {p.address}</p>
+                {p.flaggedForReview && (
+                  <p className="mt-1 flex items-center gap-1 text-xs text-amber-700">
+                    <Flag size={11} /> Automatikus szűrő megjelölte – ellenőrizd
+                  </p>
+                )}
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 <CategoryBadge category={categoryBySlug.get(p.category)} />
@@ -122,7 +134,7 @@ export default function AdminPendingPlaces({
               </div>
             )}
 
-            {/* Tartalom (összecsukható) */}
+            {/* Tartalom */}
             {isExpanded && !isEditing && (
               <div className="mt-3 space-y-2">
                 <p className="text-sm text-gray-600">{p.description}</p>
@@ -150,95 +162,61 @@ export default function AdminPendingPlaces({
               <div className="mt-3 space-y-3 rounded-xl border border-sni-brand-teal/30 bg-teal-50/30 p-4">
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Név</label>
-                  <input
-                    className="input-field text-sm"
-                    value={editValues.name}
-                    onChange={(e) => setEditValues((v) => ({ ...v, name: e.target.value }))}
-                  />
+                  <input className="input-field text-sm" value={editValues.name}
+                    onChange={(e) => setEditValues((v) => ({ ...v, name: e.target.value }))} />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Leírás</label>
-                  <textarea
-                    rows={3}
-                    className="input-field text-sm resize-none"
-                    value={editValues.description}
-                    onChange={(e) => setEditValues((v) => ({ ...v, description: e.target.value }))}
-                  />
+                  <textarea rows={3} className="input-field text-sm resize-none" value={editValues.description}
+                    onChange={(e) => setEditValues((v) => ({ ...v, description: e.target.value }))} />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Miért autizmus/ADHD-barát?</label>
-                  <textarea
-                    rows={3}
-                    className="input-field text-sm resize-none"
-                    value={editValues.whyFriendly}
-                    onChange={(e) => setEditValues((v) => ({ ...v, whyFriendly: e.target.value }))}
-                  />
+                  <textarea rows={3} className="input-field text-sm resize-none" value={editValues.whyFriendly}
+                    onChange={(e) => setEditValues((v) => ({ ...v, whyFriendly: e.target.value }))} />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Saját tapasztalat</label>
-                  <textarea
-                    rows={2}
-                    className="input-field text-sm resize-none"
-                    value={editValues.ownExperience}
-                    onChange={(e) => setEditValues((v) => ({ ...v, ownExperience: e.target.value }))}
-                  />
+                  <textarea rows={2} className="input-field text-sm resize-none" value={editValues.ownExperience}
+                    onChange={(e) => setEditValues((v) => ({ ...v, ownExperience: e.target.value }))} />
                 </div>
               </div>
             )}
 
             {/* Gombok */}
-            {p.decision === null && (
-              <div className="mt-3 flex flex-wrap gap-2">
-                {!isEditing ? (
-                  <>
-                    <button
-                      disabled={isPending}
-                      onClick={() => decide(p.id, "approved")}
-                      className="btn-secondary text-sm"
-                    >
-                      <Check size={15} /> Jóváhagyás
-                    </button>
-                    <button
-                      disabled={isPending}
-                      onClick={() => startEdit(p)}
-                      className="inline-flex items-center gap-1.5 rounded-xl border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-50"
-                    >
-                      <Pencil size={14} /> Szerkesztés + jóváhagyás
-                    </button>
-                    <button
-                      disabled={isPending}
-                      onClick={() => decide(p.id, "rejected")}
-                      className="inline-flex items-center gap-1.5 rounded-xl border border-red-300 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50"
-                    >
-                      <X size={15} /> Elutasítás
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <button
-                      disabled={isPending}
-                      onClick={() => saveAndApprove(p.id)}
-                      className="btn-primary text-sm"
-                    >
-                      <Check size={15} /> {isPending ? "Mentés..." : "Mentés és jóváhagyás"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={cancelEdit}
-                      className="btn-secondary text-sm"
-                    >
-                      Mégse
-                    </button>
-                  </>
-                )}
-              </div>
-            )}
-
-            {p.decision !== null && (
-              <p className={`mt-3 text-sm font-medium ${p.decision === "approved" ? "text-emerald-600" : "text-red-600"}`}>
-                {p.decision === "approved" ? "✓ Jóváhagyva" : "✗ Elutasítva"}
-              </p>
-            )}
+            <div className="mt-3 flex flex-wrap gap-2">
+              {!isEditing ? (
+                <>
+                  <button
+                    disabled={isPending || !!p.removed}
+                    onClick={() => startEdit(p)}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    <Pencil size={14} /> Adatminőség szerkesztés
+                  </button>
+                  <button
+                    disabled={isPending || !!p.removed}
+                    onClick={() => handleRemove(p.id)}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-red-300 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                  >
+                    <Trash2 size={14} /> Eltávolítás
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    disabled={isPending}
+                    onClick={() => saveEdit(p.id)}
+                    className="btn-primary text-sm"
+                  >
+                    <Check size={15} /> {isPending ? "Mentés..." : "Mentés"}
+                  </button>
+                  <button type="button" onClick={cancelEdit} className="btn-secondary text-sm">
+                    Mégse
+                  </button>
+                </>
+              )}
+            </div>
           </div>
         );
       })}

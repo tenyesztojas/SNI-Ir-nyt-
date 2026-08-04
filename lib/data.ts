@@ -176,7 +176,7 @@ export async function getApprovedPlaces(): Promise<Place[]> {
   const { data, error } = await supabase
     .from("places")
     .select("*")
-    .eq("status", "approved")
+    .eq("status", "published")
     .order("name");
   if (error) throw error;
   return (data ?? [])
@@ -217,7 +217,7 @@ export async function getApprovedReviewsForPlace(placeId: string): Promise<Revie
     .from("reviews")
     .select(`*, profiles(${PROFILE_SELECT})`)
     .eq("place_id", placeId)
-    .eq("status", "approved")
+    .eq("status", "published")
     .order("created_at", { ascending: false });
   if (error) throw error;
   return (data ?? []).map(mapReview);
@@ -232,6 +232,32 @@ export async function getPendingReviews(): Promise<Review[]> {
     .order("created_at");
   if (error) throw error;
   return (data ?? []).map(mapReview);
+}
+
+
+export async function getFlaggedReviews(): Promise<Review[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("reviews")
+    .select(`*, profiles(${PROFILE_SELECT})`)
+    .eq("flagged_for_review", true)
+    .eq("status", "published")
+    .order("created_at", { ascending: false });
+  if (error || !data) return [];
+  return data.map(mapReview);
+}
+
+export async function getAdminReviews(): Promise<Review[]> {
+  // Megjelölt + bejelentett közzétett értékelések admin kezeléshez
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("reviews")
+    .select(`*, profiles(${PROFILE_SELECT})`)
+    .in("status", ["published", "removed"])
+    .eq("flagged_for_review", true)
+    .order("created_at", { ascending: false });
+  if (error || !data) return [];
+  return data.map(mapReview);
 }
 
 export async function getOwnPlaces(userId: string): Promise<Place[]> {

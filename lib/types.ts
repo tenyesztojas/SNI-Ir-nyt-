@@ -1,5 +1,5 @@
-export type PlaceStatus = "pending" | "approved" | "rejected" | "archived";
-export type ReviewStatus = "pending" | "approved" | "rejected" | "redacted";
+export type PlaceStatus = "pending" | "approved" | "rejected" | "archived" | "published" | "removed";
+export type ReviewStatus = "pending" | "approved" | "rejected" | "redacted" | "published" | "rejected_automated" | "removed";
 export type UserRole = "user" | "admin";
 export type ReportType = "hibas_adat" | "nem_mukodik" | "nem_megfelelo_tartalom" | "egyeb";
 export type ReportStatus = "pending" | "resolved" | "dismissed";
@@ -30,6 +30,8 @@ export interface Place {
   status: PlaceStatus;
   createdBy?: string | null;
   submitter?: { displayName: string; email: string };
+  source?: string | null;
+  flaggedForReview?: boolean | null;
 }
 
 export interface Review {
@@ -50,6 +52,9 @@ export interface Review {
   images?: string[] | null;
   createdAt: string;
   status: ReviewStatus;
+  flaggedForReview?: boolean | null;
+  flagReason?: string | null;
+  rejectionReason?: string | null;
 }
 
 export interface Profile {

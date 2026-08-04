@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { newPlaceSchema, NewPlaceInput } from "@/lib/schemas";
 import { slugify, randomSuffix } from "@/lib/slugify";
 import { isCurrentUserAdmin } from "@/lib/data";
+import { autoModeratePlace } from "@/lib/autoModerate";
 import { sendAdminPush } from "@/lib/push";
 
 // --- Google Maps Geocoding ---
@@ -41,6 +42,21 @@ export async function submitPlace(input: NewPlaceInput, images: string[] = []): 
   const user = userData.user;
   if (!user) return { error: "A hely beküldéséhez be kell jelentkezned." };
 
+  // Automatikus technikai ellenőrzés (ÁSZF 3. pont — kizárólag formai/technikai szempontok)
+  const modResult = autoModeratePlace({
+    name: data.name,
+    description: data.description,
+    whyFriendly: data.whyFriendly,
+  });
+  if (!modResult.pass) {
+    return {
+      error: "A hely-javaslat automatikus technikai ellenőrzésen nem ment át: " + modResult.reason,
+    };
+  }
+
+  // Geocoding
+  const geo = await geocodeAddress(data.address, data.city, data.country ?? "Magyarország");
+
   const baseSlug = slugify(data.name) || "hely";
   let slug = baseSlug;
 
@@ -58,18 +74,20 @@ export async function submitPlace(input: NewPlaceInput, images: string[] = []): 
       own_experience: data.ownExperience,
       images: images.length > 0 ? images : null,
       country: data.country ?? "Magyarország",
-      status: "pending",
+      status: "published",
+      source: "user_suggested",
+      flagged_for_review: modResult.flagged,
       created_by: user.id,
+      latitude: geo?.lat ?? null,
+      longitude: geo?.lng ?? null,
     });
 
     if (!error) {
-      revalidatePath("/admin/helyek");
+      revalidatePath("/helyek");
       revalidatePath("/profil");
-      await sendAdminPush(
-        "Uj hely bekuldes",
-        `${data.name} - ${data.city}`,
-        "/admin/helyek"
-      );
+      if (modResult.flagged) {
+        await sendAdminPush("Megjelölt hely közzétéve", `${data.name} — automatikusan közzétéve, gyanús mintázat`, "/admin/jelzesek");
+      }
       return {};
     }
 
@@ -84,40 +102,38 @@ export async function submitPlace(input: NewPlaceInput, images: string[] = []): 
   return { error: "Nem sikerült a hely beküldése. Próbáld újra." };
 }
 
-export async function decidePlace(
+// removePlace — UTÓLAGOS, bejelentés-alapú eltávolítás (ÁSZF 7. pont)
+// Előzetes jóváhagyási funkció szándékosan el lett távolítva (ÁSZF 3. pont).
+export async function removePlace(
   placeId: string,
-  decision: "approved" | "rejected"
+  reportId: string | null,
+  reason: string
 ): Promise<{ error?: string }> {
   const isAdmin = await isCurrentUserAdmin();
   if (!isAdmin) return { error: "Nincs jogosultságod ehhez a művelethez." };
 
   const admin = createAdminClient();
+  const supabase = createClient();
 
-  // Ha jóváhagyás: geocoding, ha még nincs koordináta
-  let coords: { latitude: number; longitude: number } | Record<string, never> = {};
-  if (decision === "approved") {
-    const { data: place } = await admin
-      .from("places")
-      .select("address, city, latitude, longitude")
-      .eq("id", placeId)
-      .single();
+  const { error } = await admin.from("places").update({ status: "removed" }).eq("id", placeId);
+  if (error) return { error: "Nem sikerült eltávolítani." };
 
-    if (place && !place.latitude && place.address && place.city) {
-      const geo = await geocodeAddress(place.address, place.city);
-      if (geo) {
-        coords = { latitude: geo.lat, longitude: geo.lng };
-      }
-    }
+  // Audit log
+  const { data: userData } = await supabase.auth.getUser();
+  await admin.from("moderation_log").insert({
+    content_type: "place",
+    content_id: placeId,
+    admin_id: userData.user?.id,
+    report_id: reportId,
+    action: "removed",
+    reason,
+  });
+
+  if (reportId) {
+    await admin.from("reports").update({ status: "resolved" }).eq("id", reportId);
   }
 
-  const { error } = await admin
-    .from("places")
-    .update({ status: decision, ...coords })
-    .eq("id", placeId);
-
-  if (error) return { error: "Nem sikerült a státusz frissítése." };
-
-  revalidatePath("/admin/helyek");
+  revalidatePath("/admin/jelzesek");
   revalidatePath("/helyek");
   revalidatePath("/");
   return {};
@@ -153,7 +169,7 @@ export async function searchPlacesByName(
   const { data } = await supabase
     .from("places")
     .select("id, name, city, slug")
-    .eq("status", "approved")
+    .eq("status", "published")
     .ilike("name", `%${query.trim()}%`)
     .limit(4);
   return data ?? [];
@@ -209,7 +225,8 @@ export async function adminCreatePlace(
       why_friendly: input.whyFriendly,
       own_experience: input.ownExperience || null,
       images: images.length > 0 ? images : null,
-      status: "approved",
+      status: "published",
+      source: "admin",
       created_by: userData.user?.id ?? null,
       latitude: geo?.lat ?? null,
       longitude: geo?.lng ?? null,
@@ -327,7 +344,7 @@ export async function adminEditAndApprovePlace(
       description: fields.description,
       why_friendly: fields.whyFriendly,
       own_experience: fields.ownExperience || null,
-      status: "approved",
+      // status szándékosan NEM módosul — adminEditAndApprovePlace nem jóváhagyási funkció
       ...coords,
     })
     .eq("id", placeId);
