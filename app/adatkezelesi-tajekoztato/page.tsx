@@ -2,11 +2,12 @@ export const metadata = {
   title: "Adatkezelési tájékoztató – VédettSarok",
 };
 
+
 export default function AdatkezelesiPage() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
       <h1 className="text-3xl font-extrabold text-sni-text">Adatkezelési tájékoztató</h1>
-      <p className="mt-2 text-sm text-gray-500">Hatályos: [kitöltendő dátum] &mdash; Verzió: 1.0 – TESZTVERZIÓ</p>
+      <p className="mt-2 text-sm text-gray-500">Hatályos: 2026. augusztus &mdash; Verzió: 1.1</p>
 
       <div className="mt-8 prose prose-sm max-w-none text-gray-700 space-y-6">
 
@@ -40,6 +41,7 @@ export default function AdatkezelesiPage() {
 
         <Section title="5. Fogalmak">
           <p>Jelen tájékoztatóban a személyes adat, adatkezelés, adatkezelő, adatfeldolgozó, címzett, érintett, hozzájárulás, különleges kategóriájú személyes adat, profilalkotás, álnevesítés és adattovábbítás fogalma alatt a GDPR-ban meghatározott fogalmak értendők.</p>
+          <p><strong>Megjelenítési név:</strong> a felhasználó által a regisztráció során megadott név, amelyet a Szolgáltatás az érintett által beküldött nyilvános tartalmak (így különösen az értékelések) mellett a nyilvánosság számára megjelenít.</p>
         </Section>
 
         <Section title="6. Az érintettek köre">
@@ -48,33 +50,34 @@ export default function AdatkezelesiPage() {
         </Section>
 
         <Section title="7. Kezelt adatok köre, cél, jogalap, megőrzési idő">
-          <SubSection title="7.1. Weboldal működtetése, IT-biztonság">
-            <p>Az adatkezelő a weboldal működtetése és védelme érdekében kezelheti az IP-címet, a böngésző típusát, az eszköz típusát, a látogatás időpontját és egyéb technikai naplóadatokat. Jogalap: jogos érdek. Megőrzési idő: jellemzően 30–90 nap.</p>
-          </SubSection>
-          <SubSection title="7.2. Kapcsolatfelvétel, ügyintézés">
-            <p>Kezelt adatok: név, e-mail cím, üzenet tartalma, beküldés időpontja. Cél: a megkeresés megválaszolása, panasz- és ügykezelés. Jogalap: jogos érdek. Megőrzési idő: az ügy lezárásától számított legfeljebb 12 hónap.</p>
-          </SubSection>
-          <SubSection title="7.3. Helybeküldés">
-            <p>Kezelt adatok: megjelenítési név, e-mail cím, a hely adatai, rövid leírás, beküldés időpontja, moderációs státusz. Jogalap: jogos érdek. Megőrzési idő: elutasítás esetén legfeljebb 90 nap, jóváhagyott tartalom esetén a közzététel fennállásáig.</p>
-          </SubSection>
-          <SubSection title="7.4. Értékelések és vélemények">
-            <p>Kezelt adatok: publikus megjelenítési név, csillagos értékelés, rövid szöveges vélemény, beküldés időpontja, moderációs státusz. Jogalap: jogos érdek. Megőrzési idő: a közzététel fennállásáig vagy törlési kérelemig.</p>
-          </SubSection>
-          <SubSection title="7.5. Hibajelentés">
-            <p>Kezelt adatok: opcionális név vagy e-mail, bejelentés tartalma, időpont. Jogalap: jogos érdek. Megőrzési idő: az ügy lezárásától számított legfeljebb 12 hónap.</p>
-          </SubSection>
-          <SubSection title="7.6. Regisztráció és fiókkezelés">
-            <p>Kezelt adatok: belső azonosító, e-mail cím, auth provider, publikus megjelenítési név, fiók létrehozásának időpontja, utolsó belépés ideje. Jogalap: szerződéses jogalap. Megőrzési idő: a fiók fennállásáig.</p>
-          </SubSection>
-          <SubSection title="7.7. Visszaélés-megelőzés, hitelességvédelem">
-            <p>Kezelt adatok: belső azonosítók, belépési és beküldési időpontok, IP-hash formában tárolt technikai adatok. Jogalap: jogos érdek. Megőrzési idő: tipikusan 30–180 nap.</p>
-          </SubSection>
-          <SubSection title="7.8. Hírlevél">
-            <p>Kezelt adatok: e-mail cím, feliratkozás és leiratkozás időpontja, hozzájárulás igazolása. Jogalap: hozzájárulás. Megőrzési idő: a leiratkozásig.</p>
-          </SubSection>
-          <SubSection title="7.9. Sütik és analitika">
-            <p>A weboldal sütiket és analitikai eszközöket (Google Analytics) használhat. A szükséges sütik jogalapja a működtetéshez kapcsolódó érdek, a nem szükséges sütiké hozzájárulás.</p>
-          </SubSection>
+          <h3 className="font-semibold text-gray-800 mt-3">7.1. Weboldal működtetése, IT-biztonság</h3>
+          <p>Az adatkezelő a weboldal működtetése és védelme érdekében kezelheti az IP-címet, a böngésző típusát, az eszköz típusát, a látogatás időpontját és egyéb technikai naplóadatokat. Jogalap: jogos érdek. Megőrzési idő: jellemzően 30–90 nap.</p>
+
+          <h3 className="font-semibold text-gray-800 mt-3">7.2. Kapcsolatfelvétel, ügyintézés</h3>
+          <p>Kezelt adatok: név, e-mail cím, üzenet tartalma, beküldés időpontja. Cél: a megkeresés megválaszolása, panasz- és ügykezelés. Jogalap: jogos érdek. Megőrzési idő: az ügy lezárásától számított legfeljebb 12 hónap. Ezen adatok nem nyilvánosak.</p>
+
+          <h3 className="font-semibold text-gray-800 mt-3">7.3. Helybeküldés</h3>
+          <p>Kezelt adatok: a beküldő regisztráció során megadott neve, e-mail cím, a hely adatai, rövid leírás, beküldés időpontja, moderációs státusz. Jogalap: jogos érdek. Megőrzési idő: elutasítás esetén legfeljebb 90 nap, jóváhagyott tartalom esetén a közzététel fennállásáig. A beküldő e-mail címe és egyéb személyes adata nem kerül nyilvános megjelenítésre.</p>
+
+          <h3 className="font-semibold text-gray-800 mt-3">7.4. Értékelések és vélemények</h3>
+          <p>Kezelt adatok: a felhasználó regisztráció során megadott neve (megjelenítési név), csillagos értékelés, rövid szöveges vélemény, beküldés időpontja, moderációs státusz. Jogalap: jogos érdek. Megőrzési idő: a közzététel fennállásáig vagy törlési kérelemig.</p>
+          <p>Nyilvánosságra kerülő adatok: az értékelés mellett kizárólag a felhasználó regisztráció során megadott neve, a csillagos értékelés, a rövid szöveges vélemény szövege és a beküldés időpontja jelenik meg a nyilvános felületen. A felhasználó semmilyen egyéb személyes adata (így különösen e-mail címe, telefonszáma, fiókazonosítója, jelszava vagy bármely más, a regisztráció során megadott adata) nem kerül nyilvánosságra.</p>
+
+          <h3 className="font-semibold text-gray-800 mt-3">7.5. Hibajelentés</h3>
+          <p>Kezelt adatok: opcionális név vagy e-mail, bejelentés tartalma, időpont. Jogalap: jogos érdek. Megőrzési idő: az ügy lezárásától számított legfeljebb 12 hónap. Ezen adatok nem nyilvánosak.</p>
+
+          <h3 className="font-semibold text-gray-800 mt-3">7.6. Regisztráció és fiókkezelés</h3>
+          <p>Kezelt adatok: belső azonosító, e-mail cím, auth provider, a regisztráció során megadott név (megjelenítési név), fiók létrehozásának időpontja, utolsó belépés ideje. Jogalap: szerződéses jogalap. Megőrzési idő: a fiók fennállásáig.</p>
+          <p>Ezen adatok közül a nyilvánosság számára – kizárólag a felhasználó által beküldött nyilvános tartalmak (pl. értékelések) mellett – csak a megjelenítési név válik láthatóvá. A belső azonosító, az e-mail cím, az auth provider adatai, valamint a belépési időpontok nem nyilvánosak.</p>
+
+          <h3 className="font-semibold text-gray-800 mt-3">7.7. Visszaélés-megelőzés, hitelességvédelem</h3>
+          <p>Kezelt adatok: belső azonosítók, belépési és beküldési időpontok, IP-hash formában tárolt technikai adatok. Jogalap: jogos érdek. Megőrzési idő: tipikusan 30–180 nap. Ezen adatok nem nyilvánosak.</p>
+
+          <h3 className="font-semibold text-gray-800 mt-3">7.8. Hírlevél</h3>
+          <p>Kezelt adatok: e-mail cím, feliratkozás és leiratkozás időpontja, hozzájárulás igazolása. Jogalap: hozzájárulás. Megőrzési idő: a leiratkozásig. Ezen adatok nem nyilvánosak.</p>
+
+          <h3 className="font-semibold text-gray-800 mt-3">7.9. Sütik és analitika</h3>
+          <p>A weboldal sütiket és analitikai eszközöket (Google Analytics) használhat. A szükséges sütik jogalapja a működtetéshez kapcsolódó érdek, a nem szükséges sütiké hozzájárulás.</p>
         </Section>
 
         <Section title="8–9. Látogatói adatok és kapcsolatfelvétel">
@@ -82,7 +85,8 @@ export default function AdatkezelesiPage() {
         </Section>
 
         <Section title="10–11. Helybeküldés és értékelések">
-          <p>Helybeküldéskor az adatkezelő kezeli a beküldő megjelenítési nevét, e-mail címét, a helyre vonatkozó adatokat és a rövid leírást. A beküldött tartalmak moderáción esnek át. Az értékelések célja a helyek rövid, általános bemutatása. A nyilvános felületen csak a publikus megjelenítési név, a csillagos értékelés, a rövid szöveges vélemény és az időpont jelenik meg.</p>
+          <p>Helybeküldéskor az adatkezelő kezeli a beküldő regisztráció során megadott nevét, e-mail címét, a helyre vonatkozó adatokat és a rövid leírást. A beküldött tartalmak moderáción esnek át. Az értékelések célja a helyek rövid, általános bemutatása.</p>
+          <p>A nyilvános felületen az értékelés mellett kizárólag a felhasználó regisztráció során megadott neve, a csillagos értékelés, a rövid szöveges vélemény és a beküldés időpontja jelenik meg. A felhasználó semmilyen más személyes adata – így különösen e-mail címe, telefonszáma, fiókazonosítója vagy egyéb, a regisztráció során megadott adata – nem kerül nyilvános megjelenítésre.</p>
         </Section>
 
         <Section title="12–13. Különleges kategóriájú adatok és gyermekek adatai">
@@ -111,14 +115,14 @@ export default function AdatkezelesiPage() {
 
         <Section title="25. Jogorvoslat – NAIH és bíróság">
           <p>Ha az érintett úgy véli, hogy személyes adatainak kezelése sérti az adatvédelmi jogszabályokat, panasszal fordulhat a Nemzeti Adatvédelmi és Információszabadság Hatósághoz, vagy bírósághoz fordulhat.</p>
-          <p>
+          <address className="not-italic mt-2 text-sm text-gray-600">
             <strong>Nemzeti Adatvédelmi és Információszabadság Hatóság</strong><br />
             1055 Budapest, Falk Miksa utca 9-11.<br />
             Levelezési cím: 1363 Budapest, Pf. 9.<br />
             Telefon: +36 (1) 391-1400<br />
             E-mail: ugyfelszolgalat@naih.hu<br />
-            Web: <a href="https://www.naih.hu" target="_blank" rel="noopener" className="text-sni-brand-blue underline">naih.hu</a>
-          </p>
+            Web: naih.hu
+          </address>
         </Section>
 
         <Section title="26–27. Adatvédelmi incidensek és tájékoztató módosítása">
@@ -134,16 +138,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   return (
     <section>
       <h2 className="text-lg font-bold text-sni-text mb-2">{title}</h2>
-      <div className="space-y-2 text-gray-700 text-sm leading-relaxed">{children}</div>
+      <div className="space-y-3">{children}</div>
     </section>
-  );
-}
-
-function SubSection({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="mt-3">
-      <h3 className="font-semibold text-gray-800 mb-1">{title}</h3>
-      {children}
-    </div>
   );
 }
