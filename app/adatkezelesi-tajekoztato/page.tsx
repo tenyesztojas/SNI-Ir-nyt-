@@ -1,144 +1,214 @@
-export const metadata = {
-  title: "Adatkezelési tájékoztató – VédettSarok",
-};
+import Link from "next/link";
 
-
-export default function AdatkezelesiPage() {
+function Section({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {
   return (
-    <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
-      <h1 className="text-3xl font-extrabold text-sni-text">Adatkezelési tájékoztató</h1>
-      <p className="mt-2 text-sm text-gray-500">Hatályos: 2026. augusztus &mdash; Verzió: 1.1</p>
+    <section id={id} className="mb-10 scroll-mt-20">
+      <h2 className="mb-4 text-xl font-bold text-sni-text border-b border-gray-200 pb-2">{title}</h2>
+      <div className="space-y-3">{children}</div>
+    </section>
+  );
+}
 
-      <div className="mt-8 prose prose-sm max-w-none text-gray-700 space-y-6">
+function P({ children }: { children: React.ReactNode }) {
+  return <p className="text-gray-700 leading-relaxed">{children}</p>;
+}
 
-        <Section title="1. Az adatkezelési tájékoztató célja">
-          <p>Jelen adatkezelési tájékoztató a VédettSarok weboldal és webalkalmazás (a továbbiakban: Szolgáltatás) használatával összefüggő személyesadat-kezelésekre vonatkozó tájékoztatást tartalmazza. A tájékoztató célja, hogy az érintettek átlátható, közérthető és részletes információt kapjanak arról, hogy a Szolgáltatás üzemeltetője milyen adatokat, milyen célból, milyen jogalapon, mennyi ideig kezel, kik számára teszi hozzáférhetővé, valamint az érintetteket milyen jogok illetik meg.</p>
-          <p>A VédettSarok egy magyar nyelvű közösségi helykereső és ajánló szolgáltatás, amely autizmussal és ADHD-val érintett családoknak, érintett felnőtteknek és segítő szakembereknek nyújt segítséget. A Szolgáltatás nem minősül egészségügyi, diagnosztikai, terápiás vagy orvosi szolgáltatásnak.</p>
-          <p>A Szolgáltatás kialakítása során kiemelt szempont az adattakarékosság, a beépített és alapértelmezett adatvédelem, valamint annak elkerülése, hogy a rendszer szükségtelenül gyermekekre vagy egészségi állapotra vonatkozó személyes adatokat gyűjtsön vagy tegyen közzé.</p>
-        </Section>
-
-        <Section title="2. Az adatkezelő adatai">
-          <p>
-            <strong>Adatkezelő neve:</strong> 4 Nature Kft.<br />
-            <strong>Székhely:</strong> 2038 Sóskút, Kőszikla utca 21.<br />
-            <strong>Levelezési cím:</strong> 2038 Sóskút, Kőszikla utca 21.<br />
-            <strong>E-mail cím:</strong> 4naturekft@gmail.com<br />
-            <strong>Cégjegyzékszám:</strong> 13-09-221686<br />
-            <strong>Adószám:</strong> 32038107-1-13<br />
-            <strong>Weboldal:</strong> vedettsarok.hu
-          </p>
-        </Section>
-
-        <Section title="3. A Szolgáltatás rövid bemutatása">
-          <p>A VédettSarok olyan közösségi platform, amely lehetővé teszi különösen az alábbi funkciók használatát: helyek keresése, helyek adatlapjának megtekintése, helyek ajánlása és beküldése, csillagos értékelés és rövid szöveges vélemény beküldése, hibás adat vagy problémás tartalom jelzése, felhasználói fiók létrehozása és belépés, kedvencek mentése, hírlevél és egyéb bővített funkciók.</p>
-          <p>A rendszer nem arra szolgál, hogy a felhasználók saját magukra, gyermekükre vagy más személyre vonatkozó diagnózist, egészségi állapotot, terápiás hátteret vagy más érzékeny információt közzétegyenek.</p>
-        </Section>
-
-        <Section title="4. Irányadó jogszabályok és alapelvek">
-          <p>Az adatkezelésre különösen az alábbi jogszabályok irányadók: az Európai Parlament és a Tanács (EU) 2016/679 rendelete (GDPR), az információs önrendelkezési jogról és az információszabadságról szóló 2011. évi CXII. törvény (Infotv.), a NAIH vonatkozó tájékoztatói és iránymutatásai, valamint az Európai Adatvédelmi Testület releváns iránymutatásai.</p>
-          <p>Az adatkezelő az adatkezelés során különösen az alábbi alapelveket érvényesíti: jogszerűség, tisztességes eljárás és átláthatóság; célhoz kötöttség; adattakarékosság; pontosság; korlátozott tárolhatóság; integritás és bizalmas jelleg; elszámoltathatóság.</p>
-        </Section>
-
-        <Section title="5. Fogalmak">
-          <p>Jelen tájékoztatóban a személyes adat, adatkezelés, adatkezelő, adatfeldolgozó, címzett, érintett, hozzájárulás, különleges kategóriájú személyes adat, profilalkotás, álnevesítés és adattovábbítás fogalma alatt a GDPR-ban meghatározott fogalmak értendők.</p>
-          <p><strong>Megjelenítési név:</strong> a felhasználó által a regisztráció során megadott név, amelyet a Szolgáltatás az érintett által beküldött nyilvános tartalmak (így különösen az értékelések) mellett a nyilvánosság számára megjelenít.</p>
-        </Section>
-
-        <Section title="6. Az érintettek köre">
-          <p>Az adatkezelések különösen az alábbi érintetti köröket érinthetik: a weboldal látogatói, kapcsolatfelvételt kezdeményező személyek, helybeküldők, értékelést vagy véleményt beküldő felhasználók, regisztrált felhasználók, hírlevélre feliratkozók, szolgáltatói vagy üzleti profil igénylői, hibás adatot vagy problémás tartalmat bejelentő személyek.</p>
-          <p>A Szolgáltatás nem gyermekek személyes adatainak gyűjtésére szolgál.</p>
-        </Section>
-
-        <Section title="7. Kezelt adatok köre, cél, jogalap, megőrzési idő">
-          <h3 className="font-semibold text-gray-800 mt-3">7.1. Weboldal működtetése, IT-biztonság</h3>
-          <p>Az adatkezelő a weboldal működtetése és védelme érdekében kezelheti az IP-címet, a böngésző típusát, az eszköz típusát, a látogatás időpontját és egyéb technikai naplóadatokat. Jogalap: jogos érdek. Megőrzési idő: jellemzően 30–90 nap.</p>
-
-          <h3 className="font-semibold text-gray-800 mt-3">7.2. Kapcsolatfelvétel, ügyintézés</h3>
-          <p>Kezelt adatok: név, e-mail cím, üzenet tartalma, beküldés időpontja. Cél: a megkeresés megválaszolása, panasz- és ügykezelés. Jogalap: jogos érdek. Megőrzési idő: az ügy lezárásától számított legfeljebb 12 hónap. Ezen adatok nem nyilvánosak.</p>
-
-          <h3 className="font-semibold text-gray-800 mt-3">7.3. Helybeküldés</h3>
-          <p>Kezelt adatok: a beküldő regisztráció során megadott neve, e-mail cím, a hely adatai, rövid leírás, beküldés időpontja, moderációs státusz. Jogalap: jogos érdek. Megőrzési idő: elutasítás esetén legfeljebb 90 nap, jóváhagyott tartalom esetén a közzététel fennállásáig. A beküldő e-mail címe és egyéb személyes adata nem kerül nyilvános megjelenítésre.</p>
-
-          <h3 className="font-semibold text-gray-800 mt-3">7.4. Értékelések és vélemények</h3>
-          <p>Kezelt adatok: a felhasználó regisztráció során megadott neve (megjelenítési név), csillagos értékelés, rövid szöveges vélemény, beküldés időpontja, moderációs státusz. Jogalap: jogos érdek. Megőrzési idő: a közzététel fennállásáig vagy törlési kérelemig.</p>
-          <p>Nyilvánosságra kerülő adatok: az értékelés mellett kizárólag a felhasználó regisztráció során megadott neve, a csillagos értékelés, a rövid szöveges vélemény szövege és a beküldés időpontja jelenik meg a nyilvános felületen. A felhasználó semmilyen egyéb személyes adata (így különösen e-mail címe, telefonszáma, fiókazonosítója, jelszava vagy bármely más, a regisztráció során megadott adata) nem kerül nyilvánosságra.</p>
-
-          <h3 className="font-semibold text-gray-800 mt-3">7.5. Hibajelentés</h3>
-          <p>Kezelt adatok: opcionális név vagy e-mail, bejelentés tartalma, időpont. Jogalap: jogos érdek. Megőrzési idő: az ügy lezárásától számított legfeljebb 12 hónap. Ezen adatok nem nyilvánosak.</p>
-
-          <h3 className="font-semibold text-gray-800 mt-3">7.6. Regisztráció és fiókkezelés</h3>
-          <p>Kezelt adatok: belső azonosító, e-mail cím, auth provider, a regisztráció során megadott név (megjelenítési név), fiók létrehozásának időpontja, utolsó belépés ideje. Jogalap: szerződéses jogalap. Megőrzési idő: a fiók fennállásáig.</p>
-          <p>Ezen adatok közül a nyilvánosság számára – kizárólag a felhasználó által beküldött nyilvános tartalmak (pl. értékelések) mellett – csak a megjelenítési név válik láthatóvá. A belső azonosító, az e-mail cím, az auth provider adatai, valamint a belépési időpontok nem nyilvánosak.</p>
-
-          <h3 className="font-semibold text-gray-800 mt-3">7.7. Visszaélés-megelőzés, hitelességvédelem</h3>
-          <p>Kezelt adatok: belső azonosítók, belépési és beküldési időpontok, IP-hash formában tárolt technikai adatok. Jogalap: jogos érdek. Megőrzési idő: tipikusan 30–180 nap. Ezen adatok nem nyilvánosak.</p>
-
-          <h3 className="font-semibold text-gray-800 mt-3">7.8. Hírlevél</h3>
-          <p>Kezelt adatok: e-mail cím, feliratkozás és leiratkozás időpontja, hozzájárulás igazolása. Jogalap: hozzájárulás. Megőrzési idő: a leiratkozásig. Ezen adatok nem nyilvánosak.</p>
-
-          <h3 className="font-semibold text-gray-800 mt-3">7.9. Sütik és analitika</h3>
-          <p>A weboldal sütiket és analitikai eszközöket (Google Analytics) használhat. A szükséges sütik jogalapja a működtetéshez kapcsolódó érdek, a nem szükséges sütiké hozzájárulás.</p>
-        </Section>
-
-        <Section title="8–9. Látogatói adatok és kapcsolatfelvétel">
-          <p>A weboldal használata során technikai okokból kezelhetők IP-címek, böngésző- és eszközadatok, a látogatás időpontja, hibalogok és biztonsági naplók. Kapcsolatfelvételkor az adatkezelő kezeli a felhasználó nevét, e-mail címét, üzenetét és az üzenet időpontját. A felhasználó köteles tartózkodni attól, hogy diagnosztikai, egészségügyi vagy gyermekre vonatkozó érzékeny adatot küldjön.</p>
-        </Section>
-
-        <Section title="10–11. Helybeküldés és értékelések">
-          <p>Helybeküldéskor az adatkezelő kezeli a beküldő regisztráció során megadott nevét, e-mail címét, a helyre vonatkozó adatokat és a rövid leírást. A beküldött tartalmak moderáción esnek át. Az értékelések célja a helyek rövid, általános bemutatása.</p>
-          <p>A nyilvános felületen az értékelés mellett kizárólag a felhasználó regisztráció során megadott neve, a csillagos értékelés, a rövid szöveges vélemény és a beküldés időpontja jelenik meg. A felhasználó semmilyen más személyes adata – így különösen e-mail címe, telefonszáma, fiókazonosítója vagy egyéb, a regisztráció során megadott adata – nem kerül nyilvános megjelenítésre.</p>
-        </Section>
-
-        <Section title="12–13. Különleges kategóriájú adatok és gyermekek adatai">
-          <p>Az egészségi állapotra vonatkozó adatok különleges kategóriájú személyes adatok. A Szolgáltatás működési modellje kifejezetten arra épül, hogy ilyen adatokat ne gyűjtsön. A Szolgáltatás nem gyermekek személyes adatainak gyűjtésére szolgál.</p>
-        </Section>
-
-        <Section title="14–16. Fiókkezelés, hitelességvédelem, moderáció">
-          <p>A felhasználói fiókok célja a hitelesség és kényelmi funkciók biztosítása. Az adatkezelő a fiókhoz szükséges minimális adatokat kezeli. A hamis vagy tömeges értékelések kiszűrése érdekében az adatkezelő visszaélés-megelőzési logikát alkalmazhat. A felhasználói tartalmak moderációja a Szolgáltatás működésének része.</p>
-        </Section>
-
-        <Section title="17–19. Sütik, hírlevél, szolgáltatói profil">
-          <p>A weboldal sütiket használhat; a részletes listát külön sütitájékoztató tartalmazza. Hírlevél esetén az adatkezelő az e-mail címet, a feliratkozás és leiratkozás időpontját kezeli; a felhasználó bármikor leiratkozhat. Szolgáltatói profil igénylésekor az adatkezelő a kapcsolattartó nevét, elérhetőségét és a vállalkozás alapadatait kezeli.</p>
-        </Section>
-
-        <Section title="20–21. Adatfeldolgozók és adattovábbítás">
-          <p>Az adatkezelő a szolgáltatás nyújtásához adatfeldolgozókat vesz igénybe (tárhelyszolgáltató, hosting szolgáltató, auth- és adatbázis-szolgáltató, e-mail szolgáltató, analitikai szolgáltató). Ha valamely szolgáltató az Európai Gazdasági Térségen kívülre továbbít adatot, az adatkezelő gondoskodik a megfelelő garanciákról.</p>
-        </Section>
-
-        <Section title="22–23. Adatbiztonság és adatvédelmi hatásvizsgálat">
-          <p>Az adatkezelő kockázattal arányos technikai és szervezési intézkedéseket alkalmaz: hozzáférés-szabályozás, titkosított adatkapcsolat, naplózás, biztonsági mentés, rendszeres frissítés, jogosultságkezelés és incidenskezelési eljárás.</p>
-        </Section>
-
-        <Section title="24. Az érintettek jogai">
-          <p>Az érintettet különösen az alábbi jogok illetik meg: tájékoztatáshoz és hozzáféréshez való jog, helyesbítéshez való jog, törléshez való jog, az adatkezelés korlátozásához való jog, adathordozhatósághoz való jog, tiltakozáshoz való jog, hozzájárulás visszavonásának joga. Az érintett kérelmét az adatkezelő indokolatlan késedelem nélkül, legfeljebb egy hónapon belül válaszolja meg.</p>
-        </Section>
-
-        <Section title="25. Jogorvoslat – NAIH és bíróság">
-          <p>Ha az érintett úgy véli, hogy személyes adatainak kezelése sérti az adatvédelmi jogszabályokat, panasszal fordulhat a Nemzeti Adatvédelmi és Információszabadság Hatósághoz, vagy bírósághoz fordulhat.</p>
-          <address className="not-italic mt-2 text-sm text-gray-600">
-            <strong>Nemzeti Adatvédelmi és Információszabadság Hatóság</strong><br />
-            1055 Budapest, Falk Miksa utca 9-11.<br />
-            Levelezési cím: 1363 Budapest, Pf. 9.<br />
-            Telefon: +36 (1) 391-1400<br />
-            E-mail: ugyfelszolgalat@naih.hu<br />
-            Web: naih.hu
-          </address>
-        </Section>
-
-        <Section title="26–27. Adatvédelmi incidensek és tájékoztató módosítása">
-          <p>Az adatkezelő belső eljárásrendet működtet adatvédelmi incidensek felismerésére, kivizsgálására és szükség szerinti bejelentésére. Az adatkezelő jogosult a jelen tájékoztatót módosítani; a hatályos verziót mindig a weboldalon teszi közzé.</p>
-        </Section>
-
-      </div>
+function Sub({ n, title, children }: { n: string; title?: string; children: React.ReactNode }) {
+  return (
+    <div className="mt-4">
+      {title ? (
+        <p className="font-semibold text-gray-900 mb-1">{n} {title}</p>
+      ) : (
+        <p className="font-medium text-gray-800 mb-1">{n}</p>
+      )}
+      <div className="pl-4 space-y-2 text-gray-700 leading-relaxed">{children}</div>
     </div>
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function DataTable({ rows }: { rows: [string, string][] }) {
   return (
-    <section>
-      <h2 className="text-lg font-bold text-sni-text mb-2">{title}</h2>
-      <div className="space-y-3">{children}</div>
-    </section>
+    <div className="mt-3 overflow-hidden rounded-xl border border-gray-200">
+      {rows.map(([label, value]) => (
+        <div key={label} className="flex border-b border-gray-100 last:border-0">
+          <div className="w-40 shrink-0 bg-gray-50 px-4 py-3 text-xs font-semibold text-gray-600 uppercase tracking-wide">
+            {label}
+          </div>
+          <div className="px-4 py-3 text-sm text-gray-700 leading-relaxed">{value}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function LetterList({ items }: { items: string[] }) {
+  return (
+    <ul className="list-none space-y-1 pl-2">
+      {items.map((item, i) => (
+        <li key={i} className="text-gray-700 leading-relaxed">{item}</li>
+      ))}
+    </ul>
+  );
+}
+
+export default function AdatkezelesiTajekoztato() {
+  return (
+    <div className="mx-auto max-w-3xl px-4 py-12 sm:px-6">
+      <h1 className="mb-2 text-3xl font-bold text-sni-text">Adatkezelési Tájékoztató</h1>
+      <p className="mb-1 text-sm text-gray-500">Hatályos: 2026. augusztus 5. napjától</p>
+      <div className="mb-8 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
+        <strong>Adatkezelő:</strong> [Üzemeltető teljes neve / cégneve, székhelye, cégjegyzékszáma vagy
+        nyilvántartási száma, adószáma, elérhetősége – kitöltendő]
+        <span className="ml-1 text-gray-400">(a továbbiakban: „Adatkezelő")</span>
+      </div>
+
+      <P>Jelen tájékoztató a Weboldal (a továbbiakban: „Weboldal") működésével összefüggő adatkezelésekről nyújt tájékoztatást, az Európai Parlament és a Tanács (EU) 2016/679 rendelete (a továbbiakban: „GDPR"), valamint az információs önrendelkezési jogról és az információszabadságról szóló 2011. évi CXII. törvény (a továbbiakban: „Infotv.") rendelkezéseivel összhangban. A jelen tájékoztató a Weboldal <Link href="/aszf" className="text-sni-brand-blue hover:underline">Általános Szerződési Feltételeivel (ÁSZF)</Link> együtt értelmezendő; a fogalommeghatározások tekintetében az ÁSZF-ben foglaltak az irányadók.</P>
+
+      <div className="my-8" />
+
+      <Section id="alapelvek" title="1. Az adatkezelés alapelvei">
+        <Sub n="1.1.">
+          <P>Az Adatkezelő a személyes adatokat jogszerűen, tisztességesen és az érintett számára átlátható módon, célhoz kötötten, a szükséges mértékre korlátozva, pontosan, korlátozott ideig tárolva, valamint megfelelő biztonsági intézkedésekkel kezeli, a GDPR 5. cikkében rögzített elvekkel összhangban.</P>
+        </Sub>
+        <Sub n="1.2.">
+          <P>Az Adatkezelő kifejezetten rögzíti, hogy egyetlen adatkezelési célhoz kapcsolódó személyes adatot sem használ fel más, azzal összeegyeztethetetlen célra anélkül, hogy erről az érintettet tájékoztatná, illetve – ahol jogszabály ezt előírja – hozzájárulását kérné.</P>
+        </Sub>
+      </Section>
+
+      <Section id="adatkezelesek" title="2. Az egyes adatkezelések">
+        <Sub n="2.1." title="Regisztráció">
+          <DataTable rows={[
+            ["Kezelt adatok", "e-mail cím, jelszó (titkosítva), felhasználónév, regisztráció időpontja, IP-cím"],
+            ["Cél", "fiók létrehozása, azonosítás, a Weboldal biztonságos működésének biztosítása"],
+            ["Jogalap", "szerződés teljesítése (GDPR 6. cikk (1) b) pont) – a Weboldal használatára vonatkozó ÁSZF elfogadása"],
+            ["Megőrzési idő", "a fiók fennállásának ideje, törlési kérelemig, illetve jogszabályi megőrzési kötelezettség esetén az arra irányadó ideig"],
+          ]} />
+        </Sub>
+
+        <Sub n="2.2." title="Hely-javaslat">
+          <DataTable rows={[
+            ["Kezelt adatok", "a javasolt Hely adatai, a javaslattevő felhasználói fiókjához kapcsolt azonosító, időpont"],
+            ["Cél", "a Hely-adatbázis bővítése, az Automatikus technikai ellenőrzés lefolytatása"],
+            ["Jogalap", "szerződés teljesítése (GDPR 6. cikk (1) b) pont)"],
+            ["Megőrzési idő", "a Hely adatbázisban való szereplésének ideje, illetve a fiók törléséig"],
+          ]} />
+        </Sub>
+
+        <Sub n="2.3." title="Értékelés közzététele">
+          <DataTable rows={[
+            ["Kezelt adatok", "az Értékelés szövege, minősítése (pl. csillagszám), a közzétevő felhasználói fiókjához kapcsolt azonosító, időpont, technikai adatok (IP-cím, eszközazonosító – kizárólag az Automatikus technikai ellenőrzés céljára)"],
+            ["Cél", "az Értékelés közzététele, Automatikus technikai ellenőrzés, visszaélések (pl. manipulált, duplikált Értékelés) kiszűrése"],
+            ["Jogalap", "szerződés teljesítése (GDPR 6. cikk (1) b) pont); a visszaélés-szűrés tekintetében az Adatkezelő jogos érdeke (GDPR 6. cikk (1) f) pont)"],
+            ["Megőrzési idő", "az Értékelés közzétételének ideje, illetve jogsértés-bejelentés esetén a bejelentés elbírálásához szükséges ideig"],
+          ]} />
+        </Sub>
+
+        <Sub n="2.4." title="Nyilvános Válasz (az Érintett Hely részéről)">
+          <DataTable rows={[
+            ["Kezelt adatok", "az Érintett Hely képviselőjének igazoláshoz megadott adatai (pl. céges e-mail cím, kapcsolattartó neve), a Nyilvános Válasz szövege, időpont"],
+            ["Cél", "az Érintett Hely jogosultságának igazolása, a Nyilvános Válasz közzététele az ÁSZF 7. pontja szerint"],
+            ["Jogalap", "szerződés teljesítése, illetve az Adatkezelő jogos érdeke a jogosultság-igazolás lefolytatásához (GDPR 6. cikk (1) b) és f) pont)"],
+            ["Megőrzési idő", "a Nyilvános Válasz közzétételének ideje"],
+          ]} />
+          <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            <strong>Fontos, kiemelt tájékoztatás:</strong> Az Adatkezelő a jelen 2.4. pont szerinti Nyilvános Válasz funkció keretében az Értékelést közzétevő Felhasználó valós nevét, e-mail címét, telefonszámát vagy egyéb, a személyazonosságára közvetlenül utaló adatát az Érintett Hely részére nem továbbítja, és azt az Érintett Hely számára a Weboldal felületén sem teszi megismerhetővé. A Nyilvános Válasz kizárólag az Értékeléshez, nem a Felhasználó személyéhez kapcsolódóan, nyilvánosan jelenik meg.
+          </div>
+        </Sub>
+
+        <Sub n="2.5." title="Anonimizált üzenetküldő funkció (amennyiben elérhető)">
+          <DataTable rows={[
+            ["Kezelt adatok", "az üzenet szövege, a felek felhasználói fiókjához kapcsolt azonosító, időpont; a felek valós elérhetősége (e-mail, telefonszám) nem kerül felfedésre, kivéve, ha a Felhasználó ezt a jelen tájékoztató 3. pontja szerint kifejezetten engedélyezi"],
+            ["Cél", "az Érintett Hely és a Felhasználó közötti, a valós elérhetőség felfedése nélküli kapcsolatfelvétel lehetővé tétele"],
+            ["Jogalap", "az érintett hozzájárulása (GDPR 6. cikk (1) a) pont) – az üzenetküldő funkció igénybevétele önkéntes"],
+            ["Megőrzési idő", "az üzenetváltás lezárását követő, az Adatkezelő által meghatározott idő, illetve törlési kérelemig"],
+          ]} />
+        </Sub>
+
+        <Sub n="2.6." title="Jogsértés-bejelentés (Notice-and-Action)">
+          <DataTable rows={[
+            ["Kezelt adatok", "a bejelentő elérhetősége, a bejelentés tartalma, az érintett Tartalom megjelölése, időpont"],
+            ["Cél", "a bejelentés kivizsgálása, a jogszabályi (Ekertv., DSA) bejelentés-alapú eljárás lefolytatása"],
+            ["Jogalap", "jogi kötelezettség teljesítése (GDPR 6. cikk (1) c) pont), illetve az Adatkezelő jogos érdeke"],
+            ["Megőrzési idő", "a bejelentés elbírálásától számított, jogi igényérvényesítési határidőn belüli, indokolt ideig"],
+          ]} />
+        </Sub>
+      </Section>
+
+      <Section id="adatadas" title="3. A Felhasználó személyes adatainak Érintett Hely részére történő átadása – kifejezett, elkülönített hozzájárulás">
+        <Sub n="3.1.">
+          <P>Az Adatkezelő elsődleges és alapértelmező eljárása szerint a Felhasználó személyes adatait nem továbbítja az Érintett Hely részére. Amennyiben a Weboldal ezen felül olyan funkciót is biztosít, amelynek keretében a Felhasználó – kifejezetten és önként – hozzájárulhat ahhoz, hogy elérhetőségét egy adott Értékeléssel kapcsolatban az Érintett Hely megismerhesse, ez a hozzájárulás:</P>
+          <LetterList items={[
+            "a) kizárólag az adott, konkrét Értékeléshez kapcsolódóan, eseti jelleggel kérhető (nem az általános ÁSZF-elfogadás vagy regisztráció részeként);",
+            "b) egyértelmű, aktív cselekvést (pl. jelölőnégyzet bejelölése, gombra kattintás) igényel, hallgatás vagy előre bejelölt opció nem minősül hozzájárulásnak;",
+            "c) bármikor, korlátozás nélkül visszavonható, a visszavonás azonban nem érinti a visszavonás előtt már megtörtént adatátadás jogszerűségét;",
+            "d) elutasítása esetén a Felhasználó a Weboldal egyéb funkcióit (pl. Értékelés közzététele) korlátozás nélkül továbbra is használhatja – a hozzájárulás megadása semmilyen szolgáltatás feltételéül nem szabható.",
+          ]} />
+        </Sub>
+        <Sub n="3.2.">
+          <P>Az Adatkezelő a 3.1. pont szerinti hozzájárulás megadása előtt köteles a Felhasználót tájékoztatni arról, hogy adatai mely körben, milyen célból és mely Érintett Hely számára kerülnek átadásra.</P>
+        </Sub>
+      </Section>
+
+      <Section id="automatizalt" title="4. Automatizált döntéshozatal">
+        <Sub n="4.1.">
+          <P>A Weboldal az Értékelések és Hely-javaslatok közzétételéről az ÁSZF 3. pontja szerinti Automatikus technikai ellenőrzés keretében, kizárólag automatizált módon dönt, amely a GDPR 22. cikke szerinti, kizárólag automatizált döntéshozatalnak minősülhet, amennyiben az a Felhasználóra vonatkozó joghatással jár (pl. a Tartalom elutasítása).</P>
+        </Sub>
+        <Sub n="4.2.">
+          <P>A Felhasználót az ilyen automatizált döntéssel kapcsolatban megilleti:</P>
+          <LetterList items={[
+            "a) a döntés emberi beavatkozás útján történő felülvizsgálatának kérelmezéséhez való jog;",
+            "b) a saját álláspontja kifejtésének joga;",
+            "c) a döntés megtámadásának joga.",
+          ]} />
+          <P>E jogokat az Üzemeltető az ÁSZF 5.2. pontja szerinti panaszeljárás útján biztosítja.</P>
+        </Sub>
+      </Section>
+
+      <Section id="adattovabbitas" title="5. Adattovábbítás, adatfeldolgozók">
+        <Sub n="5.1.">
+          <P>Az Adatkezelő a Weboldal működtetéséhez adatfeldolgozókat (pl. tárhelyszolgáltató, adatbázis-szolgáltató – Supabase Inc., e-mail küldő szolgáltató) vehet igénybe. Az adatfeldolgozók listája és az esetleges harmadik országba (EGT-n kívüli) irányuló adattovábbítás részletei a Weboldalon elérhető, mindenkor aktuális adatfeldolgozói jegyzékben találhatók.</P>
+        </Sub>
+        <Sub n="5.2.">
+          <P>Az Adatkezelő a Felhasználó személyes adatait – a jelen tájékoztató 3. pontjában rögzített, kifejezett hozzájáruláson alapuló eseten kívül – harmadik személy (így különösen az Érintett Hely) részére nem továbbítja.</P>
+        </Sub>
+      </Section>
+
+      <Section id="jogok" title="6. Az érintett jogai">
+        <Sub n="6.1.">
+          <P>A Felhasználót és az Érintett Helyet a GDPR alapján megilleti:</P>
+          <LetterList items={[
+            "a hozzáféréshez való jog (15. cikk);",
+            "a helyesbítéshez való jog (16. cikk);",
+            "a törléshez való jog (17. cikk);",
+            "az adatkezelés korlátozásához való jog (18. cikk);",
+            "az adathordozhatósághoz való jog (20. cikk);",
+            "a tiltakozáshoz való jog (21. cikk);",
+            "a hozzájárulás visszavonásához való jog, amennyiben az adatkezelés hozzájáruláson alapul (7. cikk (3) bekezdés).",
+          ]} />
+        </Sub>
+        <Sub n="6.2.">
+          <P>A jogok gyakorlására vonatkozó kérelmet az Adatkezelő [kapcsolattartási e-mail cím – kitöltendő] címen fogadja, és azt a GDPR-ban meghatározott határidőn (alapesetben egy hónapon) belül teljesíti.</P>
+        </Sub>
+        <Sub n="6.3.">
+          <P>Az érintett jogosult a Nemzeti Adatvédelmi és Információszabadság Hatósághoz (NAIH, 1055 Budapest, Falk Miksa utca 9–11., www.naih.hu) panasszal fordulni, illetve jogainak megsértése esetén bírósághoz fordulni.</P>
+        </Sub>
+      </Section>
+
+      <Section id="adatbiztonsag" title="7. Adatbiztonság">
+        <Sub n="7.1.">
+          <P>Az Adatkezelő megfelelő technikai és szervezési intézkedésekkel gondoskodik a személyes adatok jogosulatlan hozzáféréstől, megváltoztatástól, továbbítástól, nyilvánosságra hozataltól, törléstől vagy megsemmisítéstől való védelméről.</P>
+        </Sub>
+      </Section>
+
+      <Section id="modositas" title="8. A tájékoztató módosítása">
+        <Sub n="8.1.">
+          <P>Az Adatkezelő fenntartja a jogot a jelen Adatkezelési Tájékoztató módosítására. A módosított tájékoztató a Weboldalon történő közzétételt követően lép hatályba.</P>
+        </Sub>
+      </Section>
+
+      <div className="mt-8 rounded-xl border border-gray-200 bg-gray-50 px-4 py-4 text-xs text-gray-500 italic">
+        <strong className="not-italic font-semibold text-gray-700">Jogi megjegyzés:</strong> A jelen dokumentum mintaszövegként készült, és az ÁSZF 7. és 12. pontjában rögzített Nyilvános Válasz funkcióhoz, valamint az esetleges anonimizált üzenetküldő funkcióhoz igazodóan tartalmazza a szükséges adatvédelmi rendelkezéseket. A dokumentum véglegesítése előtt – az adatfeldolgozói kör tényleges összeállítása, valamint a mindenkori jogszabályi változások figyelembevétele érdekében – elengedhetetlen ügyvéd/adatvédelmi szakjogász általi felülvizsgálat.
+      </div>
+    </div>
   );
 }
