@@ -83,3 +83,38 @@ export function autoModeratePlace(fields: {
   const combined = [fields.name, fields.description, fields.whyFriendly].join(" ");
   return autoModerateText(combined);
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PII-szűrő mintázatok — Nyilvános Válasz szövegéhez (ÁSZF 7.5. pont)
+// Megjelöli (flagged), ha a válasz személyazonosításra alkalmas adatot tartalmaz
+// ─────────────────────────────────────────────────────────────────────────────
+const PII_PATTERNS: Array<{ re: RegExp; reason: string }> = [
+  // E-mail cím minta
+  { re: /[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,}/i, reason: "E-mail cím mintázat a válaszban" },
+  // Magyar telefonszám
+  { re: /(\+?36|06)[\s.\-]?\d{1,2}[\s.\-]?\d{3}[\s.\-]?\d{3,4}/, reason: "Telefonszám mintázat a válaszban" },
+  // Azonosítási kísérlet szövegesen
+  { re: /biztos (te|ön) vagy|valószín[uű]leg (te|ön)|te vagy \w+|ön az aki/i, reason: "Személyazonosítási kísérlet" },
+  // Közösségi profil linkek
+  { re: /instagram\.com\/|facebook\.com\/|linkedin\.com\//i, reason: "Közösségi profil link" },
+];
+
+/**
+ * Nyilvános Válasz szövegének ellenőrzése.
+ * Az alap tartalomszűrőn felül PII-mintázatokat is keres.
+ * Pass=false → eltávolítják; flagged=true → közzététel + admin értesítés.
+ */
+export function autoModerateResponse(text: string): ModResult {
+  // 1. Alap szűrő (tiltott szavak)
+  const base = autoModerateText(text);
+  if (!base.pass) return base;
+
+  // 2. PII-szűrő (csak flagelés, NEM blokkolás)
+  for (const { re, reason } of PII_PATTERNS) {
+    if (re.test(text)) {
+      return { pass: true, flagged: true, flagReason: reason };
+    }
+  }
+
+  return base;
+}

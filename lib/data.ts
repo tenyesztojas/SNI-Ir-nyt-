@@ -425,3 +425,62 @@ export async function getPlaceByIdWithSubmitter(id: string): Promise<Place | und
   place.submitter = await fetchSubmitterInfo(place.createdBy);
   return place;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Place claims + responses — Nyilvános Válasz / Hely-igénylés
+// ─────────────────────────────────────────────────────────────────────────────
+
+import { PlaceClaim, PlaceResponse } from "@/lib/types";
+
+/** Ellenőrzött claim lekérése egy hely számára */
+export async function getVerifiedClaimForPlace(
+  placeId: string
+): Promise<PlaceClaim | null> {
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("place_claims")
+    .select("id, place_id, claimant_user_id, verification_method, verification_data, status, reject_reason, created_at, verified_at")
+    .eq("place_id", placeId)
+    .eq("status", "verified")
+    .maybeSingle();
+  if (!data) return null;
+  return {
+    id: data.id,
+    placeId: data.place_id,
+    claimantUserId: data.claimant_user_id,
+    verificationMethod: data.verification_method,
+    verificationData: data.verification_data,
+    status: data.status,
+    rejectReason: data.reject_reason,
+    createdAt: data.created_at,
+    verifiedAt: data.verified_at,
+  };
+}
+
+/** Aktív nyilvános válaszok lekérése egy helyhez (review_id → válasz) */
+export async function getPublishedResponsesForPlace(
+  placeId: string
+): Promise<Record<string, PlaceResponse>> {
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("place_responses")
+    .select("id, review_id, place_id, responder_user_id, text, status, flagged_for_review, flag_reason, created_at")
+    .eq("place_id", placeId)
+    .eq("status", "published");
+
+  const map: Record<string, PlaceResponse> = {};
+  for (const r of data ?? []) {
+    map[r.review_id] = {
+      id: r.id,
+      reviewId: r.review_id,
+      placeId: r.place_id,
+      responderUserId: r.responder_user_id,
+      text: r.text,
+      status: r.status,
+      flaggedForReview: r.flagged_for_review,
+      flagReason: r.flag_reason,
+      createdAt: r.created_at,
+    };
+  }
+  return map;
+}

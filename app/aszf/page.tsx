@@ -1,3 +1,4 @@
+/* eslint-disable react/no-unescaped-entities */
 import Link from "next/link";
 
 function Section({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {

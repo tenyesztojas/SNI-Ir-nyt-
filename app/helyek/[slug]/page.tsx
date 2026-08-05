@@ -8,12 +8,16 @@ import {
   getApprovedReviewsForPlace,
   getCurrentUserAndProfile,
   isPlaceFavorited,
+  getVerifiedClaimForPlace,
+  getPublishedResponsesForPlace,
 } from "@/lib/data";
 import { Review } from "@/lib/types";
 import CategoryBadge from "@/components/CategoryBadge";
 import Disclaimer from "@/components/Disclaimer";
 import FavoriteButton from "@/components/FavoriteButton";
 import ReportButton from "@/components/ReportButton";
+import PlaceClaimButton from "@/components/PlaceClaimButton";
+import PlaceResponseSection from "@/components/PlaceResponseSection";
 
 const PlaceDetailMap = dynamic(() => import("@/components/PlaceDetailMapInner"), {
   ssr: false,
@@ -85,13 +89,17 @@ export default async function PlaceDetailPage({ params }: { params: { slug: stri
   const place = await getPlaceBySlug(params.slug);
   if (!place) notFound();
 
-  const [category, reviews, { user }] = await Promise.all([
+  const [category, reviews, { user }, verifiedClaim, responsesByReviewId] = await Promise.all([
     getCategoryBySlug(place.category),
     getApprovedReviewsForPlace(place.id),
     getCurrentUserAndProfile(),
+    getVerifiedClaimForPlace(place.id),
+    getPublishedResponsesForPlace(place.id),
   ]);
 
   const initialFavorite = user ? await isPlaceFavorited(user.id, place.id) : false;
+  const isClaimed = !!verifiedClaim;
+  const isOwner = isClaimed && user?.id === verifiedClaim?.claimantUserId;
   const avg = avgRating(reviews);
   const gradient = pickGradient(place.slug ?? place.name);
   const images = place.images ?? [];
@@ -137,6 +145,13 @@ export default async function PlaceDetailPage({ params }: { params: { slug: stri
           <Link href={`/ertekeles/${place.id}`} className="btn-primary">
             <Star size={17} /> Értékelést írok
           </Link>
+          {user && (
+            <PlaceClaimButton
+              placeId={place.id}
+              isClaimed={isClaimed}
+              isOwner={isOwner}
+            />
+          )}
         </div>
 
         {/* Térkép */}
@@ -304,6 +319,13 @@ export default async function PlaceDetailPage({ params }: { params: { slug: stri
                       ))}
                     </div>
                   )}
+                  {/* Nyilvános válasz — csak verified tulajdonosnak, vagy ha már van aktív válasz */}
+                  <PlaceResponseSection
+                    reviewId={r.id}
+                    placeId={place.id}
+                    existingResponse={responsesByReviewId[r.id] ?? null}
+                    isOwner={isOwner}
+                  />
                   </div>{/* /pl-12 */}
                 </div>
               ))}

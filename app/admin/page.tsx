@@ -61,6 +61,9 @@ export default async function AdminOverviewPage() {
         <Link href="/admin/felhasznalok" className="btn-secondary inline-flex items-center gap-2">
           <Users size={16} /> Felhasználók
         </Link>
+        <Link href="/admin/igenylesek" className="btn-secondary inline-flex items-center gap-2">
+          Hely-igénylések
+        </Link>
       </div>
     </div>
   );
