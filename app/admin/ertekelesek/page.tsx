@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { getPendingReviews, getVisiblePlaces } from "@/lib/data";
+import { getFlaggedReviews, getVisiblePlaces } from "@/lib/data";
 
 export default async function AdminReviewsPage() {
-  const [flagged, places] = await Promise.all([getPendingReviews(), getVisiblePlaces()]);
+  const [flagged, places] = await Promise.all([getFlaggedReviews(), getVisiblePlaces()]);
   const placeNameById: Record<string, string> = {};
   for (const p of places) placeNameById[p.id] = p.name;
 

@@ -1,20 +1,18 @@
 import Link from "next/link";
-import { ShieldCheck, MapPin, Star, Flag, Mail, Users, PlusCircle } from "lucide-react";
-import { getApprovedPlaces, getPendingPlaces, getPendingReviews, getPendingReports } from "@/lib/data";
+import { MapPin, Star, Flag, Mail, Users, PlusCircle } from "lucide-react";
+import { getApprovedPlaces, getFlaggedReviews, getPendingReports } from "@/lib/data";
 import PushNotifButton from "@/components/PushNotifButton";
 
 export default async function AdminOverviewPage() {
-  const [places, pendingPlaces, pendingReviews, pendingReports] = await Promise.all([
+  const [places, flaggedReviews, pendingReports] = await Promise.all([
     getApprovedPlaces(),
-    getPendingPlaces(),
-    getPendingReviews(),
+    getFlaggedReviews(),
     getPendingReports(),
   ]);
 
   const stats = [
-    { label: "Jóváhagyott hely", value: places.length, icon: MapPin },
-    { label: "Jóváhagyásra váró hely", value: pendingPlaces.length, icon: ShieldCheck },
-    { label: "Jóváhagyásra váró értékelés", value: pendingReviews.length, icon: Star },
+    { label: "Közzétett hely", value: places.length, icon: MapPin },
+    { label: "Megjelölt értékelés", value: flaggedReviews.length, icon: Star },
     { label: "Nyitott hibajelentés", value: pendingReports.length, icon: Flag },
   ];
 
@@ -45,10 +43,7 @@ export default async function AdminOverviewPage() {
         <Link href="/admin/helyek/uj" className="btn-primary inline-flex items-center gap-2">
           <PlusCircle size={16} /> Új hely felvitele
         </Link>
-        <Link href="/admin/helyek" className="btn-secondary">
-          Beküldött helyek jóváhagyása
-        </Link>
-        <Link href="/admin/helyek/osszes" className="btn-secondary inline-flex items-center gap-2">
+<Link href="/admin/helyek/osszes" className="btn-secondary inline-flex items-center gap-2">
           <MapPin size={16} /> Összes hely szerkesztése
         </Link>
         <Link href="/admin/ertekelesek" className="btn-secondary">
