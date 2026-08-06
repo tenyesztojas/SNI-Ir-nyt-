@@ -3,7 +3,7 @@ import { Building2 } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentUserAndProfile } from "@/lib/data";
 import { redirect } from "next/navigation";
-import ProviderRegistrationForm from "./ProviderRegistrationForm";
+import ProviderRegistrationForm from "@/components/ProviderRegistrationForm";
 
 export default async function ProviderRegistrationPage() {
   const { user } = await getCurrentUserAndProfile();
