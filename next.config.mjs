@@ -6,14 +6,14 @@ const supabaseHost = process.env.NEXT_PUBLIC_SUPABASE_URL
 
 // Content-Security-Policy — megakadályozza az XSS és külső tartalom-injektálást
 const cspDirectives = [
-  // Scriptek: csak saját domain + Google OAuth/reCAPTCHA
-  `script-src 'self' 'unsafe-inline' https://www.google.com https://www.gstatic.com`,
+  // Scriptek: saját + Google OAuth/reCAPTCHA + Google Analytics
+  `script-src 'self' 'unsafe-inline' https://www.google.com https://www.gstatic.com https://www.googletagmanager.com`,
   // Stílusok: saját + inline (Tailwind/CSS-in-JS)
   `style-src 'self' 'unsafe-inline'`,
-  // Képek: saját + Supabase Storage + OpenStreetMap + adatURl
-  `img-src 'self' data: blob: https://${supabaseHost} https://*.tile.openstreetmap.org https://*.openstreetmap.org`,
-  // API hívások: csak saját + Supabase + Google OAuth API
-  `connect-src 'self' https://${supabaseHost} https://*.supabase.co wss://*.supabase.co https://oauth2.googleapis.com https://www.googleapis.com`,
+  // Képek: saját + Supabase Storage + OpenStreetMap + GA pixel
+  `img-src 'self' data: blob: https://${supabaseHost} https://*.tile.openstreetmap.org https://*.openstreetmap.org https://www.google-analytics.com https://www.googletagmanager.com`,
+  // API hívások: saját + Supabase + Google OAuth + Google Analytics
+  `connect-src 'self' https://${supabaseHost} https://*.supabase.co wss://*.supabase.co https://oauth2.googleapis.com https://www.googleapis.com https://www.google-analytics.com https://region1.google-analytics.com https://www.googletagmanager.com`,
   // Frame: csak reCAPTCHA
   `frame-src https://www.google.com`,
   // Font: saját (fontsource npm csomagból, nem CDN)
