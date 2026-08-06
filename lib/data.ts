@@ -561,3 +561,29 @@ export async function getBookingDataForPlace(providerId: string): Promise<{
 
   return { packages, slots };
 }
+
+// ─── PWA statisztika ──────────────────────────────────────────────────────────
+export async function getPwaStats(): Promise<{
+  totalInstalls: number;
+  androidInstalls: number;
+  iosInstalls: number;
+  totalSessions: number;
+  last30DaySessions: number;
+}> {
+  const adminClient = createAdminClient();
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+  const [{ data: installs }, { data: sessions }, { data: recentSessions }] = await Promise.all([
+    adminClient.from("pwa_stats").select("platform").eq("event_type", "install"),
+    adminClient.from("pwa_stats").select("id").eq("event_type", "session"),
+    adminClient.from("pwa_stats").select("id").eq("event_type", "session").gte("created_at", thirtyDaysAgo),
+  ]);
+
+  return {
+    totalInstalls: installs?.length ?? 0,
+    androidInstalls: installs?.filter((r) => r.platform === "android").length ?? 0,
+    iosInstalls: installs?.filter((r) => r.platform === "ios").length ?? 0,
+    totalSessions: sessions?.length ?? 0,
+    last30DaySessions: recentSessions?.length ?? 0,
+  };
+}

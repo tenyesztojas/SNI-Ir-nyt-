@@ -42,7 +42,21 @@ export default function PWAInstallBanner() {
       setDeferredPrompt(e as Event & { prompt(): Promise<void>; userChoice: Promise<{ outcome: string }> });
     };
     window.addEventListener("beforeinstallprompt", handler);
-    return () => window.removeEventListener("beforeinstallprompt", handler);
+
+    // Telepítés esemény naplózása
+    const installedHandler = () => {
+      fetch("/api/pwa-event", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ event_type: "install", platform: detectPlatform() }),
+      }).catch(() => {});
+    };
+    window.addEventListener("appinstalled", installedHandler);
+
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handler);
+      window.removeEventListener("appinstalled", installedHandler);
+    };
   }, []);
 
   async function handleAndroidInstall() {

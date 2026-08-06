@@ -9,6 +9,7 @@ import "./globals.css";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import PWAInstallBanner from "@/components/PWAInstallBanner";
+import PWASessionTracker from "@/components/PWASessionTracker";
 
 export const metadata: Metadata = {
   title: "VédettSarok \u2013 Autizmus- és ADHD-barát helyek iránytűje",
@@ -46,6 +47,7 @@ export default function RootLayout({
         <main className="flex-1">{children}</main>
         <Footer />
         <PWAInstallBanner />
+        <PWASessionTracker />
 
         {/* Google Analytics */}
         <Script

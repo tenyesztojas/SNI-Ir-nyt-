@@ -1,13 +1,14 @@
 import Link from "next/link";
-import { MapPin, Star, Flag, Mail, Users, PlusCircle } from "lucide-react";
-import { getApprovedPlaces, getFlaggedReviews, getPendingReports } from "@/lib/data";
+import { MapPin, Star, Flag, Mail, Users, PlusCircle, Smartphone } from "lucide-react";
+import { getApprovedPlaces, getFlaggedReviews, getPendingReports, getPwaStats } from "@/lib/data";
 import PushNotifButton from "@/components/PushNotifButton";
 
 export default async function AdminOverviewPage() {
-  const [places, flaggedReviews, pendingReports] = await Promise.all([
+  const [places, flaggedReviews, pendingReports, pwaStats] = await Promise.all([
     getApprovedPlaces(),
     getFlaggedReviews(),
     getPendingReports(),
+    getPwaStats(),
   ]);
 
   const stats = [
@@ -35,7 +36,33 @@ export default async function AdminOverviewPage() {
         ))}
       </div>
 
-      <div className="mt-6">
+      {/* PWA statisztika */}
+      <div className="mt-6 rounded-2xl border border-gray-100 bg-white p-5 shadow-soft">
+        <div className="flex items-center gap-2 mb-4">
+          <Smartphone size={20} className="text-sni-brand-teal" />
+          <h2 className="font-bold text-gray-800">PWA alkalmazás statisztika</h2>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="rounded-xl bg-gray-50 p-3 text-center">
+            <p className="text-2xl font-bold text-sni-brand-teal">{pwaStats.totalInstalls}</p>
+            <p className="text-xs text-gray-500 mt-0.5">Összes telepítés</p>
+          </div>
+          <div className="rounded-xl bg-gray-50 p-3 text-center">
+            <p className="text-2xl font-bold text-gray-700">{pwaStats.androidInstalls}</p>
+            <p className="text-xs text-gray-500 mt-0.5">Android telepítés</p>
+          </div>
+          <div className="rounded-xl bg-gray-50 p-3 text-center">
+            <p className="text-2xl font-bold text-gray-700">{pwaStats.iosInstalls}</p>
+            <p className="text-xs text-gray-500 mt-0.5">iOS telepítés</p>
+          </div>
+          <div className="rounded-xl bg-gray-50 p-3 text-center">
+            <p className="text-2xl font-bold text-sni-brand-blue">{pwaStats.last30DaySessions}</p>
+            <p className="text-xs text-gray-500 mt-0.5">PWA megnyitás (30 nap)</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-4">
         <PushNotifButton />
       </div>
 
