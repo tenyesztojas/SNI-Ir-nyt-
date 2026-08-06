@@ -10,6 +10,10 @@ import {
   isPlaceFavorited,
   getVerifiedClaimForPlace,
   getPublishedResponsesForPlace,
+  isCurrentUserAdmin,
+  isBookingLive,
+  getProviderForPlace,
+  getBookingDataForPlace,
 } from "@/lib/data";
 import { Review } from "@/lib/types";
 import CategoryBadge from "@/components/CategoryBadge";
@@ -18,6 +22,7 @@ import FavoriteButton from "@/components/FavoriteButton";
 import ReportButton from "@/components/ReportButton";
 import PlaceClaimButton from "@/components/PlaceClaimButton";
 import PlaceResponseSection from "@/components/PlaceResponseSection";
+import BookingWidget from "@/components/BookingWidget";
 
 const PlaceDetailMap = dynamic(() => import("@/components/PlaceDetailMapInner"), {
   ssr: false,
@@ -89,17 +94,24 @@ export default async function PlaceDetailPage({ params }: { params: { slug: stri
   const place = await getPlaceBySlug(params.slug);
   if (!place) notFound();
 
-  const [category, reviews, { user }, verifiedClaim, responsesByReviewId] = await Promise.all([
+  const [category, reviews, { user }, verifiedClaim, responsesByReviewId, bookingLive, provider, adminCheck] = await Promise.all([
     getCategoryBySlug(place.category),
     getApprovedReviewsForPlace(place.id),
     getCurrentUserAndProfile(),
     getVerifiedClaimForPlace(place.id),
     getPublishedResponsesForPlace(place.id),
+    isBookingLive(),
+    getProviderForPlace(place.id),
+    isCurrentUserAdmin(),
   ]);
 
   const initialFavorite = user ? await isPlaceFavorited(user.id, place.id) : false;
   const isClaimed = !!verifiedClaim;
   const isOwner = isClaimed && user?.id === verifiedClaim?.claimantUserId;
+
+  // Booking widget megjelenítése: csak ha booking_live=true VAGY admin nézi
+  const showBooking = place.booking_enabled && provider && (bookingLive || adminCheck);
+  const bookingData = showBooking ? await getBookingDataForPlace(provider!.id) : null;
   const avg = avgRating(reviews);
   const gradient = pickGradient(place.slug ?? place.name);
   const images = place.images ?? [];
@@ -336,6 +348,25 @@ export default async function PlaceDetailPage({ params }: { params: { slug: stri
             <Star size={17} /> Értékelés írása
           </Link>
         </div>
+
+        {/* Booking widget — csak booking_live=true esetén, vagy admin nézetben */}
+        {showBooking && bookingData && provider && (
+          <div className="mt-6">
+            {adminCheck && !bookingLive && (
+              <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800">
+                🔒 Admin nézet — a foglalási widget még nem nyilvános (<code>booking_live = false</code>)
+              </div>
+            )}
+            <BookingWidget
+              placeId={place.id}
+              providerId={provider.id}
+              packages={bookingData.packages}
+              slots={bookingData.slots}
+              isLoggedIn={!!user}
+              bookingType={provider.bookingType}
+            />
+          </div>
+        )}
 
         <div className="mt-6"><Disclaimer /></div>
         <div className="mt-4"><ReportButton placeId={place.id} /></div>

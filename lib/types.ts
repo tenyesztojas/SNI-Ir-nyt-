@@ -32,6 +32,7 @@ export interface Place {
   submitter?: { displayName: string; email: string };
   source?: string | null;
   flaggedForReview?: boolean | null;
+  booking_enabled?: boolean | null;
 }
 
 export interface Review {
@@ -133,4 +134,121 @@ export interface ConsentRecord {
   consentType: ConsentType;
   grantedAt: string;
   revokedAt?: string | null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Booking platform típusok
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type BookingType = "appointment" | "accommodation" | "both";
+export type BookingStatus = "pending" | "confirmed" | "rejected" | "cancelled" | "completed";
+export type PackageType = "appointment" | "accommodation";
+export type PriceUnit = "alkalom" | "éjszaka" | "fő" | "fő/éjszaka" | "óra";
+export type SlotType = "recurring" | "specific" | "blocked";
+export type ProviderRegistrationStatus = "pending" | "approved" | "rejected";
+
+export interface ProviderRegistration {
+  id: string;
+  userId: string;
+  placeId: string | null;
+  companyName: string;
+  contactName: string;
+  contactEmail: string;
+  contactPhone?: string | null;
+  taxNumber?: string | null;
+  bookingType: BookingType;
+  customDescription?: string | null;
+  status: ProviderRegistrationStatus;
+  rejectReason?: string | null;
+  reviewedAt?: string | null;
+  createdAt: string;
+  // joined
+  placeName?: string;
+  placeSlug?: string;
+}
+
+export interface ProviderProfile {
+  id: string;
+  userId: string;
+  placeId: string;
+  registrationId?: string | null;
+  companyName: string;
+  contactEmail: string;
+  contactPhone?: string | null;
+  bookingType: BookingType;
+  customDescription?: string | null;
+  bookingNoticeHours: number;
+  maxAdvanceDays: number;
+  autoConfirm: boolean;
+  cancellationPolicy?: string | null;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+  // joined
+  placeName?: string;
+  placeSlug?: string;
+}
+
+export interface ServicePackage {
+  id: string;
+  providerId: string;
+  placeId: string;
+  name: string;
+  description?: string | null;
+  packageType: PackageType;
+  durationMinutes?: number | null;
+  unitName?: string | null;
+  maxGuests?: number | null;
+  priceAmount: number;
+  priceCurrency: string;
+  priceUnit: PriceUnit;
+  active: boolean;
+  sortOrder: number;
+  createdAt: string;
+}
+
+export interface AvailabilitySlot {
+  id: string;
+  providerId: string;
+  packageId?: string | null;
+  slotType: SlotType;
+  dayOfWeek?: number | null;
+  startTime?: string | null;
+  endTime?: string | null;
+  specificDate?: string | null;
+  dateFrom?: string | null;
+  dateTo?: string | null;
+  capacity: number;
+  createdAt: string;
+}
+
+export interface Booking {
+  id: string;
+  providerId: string;
+  packageId: string;
+  placeId: string;
+  guestUserId?: string | null;
+  bookingType: PackageType;
+  appointmentDate?: string | null;
+  appointmentTime?: string | null;
+  checkinDate?: string | null;
+  checkoutDate?: string | null;
+  numGuests: number;
+  guestName: string;
+  guestEmail: string;
+  guestPhone?: string | null;
+  guestNote?: string | null;
+  totalAmount?: number | null;
+  currency: string;
+  status: BookingStatus;
+  rejectReason?: string | null;
+  confirmedAt?: string | null;
+  cancelledAt?: string | null;
+  dataRetentionUntil: string;
+  createdAt: string;
+  updatedAt: string;
+  // joined
+  placeName?: string;
+  packageName?: string;
+  providerCompanyName?: string;
 }

@@ -484,3 +484,80 @@ export async function getPublishedResponsesForPlace(
   }
   return map;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Booking adatok a hely oldalához
+// ─────────────────────────────────────────────────────────────────────────────
+
+import { ServicePackage, AvailabilitySlot, ProviderProfile } from "@/lib/types";
+
+/** Feature flag: booking_live értéke */
+export async function isBookingLive(): Promise<boolean> {
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("feature_flags")
+    .select("value")
+    .eq("key", "booking_live")
+    .single();
+  return data?.value === true || data?.value === "true";
+}
+
+/** Provider profil lekérése egy helyhez (ha van aktív) */
+export async function getProviderForPlace(
+  placeId: string
+): Promise<ProviderProfile | null> {
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("provider_profiles")
+    .select("id, user_id, place_id, company_name, contact_email, contact_phone, booking_type, custom_description, booking_notice_hours, max_advance_days, auto_confirm, cancellation_policy, active, created_at, updated_at")
+    .eq("place_id", placeId)
+    .eq("active", true)
+    .maybeSingle();
+  if (!data) return null;
+  return {
+    id: data.id,
+    userId: data.user_id,
+    placeId: data.place_id,
+    companyName: data.company_name,
+    contactEmail: data.contact_email,
+    contactPhone: data.contact_phone,
+    bookingType: data.booking_type,
+    customDescription: data.custom_description,
+    bookingNoticeHours: data.booking_notice_hours,
+    maxAdvanceDays: data.max_advance_days,
+    autoConfirm: data.auto_confirm,
+    cancellationPolicy: data.cancellation_policy,
+    active: data.active,
+    createdAt: data.created_at,
+    updatedAt: data.updated_at,
+  };
+}
+
+/** Aktív szolgáltatás csomagok + elérhetőségek egy hely provideréhez */
+export async function getBookingDataForPlace(providerId: string): Promise<{
+  packages: ServicePackage[];
+  slots: AvailabilitySlot[];
+}> {
+  const admin = createAdminClient();
+  const [pkgRes, slotRes] = await Promise.all([
+    admin.from("service_packages").select("*").eq("provider_id", providerId).eq("active", true).order("sort_order"),
+    admin.from("availability_slots").select("*").eq("provider_id", providerId),
+  ]);
+
+  const packages: ServicePackage[] = (pkgRes.data ?? []).map((p) => ({
+    id: p.id, providerId: p.provider_id, placeId: p.place_id,
+    name: p.name, description: p.description, packageType: p.package_type,
+    durationMinutes: p.duration_minutes, unitName: p.unit_name, maxGuests: p.max_guests,
+    priceAmount: p.price_amount, priceCurrency: p.price_currency, priceUnit: p.price_unit,
+    active: p.active, sortOrder: p.sort_order, createdAt: p.created_at,
+  }));
+
+  const slots: AvailabilitySlot[] = (slotRes.data ?? []).map((s) => ({
+    id: s.id, providerId: s.provider_id, packageId: s.package_id, slotType: s.slot_type,
+    dayOfWeek: s.day_of_week, startTime: s.start_time, endTime: s.end_time,
+    specificDate: s.specific_date, dateFrom: s.date_from, dateTo: s.date_to,
+    capacity: s.capacity, createdAt: s.created_at,
+  }));
+
+  return { packages, slots };
+}

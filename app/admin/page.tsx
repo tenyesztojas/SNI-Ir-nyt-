@@ -64,6 +64,9 @@ export default async function AdminOverviewPage() {
         <Link href="/admin/igenylesek" className="btn-secondary inline-flex items-center gap-2">
           Hely-igénylések
         </Link>
+        <Link href="/admin/szolgaltatok" className="btn-secondary inline-flex items-center gap-2">
+          Szolgáltatók
+        </Link>
       </div>
     </div>
   );
