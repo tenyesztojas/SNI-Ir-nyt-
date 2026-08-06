@@ -10,8 +10,8 @@ const cspDirectives = [
   `script-src 'self' 'unsafe-inline' https://www.google.com https://www.gstatic.com https://www.googletagmanager.com`,
   // Stílusok: saját + inline (Tailwind/CSS-in-JS)
   `style-src 'self' 'unsafe-inline'`,
-  // Képek: saját + Supabase Storage + OpenStreetMap + GA pixel
-  `img-src 'self' data: blob: https://${supabaseHost} https://*.tile.openstreetmap.org https://*.openstreetmap.org https://www.google-analytics.com https://www.googletagmanager.com`,
+  // Képek: saját + minden HTTPS forrás (képek nem futtatnak kódot, külső domain-ek nem prediktálhatók)
+  `img-src 'self' data: blob: https:`,
   // API hívások: saját + Supabase + Google OAuth + Google Analytics
   `connect-src 'self' https://${supabaseHost} https://*.supabase.co wss://*.supabase.co https://oauth2.googleapis.com https://www.googleapis.com https://www.google-analytics.com https://region1.google-analytics.com https://www.googletagmanager.com`,
   // Frame: csak reCAPTCHA
