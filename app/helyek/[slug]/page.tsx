@@ -209,6 +209,13 @@ export default async function PlaceDetailPage({ params }: { params: { slug: stri
             <p className="leading-relaxed text-emerald-900">{place.whyFriendly}</p>
           </div>
 
+          {place.ownExperience && (
+            <div className="mt-4">
+              <h2 className="text-base font-semibold text-gray-700">Saját tapasztalat</h2>
+              <p className="mt-1 leading-relaxed text-gray-600 text-sm">{place.ownExperience}</p>
+            </div>
+          )}
+
           <dl className="mt-6 space-y-2 text-sm text-gray-600">
             <div className="flex items-start gap-2">
               <MapPin size={15} className="mt-0.5 shrink-0 text-sni-brand-teal" />

@@ -97,8 +97,7 @@ export async function submitPlace(input: NewPlaceInput, images: string[] = []): 
       continue;
     }
 
-    console.error("submitPlace DB hiba:", error);
-    return { error: `DB hiba: ${error.message} (${error.code})` };
+    return { error: "Nem sikerült a hely beküldése. Próbáld újra." };
   }
 
   return { error: "Nem sikerült a hely beküldése (slug ütközés)." };
