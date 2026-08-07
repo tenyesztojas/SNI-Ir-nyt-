@@ -97,11 +97,13 @@ export async function submitPlace(input: NewPlaceInput, images: string[] = []): 
       continue;
     }
 
-    return { error: "Nem sikerült a hely beküldése. Próbáld újra." };
+    console.error("submitPlace DB hiba:", error);
+    return { error: `DB hiba: ${error.message} (${error.code})` };
   }
 
-  return { error: "Nem sikerült a hely beküldése. Próbáld újra." };
+  return { error: "Nem sikerült a hely beküldése (slug ütközés)." };
 }
+
 
 // removePlace — UTÓLAGOS, bejelentés-alapú eltávolítás (ÁSZF 7. pont)
 // Előzetes jóváhagyási funkció szándékosan el lett távolítva (ÁSZF 3. pont).
