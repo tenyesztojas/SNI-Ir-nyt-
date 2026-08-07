@@ -57,11 +57,12 @@ export async function submitPlace(input: NewPlaceInput, images: string[] = []): 
   // Geocoding
   const geo = await geocodeAddress(data.address, data.city, data.country ?? "Magyarország");
 
+  const adminClient = createAdminClient();
   const baseSlug = slugify(data.name) || "hely";
   let slug = baseSlug;
 
   for (let attempt = 0; attempt < 5; attempt++) {
-    const { error } = await supabase.from("places").insert({
+    const { error } = await adminClient.from("places").insert({
       slug,
       name: data.name,
       category: data.category,
