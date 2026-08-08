@@ -656,7 +656,7 @@ export async function getAllReviewsLog(): Promise<Array<{
     overallRating: r.overall_rating,
     placeName: placeMap[r.place_id]?.name ?? "Ismeretlen hely",
     placeSlug: placeMap[r.place_id]?.slug ?? "",
-    authorName: (r.profiles as { display_name: string } | null)?.display_name ?? "Anonim",
+    authorName: (r.profiles as unknown as { display_name: string } | null)?.display_name ?? "Anonim",
     createdAt: r.created_at,
     status: r.status ?? "published",
     flagged: r.flagged_for_review ?? false,
