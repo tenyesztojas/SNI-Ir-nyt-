@@ -45,8 +45,9 @@ export async function submitReview(
     };
   }
 
-  // Közzététel — automatikus, emberi beavatkozás nélkül
-  const { error } = await supabase.from("reviews").insert({
+  // Közzététel — automatikus, emberi beavatkozás nélkül (adminClient: RLS bypass)
+  const adminClient = createAdminClient();
+  const { error } = await adminClient.from("reviews").insert({
     place_id: placeId,
     author_id: user.id,
     title: data.title,
