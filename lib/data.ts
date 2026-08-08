@@ -587,3 +587,78 @@ export async function getPwaStats(): Promise<{
     last30DaySessions: recentSessions?.length ?? 0,
   };
 }
+
+// ─── Admin naplók ─────────────────────────────────────────────────────────────
+
+export async function getPlacesLog(): Promise<Array<{
+  id: string; name: string; city: string; slug: string;
+  status: string; source: string | null;
+  createdAt: string; submitterName: string | null;
+}>> {
+  const adminClient = createAdminClient();
+  const { data } = await adminClient
+    .from("places")
+    .select("id, name, city, slug, status, source, created_at, created_by")
+    .order("created_at", { ascending: false });
+
+  if (!data) return [];
+
+  // Beküldők display_name-jének lekérése
+  const userIds = [...new Set(data.map((p) => p.created_by).filter(Boolean))];
+  const profileMap: Record<string, string> = {};
+  if (userIds.length > 0) {
+    const { data: profiles } = await adminClient
+      .from("profiles")
+      .select("id, display_name")
+      .in("id", userIds);
+    for (const p of profiles ?? []) profileMap[p.id] = p.display_name;
+  }
+
+  return data.map((p) => ({
+    id: p.id,
+    name: p.name,
+    city: p.city,
+    slug: p.slug,
+    status: p.status,
+    source: p.source,
+    createdAt: p.created_at,
+    submitterName: p.created_by ? (profileMap[p.created_by] ?? "Ismeretlen") : "Admin",
+  }));
+}
+
+export async function getAllReviewsLog(): Promise<Array<{
+  id: string; title: string; overallRating: number;
+  placeName: string; placeSlug: string;
+  authorName: string; createdAt: string;
+  status: string; flagged: boolean;
+}>> {
+  const adminClient = createAdminClient();
+  const { data: reviews } = await adminClient
+    .from("reviews")
+    .select("id, title, overall_rating, place_id, author_id, status, flagged_for_review, created_at, profiles(display_name)")
+    .order("created_at", { ascending: false });
+
+  if (!reviews) return [];
+
+  const placeIds = [...new Set(reviews.map((r) => r.place_id))];
+  const placeMap: Record<string, { name: string; slug: string }> = {};
+  if (placeIds.length > 0) {
+    const { data: places } = await adminClient
+      .from("places")
+      .select("id, name, slug")
+      .in("id", placeIds);
+    for (const p of places ?? []) placeMap[p.id] = { name: p.name, slug: p.slug };
+  }
+
+  return reviews.map((r) => ({
+    id: r.id,
+    title: r.title,
+    overallRating: r.overall_rating,
+    placeName: placeMap[r.place_id]?.name ?? "Ismeretlen hely",
+    placeSlug: placeMap[r.place_id]?.slug ?? "",
+    authorName: (r.profiles as { display_name: string } | null)?.display_name ?? "Anonim",
+    createdAt: r.created_at,
+    status: r.status ?? "published",
+    flagged: r.flagged_for_review ?? false,
+  }));
+}
