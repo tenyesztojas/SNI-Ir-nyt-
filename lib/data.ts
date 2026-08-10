@@ -212,8 +212,8 @@ export async function getPendingPlaces(): Promise<Place[]> {
 const PROFILE_SELECT = "display_name, first_name, show_first_name";
 
 export async function getApprovedReviewsForPlace(placeId: string): Promise<Review[]> {
-  const supabase = createClient();
-  const { data, error } = await supabase
+  const adminClient = createAdminClient();
+  const { data, error } = await adminClient
     .from("reviews")
     .select(`*, profiles(${PROFILE_SELECT})`)
     .eq("place_id", placeId)
