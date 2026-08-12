@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import ProgramForm from "./ProgramForm";
 import { CalendarDays, MapPin, ExternalLink } from "lucide-react";
 
@@ -10,12 +11,22 @@ export const metadata = {
 export const revalidate = 60;
 
 export default async function ProgramajanlokPage() {
+  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+
+  // Lejárt programok automatikus törlése az adatbázisból
+  const adminClient = createAdminClient();
+  await adminClient
+    .from("programs")
+    .delete()
+    .lt("event_date", today);
+
   const supabase = createClient();
   const { data: programs } = await supabase
     .from("programs")
     .select("*")
     .eq("status", "approved")
-    .order("created_at", { ascending: false });
+    .gte("event_date", today)
+    .order("event_date", { ascending: true });
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
