@@ -44,7 +44,12 @@ export default async function ProgramajanlokPage() {
               <h2 className="text-lg font-bold text-sni-text">{p.name}</h2>
               <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm text-gray-500">
                 <span className="flex items-center gap-1"><MapPin size={14} />{p.location}</span>
-                <span className="flex items-center gap-1"><CalendarDays size={14} />{p.event_date}</span>
+                <span className="flex items-center gap-1">
+                  <CalendarDays size={14} />
+                  {p.event_date
+                    ? new Date(p.event_date).toLocaleDateString("hu-HU", { year: "numeric", month: "long", day: "numeric" })
+                    : "—"}
+                </span>
               </div>
               <p className="mt-2 text-sm text-gray-700">{p.description}</p>
               <div className="mt-2 flex flex-wrap gap-4 text-sm">

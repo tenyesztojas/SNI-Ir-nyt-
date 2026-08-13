@@ -75,10 +75,10 @@ export default function ProgramForm() {
         />
       </div>
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Dátum, időpont *</label>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Program dátuma *</label>
         <input
-          type="text" required value={eventDate} onChange={(e) => setEventDate(e.target.value)}
-          className="input-field" placeholder="pl. 2025. augusztus 10., 10:00–13:00"
+          type="date" required value={eventDate} onChange={(e) => setEventDate(e.target.value)}
+          className="input-field"
         />
       </div>
       <div>
