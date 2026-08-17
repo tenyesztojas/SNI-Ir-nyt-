@@ -336,7 +336,10 @@ export async function getPendingReports(): Promise<ReportWithPlace[]> {
 }
 
 export function citiesFromPlaces(places: Place[]): string[] {
-  return Array.from(new Set(places.map((p) => p.city))).sort((a, b) => huSort(a, b));
+  const normalized = places.map((p) =>
+    p.city.startsWith("Budapest") ? "Budapest" : p.city
+  );
+  return Array.from(new Set(normalized)).sort((a, b) => huSort(a, b));
 }
 
 export function countriesFromPlaces(places: Place[]): string[] {

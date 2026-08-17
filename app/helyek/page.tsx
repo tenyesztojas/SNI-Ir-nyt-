@@ -36,7 +36,9 @@ export default async function HelyekPage({
       normalize(p.name).includes(normalize(q)) ||
       normalize(p.city).includes(normalize(q));
     const matchesCategory = kategoria === "" || p.category === kategoria;
-    const matchesCity = telepules === "" || p.city === telepules;
+    const matchesCity =
+      telepules === "" ||
+      (telepules === "Budapest" ? p.city.startsWith("Budapest") : p.city === telepules);
     const matchesOrszag = orszag === "" || (p.country ?? "Magyarország") === orszag;
     return matchesQ && matchesCategory && matchesCity && matchesOrszag;
   });
