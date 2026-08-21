@@ -23,6 +23,7 @@ import ReportButton from "@/components/ReportButton";
 import PlaceClaimButton from "@/components/PlaceClaimButton";
 import PlaceResponseSection from "@/components/PlaceResponseSection";
 import BookingWidget from "@/components/BookingWidget";
+import NavigateButton from "@/components/NavigateButton";
 
 const PlaceDetailMap = dynamic(() => import("@/components/PlaceDetailMapInner"), {
   ssr: false,
@@ -221,6 +222,11 @@ export default async function PlaceDetailPage({ params }: { params: { slug: stri
               <MapPin size={15} className="mt-0.5 shrink-0 text-sni-brand-teal" />
               <dd>{place.address}, {place.city}{place.postalCode ? ` (${place.postalCode})` : ""}{place.country && place.country !== "Magyarország" ? `, ${place.country}` : ""}</dd>
             </div>
+            {typeof place.latitude === "number" && typeof place.longitude === "number" && (
+              <div className="pt-1">
+                <NavigateButton lat={place.latitude} lng={place.longitude} placeName={place.name} />
+              </div>
+            )}
             {place.phone && (
               <div className="flex items-center gap-2">
                 <Phone size={15} className="shrink-0 text-sni-brand-teal" />
