@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
-import { MapPin, HeartHandshake, ArrowRight, CalendarDays, ExternalLink, Search } from "lucide-react";
+import { MapPin, HeartHandshake, ArrowRight, CalendarDays, ExternalLink } from "lucide-react";
 import { getCategories, getApprovedPlaces, citiesFromPlaces, countriesFromPlaces, getCurrentUserAndProfile } from "@/lib/data";
 import { createClient } from "@/lib/supabase/server";
 import HeroSearchForm from "@/components/HeroSearchForm";
@@ -149,27 +149,7 @@ export default async function HomePage() {
             Létrehozhatsz egy közösségi profilt, megjelenhetsz város vagy kerület szinten a térképen,
             és kapcsolatba léphetsz másokkal.
           </p>
-          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-            <Link
-              href="/kozosseg/terkep"
-              className="inline-flex items-center gap-2 rounded-full bg-sni-brand-teal px-6 py-3 text-sm font-bold text-white shadow-md transition-all hover:bg-sni-brand-blue hover:shadow-lg"
-            >
-              <MapPin size={16} /> Megnézem a közösségi térképet
-            </Link>
-            <Link
-              href="/kozosseg/tagok"
-              className="inline-flex items-center gap-2 rounded-full border-2 border-sni-brand-teal bg-white px-6 py-3 text-sm font-bold text-sni-brand-blue transition-all hover:bg-sni-brand-teal/10"
-            >
-              <Search size={16} /> Tagok keresése
-            </Link>
-            <Link
-              href="/kozosseg/profilom"
-              className="inline-flex items-center gap-2 rounded-full border-2 border-sni-brand-teal bg-white px-6 py-3 text-sm font-bold text-sni-brand-blue transition-all hover:bg-sni-brand-teal/10"
-            >
-              Profilom szerkesztése
-            </Link>
-          </div>
-          {/* Feature kártyák */}
+          {/* Feature kártyák — 2×2 */}
           <div className="mt-10 grid gap-4 text-left sm:grid-cols-2">
             <div className="rounded-2xl bg-white/80 p-5 shadow-sm">
               <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-sni-brand-teal/10">
@@ -191,6 +171,26 @@ export default async function HomePage() {
               <p className="font-bold text-gray-900">Kapcsolatok és chat</p>
               <p className="mt-1 text-sm text-gray-500">Jelöld ismerősnek azokat, akikkel kapcsolódni szeretnél. Elfogadás után privát chatben tudtok írni egymásnak.</p>
               <Link href="/kozosseg/kapcsolataim" className="mt-3 inline-block text-sm font-semibold text-sni-brand-teal hover:underline">Kapcsolataim →</Link>
+            </div>
+            <div className="rounded-2xl bg-white/80 p-5 shadow-sm">
+              <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-sni-brand-teal/10">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-5 w-5 text-sni-brand-teal" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
+                </svg>
+              </div>
+              <p className="font-bold text-gray-900">Tagok keresése</p>
+              <p className="mt-1 text-sm text-gray-500">Keress szülőkre, érintett felnőttekre vagy szakemberekre — város, kerület vagy szerepkör szerint.</p>
+              <Link href="/kozosseg/tagok" className="mt-3 inline-block text-sm font-semibold text-sni-brand-teal hover:underline">Tagok böngészése →</Link>
+            </div>
+            <div className="rounded-2xl bg-white/80 p-5 shadow-sm">
+              <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-sni-brand-teal/10">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-5 w-5 text-sni-brand-teal" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487 18.549 2.8a1.875 1.875 0 1 1 2.651 2.651L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />
+                </svg>
+              </div>
+              <p className="font-bold text-gray-900">Profilom szerkesztése</p>
+              <p className="mt-1 text-sm text-gray-500">Állítsd be, mit osztasz meg magadról, és hogyan szeretnél megjelenni a közösségben.</p>
+              <Link href="/kozosseg/profilom" className="mt-3 inline-block text-sm font-semibold text-sni-brand-teal hover:underline">Profilom →</Link>
             </div>
           </div>
 
