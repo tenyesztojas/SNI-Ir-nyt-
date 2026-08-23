@@ -21,8 +21,6 @@ const navLinks = [
   { href: "/kedvencek", label: "Kedvenceim" },
   { href: "/kozosseg", label: "Közösség" },
   { href: "/programajanlok", label: "Programajánló", newTab: true },
-  { href: "/rolunk", label: "Rólunk" },
-  { href: "/kapcsolat", label: "Kapcsolat" },
 ];
 
 export default function HeaderClient({
