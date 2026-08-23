@@ -91,8 +91,18 @@ export async function getMyConnections(): Promise<CommunityConnection[]> {
   if (!data) return [];
 
   // A másik fél profilját mindig a current user szempontjából töltjük be
+  // + deduplikáció: ha ugyanaz a pár kétszer szerepel, csak a legfrissebbet tartjuk meg
+  const seenOtherIds = new Set<string>();
+  const deduped = data.filter((c) => {
+    const otherId =
+      c.requester_user_id === user.id ? c.receiver_user_id : c.requester_user_id;
+    if (seenOtherIds.has(otherId)) return false;
+    seenOtherIds.add(otherId);
+    return true;
+  });
+
   const connections: CommunityConnection[] = await Promise.all(
-    data.map(async (c) => {
+    deduped.map(async (c) => {
       const otherId =
         c.requester_user_id === user.id
           ? c.receiver_user_id
@@ -144,9 +154,21 @@ export async function getMyThreads(): Promise<CommunityThread[]> {
 
   if (!data) return [];
 
+  // Deduplikáció: ugyanolyan résztvevő-pár esetén csak a legfrissebbet tartjuk meg
+  const seenOtherIds = new Set<string>();
+  const deduped = data.filter((t) => {
+    const otherId =
+      t.participant_1_user_id === user.id
+        ? t.participant_2_user_id
+        : t.participant_1_user_id;
+    if (seenOtherIds.has(otherId)) return false;
+    seenOtherIds.add(otherId);
+    return true;
+  });
+
   // Lekérjük a másik fél profilját
   const threads: CommunityThread[] = await Promise.all(
-    data.map(async (t) => {
+    deduped.map(async (t) => {
       const otherId =
         t.participant_1_user_id === user.id
           ? t.participant_2_user_id
