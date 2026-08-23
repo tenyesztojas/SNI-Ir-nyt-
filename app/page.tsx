@@ -1,15 +1,13 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
-import { MapPin, HeartHandshake, ArrowRight, CalendarDays, ExternalLink } from "lucide-react";
+import { MapPin, HeartHandshake, ArrowRight, CalendarDays, ExternalLink, Search } from "lucide-react";
 import { getCategories, getApprovedPlaces, citiesFromPlaces, countriesFromPlaces, getCurrentUserAndProfile } from "@/lib/data";
 import { createClient } from "@/lib/supabase/server";
-import PlaceCard from "@/components/PlaceCard";
 import HeroSearchForm from "@/components/HeroSearchForm";
 import NearbyPlacesPanel from "@/components/NearbyPlacesPanel";
 
-export default async function HomePage({ searchParams }: { searchParams?: { orszag?: string } }) {
-  const orszag = searchParams?.orszag ?? "";
+export default async function HomePage() {
   const supabase = createClient();
   const [categories, places, programsResult, { user }] = await Promise.all([
     getCategories(),
@@ -23,10 +21,8 @@ export default async function HomePage({ searchParams }: { searchParams?: { orsz
     getCurrentUserAndProfile(),
   ]);
   const programs = programsResult.data ?? [];
-  const categoryBySlug = new Map(categories.map((c) => [c.slug, c]));
   const cities = citiesFromPlaces(places);
   const countries = countriesFromPlaces(places);
-  const featuredPlaces = (orszag ? places.filter((p) => (p.country ?? "Magyarország") === orszag) : places).slice(0, 6);
 
   return (
     <div>
@@ -141,40 +137,49 @@ export default async function HomePage({ searchParams }: { searchParams?: { orsz
         </section>
       )}
 
-      {/* FEATURED PLACES */}
-      {featuredPlaces.length > 0 && (
-        <section className="bg-gray-50 py-12">
-          <div className="mx-auto max-w-5xl px-4 sm:px-6">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <h2 className="text-xl font-bold text-gray-900">Helyek a közösségtől</h2>
-                <p className="mt-0.5 text-sm text-gray-500">Közösségi tapasztalatok alapján ajánlott helyek</p>
-              </div>
-              <div className="flex items-center gap-3">
-                {countries.length > 1 && (
-                  <form method="get" className="flex items-center gap-2">
-                    <select name="orszag" defaultValue={orszag} className="input-field py-1.5 text-sm sm:w-40">
-                      <option value="">Összes ország</option>
-                      {countries.map((c) => (
-                        <option key={c} value={c}>{c}</option>
-                      ))}
-                    </select>
-                    <button type="submit" className="rounded-lg bg-sni-brand-teal px-3 py-1.5 text-sm font-bold text-white hover:bg-sni-brand-blue">OK</button>
-                  </form>
-                )}
-                <Link href="/helyek" className="flex items-center gap-1 text-sm font-bold text-sni-brand-blue transition-colors hover:text-sni-brand-teal">
-                  Összes hely <ArrowRight size={16} />
-                </Link>
-              </div>
-            </div>
-            <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              {featuredPlaces.map((p) => (
-                <PlaceCard key={p.id} place={p} category={categoryBySlug.get(p.category)} />
-              ))}
-            </div>
+      {/* KÖZÖSSÉGI PLATFORM SZEKCIÓ */}
+      <section className="bg-gradient-to-br from-[#e8f7f7] to-[#d0f0ec] py-16 sm:py-20">
+        <div className="mx-auto max-w-3xl px-4 text-center sm:px-6">
+          <h2 className="text-3xl font-extrabold leading-tight text-sni-brand-navy sm:text-4xl">
+            Kapcsolódj olyan emberekhez,<br className="hidden sm:block" />{" "}
+            akik értik, milyen, amikor túl sok a világ.
+          </h2>
+          <p className="mx-auto mt-5 max-w-2xl text-base text-gray-600 sm:text-lg">
+            A VédettSarok Közösségben szülők, érintett felnőttek és szakemberek találhatnak egymásra.
+            Létrehozhatsz egy közösségi profilt, megjelenhetsz város vagy kerület szinten a térképen,
+            és kapcsolatba léphetsz másokkal.
+          </p>
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+            <Link
+              href="/kozosseg/terkep"
+              className="inline-flex items-center gap-2 rounded-full bg-sni-brand-teal px-6 py-3 text-sm font-bold text-white shadow-md transition-all hover:bg-sni-brand-blue hover:shadow-lg"
+            >
+              <MapPin size={16} /> Megnézem a közösségi térképet
+            </Link>
+            <Link
+              href="/kozosseg/tagok"
+              className="inline-flex items-center gap-2 rounded-full border-2 border-sni-brand-teal bg-white px-6 py-3 text-sm font-bold text-sni-brand-blue transition-all hover:bg-sni-brand-teal/10"
+            >
+              <Search size={16} /> Tagok keresése
+            </Link>
+            <Link
+              href="/kozosseg/profilom"
+              className="inline-flex items-center gap-2 rounded-full border-2 border-sni-brand-teal bg-white px-6 py-3 text-sm font-bold text-sni-brand-blue transition-all hover:bg-sni-brand-teal/10"
+            >
+              Profilom szerkesztése
+            </Link>
           </div>
-        </section>
-      )}
+          <div className="mx-auto mt-8 flex max-w-lg items-start gap-3 rounded-2xl bg-white/70 px-5 py-4 text-left text-sm text-gray-500 shadow-sm">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="mt-0.5 h-5 w-5 shrink-0 text-sni-brand-teal" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" />
+            </svg>
+            <span>
+              A közösségi profil teljesen önkéntes. Te döntöd el, mit osztasz meg, ki írhat neked,
+              és szeretnél-e megjelenni a térképen. Pontos lakcímet nem jelenítünk meg.
+            </span>
+          </div>
+        </div>
+      </section>
 
       {/* CTA */}
       <section className="mx-auto max-w-5xl px-4 py-12 sm:px-6">
