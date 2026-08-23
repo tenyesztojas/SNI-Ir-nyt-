@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState, useRef, useEffect } from "react";
 import { Menu, X, LogOut, ChevronDown, BookOpen } from "lucide-react";
 import { signOutAction } from "@/lib/actions/auth";
+import AccessibilityButton from "@/components/accessibility/AccessibilityButton";
 
 const TUDASBAZIS = [
   { href: "/tudasbazis/autizmus", label: "Mi az autizmus?" },
@@ -143,17 +144,25 @@ export default function HeaderClient({
               Belépés
             </Link>
           )}
+
+          {/* Akadálymentességi gomb — desktop */}
+          <div className="ml-2">
+            <AccessibilityButton />
+          </div>
         </nav>
 
-        {/* Hamburger */}
-        <button
-          className="rounded-full p-2 text-gray-700 transition hover:bg-gray-100 sm:hidden"
-          aria-label={mobileOpen ? "Menü bezárása" : "Menü megnyitása"}
-          aria-expanded={mobileOpen}
-          onClick={() => setMobileOpen((v) => !v)}
-        >
-          {mobileOpen ? <X size={24} /> : <Menu size={24} />}
-        </button>
+        {/* Hamburger + akadálymentességi gomb — mobil (< sm) */}
+        <div className="flex items-center gap-2 sm:hidden">
+          <AccessibilityButton />
+          <button
+            className="rounded-full p-2 text-gray-700 transition hover:bg-gray-100"
+            aria-label={mobileOpen ? "Menü bezárása" : "Menü megnyitása"}
+            aria-expanded={mobileOpen}
+            onClick={() => setMobileOpen((v) => !v)}
+          >
+            {mobileOpen ? <X size={24} /> : <Menu size={24} />}
+          </button>
+        </div>
       </div>
 
       {/* Mobil menü */}

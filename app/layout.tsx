@@ -10,6 +10,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import PWAInstallBanner from "@/components/PWAInstallBanner";
 import PWASessionTracker from "@/components/PWASessionTracker";
+import { AccessibilityProvider } from "@/components/accessibility/AccessibilityProvider";
 
 export const metadata: Metadata = {
   title: "VédettSarok \u2013 Autizmus- és ADHD-barát helyek iránytűje",
@@ -41,13 +42,21 @@ export default function RootLayout({
             __html: `if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js'))}`,
           }}
         />
+        {/* Akadálymentességi beállítások anti-flash: hydration előtt alkalmazza a mentett prefs-t */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var p=JSON.parse(localStorage.getItem('vs-a11y')||'{}');var h=document.documentElement;if(p.fontScale&&p.fontScale!==100)h.setAttribute('data-font-scale',p.fontScale);if(p.grayscale)h.setAttribute('data-grayscale','1');if(p.contrast&&p.contrast!=='none')h.setAttribute('data-contrast',p.contrast);if(p.underlineLinks)h.setAttribute('data-underline-links','1');if(p.readableFont)h.setAttribute('data-readable-font','1');}catch(e){}})();`,
+          }}
+        />
       </head>
       <body className="flex min-h-screen flex-col bg-gray-100 font-sans antialiased">
-        <Header />
-        <main className="flex-1">{children}</main>
-        <Footer />
-        <PWAInstallBanner />
-        <PWASessionTracker />
+        <AccessibilityProvider>
+          <Header />
+          <main className="flex-1">{children}</main>
+          <Footer />
+          <PWAInstallBanner />
+          <PWASessionTracker />
+        </AccessibilityProvider>
 
         {/* Google Analytics */}
         <Script
