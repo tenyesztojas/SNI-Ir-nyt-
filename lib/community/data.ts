@@ -84,11 +84,34 @@ export async function getMyConnections(): Promise<CommunityConnection[]> {
 
   const { data } = await supabase
     .from("community_connections")
-    .select(`*, other_profile:community_profiles!community_connections_receiver_user_id_fkey(${SAFE_PROFILE_COLS})`)
+    .select("*")
     .or(`requester_user_id.eq.${user.id},receiver_user_id.eq.${user.id}`)
     .order("updated_at", { ascending: false });
 
-  return (data ?? []) as unknown as CommunityConnection[];
+  if (!data) return [];
+
+  // A másik fél profilját mindig a current user szempontjából töltjük be
+  const connections: CommunityConnection[] = await Promise.all(
+    data.map(async (c) => {
+      const otherId =
+        c.requester_user_id === user.id
+          ? c.receiver_user_id
+          : c.requester_user_id;
+
+      const { data: prof } = await supabase
+        .from("community_profiles")
+        .select(SAFE_PROFILE_COLS)
+        .eq("user_id", otherId)
+        .maybeSingle();
+
+      return {
+        ...c,
+        other_profile: (prof ?? null) as CommunityProfile | null,
+      };
+    })
+  );
+
+  return connections;
 }
 
 export async function getConnectionBetween(

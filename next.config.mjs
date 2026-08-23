@@ -6,10 +6,10 @@ const supabaseHost = process.env.NEXT_PUBLIC_SUPABASE_URL
 
 // Content-Security-Policy — megakadályozza az XSS és külső tartalom-injektálást
 const cspDirectives = [
-  // Scriptek: saját + Google OAuth/reCAPTCHA + Google Analytics
-  `script-src 'self' 'unsafe-inline' https://www.google.com https://www.gstatic.com https://www.googletagmanager.com`,
-  // Stílusok: saját + inline (Tailwind/CSS-in-JS)
-  `style-src 'self' 'unsafe-inline'`,
+  // Scriptek: saját + Google OAuth/reCAPTCHA + Google Analytics + Leaflet CDN
+  `script-src 'self' 'unsafe-inline' https://www.google.com https://www.gstatic.com https://www.googletagmanager.com https://unpkg.com`,
+  // Stílusok: saját + inline (Tailwind/CSS-in-JS) + Leaflet CDN
+  `style-src 'self' 'unsafe-inline' https://unpkg.com`,
   // Képek: saját + minden HTTPS forrás (képek nem futtatnak kódot, külső domain-ek nem prediktálhatók)
   `img-src 'self' data: blob: https:`,
   // API hívások: saját + Supabase + Google OAuth + Google Analytics

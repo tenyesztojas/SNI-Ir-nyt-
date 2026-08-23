@@ -66,7 +66,7 @@ export default function CommunityMap({ members }: Props) {
   }, [members, mapLoaded]);
 
   return (
-    <div className="relative h-full">
+    <div className="relative" style={{ height: "calc(100vh - 120px)" }}>
       <div ref={mapRef} className="h-full w-full" />
 
       {/* Info kártya */}
