@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test:vedett-route": "node --test __tests__/vedett-route/*.test.ts"
   },
   "dependencies": {
     "@fontsource/nunito": "^5.2.7",
@@ -14,8 +15,10 @@
     "@supabase/ssr": "0.4.0",
     "@supabase/supabase-js": "2.45.4",
     "@types/web-push": "^3.6.4",
+    "gtfs-realtime-bindings": "^2.2.0",
     "leaflet": "^1.9.4",
     "lucide-react": "0.408.0",
+    "nanoid": "^6.0.1",
     "next": "14.2.5",
     "react": "18.3.1",
     "react-dom": "18.3.1",

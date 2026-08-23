@@ -1,0 +1,222 @@
+// VédettSarok Közösség — szerver oldali adathozzáférés
+// FONTOS: user_private_lat és user_private_lng soha nem kerül lekérdezésbe!
+
+import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import type {
+  CommunityProfile,
+  CommunityConnection,
+  CommunityThread,
+  CommunityMessage,
+  Notification,
+} from "./types";
+
+// Biztonságos oszloplista — user_private_lat/lng szándékosan kihagyva
+const SAFE_PROFILE_COLS = `
+  id, user_id, display_name, role, profile_image_url, avatar_type,
+  intro_text, country, county, city, district, map_display_enabled,
+  approximate_lat, approximate_lng, use_location_for_nearby,
+  child_age_group, neurodivergence_tags, connection_goals,
+  accepts_friend_requests, accepts_first_message,
+  push_friend_requests, push_messages, push_connection_accepted,
+  profile_visibility, status, created_at, updated_at
+`.trim();
+
+// ── Saját profil ──────────────────────────────────────────────
+export async function getOwnCommunityProfile(): Promise<CommunityProfile | null> {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data } = await supabase
+    .from("community_profiles")
+    .select(SAFE_PROFILE_COLS)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  return data as CommunityProfile | null;
+}
+
+// ── Aktív tagok listája (keresés/térkép) ─────────────────────
+export async function getActiveCommunityMembers(filters?: {
+  city?: string;
+  county?: string;
+  district?: string;
+  role?: string;
+  goal?: string;
+}): Promise<CommunityProfile[]> {
+  const supabase = createClient();
+
+  let query = supabase
+    .from("community_profiles")
+    .select(SAFE_PROFILE_COLS)
+    .eq("status", "active")
+    .eq("profile_visibility", "active");
+
+  if (filters?.city) query = query.eq("city", filters.city);
+  if (filters?.county) query = query.eq("county", filters.county);
+  if (filters?.district) query = query.eq("district", filters.district);
+  if (filters?.role) query = query.eq("role", filters.role);
+  if (filters?.goal) query = query.contains("connection_goals", [filters.goal]);
+
+  const { data } = await query.order("created_at", { ascending: false }).limit(200);
+  return (data ?? []) as unknown as CommunityProfile[];
+}
+
+// ── Egy tag profilja (nyilvános) ──────────────────────────────
+export async function getCommunityProfileById(id: string): Promise<CommunityProfile | null> {
+  const supabase = createClient();
+  const { data } = await supabase
+    .from("community_profiles")
+    .select(SAFE_PROFILE_COLS)
+    .eq("id", id)
+    .eq("status", "active")
+    .eq("profile_visibility", "active")
+    .maybeSingle();
+  return data as CommunityProfile | null;
+}
+
+// ── Kapcsolatok ───────────────────────────────────────────────
+export async function getMyConnections(): Promise<CommunityConnection[]> {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data } = await supabase
+    .from("community_connections")
+    .select(`*, other_profile:community_profiles!community_connections_receiver_user_id_fkey(${SAFE_PROFILE_COLS})`)
+    .or(`requester_user_id.eq.${user.id},receiver_user_id.eq.${user.id}`)
+    .order("updated_at", { ascending: false });
+
+  return (data ?? []) as unknown as CommunityConnection[];
+}
+
+export async function getConnectionBetween(
+  userId: string,
+  otherId: string
+): Promise<CommunityConnection | null> {
+  const supabase = createClient();
+  const { data } = await supabase
+    .from("community_connections")
+    .select("*")
+    .or(
+      `and(requester_user_id.eq.${userId},receiver_user_id.eq.${otherId}),` +
+      `and(requester_user_id.eq.${otherId},receiver_user_id.eq.${userId})`
+    )
+    .maybeSingle();
+  return data as CommunityConnection | null;
+}
+
+// ── Chat szálak ───────────────────────────────────────────────
+export async function getMyThreads(): Promise<CommunityThread[]> {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data } = await supabase
+    .from("community_threads")
+    .select("*")
+    .or(`participant_1_user_id.eq.${user.id},participant_2_user_id.eq.${user.id}`)
+    .order("last_message_at", { ascending: false });
+
+  if (!data) return [];
+
+  // Lekérjük a másik fél profilját
+  const threads: CommunityThread[] = await Promise.all(
+    data.map(async (t) => {
+      const otherId =
+        t.participant_1_user_id === user.id
+          ? t.participant_2_user_id
+          : t.participant_1_user_id;
+
+      const { data: prof } = await supabase
+        .from("community_profiles")
+        .select(SAFE_PROFILE_COLS)
+        .eq("user_id", otherId)
+        .maybeSingle();
+
+      // Olvasatlan üzenetek száma
+      const { count } = await supabase
+        .from("community_messages")
+        .select("id", { count: "exact", head: true })
+        .eq("thread_id", t.id)
+        .neq("sender_user_id", user.id)
+        .is("read_at", null);
+
+      return {
+        ...t,
+        other_profile: prof as CommunityProfile | null,
+        unread_count: count ?? 0,
+      };
+    })
+  );
+
+  return threads;
+}
+
+export async function getThreadMessages(threadId: string): Promise<CommunityMessage[]> {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  // RLS biztosítja, hogy csak a résztvevő láthatja
+  const { data } = await supabase
+    .from("community_messages")
+    .select("id, thread_id, sender_user_id, body, read_at, created_at, status")
+    .eq("thread_id", threadId)
+    .in("status", ["active", "deleted_by_user"])
+    .order("created_at", { ascending: true });
+
+  return (data ?? []) as CommunityMessage[];
+}
+
+// ── Értesítések ───────────────────────────────────────────────
+export async function getMyNotifications(): Promise<Notification[]> {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data } = await supabase
+    .from("notifications")
+    .select("*")
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: false })
+    .limit(50);
+
+  return (data ?? []) as Notification[];
+}
+
+export async function getUnreadNotificationCount(): Promise<number> {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return 0;
+
+  const { count } = await supabase
+    .from("notifications")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user.id)
+    .is("read_at", null);
+
+  return count ?? 0;
+}
+
+// ── Admin: közösségi profilok listája ─────────────────────────
+export async function adminGetAllCommunityProfiles(): Promise<CommunityProfile[]> {
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("community_profiles")
+    .select(SAFE_PROFILE_COLS)
+    .order("created_at", { ascending: false });
+  return (data ?? []) as unknown as CommunityProfile[];
+}
+
+// ── Admin: jelentések listája ─────────────────────────────────
+export async function adminGetPendingReports() {
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("community_reports")
+    .select("*")
+    .eq("status", "pending")
+    .order("created_at", { ascending: false });
+  return data ?? [];
+}

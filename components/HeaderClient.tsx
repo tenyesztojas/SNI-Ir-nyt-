@@ -19,6 +19,7 @@ const navLinks = [
   { href: "/helyek", label: "Helyek keresése" },
   { href: "/uj-hely", label: "Hely beküldése" },
   { href: "/kedvencek", label: "Kedvenceim" },
+  { href: "/kozosseg", label: "Közösség" },
   { href: "/programajanlok", label: "Programajánló", newTab: true },
   { href: "/rolunk", label: "Rólunk" },
   { href: "/kapcsolat", label: "Kapcsolat" },

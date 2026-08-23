@@ -2,3 +2,6 @@ node_modules
 .next
 out
 .env*.local
+
+# Védett Útvonal — GTFS statikus cache (nagy méretű, sosem commitolható)
+.vedett-cache

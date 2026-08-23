@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { MapPin, Star, Flag, Mail, Users, PlusCircle } from "lucide-react";
+import { MapPin, Star, Flag, Mail, Users, PlusCircle, Map, MessageCircle } from "lucide-react";
 import { getApprovedPlaces, getFlaggedReviews, getPendingReports } from "@/lib/data";
 import PushNotifButton from "@/components/PushNotifButton";
 import AdminPwaStats from "@/components/AdminPwaStats";
@@ -75,6 +75,21 @@ export default async function AdminOverviewPage() {
         </Link>
         <Link href="/admin/ertekelesek/osszes" className="btn-secondary inline-flex items-center gap-2">
           Összes értékelés
+        </Link>
+        <Link href="/admin/kozosseg" className="btn-secondary inline-flex items-center gap-2">
+          <MessageCircle size={16} /> Közösség moderáció
+        </Link>
+        <Link href="/admin/kozosseg/jelentesek" className="btn-secondary inline-flex items-center gap-2">
+          <Flag size={16} /> Közösségi jelentések
+        </Link>
+        <Link
+          href="/admin/vedett-utvonal"
+          className="btn-secondary inline-flex items-center gap-2 border border-amber-400"
+        >
+          <Map size={16} /> Védett Útvonal
+          <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-800">
+            NEM PUBLIKUS
+          </span>
         </Link>
       </div>
     </div>

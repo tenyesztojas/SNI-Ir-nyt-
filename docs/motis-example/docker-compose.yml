@@ -1,0 +1,22 @@
+# Példa MOTIS routing engine szolgáltatás — NEM automatikusan telepítve.
+# Lásd docs/vedett-route.md "MOTIS setup" fejezet a teljes beüzemelési
+# folyamatért (OSM kivonat + BKK statikus GTFS beszerzése, gráf build).
+#
+# Használat (a projekt gyökerétől eltérő, külön gépen/szerveren):
+#   docker compose -f docs/motis-example/docker-compose.yml up -d
+#
+# Beüzemelés után a Next.js app felé a MOTIS_BASE_URL env változóban add meg
+# ennek a szolgáltatásnak az elérési címét (pl. http://motis-host:8080).
+
+services:
+  motis:
+    image: ghcr.io/motis-project/motis:latest
+    container_name: vedett-utvonal-motis
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./motis-data:/data
+    # A /data alá kerül: egy Budapest (vagy Magyarország) OSM .osm.pbf kivonat
+    # és a BKK statikus GTFS zip (lásd docs/vedett-route.md GTFS update).
+    command: ["motis", "config", "/data/config.yml"]
+    restart: unless-stopped
