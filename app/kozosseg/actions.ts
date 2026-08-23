@@ -6,25 +6,58 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { findCityCoordinates, BUDAPEST_DISTRICT_COORDINATES } from "@/lib/community/types";
 import type { CommunityRole, MessagePrivacy } from "@/lib/community/types";
 
-// ── Segédfüggvény: közelítő koordináta kiszámítása ──────────
-function getApproximateCoords(
+// ── Nominatim geocoding (szerver oldalon, API kulcs nélkül) ──
+async function geocodeWithNominatim(
+  query: string
+): Promise<{ lat: number; lng: number } | null> {
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&countrycodes=hu&format=json&limit=1`;
+    const res = await fetch(url, {
+      headers: { "User-Agent": "VedettSarok/1.0 (holvay.csaba@gmail.com)" },
+      next: { revalidate: 86400 }, // 24h cache
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data.length > 0) {
+      return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
+    }
+  } catch {
+    // silent fail
+  }
+  return null;
+}
+
+// ── Közelítő koordináta kiszámítása (lokális szótár + Nominatim fallback) ──
+async function getApproximateCoords(
   city: string | undefined,
   district: string | undefined
-): { lat: number | null; lng: number | null } {
+): Promise<{ lat: number | null; lng: number | null }> {
   const cityNorm = city?.trim() ?? "";
   const districtNorm = district?.trim() ?? "";
-  // Budapest kerület (case-insensitive city match)
+
+  // Budapest kerület — lokális szótárból
   if (cityNorm.toLowerCase() === "budapest" && districtNorm) {
     const distEntry = Object.entries(BUDAPEST_DISTRICT_COORDINATES).find(
       ([k]) => k.toLowerCase() === districtNorm.toLowerCase()
     );
     if (distEntry) return distEntry[1];
   }
-  // Város keresés case-insensitive
+
+  // Lokális szótár (leggyakoribb városok, gyors)
   if (cityNorm) {
-    const coords = findCityCoordinates(cityNorm);
-    if (coords) return coords;
+    const local = findCityCoordinates(cityNorm);
+    if (local) return local;
   }
+
+  // Nominatim fallback — minden magyarországi település
+  if (cityNorm) {
+    const query = districtNorm
+      ? `${districtNorm} kerület, ${cityNorm}, Magyarország`
+      : `${cityNorm}, Magyarország`;
+    const nominatim = await geocodeWithNominatim(query);
+    if (nominatim) return nominatim;
+  }
+
   return { lat: null, lng: null };
 }
 
@@ -102,7 +135,7 @@ export async function upsertCommunityProfile(formData: {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "Nem vagy bejelentkezve." };
 
-  const coords = getApproximateCoords(formData.city, formData.district);
+  const coords = await getApproximateCoords(formData.city, formData.district);
 
   const payload = {
     user_id: user.id,
