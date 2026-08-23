@@ -145,8 +145,8 @@ export default function CommunityOnboardingForm() {
             <input className="input-field" value={county} onChange={(e) => setCounty(e.target.value)} placeholder="pl. Pest" />
           </div>
           <div>
-            <label className="label-field">Település</label>
-            <input className="input-field" value={city} onChange={(e) => setCity(e.target.value)} placeholder="pl. Budapest" />
+            <label className="label-field">Település *</label>
+            <input className="input-field" value={city} onChange={(e) => setCity(e.target.value)} placeholder="pl. Budapest" required />
           </div>
           {isBudapest && (
             <div>
@@ -343,7 +343,12 @@ export default function CommunityOnboardingForm() {
         {step < STEP_COUNT ? (
           <button
             type="button"
-            onClick={() => { if (step === 1 && !displayName.trim()) { setError("A megjelenített név kötelező."); return; } setError(null); setStep((s) => s + 1); }}
+            onClick={() => {
+              if (step === 1 && !displayName.trim()) { setError("A megjelenített név kötelező."); return; }
+              if (step === 2 && !city.trim()) { setError("A település megadása kötelező."); return; }
+              setError(null);
+              setStep((s) => s + 1);
+            }}
             className="btn-primary"
           >
             Tovább

@@ -118,7 +118,7 @@ export async function upsertCommunityProfile(formData: {
     push_messages: formData.push_messages ?? true,
     push_connection_accepted: formData.push_connection_accepted ?? true,
     profile_visibility: formData.profile_visibility ?? "active",
-    status: "pending_review",
+    status: "active",
     updated_at: new Date().toISOString(),
   };
 

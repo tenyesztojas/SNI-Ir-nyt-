@@ -34,7 +34,7 @@ export default async function TerképPage() {
           Csak város/kerület szintű megjelenítés. Pontos lakcím nem látható.
         </p>
       </div>
-      <div className="flex-1">
+      <div className="flex-1 min-h-0">
         <CommunityMap members={mapMembers} />
       </div>
     </div>
