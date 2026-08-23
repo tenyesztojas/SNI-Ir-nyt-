@@ -184,7 +184,51 @@ export const CITY_COORDINATES: Record<string, { lat: number; lng: number }> = {
   "Veszprém": { lat: 47.0930, lng: 17.9087 },
   "Érd": { lat: 47.3922, lng: 18.9137 },
   "Zalaegerszeg": { lat: 46.8417, lng: 16.8416 },
+  "Eger": { lat: 47.9025, lng: 20.3772 },
+  "Dunaújváros": { lat: 46.9819, lng: 18.9355 },
+  "Sopron": { lat: 47.6849, lng: 16.5845 },
+  "Nagykanizsa": { lat: 46.4590, lng: 16.9897 },
+  "Békéscsaba": { lat: 46.6792, lng: 21.0877 },
+  "Salgótarján": { lat: 48.0955, lng: 19.7997 },
+  "Esztergom": { lat: 47.7924, lng: 18.7408 },
+  "Pápa": { lat: 47.3297, lng: 17.4694 },
+  "Ajka": { lat: 47.1006, lng: 17.5561 },
+  "Mosonmagyaróvár": { lat: 47.8691, lng: 17.2687 },
+  "Hatvan": { lat: 47.6678, lng: 19.6811 },
+  "Gödöllő": { lat: 47.5978, lng: 19.3581 },
+  "Cegléd": { lat: 47.1703, lng: 19.7997 },
+  "Várpalota": { lat: 47.2026, lng: 18.1372 },
+  "Kazincbarcika": { lat: 48.2511, lng: 20.6408 },
+  "Szekszárd": { lat: 46.3478, lng: 18.7061 },
+  "Dombóvár": { lat: 46.3764, lng: 18.1339 },
+  "Orosháza": { lat: 46.5655, lng: 20.6647 },
+  "Baja": { lat: 46.1833, lng: 18.9536 },
+  "Ózd": { lat: 48.2197, lng: 20.2903 },
+  "Tiszaújváros": { lat: 47.9194, lng: 21.0581 },
+  "Gyöngyös": { lat: 47.7839, lng: 19.9281 },
+  "Gyula": { lat: 46.6478, lng: 21.2800 },
+  "Mátészalka": { lat: 47.9536, lng: 22.3200 },
+  "Sárospatak": { lat: 48.3211, lng: 21.5711 },
+  "Marcali": { lat: 46.5847, lng: 17.4086 },
+  "Paks": { lat: 46.6261, lng: 18.8558 },
+  "Szentendre": { lat: 47.6728, lng: 19.0736 },
+  "Vecsés": { lat: 47.4069, lng: 19.2706 },
+  "Budaörs": { lat: 47.4614, lng: 18.9553 },
+  "Pomáz": { lat: 47.6406, lng: 18.9994 },
+  "Törökbálint": { lat: 47.4256, lng: 18.9089 },
+  "Dunakeszi": { lat: 47.6253, lng: 19.1392 },
+  "Fót": { lat: 47.6139, lng: 19.1894 },
+  "Szigetszentmiklós": { lat: 47.3453, lng: 19.0436 },
 };
+
+// Case-insensitive városkeresés
+export function findCityCoordinates(city: string): { lat: number; lng: number } | null {
+  const lower = city.trim().toLowerCase();
+  const entry = Object.entries(CITY_COORDINATES).find(
+    ([key]) => key.toLowerCase() === lower
+  );
+  return entry ? entry[1] : null;
+}
 
 // Budapest kerületek közelítő koordinátái
 export const BUDAPEST_DISTRICT_COORDINATES: Record<string, { lat: number; lng: number }> = {

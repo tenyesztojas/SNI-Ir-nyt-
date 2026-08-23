@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { CITY_COORDINATES, BUDAPEST_DISTRICT_COORDINATES } from "@/lib/community/types";
+import { findCityCoordinates, BUDAPEST_DISTRICT_COORDINATES } from "@/lib/community/types";
 import type { CommunityRole, MessagePrivacy } from "@/lib/community/types";
 
 // ── Segédfüggvény: közelítő koordináta kiszámítása ──────────
@@ -11,11 +11,19 @@ function getApproximateCoords(
   city: string | undefined,
   district: string | undefined
 ): { lat: number | null; lng: number | null } {
-  if (city === "Budapest" && district && BUDAPEST_DISTRICT_COORDINATES[district]) {
-    return BUDAPEST_DISTRICT_COORDINATES[district];
+  const cityNorm = city?.trim() ?? "";
+  const districtNorm = district?.trim() ?? "";
+  // Budapest kerület (case-insensitive city match)
+  if (cityNorm.toLowerCase() === "budapest" && districtNorm) {
+    const distEntry = Object.entries(BUDAPEST_DISTRICT_COORDINATES).find(
+      ([k]) => k.toLowerCase() === districtNorm.toLowerCase()
+    );
+    if (distEntry) return distEntry[1];
   }
-  if (city && CITY_COORDINATES[city]) {
-    return CITY_COORDINATES[city];
+  // Város keresés case-insensitive
+  if (cityNorm) {
+    const coords = findCityCoordinates(cityNorm);
+    if (coords) return coords;
   }
   return { lat: null, lng: null };
 }
