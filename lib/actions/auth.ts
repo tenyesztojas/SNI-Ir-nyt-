@@ -3,6 +3,8 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { upsertCommunityProfile } from "@/app/kozosseg/actions";
+import type { CommunityRole } from "@/lib/community/types";
 
 export type AuthActionState = { error?: string; info?: string } | null;
 
@@ -32,9 +34,13 @@ export async function signUpAction(
   const password = String(formData.get("password") ?? "");
   const displayName = String(formData.get("displayName") ?? "").trim();
   const noNewsletter = formData.get("noNewsletter") === "on";
+  const joinCommunity = formData.get("joinCommunity") === "on";
+  const communityRole = (String(formData.get("communityRole") ?? "szulo")) as CommunityRole;
+  const communityCity = String(formData.get("communityCity") ?? "").trim();
 
   if (!email || !password || !displayName) return { error: "Tölts ki minden mezőt." };
   if (password.length < 6) return { error: "A jelszó legalább 6 karakter legyen." };
+  if (joinCommunity && !communityCity) return { error: "A közösségi profilhoz add meg a települést." };
 
   const supabase = createClient();
   const { data, error } = await supabase.auth.signUp({
@@ -57,7 +63,34 @@ export async function signUpAction(
   }
 
   if (!data.session) {
-    return { info: "Sikeres regisztráció! Erősítsd meg az emailcímedet a belépéshez." };
+    const communityNote = joinCommunity
+      ? " A közösségi profilodat belépés után a Közösség menüpontban tudod kitölteni."
+      : "";
+    return { info: `Sikeres regisztráció! Erősítsd meg az emailcímedet a belépéshez.${communityNote}` };
+  }
+
+  // Van session (email-megerősítés nem szükséges) → közösségi profil létrehozása
+  if (joinCommunity) {
+    await upsertCommunityProfile({
+      display_name: displayName,
+      role: communityRole,
+      city: communityCity,
+      intro_text: "",
+      county: "",
+      district: "",
+      map_display_enabled: true,
+      connection_goals: [],
+      neurodivergence_tags: [],
+      child_age_group: [],
+      accepts_friend_requests: true,
+      accepts_first_message: "connection",
+      push_friend_requests: true,
+      push_messages: true,
+      push_connection_accepted: true,
+      profile_visibility: "active",
+    });
+    revalidatePath("/", "layout");
+    redirect("/kozosseg/profilom?uj=1");
   }
 
   revalidatePath("/", "layout");

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useFormState, useFormStatus } from "react-dom";
-import { LogIn, Mail, ChevronDown } from "lucide-react";
+import { LogIn, Mail, ChevronDown, Users } from "lucide-react";
 import { signInAction, signUpAction, AuthActionState } from "@/lib/actions/auth";
 
 function SubmitButton({ label }: { label: string }) {
@@ -17,6 +17,9 @@ function SubmitButton({ label }: { label: string }) {
 export default function LoginPage() {
   const [mode, setMode] = useState<"belepes" | "regisztracio">("belepes");
   const [showEmail, setShowEmail] = useState(true);
+  const [joinCommunity, setJoinCommunity] = useState(false);
+  const [communityRole, setCommunityRole] = useState("szulo");
+  const [communityCity, setCommunityCity] = useState("");
   const [signInState, signInFormAction] = useFormState<AuthActionState, FormData>(signInAction, null);
   const [signUpState, signUpFormAction] = useFormState<AuthActionState, FormData>(signUpAction, null);
 
@@ -94,6 +97,60 @@ export default function LoginPage() {
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Jelszó</label>
                   <input type="password" name="password" className="input-field mt-1.5" required minLength={6} />
+                </div>
+
+                {/* Közösségi csatlakozás opt-in */}
+                <div className="rounded-xl border border-sni-brand-teal/30 bg-[#f0fbfa] px-4 py-4 space-y-3">
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      name="joinCommunity"
+                      checked={joinCommunity}
+                      onChange={(e) => setJoinCommunity(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 rounded border-gray-300 accent-sni-brand-teal"
+                    />
+                    <div>
+                      <span className="flex items-center gap-1.5 text-sm font-semibold text-gray-800">
+                        <Users size={15} className="text-sni-brand-teal" />
+                        Csatlakozom a VédettSarok Közösséghez
+                      </span>
+                      <p className="mt-0.5 text-xs text-gray-500">
+                        Megjelenhetsz a közösségi térképen, és kapcsolatba léphetsz más szülőkkel, érintettekkel, szakemberekkel.
+                      </p>
+                    </div>
+                  </label>
+
+                  {joinCommunity && (
+                    <div className="ml-7 space-y-3 border-t border-sni-brand-teal/20 pt-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Szerepkör</label>
+                        <select
+                          name="communityRole"
+                          value={communityRole}
+                          onChange={(e) => setCommunityRole(e.target.value)}
+                          className="input-field text-sm"
+                        >
+                          <option value="szulo">Szülő / hozzátartozó</option>
+                          <option value="erintett_felnott">Érintett felnőtt</option>
+                          <option value="szakember">Szakember</option>
+                          <option value="egyeb">Egyéb</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Település *</label>
+                        <input
+                          name="communityCity"
+                          value={communityCity}
+                          onChange={(e) => setCommunityCity(e.target.value)}
+                          className="input-field text-sm"
+                          placeholder="pl. Budapest"
+                        />
+                        <p className="mt-1 text-xs text-gray-400">
+                          Csak város/kerület szinten jelensz meg — pontos cím nem látható.
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Hírlevél opt-out */}
