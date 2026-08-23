@@ -169,6 +169,31 @@ export default async function HomePage() {
               Profilom szerkesztése
             </Link>
           </div>
+          {/* Feature kártyák */}
+          <div className="mt-10 grid gap-4 text-left sm:grid-cols-2">
+            <div className="rounded-2xl bg-white/80 p-5 shadow-sm">
+              <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-sni-brand-teal/10">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-5 w-5 text-sni-brand-teal" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
+                </svg>
+              </div>
+              <p className="font-bold text-gray-900">Közösségi térkép</p>
+              <p className="mt-1 text-sm text-gray-500">Nézd meg, kik vannak a közeledben — város vagy kerület szinten, pontos cím nélkül.</p>
+              <Link href="/kozosseg/terkep" className="mt-3 inline-block text-sm font-semibold text-sni-brand-teal hover:underline">Térkép megnyitása →</Link>
+            </div>
+            <div className="rounded-2xl bg-white/80 p-5 shadow-sm">
+              <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-xl bg-sni-brand-teal/10">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-5 w-5 text-sni-brand-teal" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
+                </svg>
+              </div>
+              <p className="font-bold text-gray-900">Kapcsolatok és chat</p>
+              <p className="mt-1 text-sm text-gray-500">Jelöld ismerősnek azokat, akikkel kapcsolódni szeretnél. Elfogadás után privát chatben tudtok írni egymásnak.</p>
+              <Link href="/kozosseg/kapcsolataim" className="mt-3 inline-block text-sm font-semibold text-sni-brand-teal hover:underline">Kapcsolataim →</Link>
+            </div>
+          </div>
+
           <div className="mx-auto mt-8 flex max-w-lg items-start gap-3 rounded-2xl bg-white/70 px-5 py-4 text-left text-sm text-gray-500 shadow-sm">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="mt-0.5 h-5 w-5 shrink-0 text-sni-brand-teal" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z" />

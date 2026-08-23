@@ -95,7 +95,7 @@ export default async function KozossegPage() {
         />
         <FeatureCard
           icon={<Users className="text-green-600" size={28} />}
-          title="Kapcsolódás és chat"
+          title="Kapcsolatok és chat"
           desc="Jelöld ismerősnek azokat, akikkel kapcsolódni szeretnél. Elfogadás után privát chatben tudtok írni egymásnak."
           href={user ? "/kozosseg/kapcsolataim" : "/belepes"}
           linkLabel="Kapcsolataim"
