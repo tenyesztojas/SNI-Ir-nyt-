@@ -236,32 +236,46 @@ export async function getUnreadNotificationCount(): Promise<number> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return 0;
 
-  // 1. Bejövő, várakozó kapcsolati kérések
-  const { count: pendingConnections } = await supabase
+  // 1. Bejövő, várakozó kapcsolati kérések — deduplikálva (egy kérő csak egyszer számít)
+  const { data: pendingRows } = await supabase
     .from("community_connections")
-    .select("id", { count: "exact", head: true })
+    .select("requester_user_id")
     .eq("receiver_user_id", user.id)
     .eq("status", "pending");
 
-  // 2. Olvasatlan üzenetek (saját maga által NEM küldött)
-  const { data: myThreadIds } = await supabase
+  const uniqueRequesters = new Set((pendingRows ?? []).map((r) => r.requester_user_id));
+  const pendingCount = uniqueRequesters.size;
+
+  // 2. Olvasatlan üzenetek — csak a deduplikált szálakból (egy másik felhasználó → egy szál)
+  const { data: allThreads } = await supabase
     .from("community_threads")
-    .select("id")
-    .or(`participant_1_user_id.eq.${user.id},participant_2_user_id.eq.${user.id}`);
+    .select("id, participant_1_user_id, participant_2_user_id")
+    .or(`participant_1_user_id.eq.${user.id},participant_2_user_id.eq.${user.id}`)
+    .order("last_message_at", { ascending: false });
+
+  // Deduplikáció: egy másik félhez csak az első (legfrissebb) szálat vesszük
+  const seenOtherIds = new Set<string>();
+  const canonicalThreadIds: string[] = [];
+  for (const t of allThreads ?? []) {
+    const otherId = t.participant_1_user_id === user.id ? t.participant_2_user_id : t.participant_1_user_id;
+    if (!seenOtherIds.has(otherId)) {
+      seenOtherIds.add(otherId);
+      canonicalThreadIds.push(t.id);
+    }
+  }
 
   let unreadMessages = 0;
-  if (myThreadIds && myThreadIds.length > 0) {
-    const threadIds = myThreadIds.map((t) => t.id);
+  if (canonicalThreadIds.length > 0) {
     const { count } = await supabase
       .from("community_messages")
       .select("id", { count: "exact", head: true })
-      .in("thread_id", threadIds)
+      .in("thread_id", canonicalThreadIds)
       .neq("sender_user_id", user.id)
       .is("read_at", null);
     unreadMessages = count ?? 0;
   }
 
-  return (pendingConnections ?? 0) + unreadMessages;
+  return pendingCount + unreadMessages;
 }
 
 // ── Admin: közösségi profilok listája ─────────────────────────
