@@ -236,13 +236,32 @@ export async function getUnreadNotificationCount(): Promise<number> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return 0;
 
-  const { count } = await supabase
-    .from("notifications")
+  // 1. Bejövő, várakozó kapcsolati kérések
+  const { count: pendingConnections } = await supabase
+    .from("community_connections")
     .select("id", { count: "exact", head: true })
-    .eq("user_id", user.id)
-    .is("read_at", null);
+    .eq("receiver_user_id", user.id)
+    .eq("status", "pending");
 
-  return count ?? 0;
+  // 2. Olvasatlan üzenetek (saját maga által NEM küldött)
+  const { data: myThreadIds } = await supabase
+    .from("community_threads")
+    .select("id")
+    .or(`participant_1_user_id.eq.${user.id},participant_2_user_id.eq.${user.id}`);
+
+  let unreadMessages = 0;
+  if (myThreadIds && myThreadIds.length > 0) {
+    const threadIds = myThreadIds.map((t) => t.id);
+    const { count } = await supabase
+      .from("community_messages")
+      .select("id", { count: "exact", head: true })
+      .in("thread_id", threadIds)
+      .neq("sender_user_id", user.id)
+      .is("read_at", null);
+    unreadMessages = count ?? 0;
+  }
+
+  return (pendingConnections ?? 0) + unreadMessages;
 }
 
 // ── Admin: közösségi profilok listája ─────────────────────────

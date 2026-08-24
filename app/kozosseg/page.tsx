@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Users, Map, Search, Shield } from "lucide-react";
-import { getOwnCommunityProfile } from "@/lib/community/data";
+import { getOwnCommunityProfile, getUnreadNotificationCount } from "@/lib/community/data";
 import { getCurrentUserAndProfile } from "@/lib/data";
 
 export const metadata = {
@@ -11,9 +11,10 @@ export const metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function KozossegPage() {
-  const [{ user }, ownProfile] = await Promise.all([
+  const [{ user }, ownProfile, communityUnread] = await Promise.all([
     getCurrentUserAndProfile(),
     getOwnCommunityProfile(),
+    getUnreadNotificationCount(),
   ]);
 
   return (
@@ -99,6 +100,7 @@ export default async function KozossegPage() {
           desc="Jelöld ismerősnek azokat, akikkel kapcsolódni szeretnél. Elfogadás után privát chatben tudtok írni egymásnak."
           href={user ? "/kozosseg/kapcsolataim" : "/belepes"}
           linkLabel="Kapcsolataim"
+          badge={communityUnread}
         />
       </div>
 
@@ -120,17 +122,26 @@ function FeatureCard({
   desc,
   href,
   linkLabel,
+  badge,
 }: {
   icon: React.ReactNode;
   title: string;
   desc: string;
   href: string;
   linkLabel: string;
+  badge?: number;
 }) {
   return (
     <div className="card flex flex-col gap-3">
       {icon}
-      <h2 className="font-bold text-sni-text">{title}</h2>
+      <h2 className="flex items-center gap-2 font-bold text-sni-text">
+        {title}
+        {badge != null && badge > 0 && (
+          <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white leading-none">
+            {badge > 99 ? "99+" : badge}
+          </span>
+        )}
+      </h2>
       <p className="flex-1 text-sm text-gray-600">{desc}</p>
       <Link href={href} className="text-sm font-semibold text-sni-brand-teal hover:underline">
         {linkLabel} →

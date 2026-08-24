@@ -28,10 +28,12 @@ export default function HeaderClient({
   isLoggedIn,
   displayName,
   isAdmin,
+  communityUnread = 0,
 }: {
   isLoggedIn: boolean;
   displayName?: string | null;
   isAdmin: boolean;
+  communityUnread?: number;
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [tbDesktopOpen, setTbDesktopOpen] = useState(false);
@@ -76,9 +78,14 @@ export default function HeaderClient({
               href={link.href}
               target={link.newTab ? "_blank" : undefined}
               rel={link.newTab ? "noopener noreferrer" : undefined}
-              className="rounded-full px-4 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-100 hover:text-sni-brand-blue"
+              className="relative rounded-full px-4 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-100 hover:text-sni-brand-blue"
             >
               {link.label}
+              {link.href === "/kozosseg" && communityUnread > 0 && (
+                <span className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white leading-none">
+                  {communityUnread > 99 ? "99+" : communityUnread}
+                </span>
+              )}
             </Link>
           ))}
 
@@ -176,9 +183,14 @@ export default function HeaderClient({
                 target={link.newTab ? "_blank" : undefined}
                 rel={link.newTab ? "noopener noreferrer" : undefined}
                 onClick={() => setMobileOpen(false)}
-                className="rounded-xl px-4 py-3 text-base font-semibold text-gray-700 hover:bg-gray-50 hover:text-sni-brand-blue"
+                className="relative flex items-center justify-between rounded-xl px-4 py-3 text-base font-semibold text-gray-700 hover:bg-gray-50 hover:text-sni-brand-blue"
               >
                 {link.label}
+                {link.href === "/kozosseg" && communityUnread > 0 && (
+                  <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-sni-brand-teal px-1.5 text-[10px] font-bold text-white leading-none">
+                    {communityUnread > 99 ? "99+" : communityUnread}
+                  </span>
+                )}
               </Link>
             ))}
 

@@ -3,13 +3,14 @@ export const dynamic = "force-dynamic";
 import Link from "next/link";
 import { MapPin, HeartHandshake, ArrowRight, CalendarDays, ExternalLink } from "lucide-react";
 import { getCategories, getApprovedPlaces, citiesFromPlaces, countriesFromPlaces, getCurrentUserAndProfile } from "@/lib/data";
+import { getUnreadNotificationCount } from "@/lib/community/data";
 import { createClient } from "@/lib/supabase/server";
 import HeroSearchForm from "@/components/HeroSearchForm";
 import NearbyPlacesPanel from "@/components/NearbyPlacesPanel";
 
 export default async function HomePage() {
   const supabase = createClient();
-  const [categories, places, programsResult, { user }] = await Promise.all([
+  const [categories, places, programsResult, { user }, communityUnread] = await Promise.all([
     getCategories(),
     getApprovedPlaces(),
     supabase
@@ -19,6 +20,7 @@ export default async function HomePage() {
       .order("created_at", { ascending: false })
       .limit(3),
     getCurrentUserAndProfile(),
+    getUnreadNotificationCount(),
   ]);
   const programs = programsResult.data ?? [];
   const cities = citiesFromPlaces(places);
@@ -168,7 +170,14 @@ export default async function HomePage() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
                 </svg>
               </div>
-              <p className="font-bold text-gray-900">Kapcsolatok és chat</p>
+              <p className="flex items-center gap-2 font-bold text-gray-900">
+                Kapcsolatok és chat
+                {communityUnread > 0 && (
+                  <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold text-white leading-none">
+                    {communityUnread > 99 ? "99+" : communityUnread}
+                  </span>
+                )}
+              </p>
               <p className="mt-1 text-sm text-gray-500">Jelöld ismerősnek azokat, akikkel kapcsolódni szeretnél. Elfogadás után privát chatben tudtok írni egymásnak.</p>
               <Link href="/kozosseg/kapcsolataim" className="mt-3 inline-block text-sm font-semibold text-sni-brand-teal hover:underline">Kapcsolataim →</Link>
             </div>
