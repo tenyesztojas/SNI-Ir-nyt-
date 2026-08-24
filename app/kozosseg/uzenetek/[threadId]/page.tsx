@@ -4,6 +4,7 @@ import { getThreadMessages, getMyThreads, getOwnCommunityProfile } from "@/lib/c
 import { markThreadMessagesRead } from "@/app/kozosseg/actions";
 import { ROLE_LABELS } from "@/lib/community/types";
 import ChatInput from "./ChatInput";
+import AutoRefresh from "./AutoRefresh";
 
 export const dynamic = "force-dynamic";
 
@@ -96,6 +97,7 @@ export default async function ChatThreadPage({
 
       {/* Beviteli mező */}
       <ChatInput threadId={params.threadId} />
+      <AutoRefresh />
     </div>
   );
 }

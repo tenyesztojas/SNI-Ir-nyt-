@@ -410,14 +410,16 @@ export async function markThreadMessagesRead(threadId: string) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
 
-  await supabase
+  // Admin kliensen keresztül (RLS bypass): a fogadó is jelölheti olvasottnak a kapott üzeneteket
+  const admin = createAdminClient();
+  await admin
     .from("community_messages")
     .update({ read_at: new Date().toISOString() })
     .eq("thread_id", threadId)
     .neq("sender_user_id", user.id)
     .is("read_at", null);
 
-  revalidatePath("/", "layout"); // header badge frissítése
+  revalidatePath("/", "layout");
 }
 
 // ── Értesítések olvasottnak jelölése ─────────────────────────
