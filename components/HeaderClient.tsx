@@ -161,14 +161,21 @@ export default function HeaderClient({
         {/* Hamburger + akadálymentességi gomb — mobil (< sm) */}
         <div className="flex items-center gap-2 sm:hidden">
           <AccessibilityButton />
-          <button
-            className="rounded-full p-2 text-gray-700 transition hover:bg-gray-100"
-            aria-label={mobileOpen ? "Menü bezárása" : "Menü megnyitása"}
-            aria-expanded={mobileOpen}
-            onClick={() => setMobileOpen((v) => !v)}
-          >
-            {mobileOpen ? <X size={24} /> : <Menu size={24} />}
-          </button>
+          <div className="relative">
+            <button
+              className="rounded-full p-2 text-gray-700 transition hover:bg-gray-100"
+              aria-label={mobileOpen ? "Menü bezárása" : "Menü megnyitása"}
+              aria-expanded={mobileOpen}
+              onClick={() => setMobileOpen((v) => !v)}
+            >
+              {mobileOpen ? <X size={24} /> : <Menu size={24} />}
+            </button>
+            {!mobileOpen && communityUnread > 0 && (
+              <span className="pointer-events-none absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white leading-none">
+                {communityUnread > 99 ? "99+" : communityUnread}
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
