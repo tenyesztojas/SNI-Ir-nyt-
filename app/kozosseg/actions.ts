@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { findCityCoordinates, BUDAPEST_DISTRICT_COORDINATES } from "@/lib/community/types";
 import type { CommunityRole, MessagePrivacy } from "@/lib/community/types";
+import { sendAdminPush } from "@/lib/push";
 
 // ── Nominatim geocoding (szerver oldalon, API kulcs nélkül) ──
 async function geocodeWithNominatim(
@@ -173,6 +174,12 @@ export async function upsertCommunityProfile(formData: {
 
   revalidatePath("/kozosseg");
   revalidatePath("/kozosseg/profilom");
+  // Admin értesítés új közösségi regisztrációról
+  await sendAdminPush(
+    "👥 Új közösségi tag",
+    `${formData.display_name} csatlakozott a közösséghez`,
+    "/admin/kozosseg"
+  );
   return { ok: true, profileId: data.id };
 }
 
@@ -322,6 +329,7 @@ export async function respondToConnection(
   }
 
   revalidatePath("/kozosseg/kapcsolataim");
+  revalidatePath("/", "layout"); // header badge frissítése
   return { ok: true };
 }
 
@@ -408,6 +416,8 @@ export async function markThreadMessagesRead(threadId: string) {
     .eq("thread_id", threadId)
     .neq("sender_user_id", user.id)
     .is("read_at", null);
+
+  revalidatePath("/", "layout"); // header badge frissítése
 }
 
 // ── Értesítések olvasottnak jelölése ─────────────────────────

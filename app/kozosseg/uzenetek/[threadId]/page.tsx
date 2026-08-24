@@ -24,11 +24,10 @@ export default async function ChatThreadPage({
   const thread = threads.find((t) => t.id === params.threadId);
   if (!thread) notFound();
 
-  // Üzenetek beolvasása + olvasottnak jelölés
-  const [messages] = await Promise.all([
-    getThreadMessages(params.threadId),
-    markThreadMessagesRead(params.threadId),
-  ]);
+  // Először olvasottnak jelöljük (hogy a header badge frissüljön),
+  // majd párhuzamosan töltjük be az üzeneteket
+  await markThreadMessagesRead(params.threadId);
+  const messages = await getThreadMessages(params.threadId);
 
   const other = thread.other_profile;
 
