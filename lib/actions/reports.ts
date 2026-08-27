@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { reportSchema, ReportInput } from "@/lib/schemas";
 import { isCurrentUserAdmin } from "@/lib/data";
+import { sendAdminPush } from "@/lib/push";
 
 export async function submitReport(input: ReportInput): Promise<{ error?: string }> {
   const parsed = reportSchema.safeParse(input);
@@ -31,6 +32,11 @@ export async function submitReport(input: ReportInput): Promise<{ error?: string
   }
 
   revalidatePath("/admin/jelzesek");
+  await sendAdminPush(
+    "🚨 Új hibajelentés",
+    `Új jelzés érkezett — típus: ${data.reportType}`,
+    "/admin/jelzesek"
+  );
   return {};
 }
 

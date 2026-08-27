@@ -21,6 +21,14 @@ npm run test:vedett-route
 - **Routing — routing engine hiánya** (`motisClient.test.ts`): `MOTIS_BASE_URL`
   nélkül mindig kezelt `routing_engine_unavailable` választ ad, sosem dob
   kivételt, sosem ad vissza kitalált útvonalat.
+- **GTFS feltöltés validáció — MÁV/Volán** (`gtfs-upload-validation.test.ts`):
+  teljes struktúra elfogadása, hiányzó kötelező fájl elutasítása,
+  nem-GTFS/nem-zip bemenet kezelése, `feed_info.txt` metaadat kiolvasása.
+  Szintetikus fixture-ökkel dolgozik (nem valós forgalmi adat).
+- **StaticOnlyGtfsProvider — MÁV/Volán** (`static-only-provider.test.ts`):
+  feltöltés hiányában őszinte "nincs konfigurálva" válasz, realtime
+  metódusok mindig üres tömböt adnak (sosem kitalált adatot),
+  `refreshStaticData()` explicit hibát dob (nincs automatikus letöltés).
 
 ## Amit ezek a tesztek szándékosan NEM fednek le, és miért
 

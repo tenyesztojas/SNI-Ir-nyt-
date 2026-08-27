@@ -13,7 +13,7 @@ const cspDirectives = [
   // Képek: saját + minden HTTPS forrás (képek nem futtatnak kódot, külső domain-ek nem prediktálhatók)
   `img-src 'self' data: blob: https:`,
   // API hívások: saját + Supabase + Google OAuth + Google Analytics
-  `connect-src 'self' https://${supabaseHost} https://*.supabase.co wss://*.supabase.co https://oauth2.googleapis.com https://www.googleapis.com https://www.google-analytics.com https://region1.google-analytics.com https://www.googletagmanager.com`,
+  `connect-src 'self' https://${supabaseHost} https://*.supabase.co wss://*.supabase.co https://oauth2.googleapis.com https://www.googleapis.com https://www.google-analytics.com https://region1.google-analytics.com https://www.googletagmanager.com https://unpkg.com`,
   // Frame: csak reCAPTCHA
   `frame-src https://www.google.com`,
   // Font: saját (fontsource npm csomagból, nem CDN)

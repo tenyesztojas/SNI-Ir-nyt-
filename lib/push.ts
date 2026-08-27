@@ -18,9 +18,20 @@ export async function sendAdminPush(title: string, body: string, url = "/admin")
     if (!vapidInitialized) return;
 
     const admin = createAdminClient();
+
+    // Csak admin felhasználók push subscription-jei
+    const { data: adminProfiles } = await admin
+      .from("profiles")
+      .select("id")
+      .eq("role", "admin");
+
+    if (!adminProfiles?.length) return;
+    const adminIds = adminProfiles.map((p) => p.id);
+
     const { data: subs } = await admin
       .from("push_subscriptions")
-      .select("endpoint, keys");
+      .select("endpoint, keys")
+      .in("user_id", adminIds);
 
     if (!subs?.length) return;
 

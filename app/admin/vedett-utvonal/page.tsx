@@ -11,6 +11,7 @@ import { getVedettRouteStatus } from "@/lib/vedett-route/status";
 import { isVedettRouteFeatureEnabled } from "@/lib/vedett-route/config";
 import VedettUtvonalStatusPanel from "@/components/vedett-utvonal/VedettUtvonalStatusPanel";
 import VedettUtvonalSearchForm from "@/components/vedett-utvonal/VedettUtvonalSearchForm";
+import VedettUtvonalGtfsUploadForm from "@/components/vedett-utvonal/VedettUtvonalGtfsUploadForm";
 
 export default async function VedettUtvonalAdminPage() {
   const status = await getVedettRouteStatus();
@@ -30,6 +31,7 @@ export default async function VedettUtvonalAdminPage() {
 
       <div className="mt-6 space-y-6">
         <VedettUtvonalStatusPanel status={status} />
+        <VedettUtvonalGtfsUploadForm disabled={!enabled} />
         <VedettUtvonalSearchForm disabled={!enabled} />
       </div>
 

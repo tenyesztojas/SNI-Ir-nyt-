@@ -196,10 +196,44 @@ runner beállításáról.
 
 ## Phase 2 – MÁV/Volán
 
-Nincs implementálva. Előkészítve: `TransitProviderId` típus már tartalmazza
-a `MAV_RAIL` és `MAV_BUS` értékeket, a `getTransitProvider()` registry
-készen áll új providerek regisztrálására anélkül, hogy a routing réteget
-vagy a UI-t módosítani kellene.
+**Elkezdve, folyamatban.** A MÁV vasúti GTFS statikus feedje ténylegesen be
+van kötve és validálva (`lib/vedett-route/providers/staticFileProvider.ts`,
+`StaticOnlyGtfsProvider`), a MÁV/Volán autóbusz ugyanezen a providertípuson
+keresztül regisztrálva van, de adatra vár.
+
+Fontos architekturális különbség a BKK-hoz képest: a MÁV/Volán GTFS-nek
+**nincs dokumentált, kulcsos OpenData API-ja** úgy, ahogy a BKK-nak — ezért
+itt nincs automatikus, hálózati `refreshStaticData()`. Helyette az admin
+manuálisan szerzi be a GTFS zip-et, és feltölti az admin felületen
+("GTFS statikus feed feltöltése" űrlap, `/admin/vedett-utvonal`) vagy
+közvetlenül a `POST /api/admin/vedett-utvonal/gtfs-upload` végponton
+(admin+flag védett, `multipart/form-data`, mezők: `provider`
+(`MAV_RAIL`/`MAV_BUS`), `file`).
+
+A végpont validálja, hogy a zip valóban GTFS statikus struktúrájú-e
+(`agency.txt`, `stops.txt`, `routes.txt`, `trips.txt`, `stop_times.txt`
+megléte kötelező — hiányukban 400-as választ ad, a hiányzó fájlok
+felsorolásával), kiolvassa a `feed_info.txt`-t (ha van), és elmenti a
+`.vedett-cache/gtfs-static/<mav_rail|mav_bus>/` alá (gitignorálva).
+
+Jelenlegi valós állapot (ellenőrizve a ténylegesen feltöltött MÁV
+adatból): a MÁV vasút feed érvényes és be van olvasva (kiadó: MÁV,
+érvényesség 2026.04.26–2027.02.26, verzió `20260826.M2ChangeID`). A
+MÁV/Volán busz feed egyelőre nincs feltöltve — az admin felület "Nincs
+feltöltve" státuszt mutat rá, nem kitalált adatot.
+
+GTFS-Realtime a MÁV/Volán esetén: **nincs dokumentált forrás**, ezért a
+`getServiceAlerts`/`getTripUpdates`/`getVehiclePositions` mindig üres
+tömböt ad — ez szándékos, nem hiba. Ha a MÁV/Volán később közzétesz
+dokumentált GTFS-RT feedet, a `TransitProvider` interfész változtatása
+nélkül bővíthető (új provider osztály, ugyanaz a regisztrációs minta, mint
+a BKK-nál).
+
+A routing engine (MOTIS) szempontjából ez azt jelenti, hogy amint mindkét
+MÁV feed feltöltve van, a MOTIS gráf-buildhez már 3 GTFS forrás áll
+rendelkezésre (BKK + MÁV vasút + MÁV/Volán busz) — ez még mindig a "MOTIS
+setup" fejezetben leírt külön szolgáltatásként történő beüzemelést
+igényli, ami nem történt meg ebben a körben sem.
 
 ## Phase 3 – Sensory Score
 

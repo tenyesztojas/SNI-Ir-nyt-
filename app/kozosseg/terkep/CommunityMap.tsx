@@ -53,8 +53,27 @@ export default function CommunityMap({ members }: Props) {
         iconAnchor: [16, 32],
       });
 
+      // Azonos koordinátájú markereket szétválasztjuk kis jitterrel
+      const coordCount: Record<string, number> = {};
       members.forEach((m) => {
-        const marker = L.marker([m.lat, m.lng], { icon }).addTo(map);
+        const key = `${m.lat.toFixed(4)},${m.lng.toFixed(4)}`;
+        coordCount[key] = (coordCount[key] ?? 0) + 1;
+      });
+      const coordIndex: Record<string, number> = {};
+
+      members.forEach((m) => {
+        const key = `${m.lat.toFixed(4)},${m.lng.toFixed(4)}`;
+        const total = coordCount[key] ?? 1;
+        const idx = coordIndex[key] ?? 0;
+        coordIndex[key] = idx + 1;
+
+        // Spirál-szerű elrendezés ha több marker ugyanazon a ponton
+        const angle = (2 * Math.PI * idx) / total;
+        const radius = total > 1 ? 0.008 : 0;
+        const jLat = m.lat + radius * Math.cos(angle);
+        const jLng = m.lng + radius * Math.sin(angle);
+
+        const marker = L.marker([jLat, jLng], { icon }).addTo(map);
         marker.on("click", () => {
           setSelected(m);
         });

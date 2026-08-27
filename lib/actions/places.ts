@@ -87,7 +87,9 @@ export async function submitPlace(input: NewPlaceInput, images: string[] = []): 
       revalidatePath("/helyek");
       revalidatePath("/profil");
       if (modResult.flagged) {
-        await sendAdminPush("Megjelölt hely közzétéve", `${data.name} — automatikusan közzétéve, gyanús mintázat`, "/admin/jelzesek");
+        await sendAdminPush("⚠️ Megjelölt hely beküldve", `${data.name} — gyanús mintázat, ellenőrzés szükséges`, "/admin/jelzesek");
+      } else {
+        await sendAdminPush("📍 Új hely beküldve", `${data.name} – ${data.city}`, "/admin/helyek");
       }
       return {};
     }
