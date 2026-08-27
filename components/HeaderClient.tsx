@@ -28,11 +28,12 @@ const TUDASBAZIS = [
 ];
 
 // ── Egyszerű top-level linkek (sorrend: spec alapján) ──────────────────────
+// MEGJEGYZÉS: "Védett Partner" és "Védett Jelzés" szándékosan NEM szerepel itt.
+// Mindkét funkció pilot/pre-launch fázisban van — közvetlen linkkel elérhető,
+// de a publikus navigációban csak az élesítési döntés után jelenik meg.
 const TOP_LINKS = [
-  { href: "/kozosseg",                label: "Közösség",        newTab: false },
-  { href: "/programajanlok",          label: "Programajánló",   newTab: true  },
-  { href: "/szolgaltato/regisztracio", label: "Védett Partner", newTab: false },
-  { href: "/vedett-jelzes",           label: "Védett Jelzés",   newTab: false },
+  { href: "/kozosseg",       label: "Közösség",      newTab: false },
+  { href: "/programajanlok", label: "Programajánló", newTab: true  },
 ];
 
 export default function HeaderClient({
