@@ -34,9 +34,10 @@ const TOP_LINKS = [
 ];
 
 // Pilot/pre-launch linkek — csak adminnak láthatók, közvetlen link megosztáshoz
+// Sorrend: Védett Jelzés → Védett Partner
 const ADMIN_PILOT_LINKS = [
-  { href: "/szolgaltato/regisztracio", label: "Védett Partner", newTab: false },
   { href: "/vedett-jelzes",            label: "Védett Jelzés",  newTab: false },
+  { href: "/szolgaltato/regisztracio", label: "Védett Partner", newTab: false },
 ];
 
 export default function HeaderClient({
@@ -128,7 +129,18 @@ export default function HeaderClient({
             )}
           </div>
 
-          {/* 2. Egyszerű top-level linkek */}
+          {/* 2. Pilot linkek — csak adminnak (Védett Jelzés, Védett Partner) */}
+          {isAdmin && ADMIN_PILOT_LINKS.map((link) => (
+            <Link
+              key={link.href}
+              href={link.href}
+              className="relative rounded-full px-4 py-2 text-sm font-semibold text-sni-brand-teal transition-colors hover:bg-sni-brand-teal/10"
+            >
+              {link.label}
+            </Link>
+          ))}
+
+          {/* 3. Közösség, Programajánló */}
           {TOP_LINKS.map((link) => (
             <Link
               key={link.href}
@@ -145,27 +157,6 @@ export default function HeaderClient({
               )}
             </Link>
           ))}
-
-          {/* 2b. Pilot linkek — csak adminnak (pre-launch megosztáshoz) */}
-          {isAdmin && ADMIN_PILOT_LINKS.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className="relative rounded-full px-4 py-2 text-sm font-semibold text-sni-brand-teal transition-colors hover:bg-sni-brand-teal/10"
-            >
-              {link.label}
-            </Link>
-          ))}
-
-          {/* 3. Admin (csak adminnak) */}
-          {isAdmin && (
-            <Link
-              href="/admin"
-              className="relative rounded-full px-4 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-100 hover:text-sni-brand-blue"
-            >
-              Admin
-            </Link>
-          )}
 
           {/* 4. Tudásbázis dropdown */}
           <div className="relative" ref={tbRef}>
@@ -203,7 +194,7 @@ export default function HeaderClient({
             )}
           </div>
 
-          {/* 5. Auth: profil név + kilépés VAGY belépés */}
+          {/* 5. Auth: profil név → Admin (ha admin) → kilépés VAGY belépés */}
           {isLoggedIn ? (
             <>
               <Link
@@ -212,6 +203,14 @@ export default function HeaderClient({
               >
                 {displayName ?? "Profilom"}
               </Link>
+              {isAdmin && (
+                <Link
+                  href="/admin"
+                  className="rounded-full px-4 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-100 hover:text-sni-brand-blue"
+                >
+                  Admin
+                </Link>
+              )}
               <form action={signOutAction}>
                 <button
                   type="submit"
@@ -314,7 +313,7 @@ export default function HeaderClient({
               </Link>
             ))}
 
-            {/* Pilot linkek — csak adminnak */}
+            {/* Pilot linkek — csak adminnak (Védett Jelzés, Védett Partner) */}
             {isAdmin && ADMIN_PILOT_LINKS.map((link) => (
               <Link
                 key={link.href}
@@ -325,17 +324,6 @@ export default function HeaderClient({
                 {link.label}
               </Link>
             ))}
-
-            {/* Admin */}
-            {isAdmin && (
-              <Link
-                href="/admin"
-                onClick={closeMobile}
-                className="rounded-xl px-4 py-3 text-base font-semibold text-gray-700 hover:bg-gray-50 hover:text-sni-brand-blue"
-              >
-                Admin
-              </Link>
-            )}
 
             {/* Tudásbázis accordion */}
             <div>
@@ -370,7 +358,7 @@ export default function HeaderClient({
               )}
             </div>
 
-            {/* Auth mobil */}
+            {/* Auth mobil: profil → Admin (ha admin) → Kilépés */}
             {isLoggedIn ? (
               <>
                 <Link
@@ -380,6 +368,15 @@ export default function HeaderClient({
                 >
                   {displayName ?? "Profilom"}
                 </Link>
+                {isAdmin && (
+                  <Link
+                    href="/admin"
+                    onClick={closeMobile}
+                    className="rounded-xl px-4 py-3 text-base font-semibold text-gray-700 hover:bg-gray-50"
+                  >
+                    Admin
+                  </Link>
+                )}
                 <form action={signOutAction}>
                   <button
                     type="submit"
