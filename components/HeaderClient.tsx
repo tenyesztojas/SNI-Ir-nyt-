@@ -28,12 +28,15 @@ const TUDASBAZIS = [
 ];
 
 // ── Egyszerű top-level linkek (sorrend: spec alapján) ──────────────────────
-// MEGJEGYZÉS: "Védett Partner" és "Védett Jelzés" szándékosan NEM szerepel itt.
-// Mindkét funkció pilot/pre-launch fázisban van — közvetlen linkkel elérhető,
-// de a publikus navigációban csak az élesítési döntés után jelenik meg.
 const TOP_LINKS = [
   { href: "/kozosseg",       label: "Közösség",      newTab: false },
   { href: "/programajanlok", label: "Programajánló", newTab: true  },
+];
+
+// Pilot/pre-launch linkek — csak adminnak láthatók, közvetlen link megosztáshoz
+const ADMIN_PILOT_LINKS = [
+  { href: "/szolgaltato/regisztracio", label: "Védett Partner", newTab: false },
+  { href: "/vedett-jelzes",            label: "Védett Jelzés",  newTab: false },
 ];
 
 export default function HeaderClient({
@@ -140,6 +143,17 @@ export default function HeaderClient({
                   {communityUnread > 99 ? "99+" : communityUnread}
                 </span>
               )}
+            </Link>
+          ))}
+
+          {/* 2b. Pilot linkek — csak adminnak (pre-launch megosztáshoz) */}
+          {isAdmin && ADMIN_PILOT_LINKS.map((link) => (
+            <Link
+              key={link.href}
+              href={link.href}
+              className="relative rounded-full px-4 py-2 text-sm font-semibold text-sni-brand-teal transition-colors hover:bg-sni-brand-teal/10"
+            >
+              {link.label}
             </Link>
           ))}
 
@@ -297,6 +311,18 @@ export default function HeaderClient({
                     {communityUnread > 99 ? "99+" : communityUnread}
                   </span>
                 )}
+              </Link>
+            ))}
+
+            {/* Pilot linkek — csak adminnak */}
+            {isAdmin && ADMIN_PILOT_LINKS.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                onClick={closeMobile}
+                className="rounded-xl px-4 py-3 text-base font-semibold text-sni-brand-teal hover:bg-sni-brand-teal/10"
+              >
+                {link.label}
               </Link>
             ))}
 
