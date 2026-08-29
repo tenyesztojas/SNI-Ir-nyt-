@@ -216,11 +216,24 @@ megléte kötelező — hiányukban 400-as választ ad, a hiányzó fájlok
 felsorolásával), kiolvassa a `feed_info.txt`-t (ha van), és elmenti a
 `.vedett-cache/gtfs-static/<mav_rail|mav_bus>/` alá (gitignorálva).
 
-Jelenlegi valós állapot (ellenőrizve a ténylegesen feltöltött MÁV
-adatból): a MÁV vasút feed érvényes és be van olvasva (kiadó: MÁV,
-érvényesség 2026.04.26–2027.02.26, verzió `20260826.M2ChangeID`). A
-MÁV/Volán busz feed egyelőre nincs feltöltve — az admin felület "Nincs
-feltöltve" státuszt mutat rá, nem kitalált adatot.
+Az eredeti, változatlan zip-eket (ahogy beszerezted, mielőtt feltöltötted)
+a `data-sources/gtfs-raw/` mappa archiválja — ez is git-ignorálva, de
+tudatosan, dokumentáltan elkülönítve a `.vedett-cache`-től, ami csak a
+futásidejű, feldolgozott másolat. Ha a `.vedett-cache` valaha törlődik
+(pl. takarítás, új gép, új deploy), innen újra feltölthető ugyanaz az
+adat anélkül, hogy újra be kellene szerezni.
+
+Jelenlegi valós állapot (mindkét feed ténylegesen feltöltve és
+ellenőrizve):
+
+| Provider | Kiadó | Érvényesség | Feed verzió |
+| --- | --- | --- | --- |
+| `MAV_RAIL` (vasút) | MÁV | 2026.04.26 – 2027.02.26 | `20260826.M2ChangeID` |
+| `MAV_BUS` (helyközi busz, "hkir" feed) | Delta Systems Kft. | 2026.08.26 – 2026.11.24 | `01628.20260826` |
+
+A `MAV_BUS` feed 61 agency-t tartalmaz (túlnyomórészt "MÁV Személyszállítási
+Zrt. - <helyi hálózat>" elnevezéssel — a korábbi Volán társaságok mára a
+MÁV-csoportba integrálva üzemeltetik a helyközi buszjáratokat).
 
 GTFS-Realtime a MÁV/Volán esetén: **nincs dokumentált forrás**, ezért a
 `getServiceAlerts`/`getTripUpdates`/`getVehiclePositions` mindig üres

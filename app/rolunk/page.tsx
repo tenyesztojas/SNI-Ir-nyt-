@@ -1,4 +1,18 @@
-import { Heart } from "lucide-react";
+import { Heart, ExternalLink } from "lucide-react";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { getYoutubeEmbedUrl } from "@/app/admin/media/actions";
+
+export const dynamic = "force-dynamic";
+
+async function getMediaAppearances() {
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("media_appearances")
+    .select("*")
+    .order("sort_order", { ascending: true })
+    .order("created_at", { ascending: false });
+  return data ?? [];
+}
 
 export const metadata = {
   title: "Rólunk – VédettSarok",
@@ -6,7 +20,9 @@ export const metadata = {
     "A VédettSarok egy közösségi térkép és tudástár, amely autizmussal és ADHD-val érintett családoknak, felnőtteknek és szakembereknek segít biztonságos helyeket találni.",
 };
 
-export default function RolunkPage() {
+export default async function RolunkPage() {
+  const mediaItems = await getMediaAppearances();
+
   return (
     <div className="mx-auto max-w-2xl px-4 py-10 sm:px-6">
       {/* Fejléc */}
@@ -56,6 +72,71 @@ export default function RolunkPage() {
           </p>
         </div>
       </div>
+
+      {/* Médiamegjelenések */}
+      {mediaItems.length > 0 && (
+        <section className="mt-14">
+          <h2 className="text-2xl font-extrabold text-gray-900">Médiamegjelenések</h2>
+          <div className="mt-6 flex flex-col gap-8">
+            {mediaItems.map((item) => {
+              if (item.type === "youtube") {
+                const embedUrl = getYoutubeEmbedUrl(item.url);
+                if (!embedUrl) return null;
+                return (
+                  <div key={item.id}>
+                    <p className="mb-2 font-semibold text-gray-800">{item.title}</p>
+                    {item.published_at && (
+                      <p className="mb-2 text-xs text-gray-400">
+                        {new Date(item.published_at).toLocaleDateString("hu-HU", {
+                          year: "numeric",
+                          month: "long",
+                          day: "numeric",
+                        })}
+                      </p>
+                    )}
+                    <div className="overflow-hidden rounded-2xl border border-gray-100 bg-black aspect-video">
+                      <iframe
+                        src={embedUrl}
+                        title={item.title}
+                        className="h-full w-full"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                      />
+                    </div>
+                  </div>
+                );
+              }
+
+              // Cikk – külső link
+              return (
+                <a
+                  key={item.id}
+                  href={item.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="group flex items-start gap-4 rounded-2xl border border-gray-100 bg-gray-50 p-5 transition hover:border-sni-brand-teal/40 hover:bg-sni-brand-teal/5"
+                >
+                  <ExternalLink className="mt-0.5 shrink-0 text-sni-brand-teal" size={20} />
+                  <div>
+                    <p className="font-semibold text-gray-900 group-hover:text-sni-brand-navy">
+                      {item.title}
+                    </p>
+                    {item.published_at && (
+                      <p className="mt-1 text-xs text-gray-400">
+                        {new Date(item.published_at).toLocaleDateString("hu-HU", {
+                          year: "numeric",
+                          month: "long",
+                          day: "numeric",
+                        })}
+                      </p>
+                    )}
+                  </div>
+                </a>
+              );
+            })}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

@@ -5,3 +5,6 @@ out
 
 # Védett Útvonal — GTFS statikus cache (nagy méretű, sosem commitolható)
 .vedett-cache
+
+# Védett Útvonal — nyers GTFS forrásfájlok (nagy méretű, sosem commitolható)
+/data-sources
