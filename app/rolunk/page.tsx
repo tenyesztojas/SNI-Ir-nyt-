@@ -1,6 +1,6 @@
 import { Heart, ExternalLink } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getYoutubeEmbedUrl } from "@/app/admin/media/actions";
+import { getYoutubeEmbedUrl } from "@/lib/media-utils";
 
 export const dynamic = "force-dynamic";
 
