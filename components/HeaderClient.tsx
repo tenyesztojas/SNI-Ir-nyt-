@@ -34,10 +34,11 @@ const TOP_LINKS = [
 ];
 
 // Pilot/pre-launch linkek — csak adminnak láthatók, közvetlen link megosztáshoz
-// Sorrend: Védett Jelzés → Védett Partner
+// Sorrend: Védett Jelzés → Védett Partner → VédettMunka
 const ADMIN_PILOT_LINKS = [
   { href: "/vedett-jelzes",            label: "Védett Jelzés",  newTab: false },
   { href: "/szolgaltato/regisztracio", label: "Védett Partner", newTab: false },
+  { href: "/vedettmunka",              label: "VédettMunka",    newTab: false },
 ];
 
 export default function HeaderClient({

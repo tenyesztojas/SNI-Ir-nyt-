@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { MapPin, Star, Flag, Mail, Users, PlusCircle, Map, MessageCircle, Tv2 } from "lucide-react";
+import { MapPin, Star, Flag, Mail, Users, PlusCircle, Map, MessageCircle, Tv2, Briefcase } from "lucide-react";
 import { getApprovedPlaces, getFlaggedReviews, getPendingReports } from "@/lib/data";
 import PushNotifButton from "@/components/PushNotifButton";
 import AdminPwaStats from "@/components/AdminPwaStats";
@@ -78,6 +78,9 @@ export default async function AdminOverviewPage() {
         </Link>
         <Link href="/admin/media" className="btn-secondary inline-flex items-center gap-2">
           <Tv2 size={16} /> Médiamegjelenések
+        </Link>
+        <Link href="/admin/vedettmunka" className="btn-secondary inline-flex items-center gap-2">
+          <Briefcase size={16} /> VédettMunka
         </Link>
         <Link href="/admin/ertekelesek/osszes" className="btn-secondary inline-flex items-center gap-2">
           Összes értékelés
