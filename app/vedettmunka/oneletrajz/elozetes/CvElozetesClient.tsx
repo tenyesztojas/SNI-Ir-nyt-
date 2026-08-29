@@ -45,8 +45,8 @@ export default function CvElozetesClient() {
       }
       const element = document.getElementById("cv-print-root");
       if (!element) return;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (window as any).html2pdf().set({
+      // eslint-disable-next-line
+      await (window as unknown as {html2pdf: () => {set: (o: unknown) => {from: (el: HTMLElement | null) => {save: () => Promise<void>}}}}).html2pdf().set({
         margin: 0,
         filename: "oneletrajz.pdf",
         image: { type: "jpeg", quality: 0.98 },

@@ -19,6 +19,10 @@ export async function addMediaAppearance(formData: FormData) {
     throw new Error("Érvénytelen YouTube URL.");
   }
 
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error("SUPABASE_SERVICE_ROLE_KEY nincs beállítva a szerveren.");
+  }
+
   const { error } = await admin
     .from("media_appearances")
     .insert({ title, url, type, published_at });
