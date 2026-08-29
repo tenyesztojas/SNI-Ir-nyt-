@@ -9,7 +9,7 @@ async function getMediaAppearances() {
   const { data } = await admin
     .from("media_appearances")
     .select("*")
-    .order("sort_order", { ascending: true })
+    .order("published_at", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false });
   return data ?? [];
 }
