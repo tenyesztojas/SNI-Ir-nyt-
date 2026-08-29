@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import type { CvData } from "@/lib/vedettmunka/types";
 import { EMPTY_CV } from "@/lib/vedettmunka/types";
@@ -18,6 +18,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 export default function CvElozetesClient() {
   const [cv, setCv] = useState<CvData | null>(null);
+  const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
     try {
@@ -26,6 +27,34 @@ export default function CvElozetesClient() {
       else setCv(EMPTY_CV);
     } catch {
       setCv(EMPTY_CV);
+    }
+  }, []);
+
+  const handleDownload = useCallback(async () => {
+    setDownloading(true);
+    try {
+      // html2pdf.js betöltése CDN-ről (ha még nincs)
+      if (!(window as unknown as Record<string, unknown>)["html2pdf"]) {
+        await new Promise<void>((resolve, reject) => {
+          const s = document.createElement("script");
+          s.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
+          s.onload = () => resolve();
+          s.onerror = () => reject(new Error("Betöltési hiba"));
+          document.head.appendChild(s);
+        });
+      }
+      const element = document.getElementById("cv-print-root");
+      if (!element) return;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (window as any).html2pdf().set({
+        margin: 0,
+        filename: "oneletrajz.pdf",
+        image: { type: "jpeg", quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true, logging: false },
+        jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+      }).from(element).save();
+    } finally {
+      setDownloading(false);
     }
   }, []);
 
@@ -42,9 +71,9 @@ export default function CvElozetesClient() {
       {/* Nyomtatási CSS */}
       <style>{`
         @media print {
-          body > * { display: none !important; }
-          #cv-print-root { display: block !important; }
-          #cv-print-root { position: fixed; top: 0; left: 0; width: 100%; }
+          body * { visibility: hidden; }
+          #cv-print-root, #cv-print-root * { visibility: visible; }
+          #cv-print-root { position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 0; }
         }
         .cv-page {
           font-family: 'Nunito', 'Segoe UI', sans-serif;
@@ -76,14 +105,12 @@ export default function CvElozetesClient() {
           ← Szerkesztés
         </Link>
         <button
-          onClick={() => window.print()}
-          className="rounded-full bg-sni-brand-teal px-6 py-2 text-sm font-bold text-sni-brand-navy transition hover:bg-sni-brand-blue hover:text-white"
+          onClick={handleDownload}
+          disabled={downloading}
+          className="rounded-full bg-sni-brand-teal px-6 py-2 text-sm font-bold text-sni-brand-navy transition hover:bg-sni-brand-blue hover:text-white disabled:opacity-60"
         >
-          PDF letöltése / Nyomtatás
+          {downloading ? "Generálás..." : "PDF letöltése"}
         </button>
-        <p className="text-xs text-gray-400">
-          A böngésző nyomtatás párbeszédablakában válaszd a &ldquo;Mentés PDF-ként&rdquo; lehetőséget.
-        </p>
       </div>
 
       <div className="mx-auto max-w-3xl px-4 pb-10 sm:px-6 print:px-0 print:max-w-none print:pb-0">
@@ -193,7 +220,7 @@ export default function CvElozetesClient() {
         {/* Figyelmeztetés */}
         <div className="print:hidden mt-4 rounded-xl bg-amber-50 px-4 py-3 text-xs text-amber-800">
           <strong>Fontos:</strong> A dokumentumot mentsd el saját eszközödre (Mentés PDF-ként a nyomtató párbeszédablakban).
-          A VédettMunka nem tárolja tartósan az önéletrajzodat.
+          A Védett Munka nem tárolja tartósan az önéletrajzodat.
         </div>
       </div>
     </>

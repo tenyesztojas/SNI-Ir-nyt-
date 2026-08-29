@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 export const metadata = {
-  title: { template: "%s – VédettMunka", default: "VédettMunka" },
+  title: { template: "%s – Védett Munka", default: "Védett Munka" },
   description:
     "Neurodivergens, megváltozott munkaképességű és érintett gyermeket nevelő szülők számára is befogadó álláshirdetések.",
 };

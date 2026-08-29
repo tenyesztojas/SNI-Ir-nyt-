@@ -9,7 +9,7 @@ export default function OneletrajzPage() {
       <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-sni-brand-teal/10">
         <FileText className="text-sni-brand-teal" size={32} />
       </div>
-      <h1 className="text-2xl font-extrabold text-sni-brand-navy">VédettMunka önéletrajz-készítő</h1>
+      <h1 className="text-2xl font-extrabold text-sni-brand-navy">Védett Munka önéletrajz-készítő</h1>
       <p className="mt-3 text-gray-600 leading-relaxed">
         Segítünk lépésről lépésre elkészíteni az önéletrajzodat. Egyszerű kérdésekre válaszolsz,
         mi pedig összerakjuk a dokumentumot. A végén PDF-ként mentheted le.
@@ -32,8 +32,8 @@ export default function OneletrajzPage() {
       </div>
 
       <div className="mt-8 rounded-xl bg-amber-50 px-4 py-3 text-xs text-amber-800 text-left">
-        <strong>Fontos:</strong> A VédettMunka önéletrajz-készítője segít PDF-önéletrajzot készíteni.
-        A dokumentumot mentsd el saját eszközödre. A VédettMunka nem tárolja tartósan az önéletrajzodat.
+        <strong>Fontos:</strong> A Védett Munka önéletrajz-készítője segít PDF-önéletrajzot készíteni.
+        A dokumentumot mentsd el saját eszközödre. A Védett Munka nem tárolja tartósan az önéletrajzodat.
       </div>
 
       <Link
