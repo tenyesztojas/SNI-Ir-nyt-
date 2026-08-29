@@ -15,22 +15,21 @@ export type PilotModule = (typeof PILOT_MODULES)[number]["key"];
 export async function searchUserByEmail(email: string) {
   if (!(await isCurrentUserAdmin())) throw new Error("Unauthorized");
   const admin = createAdminClient();
-  // auth.users-ből keresünk e-mail alapján
-  const { data } = await admin.auth.admin.listUsers({ page: 1, perPage: 1000 });
-  const match = data.users.find((u) => u.email?.toLowerCase() === email.trim().toLowerCase());
-  if (!match) return null;
 
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("id, display_name, pilot_access")
-    .eq("id", match.id)
-    .single();
+  // admin_find_user_by_email Postgres RPC-t használunk (auth.users hozzáférés)
+  const { data, error } = await admin.rpc("admin_find_user_by_email", {
+    p_email: email.trim().toLowerCase(),
+  });
 
+  if (error) throw new Error(error.message);
+  if (!data || (Array.isArray(data) && data.length === 0)) return null;
+
+  const row = Array.isArray(data) ? data[0] : data;
   return {
-    id: match.id,
-    email: match.email ?? "",
-    displayName: profile?.display_name ?? "–",
-    pilotAccess: (profile?.pilot_access as string[]) ?? [],
+    id: row.id as string,
+    email: row.email as string,
+    displayName: (row.display_name as string) ?? "–",
+    pilotAccess: (row.pilot_access as string[]) ?? [],
   };
 }
 
