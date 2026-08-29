@@ -132,8 +132,16 @@ export default function CvElozetesClient() {
               {/* Bal sáv */}
               <div style={{ width: 180, minWidth: 180, background: "#123A5C", color: "white", borderRadius: 12, padding: "20px 16px", display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
                 {cv.foto_base64 && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={cv.foto_base64} alt="Fotó" style={{ width: 100, height: 120, objectFit: "cover", borderRadius: 8, border: "3px solid #34D8C3" }} />
+                  <div style={{
+                    width: 100,
+                    height: 120,
+                    borderRadius: 8,
+                    border: "3px solid #34D8C3",
+                    backgroundImage: `url(${cv.foto_base64})`,
+                    backgroundSize: "cover",
+                    backgroundPosition: "center",
+                    flexShrink: 0,
+                  }} />
                 )}
                 <div style={{ width: "100%", color: "#34D8C3", fontSize: 9, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", marginTop: 4 }}>Elérhetőség</div>
                 {cv.telefon && <div style={{ fontSize: 10, color: "#e2e8f0" }}>📞 {cv.telefon}</div>}
