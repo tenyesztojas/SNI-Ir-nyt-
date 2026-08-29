@@ -47,9 +47,9 @@ export default async function VedettMunkaPage() {
           {[
             { icon: CheckCircle2, title: "Nincs diagnózis-kötelezettség", text: "A hirdetők vállalják, hogy nem kérnek egészségügyi igazolást a jelentkezés első szakaszában." },
             { icon: Eye, title: "Egyszerű, érthető szöveg", text: 'Nem HR-zsargon, hanem közérthető kérdések: "Mit kell csinálnom?", "Mikor kell dolgoznom?"' },
-            { icon: Users, title: "Befogadó munkáltatók", text: "Minden hirdető vállalta, hogy nyitott neurodivergens és megváltozott munkaképességű jelölőkre." },
+            { icon: Users, title: "Befogadó munkáltatók", text: "Minden hirdető vállalta, hogy nyitott neurodivergens és megváltozott munkaképességű jelöltekre." },
             { icon: Heart, title: "Szülőknek is", text: "Külön szűrhetsz olyan állásokra, ahol a munkáltató nyitott érintett gyermeket nevelő szülőkre." },
-            { icon: Bell, title: "Állásértesítő", text: "Beállítod, mit keresel – e-mailben értesítünk, ha passol valami." },
+            { icon: Bell, title: "Állásértesítő", text: "Beállítod, mit keresel – e-mailben értesítünk, ha passzol valami." },
             { icon: FileText, title: "CV-készítő", text: "Lépésről lépésre, egyszerű kérdésekkel segítünk elkészíteni az önéletrajzod. Letöltheted PDF-ben." },
           ].map(({ icon: Icon, title, text }) => (
             <div key={title} className="rounded-2xl border border-gray-100 bg-white p-5">
@@ -100,7 +100,7 @@ export default async function VedettMunkaPage() {
             <h2 className="text-lg font-extrabold text-sni-brand-navy">Te is hirdetsz állást?</h2>
             <p className="mt-1 text-sm leading-relaxed text-gray-700">
               A Védett Munka olyan munkáltatókkal dolgozik együtt, akik nyitottak neurodivergens,
-              megváltozott munkaképességű és érintett szülő jelölőkre.
+              megváltozott munkaképességű és érintett szülő jelöltekre.
             </p>
             <div className="mt-4 flex flex-wrap gap-3">
               <Link

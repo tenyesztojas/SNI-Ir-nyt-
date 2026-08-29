@@ -24,7 +24,7 @@ export default function MunkaltatokPage() {
             {[
               "A jelentkezőket méltányosan, diszkriminációmentesen kezeli.",
               "Nem kér indokolatlanul egészségügyi dokumentumot, diagnózist vagy fogyatékossági igazolást a jelentkezési folyamat első szakaszában.",
-              "Nyitott neurodivergens, megváltozott munkaképességű vagy érintett gyermeket nevelő szülő jelölőkre.",
+              "Nyitott neurodivergens, megváltozott munkaképességű vagy érintett gyermeket nevelő szülő jelöltekre.",
             ].map((item) => (
               <li key={item} className="flex items-start gap-2">
                 <CheckCircle2 className="mt-0.5 shrink-0 text-sni-brand-teal" size={18} />
@@ -57,8 +57,8 @@ export default function MunkaltatokPage() {
         <div>
           <h2 className="font-bold text-sni-brand-navy">Regisztráció és jóváhagyás</h2>
           <p className="mt-2">
-            Minden munkáltató előbb regisztrál, majd admin jóváhagyás után adhat fel hirdetést.
-            A jóváhagyás folyamata általában 1–2 munkanap. Admin ellenőrzi, hogy a cég valódi és befogadó hozzáállású-e.
+            Minden munkáltató előbb regisztrál, majd az oldal adminisztrátorának jóváhagyása után adhat fel hirdetést.
+            A jóváhagyás folyamata általában 1–2 munkanap. Az üzemeltető ellenőrzi, hogy a cég valódi és befogadó hozzáállású-e.
           </p>
         </div>
       </div>
