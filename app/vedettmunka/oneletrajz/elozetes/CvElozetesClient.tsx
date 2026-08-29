@@ -82,7 +82,7 @@ export default function CvElozetesClient() {
           PDF letöltése / Nyomtatás
         </button>
         <p className="text-xs text-gray-400">
-          A böngésző nyomtatás párbeszédablakában válaszd a „Mentés PDF-ként" lehetőséget.
+          A böngésző nyomtatás párbeszédablakában válaszd a &ldquo;Mentés PDF-ként&rdquo; lehetőséget.
         </p>
       </div>
 
