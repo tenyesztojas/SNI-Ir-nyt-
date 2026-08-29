@@ -80,7 +80,7 @@ export default async function AdminOverviewPage() {
           <Tv2 size={16} /> Médiamegjelenések
         </Link>
         <Link href="/admin/vedettmunka" className="btn-secondary inline-flex items-center gap-2">
-          <Briefcase size={16} /> VédettMunka
+          <Briefcase size={16} /> Védett Munka
         </Link>
         <Link href="/admin/ertekelesek/osszes" className="btn-secondary inline-flex items-center gap-2">
           Összes értékelés

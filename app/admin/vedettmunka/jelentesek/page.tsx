@@ -2,7 +2,7 @@ import Link from "next/link";
 import { adminGetJobReports } from "@/lib/vedettmunka/data";
 import ReportActionButtons from "./ReportActionButtons";
 
-export const metadata = { title: "Admin – VédettMunka jelentések" };
+export const metadata = { title: "Admin – Védett Munka jelentések" };
 export const dynamic = "force-dynamic";
 
 const STATUS_COLOR: Record<string, string> = {
@@ -29,7 +29,7 @@ export default async function AdminJelentesekPage({
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
-      <Link href="/admin/vedettmunka" className="text-sm text-sni-brand-blue hover:underline">← VédettMunka admin</Link>
+      <Link href="/admin/vedettmunka" className="text-sm text-sni-brand-blue hover:underline">← Védett Munka admin</Link>
       <h1 className="mt-3 text-2xl font-bold text-sni-text">Hirdetés-jelentések ({reports.length})</h1>
 
       <div className="mt-4 flex flex-wrap gap-2">

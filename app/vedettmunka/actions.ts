@@ -44,9 +44,9 @@ export async function registerEmployer(formData: FormData) {
   const adminEmail = process.env.ADMIN_EMAIL;
   if (adminEmail) {
     await resend.emails.send({
-      from: "VédettMunka <noreply@vedettsarok.hu>",
+      from: "Védett Munka <noreply@vedettsarok.hu>",
       to: adminEmail,
-      subject: `[VédettMunka] Új munkáltatói regisztráció: ${obj.company_name}`,
+      subject: `[Védett Munka] Új munkáltatói regisztráció: ${obj.company_name}`,
       html: `<p>Új munkáltatói regisztráció érkezett: <strong>${obj.company_name}</strong></p>
              <p>Kapcsolattartó: ${obj.contact_name} &lt;${obj.contact_email}&gt;</p>
              <p><a href="${process.env.NEXT_PUBLIC_SITE_URL}/admin/vedettmunka/munkaltatok">Admin kezelés</a></p>`,
@@ -125,9 +125,9 @@ export async function submitJobPost(formData: FormData) {
   const adminEmail = process.env.ADMIN_EMAIL;
   if (adminEmail) {
     await resend.emails.send({
-      from: "VédettMunka <noreply@vedettsarok.hu>",
+      from: "Védett Munka <noreply@vedettsarok.hu>",
       to: adminEmail,
-      subject: `[VédettMunka] Új hirdetés jóváhagyásra vár: ${obj.title}`,
+      subject: `[Védett Munka] Új hirdetés jóváhagyásra vár: ${obj.title}`,
       html: `<p>Új hirdetés érkezett: <strong>${obj.title}</strong></p>
              <p><a href="${process.env.NEXT_PUBLIC_SITE_URL}/admin/vedettmunka/hirdetesek">Admin kezelés</a></p>`,
     }).catch(() => null);
@@ -286,13 +286,13 @@ async function sendJobAlertEmails(jobId: string) {
     if (workTypeMatch && ndMatch && disabledMatch && parentsMatch && ptMatch && cityMatch && countyMatch) {
       const companyName = (job.employers as { company_name: string } | null)?.company_name ?? "";
       await resend.emails.send({
-        from: "VédettMunka <noreply@vedettsarok.hu>",
+        from: "Védett Munka <noreply@vedettsarok.hu>",
         to: profile.email,
-        subject: `[VédettMunka] Új állás: ${job.title}`,
-        html: `<p>Új álláslehetőség jelent meg a VédettMunka felületen:</p>
+        subject: `[Védett Munka] Új állás: ${job.title}`,
+        html: `<p>Új álláslehetőség jelent meg a Védett Munka felületen:</p>
                <p><strong>${job.title}</strong> – ${companyName} – ${job.city}</p>
                <p><a href="${process.env.NEXT_PUBLIC_SITE_URL}/vedettmunka/allasok/${job.id}">Megnézem az állást</a></p>
-               <hr><p style="font-size:12px;">Értesítőd módosításához: <a href="${process.env.NEXT_PUBLIC_SITE_URL}/vedettmunka/ertesito">VédettMunka értesítők</a></p>`,
+               <hr><p style="font-size:12px;">Értesítőd módosításához: <a href="${process.env.NEXT_PUBLIC_SITE_URL}/vedettmunka/ertesito">Védett Munka értesítők</a></p>`,
       }).catch(() => null);
     }
   }

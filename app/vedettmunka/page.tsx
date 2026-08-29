@@ -3,7 +3,7 @@ import { Briefcase, FileText, Bell, Building2, CheckCircle2, Users, Heart, Eye }
 import { getPublishedJobs } from "@/lib/vedettmunka/data";
 
 export const metadata = {
-  title: "VédettMunka – Befogadó munkahelyek álláskeresőknek",
+  title: "Védett Munka – Befogadó munkahelyek álláskeresőknek",
 };
 
 export const dynamic = "force-dynamic";
@@ -19,7 +19,7 @@ export default async function VedettMunkaPage() {
         <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-sni-brand-teal/20">
           <Briefcase className="text-sni-brand-teal" size={32} />
         </div>
-        <h1 className="text-3xl font-extrabold sm:text-4xl">VédettMunka</h1>
+        <h1 className="text-3xl font-extrabold sm:text-4xl">Védett Munka</h1>
         <p className="mt-3 text-lg text-blue-100">
           Olyan munkahelyek, ahol számít, hogy kiszámítható legyen, érthetők legyenek a feladatok,
           és nem kell diagnózist igazolni a jelentkezéshez.
@@ -42,7 +42,7 @@ export default async function VedettMunkaPage() {
 
       {/* Miben más ez az álláskereső? */}
       <section className="mt-12">
-        <h2 className="text-xl font-extrabold text-sni-brand-navy">Miben más a VédettMunka?</h2>
+        <h2 className="text-xl font-extrabold text-sni-brand-navy">Miben más a Védett Munka?</h2>
         <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {[
             { icon: CheckCircle2, title: "Nincs diagnózis-kötelezettség", text: "A hirdetők vállalják, hogy nem kérnek egészségügyi igazolást a jelentkezés első szakaszában." },
@@ -99,7 +99,7 @@ export default async function VedettMunkaPage() {
           <div>
             <h2 className="text-lg font-extrabold text-sni-brand-navy">Te is hirdetsz állást?</h2>
             <p className="mt-1 text-sm leading-relaxed text-gray-700">
-              A VédettMunka olyan munkáltatókkal dolgozik együtt, akik nyitottak neurodivergens,
+              A Védett Munka olyan munkáltatókkal dolgozik együtt, akik nyitottak neurodivergens,
               megváltozott munkaképességű és érintett szülő jelölőkre.
             </p>
             <div className="mt-4 flex flex-wrap gap-3">

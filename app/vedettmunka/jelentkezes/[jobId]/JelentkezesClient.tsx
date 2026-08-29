@@ -158,7 +158,7 @@ export default function JelentkezesClient({
         <p>
           A jelentkezés elküldésével elfogadod, hogy a megadott adataidat és csatolt önéletrajzodat
           továbbítjuk az adott munkáltatónak (<strong>{applicationEmail}</strong>).
-          A VédettMunka nem tárolja tartósan az önéletrajzodat.
+          A Védett Munka nem tárolja tartósan az önéletrajzodat.
           A munkáltató a jelentkezési adatokat a saját kiválasztási folyamatában kezeli.
         </p>
         <label className="mt-3 flex items-start gap-2">

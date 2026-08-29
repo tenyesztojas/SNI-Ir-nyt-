@@ -37,7 +37,7 @@ const TOP_LINKS = [
 const PILOT_LINKS = [
   { key: "vedett-jelzes",   href: "/vedett-jelzes",            label: "Védett Jelzés"  },
   { key: "vedett-partner",  href: "/szolgaltato/regisztracio", label: "Védett Partner" },
-  { key: "vedettmunka",     href: "/vedettmunka",              label: "VédettMunka"    },
+  { key: "vedettmunka",     href: "/vedettmunka",              label: "Védett Munka"    },
 ];
 
 export default function HeaderClient({

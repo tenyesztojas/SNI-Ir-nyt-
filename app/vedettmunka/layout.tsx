@@ -9,9 +9,9 @@ export const metadata = {
 export default function VedettMunkaLayout({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* VédettMunka sávos fejléc */}
+      {/* Védett Munka sávos fejléc */}
       <div className="bg-sni-brand-navy py-2 text-center text-xs font-semibold tracking-wide text-sni-brand-teal">
-        VédettMunka — neurodivergens és megváltozott munkaképességű álláskeresők számára is befogadó állások
+        Védett Munka — neurodivergens és megváltozott munkaképességű álláskeresők számára is befogadó állások
       </div>
       {children}
     </div>

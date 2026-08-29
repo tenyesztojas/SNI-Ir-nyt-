@@ -49,7 +49,7 @@ export async function POST(request: Request) {
     }
 
     const htmlBody = `
-      <h2 style="color:#123A5C">Új jelentkezés – VédettMunka</h2>
+      <h2 style="color:#123A5C">Új jelentkezés – Védett Munka</h2>
       <p><strong>Pozíció:</strong> ${jobTitle}</p>
       <p><strong>Munkáltató:</strong> ${companyName}</p>
       <hr>
@@ -58,17 +58,17 @@ export async function POST(request: Request) {
       ${message ? `<p><strong>Üzenet:</strong></p><p style="white-space:pre-wrap">${message.replace(/</g, "&lt;")}</p>` : ""}
       <hr>
       <p style="font-size:12px;color:#888">
-        Ez a jelentkezés a VédettMunka felületen keresztül érkezett.<br>
+        Ez a jelentkezés a Védett Munka felületen keresztül érkezett.<br>
         A jelölt elfogadta, hogy adatait és önéletrajzát továbbítjuk Önnek.<br>
-        A VédettMunka nem tárolja tartósan a jelölt önéletrajzát.
+        A Védett Munka nem tárolja tartósan a jelölt önéletrajzát.
       </p>
     `;
 
     const { error: emailError } = await resend.emails.send({
-      from: "VédettMunka <noreply@vedettsarok.hu>",
+      from: "Védett Munka <noreply@vedettsarok.hu>",
       to: applicationEmail,
       replyTo: email,
-      subject: `[VédettMunka] Új jelentkezés: ${jobTitle} – ${name}`,
+      subject: `[Védett Munka] Új jelentkezés: ${jobTitle} – ${name}`,
       html: htmlBody,
       attachments: attachments.length > 0 ? attachments : undefined,
     });

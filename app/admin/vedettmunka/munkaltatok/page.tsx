@@ -3,7 +3,7 @@ import { adminGetEmployers } from "@/lib/vedettmunka/data";
 import { EMPLOYER_STATUS_LABELS } from "@/lib/vedettmunka/types";
 import EmployerActionButtons from "./EmployerActionButtons";
 
-export const metadata = { title: "Admin – VédettMunka munkáltatók" };
+export const metadata = { title: "Admin – Védett Munka munkáltatók" };
 export const dynamic = "force-dynamic";
 
 const STATUS_COLOR: Record<string, string> = {
@@ -23,7 +23,7 @@ export default async function AdminMunkaltatokPage({
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
-      <Link href="/admin/vedettmunka" className="text-sm text-sni-brand-blue hover:underline">← VédettMunka admin</Link>
+      <Link href="/admin/vedettmunka" className="text-sm text-sni-brand-blue hover:underline">← Védett Munka admin</Link>
       <h1 className="mt-3 text-2xl font-bold text-sni-text">Munkáltatók ({employers.length})</h1>
 
       {/* Szűrők */}

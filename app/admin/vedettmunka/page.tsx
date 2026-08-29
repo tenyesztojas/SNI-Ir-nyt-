@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Building2, Briefcase, Flag, ClipboardList } from "lucide-react";
 import { adminGetVmKpis } from "@/lib/vedettmunka/data";
 
-export const metadata = { title: "Admin – VédettMunka" };
+export const metadata = { title: "Admin – Védett Munka" };
 export const dynamic = "force-dynamic";
 
 export default async function AdminVedettMunkaPage() {
@@ -25,7 +25,7 @@ export default async function AdminVedettMunkaPage() {
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
       <Link href="/admin" className="text-sm text-sni-brand-blue hover:underline">← Admin áttekintés</Link>
-      <h1 className="mt-3 text-2xl font-bold text-sni-text">VédettMunka admin</h1>
+      <h1 className="mt-3 text-2xl font-bold text-sni-text">Védett Munka admin</h1>
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {stats.map((s) => (

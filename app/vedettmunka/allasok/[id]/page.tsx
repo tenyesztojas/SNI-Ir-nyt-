@@ -193,7 +193,7 @@ export default async function AllasAdatlapPage({ params }: { params: { id: strin
 
       {/* Adatkezelési figyelmeztetés */}
       <div className="mt-6 rounded-xl bg-amber-50 px-4 py-3 text-xs text-amber-800">
-        <strong>Fontos:</strong> Ez a munkáltató vállalta, hogy a VédettMunka felületen neurodivergens, megváltozott munkaképességű és érintett szülő jelölők is jelentkezhetnek, és a kiválasztási folyamat első szakaszában nem kér egészségügyi dokumentumot, diagnózist vagy fogyatékossági igazolást.
+        <strong>Fontos:</strong> Ez a munkáltató vállalta, hogy a Védett Munka felületen neurodivergens, megváltozott munkaképességű és érintett szülő jelölők is jelentkezhetnek, és a kiválasztási folyamat első szakaszában nem kér egészségügyi dokumentumot, diagnózist vagy fogyatékossági igazolást.
       </div>
 
       {/* Gombok */}

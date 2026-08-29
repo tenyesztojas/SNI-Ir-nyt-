@@ -3,7 +3,7 @@ import { adminGetJobPosts } from "@/lib/vedettmunka/data";
 import { JOB_STATUS_LABELS, WORK_TYPE_LABELS } from "@/lib/vedettmunka/types";
 import JobActionButtons from "./JobActionButtons";
 
-export const metadata = { title: "Admin – VédettMunka hirdetések" };
+export const metadata = { title: "Admin – Védett Munka hirdetések" };
 export const dynamic = "force-dynamic";
 
 const STATUS_COLOR: Record<string, string> = {
@@ -30,7 +30,7 @@ export default async function AdminHirdetesekPage({
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
-      <Link href="/admin/vedettmunka" className="text-sm text-sni-brand-blue hover:underline">← VédettMunka admin</Link>
+      <Link href="/admin/vedettmunka" className="text-sm text-sni-brand-blue hover:underline">← Védett Munka admin</Link>
       <h1 className="mt-3 text-2xl font-bold text-sni-text">Hirdetések ({posts.length})</h1>
 
       <div className="mt-4 flex flex-wrap gap-2">

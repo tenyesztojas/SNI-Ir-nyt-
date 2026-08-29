@@ -13,7 +13,7 @@ export default function MunkaltatokPage() {
 
       <div className="mt-6 space-y-6 text-base leading-relaxed text-gray-800">
         <p>
-          A <strong>VédettMunka</strong> olyan speciális álláshirdető felület, ahol neurodivergens,
+          A <strong>Védett Munka</strong> olyan speciális álláshirdető felület, ahol neurodivergens,
           megváltozott munkaképességű, fogyatékossággal élő, illetve érintett gyermeket nevelő
           álláskeresők is jelentkezhetnek.
         </p>
@@ -36,7 +36,7 @@ export default function MunkaltatokPage() {
 
         <div className="rounded-2xl border border-red-100 bg-red-50 p-5">
           <h2 className="font-bold text-red-700">Tiltott hirdetések</h2>
-          <p className="mt-2 text-sm text-red-600">A VédettMunka platformon nem jelenhet meg:</p>
+          <p className="mt-2 text-sm text-red-600">A Védett Munka platformon nem jelenhet meg:</p>
           <ul className="mt-2 space-y-1 text-sm text-red-600">
             {[
               "MLM, piramisjáték, gyors meggazdagodást ígérő ajánlat",
