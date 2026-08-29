@@ -19,6 +19,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 export default function CvElozetesClient() {
   const [cv, setCv] = useState<CvData | null>(null);
   const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
 
   useEffect(() => {
     try {
@@ -32,6 +33,7 @@ export default function CvElozetesClient() {
 
   const handleDownload = useCallback(async () => {
     setDownloading(true);
+    setDownloadError(null);
     try {
       // html2pdf.js betöltése CDN-ről (ha még nincs)
       if (!(window as unknown as Record<string, unknown>)["html2pdf"]) {
@@ -39,13 +41,12 @@ export default function CvElozetesClient() {
           const s = document.createElement("script");
           s.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
           s.onload = () => resolve();
-          s.onerror = () => reject(new Error("Betöltési hiba"));
+          s.onerror = () => reject(new Error("A PDF-generáló könyvtár betöltése sikertelen. Kérjük, ellenőrizd az internetkapcsolatot."));
           document.head.appendChild(s);
         });
       }
       const element = document.getElementById("cv-print-root");
       if (!element) return;
-      // eslint-disable-next-line
       await (window as unknown as {html2pdf: () => {set: (o: unknown) => {from: (el: HTMLElement | null) => {save: () => Promise<void>}}}}).html2pdf().set({
         margin: 0,
         filename: "oneletrajz.pdf",
@@ -53,6 +54,8 @@ export default function CvElozetesClient() {
         html2canvas: { scale: 2, useCORS: true, logging: false },
         jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
       }).from(element).save();
+    } catch (err) {
+      setDownloadError(err instanceof Error ? err.message : "Ismeretlen hiba történt a PDF letöltésekor.");
     } finally {
       setDownloading(false);
     }
@@ -112,6 +115,11 @@ export default function CvElozetesClient() {
           {downloading ? "Generálás..." : "PDF letöltése"}
         </button>
       </div>
+      {downloadError && (
+        <div className="print:hidden mx-auto max-w-3xl px-4 sm:px-6">
+          <p className="mt-2 rounded-lg bg-red-50 px-4 py-2 text-sm text-red-700">{downloadError}</p>
+        </div>
+      )}
 
       <div className="mx-auto max-w-3xl px-4 pb-10 sm:px-6 print:px-0 print:max-w-none print:pb-0">
         <div className="rounded-2xl border border-gray-100 bg-white shadow-sm print:rounded-none print:shadow-none print:border-none">
