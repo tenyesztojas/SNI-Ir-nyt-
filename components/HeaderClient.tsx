@@ -27,18 +27,17 @@ const TUDASBAZIS = [
   { href: "/tudasbazis/iranytu-szolgaltatoknak", label: "Iránytű szolgáltatóknak" },
 ];
 
-// ── Egyszerű top-level linkek (sorrend: spec alapján) ──────────────────────
+// ── Egyszerű top-level linkek ───────────────────────────────────────────────
 const TOP_LINKS = [
-  { href: "/kozosseg",       label: "Közösség",      newTab: false },
-  { href: "/programajanlok", label: "Programajánló", newTab: true  },
+  { href: "/kozosseg", label: "Közösség", newTab: false },
 ];
 
-// Pilot/pre-launch linkek — csak adminnak láthatók, közvetlen link megosztáshoz
-// Sorrend: Védett Jelzés → Védett Partner → VédettMunka
-const ADMIN_PILOT_LINKS = [
-  { href: "/vedett-jelzes",            label: "Védett Jelzés",  newTab: false },
-  { href: "/szolgaltato/regisztracio", label: "Védett Partner", newTab: false },
-  { href: "/vedettmunka",              label: "VédettMunka",    newTab: false },
+// Pilot/pre-launch linkek — adminnak mindig látható, teszternek ha hozzáférése van
+// key értékek: 'vedett-jelzes' | 'vedett-partner' | 'vedettmunka'
+const PILOT_LINKS = [
+  { key: "vedett-jelzes",   href: "/vedett-jelzes",            label: "Védett Jelzés"  },
+  { key: "vedett-partner",  href: "/szolgaltato/regisztracio", label: "Védett Partner" },
+  { key: "vedettmunka",     href: "/vedettmunka",              label: "VédettMunka"    },
 ];
 
 export default function HeaderClient({
@@ -46,11 +45,13 @@ export default function HeaderClient({
   displayName,
   isAdmin,
   communityUnread = 0,
+  pilotAccess = [],
 }: {
   isLoggedIn: boolean;
   displayName?: string | null;
   isAdmin: boolean;
   communityUnread?: number;
+  pilotAccess?: string[];
 }) {
   const [mobileOpen,    setMobileOpen]    = useState(false);
   const [vhDesktopOpen, setVhDesktopOpen] = useState(false);
@@ -130,8 +131,8 @@ export default function HeaderClient({
             )}
           </div>
 
-          {/* 2. Pilot linkek — csak adminnak (Védett Jelzés, Védett Partner) */}
-          {isAdmin && ADMIN_PILOT_LINKS.map((link) => (
+          {/* 2. Pilot linkek — adminnak mindig, teszternek ha van hozzáférése */}
+          {PILOT_LINKS.filter((l) => isAdmin || pilotAccess.includes(l.key)).map((link) => (
             <Link
               key={link.href}
               href={link.href}
@@ -314,8 +315,8 @@ export default function HeaderClient({
               </Link>
             ))}
 
-            {/* Pilot linkek — csak adminnak (Védett Jelzés, Védett Partner) */}
-            {isAdmin && ADMIN_PILOT_LINKS.map((link) => (
+            {/* Pilot linkek — adminnak mindig, teszternek ha van hozzáférése */}
+            {PILOT_LINKS.filter((l) => isAdmin || pilotAccess.includes(l.key)).map((link) => (
               <Link
                 key={link.href}
                 href={link.href}

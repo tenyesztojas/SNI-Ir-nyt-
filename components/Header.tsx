@@ -14,6 +14,7 @@ export default async function Header() {
       displayName={profile?.displayName}
       isAdmin={profile?.role === "admin"}
       communityUnread={unreadCount}
+      pilotAccess={profile?.pilotAccess ?? []}
     />
   );
 }

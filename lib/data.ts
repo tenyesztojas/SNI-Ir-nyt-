@@ -358,7 +358,7 @@ export async function getCurrentUserAndProfile(): Promise<{
 
   const { data: profileRow } = await supabase
     .from("profiles")
-    .select("id, display_name, role, first_name, show_first_name, newsletter_subscribed")
+    .select("id, display_name, role, first_name, show_first_name, newsletter_subscribed, pilot_access")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -370,6 +370,7 @@ export async function getCurrentUserAndProfile(): Promise<{
         firstName: profileRow.first_name ?? undefined,
         showFirstName: profileRow.show_first_name ?? false,
         newsletterSubscribed: profileRow.newsletter_subscribed ?? true,
+        pilotAccess: (profileRow.pilot_access as string[]) ?? [],
       }
     : null;
 

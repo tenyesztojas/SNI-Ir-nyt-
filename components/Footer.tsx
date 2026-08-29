@@ -28,9 +28,7 @@ export default function Footer() {
                 <Link href="/kedvencek" className="text-gray-500 hover:text-sni-brand-blue hover:underline">
                   Kedvenceim
                 </Link>
-                <Link href="/programajanlok" className="text-gray-500 hover:text-sni-brand-blue hover:underline">
-                  Programajánló
-                </Link>
+
               </div>
             </div>
             <div>

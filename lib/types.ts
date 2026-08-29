@@ -65,6 +65,7 @@ export interface Profile {
   firstName?: string;
   showFirstName: boolean;
   newsletterSubscribed: boolean;
+  pilotAccess: string[];
 }
 
 export interface Report {
