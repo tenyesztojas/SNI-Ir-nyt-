@@ -4,14 +4,6 @@ import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isCurrentUserAdmin } from "@/lib/data";
 
-export const PILOT_MODULES = [
-  { key: "vedett-jelzes",  label: "Védett Jelzés"  },
-  { key: "vedett-partner", label: "Védett Partner" },
-  { key: "vedettmunka",    label: "VédettMunka"    },
-] as const;
-
-export type PilotModule = (typeof PILOT_MODULES)[number]["key"];
-
 export async function searchUserByEmail(email: string) {
   if (!(await isCurrentUserAdmin())) throw new Error("Unauthorized");
   const admin = createAdminClient();

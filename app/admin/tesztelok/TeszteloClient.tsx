@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { searchUserByEmail, setPilotAccess, PILOT_MODULES } from "./actions";
+import { searchUserByEmail, setPilotAccess } from "./actions";
+import { PILOT_MODULES } from "./config";
 
 type UserResult = {
   id: string;
