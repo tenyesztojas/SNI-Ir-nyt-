@@ -16,8 +16,37 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
+// Képet canvas-szal kivágja a megadott arányban (cover), high-DPI minőségben
+function cropImageToDataUrl(src: string, w: number, h: number, scale = 3): Promise<string> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = w * scale;
+      canvas.height = h * scale;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) { resolve(src); return; }
+      const imgRatio = img.width / img.height;
+      const targetRatio = w / h;
+      let sx = 0, sy = 0, sw = img.width, sh = img.height;
+      if (imgRatio > targetRatio) {
+        sw = img.height * targetRatio;
+        sx = (img.width - sw) / 2;
+      } else {
+        sh = img.width / targetRatio;
+        sy = (img.height - sh) / 2;
+      }
+      ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL("image/jpeg", 0.98));
+    };
+    img.onerror = () => resolve(src);
+    img.src = src;
+  });
+}
+
 export default function CvElozetesClient() {
   const [cv, setCv] = useState<CvData | null>(null);
+  const [croppedFoto, setCroppedFoto] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
 
@@ -30,6 +59,11 @@ export default function CvElozetesClient() {
       setCv(EMPTY_CV);
     }
   }, []);
+
+  useEffect(() => {
+    if (!cv?.foto_base64) { setCroppedFoto(null); return; }
+    cropImageToDataUrl(cv.foto_base64, 100, 120, 3).then(setCroppedFoto);
+  }, [cv?.foto_base64]);
 
   const handleDownload = useCallback(async () => {
     setDownloading(true);
@@ -131,17 +165,9 @@ export default function CvElozetesClient() {
             <div style={{ display: "flex", gap: 24, marginBottom: 24 }}>
               {/* Bal sáv */}
               <div style={{ width: 180, minWidth: 180, background: "#123A5C", color: "white", borderRadius: 12, padding: "20px 16px", display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
-                {cv.foto_base64 && (
-                  <div style={{
-                    width: 100,
-                    height: 120,
-                    borderRadius: 8,
-                    border: "3px solid #34D8C3",
-                    backgroundImage: `url(${cv.foto_base64})`,
-                    backgroundSize: "cover",
-                    backgroundPosition: "center",
-                    flexShrink: 0,
-                  }} />
+                {croppedFoto && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={croppedFoto} alt="Fotó" style={{ width: 100, height: 120, borderRadius: 8, border: "3px solid #34D8C3", display: "block", flexShrink: 0 }} />
                 )}
                 <div style={{ width: "100%", color: "#34D8C3", fontSize: 9, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", marginTop: 4 }}>Elérhetőség</div>
                 {cv.telefon && <div style={{ fontSize: 10, color: "#e2e8f0" }}>📞 {cv.telefon}</div>}
