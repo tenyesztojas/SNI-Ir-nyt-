@@ -15,7 +15,7 @@ const cspDirectives = [
   // API hívások: saját + Supabase + Google OAuth + Google Analytics
   `connect-src 'self' https://${supabaseHost} https://*.supabase.co wss://*.supabase.co https://oauth2.googleapis.com https://www.googleapis.com https://www.google-analytics.com https://region1.google-analytics.com https://www.googletagmanager.com https://unpkg.com`,
   // Frame: csak reCAPTCHA
-  `frame-src https://www.google.com`,
+  `frame-src https://www.google.com https://www.youtube.com https://www.youtube-nocookie.com`,
   // Font: saját (fontsource npm csomagból, nem CDN)
   `font-src 'self'`,
   // Alap: minden más tiltva
