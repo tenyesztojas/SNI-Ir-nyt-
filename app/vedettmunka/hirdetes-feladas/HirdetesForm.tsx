@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { submitJobPost } from "@/app/vedettmunka/actions";
-import { SZELLEMI_KATEGORIAK, FIZIKAI_KATEGORIAK, HUNGARIAN_COUNTIES } from "@/lib/vedettmunka/categories";
+import { SZELLEMI_KATEGORIAK, FIZIKAI_KATEGORIAK, ALL_KATEGORIAK, HUNGARIAN_COUNTIES } from "@/lib/vedettmunka/categories";
 
 function Field({ label, name, type = "text", required = false, placeholder = "", hint = "", as: As = "input", rows = 3 }: {
   label: string; name: string; type?: string; required?: boolean; placeholder?: string; hint?: string;
@@ -67,12 +67,12 @@ export default function HirdetesForm() {
     return (
       <div className="py-8 text-center">
         <p className="text-lg font-bold text-sni-brand-teal">✓ Hirdetésedet beküldtük!</p>
-        <p className="mt-2 text-sm text-gray-600">Admin jóváhagyás után jelenik meg. Általában 1–2 munkanap.</p>
+        <p className="mt-2 text-sm text-gray-600">Az oldal üzemeltetője jóváhagyja. Általában 1–2 munkanap.</p>
       </div>
     );
   }
 
-  const kategoriak = workType === "szellemi" ? SZELLEMI_KATEGORIAK : workType === "fizikai" ? FIZIKAI_KATEGORIAK : [...SZELLEMI_KATEGORIAK, ...FIZIKAI_KATEGORIAK];
+  const kategoriak = workType === "szellemi" ? SZELLEMI_KATEGORIAK : workType === "fizikai" ? FIZIKAI_KATEGORIAK : ALL_KATEGORIAK;
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-5">
@@ -103,7 +103,11 @@ export default function HirdetesForm() {
         <span className="text-sm font-semibold text-gray-700">Kategória <span className="text-red-500">*</span></span>
         <select name="job_category" required className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-sni-brand-teal">
           <option value="">— Válassz kategóriát —</option>
-          {kategoriak.map((k) => <option key={k} value={k}>{k}</option>)}
+          {kategoriak.map((k) => (
+            <option key={k.value} value={k.value}>
+              {k.description ? `${k.label} – ${k.description}` : k.label}
+            </option>
+          ))}
         </select>
       </label>
 
@@ -164,8 +168,8 @@ export default function HirdetesForm() {
       <Field name="training_description" label="Hogyan tanítják meg a munkát?" as="textarea" rows={3}
         placeholder="Kik fognak betanítani? Mennyi ideig tart a betanítás?" />
 
-      <RadioGroup name="mentor_available" label="Lesz valaki, aki segít a munkában? (mentor)" options={[
-        { value: "van", label: "Van kijelölt mentor" },
+      <RadioGroup name="mentor_available" label="Lesz valaki, aki segít a munkában? (Támogató személy a cégnél)" options={[
+        { value: "van", label: "Van kijelölt támogató személy" },
         { value: "nincs", label: "Nincs kijelölt személy" },
         { value: "meg_egyeztetes_alatt", label: "Egyeztetés alatt" },
       ]} />
@@ -243,17 +247,17 @@ export default function HirdetesForm() {
       <RadioGroup name="open_to_parents" label="Nyitott érintett gyermeket nevelő szülőkre?" options={[
         { value: "true", label: "Igen" }, { value: "false", label: "Nem" },
       ]} />
-      <RadioGroup name="open_to_neurodivergent" label="Nyitott neurodivergens jelölőkre?" options={[
+      <RadioGroup name="open_to_neurodivergent" label="Nyitott neurodivergens jelentkezőkre?" options={[
         { value: "true", label: "Igen" }, { value: "false", label: "Nem" },
       ]} />
-      <RadioGroup name="open_to_disabled" label="Nyitott megváltozott munkaképességű jelölőkre?" options={[
+      <RadioGroup name="open_to_disabled" label="Nyitott megváltozott munkaképességű személyekre?" options={[
         { value: "true", label: "Igen" }, { value: "false", label: "Nem" },
       ]} />
 
       {error && <p className="rounded-xl bg-red-50 px-4 py-2 text-sm text-red-600">{error}</p>}
 
       <div className="rounded-xl bg-blue-50 px-4 py-3 text-xs text-blue-700">
-        A hirdetés beküldés után admin ellenőrzésen esik át. Csak ezt követően jelenik meg az álláshirdetések között.
+        A hirdetést beküldés után az oldal üzemeltetője ellenőrzi. Csak ezt követően jelenik meg az álláshirdetések között.
       </div>
 
       <button

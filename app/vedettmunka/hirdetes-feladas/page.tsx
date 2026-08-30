@@ -33,7 +33,7 @@ export default async function HirdetesFeladasPage() {
         Munkáltató: <strong>{employer.company_name}</strong>
       </p>
       <p className="mt-1 text-xs text-gray-400">
-        Minden hirdetést admin ellenőriz publikálás előtt.
+        Minden hirdetést az oldal üzemeltetője ellenőriz publikálás előtt.
       </p>
       <div className="mt-6 rounded-2xl border border-gray-100 bg-white p-6">
         <HirdetesForm />

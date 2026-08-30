@@ -128,9 +128,9 @@ export default function ErtesitoClient({ initialAlert }: { initialAlert: JobAler
         <span className="text-sm font-semibold text-gray-700">Kategóriák (opcionális)</span>
         <div className="flex flex-wrap gap-2">
           {[...SZELLEMI_KATEGORIAK, ...FIZIKAI_KATEGORIAK].map((c) => (
-            <button key={c} type="button" onClick={() => toggleCat(c)}
-              className={`rounded-full px-3 py-1 text-xs font-semibold transition ${selCats.includes(c) ? "bg-sni-brand-teal text-sni-brand-navy" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>
-              {c}
+            <button key={c.value} type="button" onClick={() => toggleCat(c.value)}
+              className={`rounded-full px-3 py-1 text-xs font-semibold transition ${selCats.includes(c.value) ? "bg-sni-brand-teal text-sni-brand-navy" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>
+              {c.label}
             </button>
           ))}
         </div>
