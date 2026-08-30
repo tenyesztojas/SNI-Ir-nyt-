@@ -9,6 +9,8 @@ import type {
   CommunityThread,
   CommunityMessage,
   Notification,
+  CommunityHelpSettings,
+  CommunityUserReport,
 } from "./types";
 
 // Biztonságos oszloplista — user_private_lat/lng szándékosan kihagyva
@@ -276,6 +278,80 @@ export async function getUnreadNotificationCount(): Promise<number> {
   }
 
   return pendingCount + unreadMessages;
+}
+
+// ── Közösségi segítség beállítások ───────────────────────────
+export async function getOwnHelpSettings(): Promise<CommunityHelpSettings | null> {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data } = await supabase
+    .from("community_help_settings")
+    .select("*")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  return data as CommunityHelpSettings | null;
+}
+
+export async function getHelpSettingsByUserId(userId: string): Promise<CommunityHelpSettings | null> {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data } = await supabase
+    .from("community_help_settings")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("enabled", true)
+    .maybeSingle();
+  return data as CommunityHelpSettings | null;
+}
+
+export async function getPublicHelpSettingsList(filters?: {
+  help_needed?: boolean;
+  help_offered?: boolean;
+  category?: string;
+}): Promise<CommunityHelpSettings[]> {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  let query = supabase
+    .from("community_help_settings")
+    .select("*")
+    .eq("enabled", true)
+    .in("visibility", ["city_or_district", "county"]);
+
+  if (filters?.help_needed) query = query.eq("help_needed_enabled", true);
+  if (filters?.help_offered) query = query.eq("help_offered_enabled", true);
+  if (filters?.category) {
+    query = query.or(
+      `help_needed_categories.cs.{"${filters.category}"},help_offered_categories.cs.{"${filters.category}"}`
+    );
+  }
+
+  const { data } = await query.order("updated_at", { ascending: false }).limit(100);
+  return (data ?? []) as CommunityHelpSettings[];
+}
+
+// ── Admin: közösségi segítség beállítások ───────────────────
+export async function adminGetAllHelpSettings() {
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("community_help_settings")
+    .select("*")
+    .order("updated_at", { ascending: false });
+  return (data ?? []) as CommunityHelpSettings[];
+}
+
+export async function adminGetUserReports() {
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("community_user_reports")
+    .select("*")
+    .order("created_at", { ascending: false });
+  return (data ?? []) as CommunityUserReport[];
 }
 
 // ── Admin: közösségi profilok listája ─────────────────────────

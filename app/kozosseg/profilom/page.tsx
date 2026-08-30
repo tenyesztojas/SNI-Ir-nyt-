@@ -1,14 +1,13 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getCurrentUserAndProfile } from "@/lib/data";
-import { getOwnCommunityProfile } from "@/lib/community/data";
+import { getOwnCommunityProfile, getOwnHelpSettings } from "@/lib/community/data";
 import {
   ROLE_LABELS,
   CONNECTION_GOAL_OPTIONS,
-  NEURODIVERGENCE_OPTIONS,
-  CHILD_AGE_OPTIONS,
 } from "@/lib/community/types";
 import ProfileEditForm from "./ProfileEditForm";
+import CommunityHelpSection from "./CommunityHelpSection";
 
 export const metadata = { title: "Közösségi profilom – VédettSarok" };
 export const dynamic = "force-dynamic";
@@ -21,7 +20,10 @@ export default async function ProfilomPage({
   const { user } = await getCurrentUserAndProfile();
   if (!user) redirect("/belepes");
 
-  const profile = await getOwnCommunityProfile();
+  const [profile, helpSettings] = await Promise.all([
+    getOwnCommunityProfile(),
+    getOwnHelpSettings(),
+  ]);
   if (!profile) redirect("/kozosseg/bekapcsolas");
 
   const statusLabels: Record<string, string> = {
@@ -97,6 +99,9 @@ export default async function ProfilomPage({
         <h2 className="text-lg font-bold text-sni-text mb-5">Profil szerkesztése</h2>
         <ProfileEditForm profile={profile} />
       </div>
+
+      {/* Közösségi segítség */}
+      <CommunityHelpSection initialSettings={helpSettings} />
     </div>
   );
 }

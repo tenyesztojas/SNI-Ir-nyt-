@@ -167,6 +167,98 @@ export const CHILD_AGE_OPTIONS = [
   { value: "nem_adom_meg", label: "Nem szeretném megadni" },
 ];
 
+// ── Közösségi segítség ────────────────────────────────────────
+export type HelpVisibility = "connections_only" | "city_or_district" | "county";
+
+export interface CommunityHelpSettings {
+  id: string;
+  user_id: string;
+  enabled: boolean;
+  accepted_responsibility_notice_at: string | null;
+  help_needed_enabled: boolean;
+  help_needed_categories: string[];
+  help_needed_description: string | null;
+  help_offered_enabled: boolean;
+  help_offered_categories: string[];
+  help_offered_description: string | null;
+  visibility: HelpVisibility;
+  created_at: string;
+  updated_at: string;
+}
+
+export type UserReportStatus =
+  | "pending"
+  | "under_review"
+  | "resolved_no_action"
+  | "resolved_warning_sent"
+  | "resolved_help_disabled"
+  | "resolved_profile_suspended"
+  | "rejected";
+
+export interface CommunityUserReport {
+  id: string;
+  reporter_user_id: string;
+  reported_user_id: string;
+  related_help_setting_id: string | null;
+  related_thread_id: string | null;
+  reason: string;
+  description: string;
+  status: UserReportStatus;
+  admin_note: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export const HELP_VISIBILITY_LABELS: Record<HelpVisibility, string> = {
+  connections_only: "Csak kapcsolataimnak",
+  city_or_district: "Közösségi tagoknak (város / kerület szinten)",
+  county: "Közösségi tagoknak (megye szinten)",
+};
+
+export const HELP_NEEDED_CATEGORIES = [
+  { value: "ugyintezesben_segitseg", label: "Ügyintézésben segítség" },
+  { value: "hivatalos_ugyek_megertese", label: "Hivatalos ügyek megértése / előkészítése" },
+  { value: "urlapok_dokumentumok", label: "Űrlapok, dokumentumok értelmezése" },
+  { value: "idopontra_elkiseres", label: "Időpontra elkísérés" },
+  { value: "orvosi_idopontra_elkiseres", label: "Orvosi vagy fejlesztői időpontra elkísérés, szülői jelenléttel" },
+  { value: "kozos_programra_elkiseres", label: "Közös programra elkísérés" },
+  { value: "uj_hely_kiprobalasa", label: "Új hely kipróbálása együtt" },
+  { value: "tapasztalatmegosztas", label: "Tapasztalatmegosztás" },
+  { value: "sorstars_beszelgetes", label: "Sorstársi beszélgetés" },
+  { value: "bevasarlasban_segitseg", label: "Bevásárlásban vagy hétköznapi szervezésben segítség" },
+  { value: "gyermek_melletti_jelenlét", label: "Gyermek melletti rövid jelenlét kizárólag szülővel egyeztetve", warning: "child" },
+  { value: "szallitasban_segitseg", label: "Szállításban segítség kizárólag felnőtt hozzájárulással és külön egyeztetéssel", warning: "transport" },
+  { value: "egyeb", label: "Egyéb" },
+] as const;
+
+export const HELP_OFFERED_CATEGORIES = [
+  { value: "sorstars_beszelgetes", label: "Sorstársi beszélgetés" },
+  { value: "tapasztalatmegosztas", label: "Tapasztalatmegosztás" },
+  { value: "ugyintezesben_eligazitas", label: "Ügyintézésben eligazítás" },
+  { value: "urlapok_dokumentumok", label: "Űrlapok, dokumentumok értelmezése" },
+  { value: "programra_elkiseres", label: "Programra elkísérés" },
+  { value: "uj_hely_kiprobalasa", label: "Új hely kipróbálása együtt" },
+  { value: "bevasarlasban_segitseg", label: "Bevásárlásban vagy hétköznapi szervezésben segítség" },
+  { value: "idopontra_elkiseres", label: "Időpontra elkísérés" },
+  { value: "gyermek_melletti_jelenlét", label: "Rövid jelenlét gyermek mellett, kizárólag szülővel egyeztetve", warning: "child" },
+  { value: "szallitasban_segitseg", label: "Szállításban segítség, kizárólag külön egyeztetéssel", warning: "transport" },
+  { value: "egyeb", label: "Egyéb" },
+] as const;
+
+export const USER_REPORT_REASONS = [
+  { value: "zaklatas_banto", label: "Zaklatás vagy bántó viselkedés" },
+  { value: "gyanús_veszelyes_felajanlas", label: "Gyanús vagy veszélyes segítségfelajánlás" },
+  { value: "gyermek_adat_megosztasa", label: "Gyermek személyes adatának megosztása" },
+  { value: "erzekeny_adat_megosztasa", label: "Érzékeny adat nyilvános megosztása" },
+  { value: "penzkeresugyzletszeru", label: "Pénzkérés vagy üzletszerű szolgáltatás hirdetése" },
+  { value: "megteveeszto_info", label: "Megtévesztő információ" },
+  { value: "nem_megfelelo_uzenet", label: "Nem megfelelő üzenet vagy kapcsolatfelvétel" },
+  { value: "visszaeles_funkcióval", label: "Visszaélés a közösségi segítség funkcióval" },
+  { value: "egyeb", label: "Egyéb" },
+] as const;
+
 // Városok közelítő koordinátái a térképes megjelenítéshez
 export const CITY_COORDINATES: Record<string, { lat: number; lng: number }> = {
   "Budapest": { lat: 47.4979, lng: 19.0402 },

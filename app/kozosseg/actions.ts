@@ -480,6 +480,141 @@ export async function submitReport(params: {
   return { ok: true };
 }
 
+// ── Közösségi segítség beállítások mentése ───────────────────
+export async function upsertHelpSettings(params: {
+  enabled: boolean;
+  accepted_responsibility_notice_at?: string | null;
+  help_needed_enabled?: boolean;
+  help_needed_categories?: string[];
+  help_needed_description?: string | null;
+  help_offered_enabled?: boolean;
+  help_offered_categories?: string[];
+  help_offered_description?: string | null;
+  visibility?: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Nem vagy bejelentkezve." };
+
+  // Leírások hossz-ellenőrzése
+  if ((params.help_needed_description?.length ?? 0) > 500)
+    return { ok: false, error: "A leírás legfeljebb 500 karakter lehet." };
+  if ((params.help_offered_description?.length ?? 0) > 500)
+    return { ok: false, error: "A leírás legfeljebb 500 karakter lehet." };
+
+  const payload = {
+    user_id: user.id,
+    enabled: params.enabled,
+    accepted_responsibility_notice_at: params.accepted_responsibility_notice_at ?? null,
+    help_needed_enabled: params.help_needed_enabled ?? false,
+    help_needed_categories: params.help_needed_categories ?? [],
+    help_needed_description: params.help_needed_description ?? null,
+    help_offered_enabled: params.help_offered_enabled ?? false,
+    help_offered_categories: params.help_offered_categories ?? [],
+    help_offered_description: params.help_offered_description ?? null,
+    visibility: params.visibility ?? "connections_only",
+    updated_at: new Date().toISOString(),
+  };
+
+  const { error } = await supabase
+    .from("community_help_settings")
+    .upsert(payload, { onConflict: "user_id" });
+
+  if (error) return { ok: false, error: error.message };
+  revalidatePath("/kozosseg/profilom");
+  revalidatePath("/kozosseg/segitek");
+  return { ok: true };
+}
+
+// ── Admin: közösségi segítség kikapcsolása ───────────────────
+export async function adminDisableHelpSettings(
+  userId: string
+): Promise<{ ok: boolean }> {
+  const admin = createAdminClient();
+  await admin
+    .from("community_help_settings")
+    .update({ enabled: false, updated_at: new Date().toISOString() })
+    .eq("user_id", userId);
+  revalidatePath("/admin/kozosseg");
+  return { ok: true };
+}
+
+// ── Felhasználó jelentése ─────────────────────────────────────
+export async function submitUserReport(params: {
+  reportedUserId: string;
+  relatedHelpSettingId?: string | null;
+  relatedThreadId?: string | null;
+  reason: string;
+  description: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Nem vagy bejelentkezve." };
+
+  if (user.id === params.reportedUserId)
+    return { ok: false, error: "Saját magadat nem jelentheted." };
+
+  if (!params.description || params.description.trim().length < 20)
+    return { ok: false, error: "Kérjük, adj meg legalább 20 karakteres indoklást." };
+
+  if (params.description.trim().length > 1000)
+    return { ok: false, error: "A jelentés szövege legfeljebb 1000 karakter lehet." };
+
+  // Rate limit: max 3 jelentés ugyanarra a felhasználóra 24 óra alatt (admin kliensen)
+  const admin = createAdminClient();
+  const { count } = await admin
+    .from("community_user_reports")
+    .select("id", { count: "exact", head: true })
+    .eq("reporter_user_id", user.id)
+    .eq("reported_user_id", params.reportedUserId)
+    .gt("created_at", new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
+
+  if ((count ?? 0) >= 3)
+    return { ok: false, error: "Ugyanerről a felhasználóról 24 órán belül legfeljebb 3 jelentést küldhetsz." };
+
+  const { error } = await supabase
+    .from("community_user_reports")
+    .insert({
+      reporter_user_id: user.id,
+      reported_user_id: params.reportedUserId,
+      related_help_setting_id: params.relatedHelpSettingId ?? null,
+      related_thread_id: params.relatedThreadId ?? null,
+      reason: params.reason,
+      description: params.description.trim(),
+    });
+
+  if (error) return { ok: false, error: error.message };
+
+  // Admin push értesítés
+  await sendAdminPush(
+    "⚠️ Új felhasználói jelentés",
+    "Beérkezett egy közösségi felhasználó-jelentés. Ellenőrzés szükséges.",
+    "/admin/kozosseg/jelentesek"
+  );
+
+  return { ok: true };
+}
+
+// ── Admin: felhasználói jelentés státusz módosítása ──────────
+export async function adminUpdateUserReport(
+  reportId: string,
+  status: string,
+  adminNote?: string
+): Promise<{ ok: boolean }> {
+  const admin = createAdminClient();
+  await admin
+    .from("community_user_reports")
+    .update({
+      status,
+      admin_note: adminNote ?? null,
+      reviewed_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", reportId);
+  revalidatePath("/admin/kozosseg/jelentesek");
+  return { ok: true };
+}
+
 // ── Admin: profil státusz módosítása ─────────────────────────
 export async function adminSetProfileStatus(
   profileId: string,

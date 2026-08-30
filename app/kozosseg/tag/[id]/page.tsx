@@ -4,14 +4,18 @@ import {
   getCommunityProfileById,
   getOwnCommunityProfile,
   getConnectionBetween,
+  getHelpSettingsByUserId,
 } from "@/lib/community/data";
 import {
   ROLE_LABELS,
   CONNECTION_GOAL_OPTIONS,
   NEURODIVERGENCE_OPTIONS,
   CHILD_AGE_OPTIONS,
+  HELP_NEEDED_CATEGORIES,
+  HELP_OFFERED_CATEGORIES,
 } from "@/lib/community/types";
 import ConnectionActions from "./ConnectionActions";
+import ReportUserButton from "./ReportUserButton";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +32,8 @@ export default async function TagProfilPage({
     getOwnCommunityProfile(),
     getConnectionBetween(user.id, params.id).catch(() => null),
   ]);
+  // Help settings csak bejelentkezett tagoknak — utólag hozzuk le, hogy ne lassítsa a lapot
+  const helpSettings = profile ? await getHelpSettingsByUserId(profile.user_id).catch(() => null) : null;
 
   if (!profile) notFound();
   if (profile.user_id === user.id) redirect("/kozosseg/profilom");
@@ -129,11 +135,64 @@ export default async function TagProfilPage({
         </div>
       )}
 
-      {/* Adatvédelmi szöveg */}
-      <p className="mt-8 text-xs text-gray-400 text-center">
-        Csak az a felhasználó engedélyezte ezen adatainak megtekintését.
-        Pontos lakcím nem látható.
-      </p>
+      {/* Közösségi segítség */}
+      {helpSettings?.enabled && (
+        <div className="mt-8 rounded-2xl border border-sni-brand-teal/20 bg-white p-5 shadow-soft">
+          <p className="text-xs text-gray-400 mb-3">
+            A VédettSarok csak a kapcsolatfelvételi felületet biztosítja. A konkrét segítségnyújtás a felek saját felelőssége.
+          </p>
+          <h2 className="text-sm font-bold text-sni-text mb-3">Közösségi segítség</h2>
+          <div className="flex flex-wrap gap-2 mb-3">
+            {helpSettings.help_needed_enabled && (
+              <span className="rounded-full bg-blue-50 px-3 py-1 text-xs text-blue-700 font-medium">Segítséget kér</span>
+            )}
+            {helpSettings.help_offered_enabled && (
+              <span className="rounded-full bg-green-50 px-3 py-1 text-xs text-green-700 font-medium">Segítséget ajánl</span>
+            )}
+            {[...helpSettings.help_needed_categories, ...helpSettings.help_offered_categories]
+              .filter((v, i, a) => a.indexOf(v) === i)
+              .slice(0, 6)
+              .map((cat) => {
+                const label =
+                  HELP_NEEDED_CATEGORIES.find((c) => c.value === cat)?.label ??
+                  HELP_OFFERED_CATEGORIES.find((c) => c.value === cat)?.label ??
+                  cat;
+                return (
+                  <span key={cat} className="rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-600 font-medium">
+                    {label}
+                  </span>
+                );
+              })}
+          </div>
+          {helpSettings.help_needed_description && (
+            <div className="mb-2">
+              <p className="text-xs font-semibold text-gray-500 mb-1">Miben kér segítséget:</p>
+              <p className="text-sm text-gray-700">{helpSettings.help_needed_description}</p>
+            </div>
+          )}
+          {helpSettings.help_offered_description && (
+            <div className="mb-2">
+              <p className="text-xs font-semibold text-gray-500 mb-1">Miben tud segíteni:</p>
+              <p className="text-sm text-gray-700">{helpSettings.help_offered_description}</p>
+            </div>
+          )}
+          <p className="mt-3 text-xs text-gray-400">
+            Kérjük, a részletek egyeztetésére privát üzenetet használj. Ne ossz meg nyilvánosan gyermeknevet, pontos lakcímet, diagnózist vagy egészségügyi adatot.
+          </p>
+        </div>
+      )}
+
+      {/* Adatvédelmi szöveg + Jelentés */}
+      <div className="mt-8 flex items-center justify-between">
+        <p className="text-xs text-gray-400">
+          Csak az a felhasználó engedélyezte ezen adatainak megtekintését.
+          Pontos lakcím nem látható.
+        </p>
+        <ReportUserButton
+          reportedUserId={profile.user_id}
+          relatedHelpSettingId={helpSettings?.id ?? null}
+        />
+      </div>
     </div>
   );
 }
