@@ -120,12 +120,11 @@ export default function CvElozetesClient() {
     cv.egyeb_jogositvany,
   ].filter(Boolean).join(", ");
 
-  // Születési dátum formázás (YYYY-MM-DD → 1990. 03. 15.)
+  // Születési év formázás (4 számjegy, esetleg régi YYYY-MM-DD → csak az év)
   function formatDatum(d: string) {
     if (!d) return "";
-    const parts = d.split("-");
-    if (parts.length === 3) return `${parts[0]}. ${parts[1]}. ${parts[2]}.`;
-    return d;
+    const year = d.slice(0, 4);
+    return year ? `${year}.` : d;
   }
 
   return (
@@ -221,7 +220,7 @@ export default function CvElozetesClient() {
                 {cv.szuletesi_datum && <div style={{ fontSize: 10, color: "#e2e8f0" }}>🎂 {formatDatum(cv.szuletesi_datum)}</div>}
                 {cv.weboldal && (
                   <>
-                    <div style={{ width: "100%", color: "#34D8C3", fontSize: 9, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", marginTop: 8 }}>Weboldal / Podcast</div>
+                    <div style={{ width: "100%", color: "#34D8C3", fontSize: 9, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", marginTop: 8 }}>Weboldal / Szakmai oldal</div>
                     <div style={{ fontSize: 9, color: "#e2e8f0", wordBreak: "break-all" }}>{cv.weboldal}</div>
                   </>
                 )}
@@ -295,9 +294,9 @@ export default function CvElozetesClient() {
                   </Section>
                 )}
 
-                {/* Nyelvismeret */}
+                {/* Idegennyelv-ismeret */}
                 {cv.nyelvek.some((l) => l.nyelv) && (
-                  <Section title="Nyelvismeret">
+                  <Section title="Idegennyelv-ismeret">
                     {cv.nyelvek.filter((l) => l.nyelv).map((l, i) => (
                       <div key={i} className="cv-row">
                         <span className="cv-label">{l.nyelv}</span>

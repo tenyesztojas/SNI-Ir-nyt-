@@ -15,7 +15,7 @@ const STEPS = [
   "Szakma",
   "Munkahelyek",
   "Számítógépes ismeretek",
-  "Nyelvismeret",
+  "Idegennyelv-ismeret",
   "Munkába állás",
   "Egyéb információ",
   "Kész!",
@@ -105,7 +105,12 @@ function migrateLegacyCv(raw: Record<string, unknown>): CvData {
   return {
     ...EMPTY_CV,
     ...(raw as Partial<CvData>),
-    szuletesi_datum: str(raw.szuletesi_datum) || (raw.szuletesi_ev ? `${raw.szuletesi_ev}-01-01` : ""),
+    szuletesi_datum: (() => {
+      const d = str(raw.szuletesi_datum) || str(raw.szuletesi_ev);
+      if (!d) return "";
+      // Ha YYYY-MM-DD formátum → csak az év
+      return d.length > 4 ? d.slice(0, 4) : d;
+    })(),
     lakhely_megye: str(raw.lakhely_megye),
     weboldal: str(raw.weboldal),
     vegzettsegek,
@@ -120,6 +125,7 @@ export default function CvSzerkesztoClient() {
   const [dragOver, setDragOver] = useState(false);
   const [draftDeleted, setDraftDeleted] = useState(false);
   const [lakhelyEgyeb, setLakhelyEgyeb] = useState(false);
+  const [emailError, setEmailError] = useState(false);
   const router = useRouter();
   const photoRef = useRef<HTMLInputElement>(null);
 
@@ -309,13 +315,16 @@ export default function CvSzerkesztoClient() {
 
             <Input label="Teljes neve" value={cv.nev} onChange={(v) => save({ ...cv, nev: v })} placeholder="pl. Kovács Anna" />
 
-            {/* Születési dátum – teljes dátum */}
+            {/* Születési év – csak 4 számjegy */}
             <label className="flex flex-col gap-1">
-              <span className="text-sm font-semibold text-gray-700">Születési dátum</span>
+              <span className="text-sm font-semibold text-gray-700">Születési év</span>
               <input
-                type="date"
+                type="text"
                 value={cv.szuletesi_datum}
-                onChange={(e) => save({ ...cv, szuletesi_datum: e.target.value })}
+                onChange={(e) => save({ ...cv, szuletesi_datum: filterEv(e.target.value) })}
+                placeholder="pl. 1985"
+                maxLength={4}
+                inputMode="numeric"
                 className="rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-sni-brand-teal"
               />
             </label>
@@ -390,17 +399,38 @@ export default function CvSzerkesztoClient() {
               />
             </label>
 
-            <Input label="E-mail" value={cv.email} onChange={(v) => save({ ...cv, email: v })} type="email" placeholder="email@pelda.hu" />
-
-            {/* Weboldal / podcast (opcionális) */}
+            {/* E-mail – valós formátum validáció */}
             <label className="flex flex-col gap-1">
-              <span className="text-sm font-semibold text-gray-700">Weboldal / podcast (opcionális)</span>
-              <span className="text-xs text-gray-400">Ha van saját weboldalad, portfóliód vagy podcastod, itt feltüntetheted.</span>
+              <span className="text-sm font-semibold text-gray-700">E-mail</span>
+              <input
+                type="email"
+                value={cv.email}
+                onChange={(e) => {
+                  save({ ...cv, email: e.target.value });
+                  setEmailError(e.target.value.length > 0 && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.target.value));
+                }}
+                onBlur={(e) => setEmailError(e.target.value.length > 0 && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.target.value))}
+                placeholder="email@pelda.hu"
+                className={`rounded-xl border px-3 py-2 text-sm outline-none ${emailError ? "border-red-400 focus:border-red-400" : "border-gray-200 focus:border-sni-brand-teal"}`}
+              />
+              {emailError && <span className="text-xs text-red-500">Kérjük, valós e-mail-formátumban add meg. (pl. nev@pelda.hu)</span>}
+            </label>
+
+            {/* Saját weboldal / szakmai oldal (opcionális) */}
+            <label className="flex flex-col gap-1">
+              <span className="text-sm font-semibold text-gray-700">Saját weboldalam, szakmai oldalam (opcionális)</span>
+              <span className="text-xs text-gray-400">Ha van saját weboldalad, LinkedIn-profilod, portfóliód — itt feltüntetheted. Pl.: https://nevem.hu</span>
               <input
                 type="url"
                 value={cv.weboldal}
                 onChange={(e) => save({ ...cv, weboldal: e.target.value })}
-                placeholder="pl. https://pelda.hu"
+                onBlur={(e) => {
+                  const v = e.target.value.trim();
+                  if (v && !v.startsWith("http://") && !v.startsWith("https://")) {
+                    save({ ...cv, weboldal: `https://${v}` });
+                  }
+                }}
+                placeholder="https://nevem.hu"
                 className="rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-sni-brand-teal"
               />
             </label>
@@ -635,10 +665,10 @@ export default function CvSzerkesztoClient() {
           </div>
         )}
 
-        {/* 6. Nyelvismeret */}
+        {/* 6. Idegennyelv-ismeret */}
         {step === 6 && (
           <div className="flex flex-col gap-4">
-            <h2 className="font-extrabold text-sni-brand-navy text-lg">Nyelvismeret</h2>
+            <h2 className="font-extrabold text-sni-brand-navy text-lg">Idegennyelv-ismeret</h2>
             {cv.nyelvek.map((l, i) => (
               <div key={i} className="grid gap-3 sm:grid-cols-2 rounded-xl border border-gray-100 p-3">
                 <Input label="Nyelv" value={l.nyelv} onChange={(v) => {
@@ -695,12 +725,12 @@ export default function CvSzerkesztoClient() {
         {step === 8 && (
           <div className="flex flex-col gap-4">
             <h2 className="font-extrabold text-sni-brand-navy text-lg">Egyéb információ</h2>
-            <p className="text-sm text-gray-500">Van valami más, amit fontosnak tartasz megemlíteni az önéletrajzodban?</p>
+            <p className="text-sm text-gray-500">Miben vagy jó? Vagy mit szeretsz csinálni, elfoglalni magad?</p>
             <textarea
               value={cv.egyeb_info}
               onChange={(e) => save({ ...cv, egyeb_info: e.target.value })}
               rows={5}
-              placeholder="pl. Hobbijaim, önkéntes tevékenység, díjak, projektek..."
+              placeholder="pl. Szeretem a precíz munkát, jól dolgozom csapatban. Szabadidőmben kertészkedem..."
               className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-sni-brand-teal"
             />
           </div>
