@@ -53,8 +53,30 @@ export default function CvElozetesClient() {
   useEffect(() => {
     try {
       const saved = localStorage.getItem(CV_KEY);
-      if (saved) setCv(JSON.parse(saved));
-      else setCv(EMPTY_CV);
+      if (saved) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const raw: any = JSON.parse(saved);
+        // Migráció: régi szuletesi_ev → szuletesi_datum
+        if (raw.szuletesi_ev && !raw.szuletesi_datum) {
+          raw.szuletesi_datum = `${raw.szuletesi_ev}-01-01`;
+        }
+        // Migráció: régi iskolai_vegzettseg → vegzettsegek
+        if (!raw.vegzettsegek) {
+          raw.vegzettsegek = (raw.iskolai_vegzettseg || raw.iskola_helye || raw.iskola_eve)
+            ? [{ szint: raw.iskolai_vegzettseg ?? "", hely: raw.iskola_helye ?? "", ev: raw.iskola_eve ?? "" }]
+            : [{ szint: "", hely: "", ev: "" }];
+        }
+        // Migráció: régi szakma → szakmak
+        if (!raw.szakmak) {
+          raw.szakmak = (raw.szakma || raw.szakma_helye || raw.szakma_eve)
+            ? [{ nev: raw.szakma ?? "", hely: raw.szakma_helye ?? "", ev: raw.szakma_eve ?? "" }]
+            : [{ nev: "", hely: "", ev: "" }];
+        }
+        if (!raw.weboldal) raw.weboldal = "";
+        setCv({ ...EMPTY_CV, ...raw });
+      } else {
+        setCv(EMPTY_CV);
+      }
     } catch {
       setCv(EMPTY_CV);
     }
@@ -97,6 +119,14 @@ export default function CvElozetesClient() {
     cv.targonca_jogositvany && "Targoncavezető-jogosítvány",
     cv.egyeb_jogositvany,
   ].filter(Boolean).join(", ");
+
+  // Születési dátum formázás (YYYY-MM-DD → 1990. 03. 15.)
+  function formatDatum(d: string) {
+    if (!d) return "";
+    const parts = d.split("-");
+    if (parts.length === 3) return `${parts[0]}. ${parts[1]}. ${parts[2]}.`;
+    return d;
+  }
 
   return (
     <>
@@ -183,7 +213,13 @@ export default function CvElozetesClient() {
                 {cv.telefon && <div style={{ fontSize: 10, color: "#e2e8f0" }}>📞 {cv.telefon}</div>}
                 {cv.email && <div style={{ fontSize: 10, color: "#e2e8f0", wordBreak: "break-all" }}>✉ {cv.email}</div>}
                 {cv.lakhely && <div style={{ fontSize: 10, color: "#e2e8f0" }}>📍 {cv.lakhely}</div>}
-                {cv.szuletesi_ev && <div style={{ fontSize: 10, color: "#e2e8f0" }}>🎂 {cv.szuletesi_ev}</div>}
+                {cv.szuletesi_datum && <div style={{ fontSize: 10, color: "#e2e8f0" }}>🎂 {formatDatum(cv.szuletesi_datum)}</div>}
+                {cv.weboldal && (
+                  <>
+                    <div style={{ width: "100%", color: "#34D8C3", fontSize: 9, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", marginTop: 8 }}>Weboldal / Podcast</div>
+                    <div style={{ fontSize: 9, color: "#e2e8f0", wordBreak: "break-all" }}>{cv.weboldal}</div>
+                  </>
+                )}
 
                 {jogositvanyok && (
                   <>
@@ -212,19 +248,27 @@ export default function CvElozetesClient() {
                 <h1 style={{ fontSize: 22, fontWeight: 800, color: "#123A5C", marginBottom: 2 }}>{cv.nev || "Önéletrajz"}</h1>
                 <div style={{ height: 3, width: 60, background: "#34D8C3", borderRadius: 2, marginBottom: 16 }} />
 
-                {/* Végzettség */}
-                {(cv.iskolai_vegzettseg || cv.iskola_helye) && (
+                {/* Végzettségek */}
+                {cv.vegzettsegek?.some((v) => v.szint || v.hely) && (
                   <Section title="Iskolai végzettség">
-                    <p className="cv-job-title">{cv.iskolai_vegzettseg}</p>
-                    <p className="cv-job-meta">{[cv.iskola_helye, cv.iskola_eve].filter(Boolean).join(" · ")}</p>
+                    {cv.vegzettsegek.filter((v) => v.szint || v.hely).map((v, i) => (
+                      <div key={i} className="cv-job">
+                        <p className="cv-job-title">{v.szint}</p>
+                        <p className="cv-job-meta">{[v.hely, v.ev].filter(Boolean).join(" · ")}</p>
+                      </div>
+                    ))}
                   </Section>
                 )}
 
-                {/* Szakma */}
-                {cv.szakma && (
+                {/* Szakmák */}
+                {cv.szakmak?.some((s) => s.nev) && (
                   <Section title="Szakma">
-                    <p className="cv-job-title">{cv.szakma}</p>
-                    <p className="cv-job-meta">{[cv.szakma_helye, cv.szakma_eve].filter(Boolean).join(" · ")}</p>
+                    {cv.szakmak.filter((s) => s.nev).map((s, i) => (
+                      <div key={i} className="cv-job">
+                        <p className="cv-job-title">{s.nev}</p>
+                        <p className="cv-job-meta">{[s.hely, s.ev].filter(Boolean).join(" · ")}</p>
+                      </div>
+                    ))}
                   </Section>
                 )}
 

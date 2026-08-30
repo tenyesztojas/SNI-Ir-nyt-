@@ -144,10 +144,11 @@ export interface JobApplicationLog {
 export interface CvData {
   // 1. Alapadatok
   nev: string;
-  szuletesi_ev: string;
+  szuletesi_datum: string;   // YYYY-MM-DD (full date)
   lakhely: string;
   telefon: string;
   email: string;
+  weboldal: string;          // weboldal / podcast URL (opcionális)
   foto_base64: string | null; // data URL
 
   // 2. Jogosítványok
@@ -155,15 +156,11 @@ export interface CvData {
   targonca_jogositvany: boolean;
   egyeb_jogositvany: string;
 
-  // 3. Iskolai végzettség
-  iskolai_vegzettseg: string;
-  iskola_helye: string;
-  iskola_eve: string;
+  // 3. Iskolai végzettségek (több is felvihető)
+  vegzettsegek: Array<{ szint: string; hely: string; ev: string }>;
 
-  // 4. Szakma
-  szakma: string;
-  szakma_helye: string;
-  szakma_eve: string;
+  // 4. Szakmák (több is felvihető)
+  szakmak: Array<{ nev: string; hely: string; ev: string }>;
 
   // 5. Munkahelyek
   munkahelyek: Array<{
@@ -189,20 +186,17 @@ export interface CvData {
 
 export const EMPTY_CV: CvData = {
   nev: "",
-  szuletesi_ev: "",
+  szuletesi_datum: "",
   lakhely: "",
   telefon: "",
   email: "",
+  weboldal: "",
   foto_base64: null,
   b_jogositvany: false,
   targonca_jogositvany: false,
   egyeb_jogositvany: "",
-  iskolai_vegzettseg: "",
-  iskola_helye: "",
-  iskola_eve: "",
-  szakma: "",
-  szakma_helye: "",
-  szakma_eve: "",
+  vegzettsegek: [{ szint: "", hely: "", ev: "" }],
+  szakmak: [{ nev: "", hely: "", ev: "" }],
   munkahelyek: [{ hol: "", mit: "", mettol: "", meddig: "" }],
   nem_dolgozott: false,
   szamitogep: [],
