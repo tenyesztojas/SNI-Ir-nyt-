@@ -17,6 +17,8 @@
     "@types/web-push": "^3.6.4",
     "adm-zip": "^0.5.16",
     "gtfs-realtime-bindings": "^2.2.0",
+    "html2canvas": "^1.4.1",
+    "html2pdf.js": "^0.14.0",
     "leaflet": "^1.9.4",
     "lucide-react": "0.408.0",
     "nanoid": "^6.0.1",

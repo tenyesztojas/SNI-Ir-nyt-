@@ -178,8 +178,9 @@ export default function JelentkezesClient({
         )}
 
         <p className="mb-3">
-          A Védett Munka technikai közvetítőként továbbítja a megadott adataidat és csatolt önéletrajzodat
-          kizárólag a megjelölt munkáltató részére. A VédettMunka nem tárolja tartósan az önéletrajzodat.
+          A VédettMunka technikai platformként továbbítja a megadott adataidat és csatolt önéletrajzodat
+          kizárólag a megjelölt munkáltató részére. A VédettMunka nem tárolja tartósan az önéletrajzodat,
+          nem munkaerő-közvetítő szolgáltatás, és nem garantál elhelyezkedést vagy munkáltatói válaszadást.
           A munkáltató a fogadástól kezdve önálló adatkezelőként jár el.
         </p>
 

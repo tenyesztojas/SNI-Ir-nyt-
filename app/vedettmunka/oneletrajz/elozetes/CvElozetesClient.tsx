@@ -69,19 +69,13 @@ export default function CvElozetesClient() {
     setDownloading(true);
     setDownloadError(null);
     try {
-      // html2pdf.js betöltése CDN-ről (ha még nincs)
-      if (!(window as unknown as Record<string, unknown>)["html2pdf"]) {
-        await new Promise<void>((resolve, reject) => {
-          const s = document.createElement("script");
-          s.src = "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js";
-          s.onload = () => resolve();
-          s.onerror = () => reject(new Error("A PDF-generáló könyvtár betöltése sikertelen. Kérjük, ellenőrizd az internetkapcsolatot."));
-          document.head.appendChild(s);
-        });
-      }
       const element = document.getElementById("cv-print-root");
       if (!element) return;
-      await (window as unknown as {html2pdf: () => {set: (o: unknown) => {from: (el: HTMLElement | null) => {save: () => Promise<void>}}}}).html2pdf().set({
+
+      // Kliensoldali dynamic import – nem fut SSR közben
+      const html2pdf = (await import("html2pdf.js")).default;
+
+      await html2pdf(element).set({
         margin: 0,
         filename: "oneletrajz.pdf",
         image: { type: "jpeg", quality: 0.98 },

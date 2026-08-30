@@ -107,7 +107,7 @@ export async function POST(request: Request) {
       <p style="font-size:12px;color:#888">
         Ez a jelentkezés a Védett Munka felületen keresztül érkezett.<br>
         A jelölt az adattovábbítási hozzájárulást megadta.<br>
-        A Védett Munka technikai közvetítőként továbbítja az adatokat – a CVt nem tárolja tartósan.
+        A Védett Munka technikai platformként továbbítja az adatokat – a CV-t nem tárolja tartósan. A VédettMunka nem munkaerő-közvetítő szolgáltatás.
       </p>
     `;
 

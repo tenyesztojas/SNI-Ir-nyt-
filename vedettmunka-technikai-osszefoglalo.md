@@ -8,7 +8,9 @@
 
 ## 1. A modul célja és MVP-hatóköre
 
-A VédettMunka állásközvetítő modul célja, hogy megváltozott munkaképességű, neurodivergens, illetve egyéb hátrányos helyzetű álláskeresők számára befogadó munkáltatókhoz kapcsolódó hirdetéseket tegyen közzé, és lehetővé tegye az egyszerűsített, CV-alapú jelentkezést.
+A VédettMunka a VédettSarok webapplikáción belüli specializált álláshirdetési, álláskeresési, önéletrajzkészítő és jelentkezéstovábbító felület. Célja, hogy megváltozott munkaképességű, neurodivergens, illetve egyéb hátrányos helyzetű álláskeresők számára befogadó munkáltatók álláshirdetéseit tegye közzé, és lehetővé tegye az egyszerűsített, CV-alapú jelentkezések technikai továbbítását.
+
+A VédettMunka nem munkaerő-közvetítő szolgáltatás, nem garantál elhelyezkedést, interjúra hívást, munkáltatói válaszadást vagy munkaviszony létrejöttét. A VédettMunka álláshirdetések megjelenítését, önéletrajz készítését és konkrét jelentkezések technikai továbbítását támogatja.
 
 **Az MVP kizárólag az alábbi funkciókat tartalmazza:**
 
