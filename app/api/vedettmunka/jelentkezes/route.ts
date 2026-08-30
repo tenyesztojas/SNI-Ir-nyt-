@@ -4,6 +4,24 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 
+const MAX_CV_SIZE = 5 * 1024 * 1024; // 5 MB
+
+const ALLOWED_CV_MIME = new Set([
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+]);
+
+const ALLOWED_CV_EXT = new Set([".pdf", ".doc", ".docx"]);
+
+/** Veszélyes karakterek eltávolítása fájlnévből */
+function sanitizeFilename(name: string): string {
+  return name
+    .replace(/[^\w.\-_() ]/g, "_")
+    .replace(/\.\./g, "_")
+    .slice(0, 200);
+}
+
 export async function POST(request: Request) {
   try {
     const formData = await request.formData();
@@ -20,11 +38,47 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Hiányzó kötelező mezők." }, { status: 400 });
     }
 
-    // Lekérjük az állás adatait (application_email)
+    // ── Szerveres CV-fájl ellenőrzés ──────────────────────────────
+    let cvFilename: string | null = null;
+    const attachments: { filename: string; content: Buffer }[] = [];
+
+    if (cvFile && cvFile.size > 0) {
+      // Méret limit
+      if (cvFile.size > MAX_CV_SIZE) {
+        return NextResponse.json(
+          { error: "Az önéletrajz fájl mérete legfeljebb 5 MB lehet." },
+          { status: 400 }
+        );
+      }
+
+      // MIME-típus ellenőrzés
+      if (!ALLOWED_CV_MIME.has(cvFile.type)) {
+        return NextResponse.json(
+          { error: "Csak PDF, DOC vagy DOCX formátumú önéletrajzot csatolhatsz." },
+          { status: 400 }
+        );
+      }
+
+      // Kiterjesztés ellenőrzés
+      const ext = "." + cvFile.name.split(".").pop()?.toLowerCase();
+      if (!ALLOWED_CV_EXT.has(ext)) {
+        return NextResponse.json(
+          { error: "Csak PDF, DOC vagy DOCX formátumú önéletrajzot csatolhatsz." },
+          { status: 400 }
+        );
+      }
+
+      const safeFilename = sanitizeFilename(cvFile.name);
+      const buffer = Buffer.from(await cvFile.arrayBuffer());
+      cvFilename = safeFilename;
+      attachments.push({ filename: safeFilename, content: buffer });
+    }
+
+    // ── Hirdetés adatainak lekérése ──────────────────────────────
     const admin = createAdminClient();
     const { data: job } = await admin
       .from("job_posts")
-      .select("title, application_email, employers(company_name)")
+      .select("title, application_email, employer_id, employers(company_name, privacy_policy_url)")
       .eq("id", jobId)
       .single();
 
@@ -34,19 +88,12 @@ export async function POST(request: Request) {
 
     const applicationEmail = job.application_email;
     const jobTitle = job.title;
-    const companyName = (job.employers as { company_name: string }[] | null)?.[0]?.company_name ?? "";
+    const empData = (job.employers as { company_name: string; privacy_policy_url: string | null }[] | null)?.[0];
+    const companyName = empData?.company_name ?? "";
+    const employerPrivacyUrl = empData?.privacy_policy_url ?? null;
 
-    // E-mail összeállítása
+    // ── E-mail összeállítása és küldése ───────────────────────────
     const resend = getResend();
-
-    const attachments: { filename: string; content: Buffer }[] = [];
-    let cvFilename: string | null = null;
-
-    if (cvFile && cvFile.size > 0) {
-      const buffer = Buffer.from(await cvFile.arrayBuffer());
-      cvFilename = cvFile.name;
-      attachments.push({ filename: cvFile.name, content: buffer });
-    }
 
     const htmlBody = `
       <h2 style="color:#123A5C">Új jelentkezés – Védett Munka</h2>
@@ -59,8 +106,8 @@ export async function POST(request: Request) {
       <hr>
       <p style="font-size:12px;color:#888">
         Ez a jelentkezés a Védett Munka felületen keresztül érkezett.<br>
-        A jelölt elfogadta, hogy adatait és önéletrajzát továbbítjuk Önnek.<br>
-        A Védett Munka nem tárolja tartósan a jelölt önéletrajzát.
+        A jelölt az adattovábbítási hozzájárulást megadta.<br>
+        A Védett Munka technikai közvetítőként továbbítja az adatokat – a CVt nem tárolja tartósan.
       </p>
     `;
 
@@ -73,7 +120,9 @@ export async function POST(request: Request) {
       attachments: attachments.length > 0 ? attachments : undefined,
     });
 
-    // Napló bejegyzés (CV tartalom nélkül)
+    // ── Napló bejegyzés (CV tartalom nélkül) ─────────────────────
+    const deliveryStatus = emailError ? "failed" : "sent";
+
     await admin.from("job_applications_log").insert({
       job_id: jobId || null,
       employer_id: employerId || null,
@@ -81,18 +130,47 @@ export async function POST(request: Request) {
       applicant_name: name,
       applicant_email: email,
       cv_filename: cvFilename,
-      delivery_status: emailError ? "failed" : "sent",
+      delivery_status: deliveryStatus,
       sent_at: new Date().toISOString(),
     });
 
+    // ── Consent napló ─────────────────────────────────────────────
+    // Ha a naplózás sikertelen, a jelentkezés sem mehet ki
+    const { error: consentError } = await admin.from("vm_consent_log").insert({
+      user_id: userId || null,
+      job_id: jobId || null,
+      employer_id: employerId || null,
+      consent_type: "job_application_data_forwarding",
+      employer_privacy_url: employerPrivacyUrl,
+      metadata: {
+        job_title: jobTitle,
+        company_name: companyName,
+        has_cv: cvFilename !== null,
+        delivery_status: deliveryStatus,
+      },
+    });
+
+    if (consentError) {
+      // Hiba esetén visszajelzés, de a küldési log már mentve van
+      console.error("Consent log hiba (vm_consent_log):", consentError.message);
+      if (emailError) {
+        return NextResponse.json({ error: "Az e-mail küldése sikertelen, a hozzájárulás nem naplózható." }, { status: 500 });
+      }
+      // E-mail elment, de consent log sikertelen – közepes kockázat
+      return NextResponse.json(
+        { error: "Jelentkezés elküldve, de a hozzájárulási napló írása sikertelen. Kérjük, jelezd az oldal üzemeltetőjének." },
+        { status: 500 }
+      );
+    }
+
     if (emailError) {
-      console.error("Resend hiba:", emailError);
       return NextResponse.json({ error: "Az e-mail küldése sikertelen." }, { status: 500 });
     }
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error("Jelentkezés API hiba:", err);
+    // FONTOS: ne logolj CV tartalmat, FormData-t vagy üzenettartalmat
+    console.error("Jelentkezés API hiba:", (err as Error).message);
     return NextResponse.json({ error: "Szerverhiba." }, { status: 500 });
   }
 }

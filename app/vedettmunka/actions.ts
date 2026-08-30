@@ -15,12 +15,26 @@ export async function registerEmployer(formData: FormData) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Nincs bejelentkezve.");
 
+  const rawPrivacyUrl = (formData.get("privacy_policy_url") as string)?.trim() || "";
+  if (!rawPrivacyUrl) {
+    throw new Error("A munkáltatói adatkezelési tájékoztató linkje kötelező.");
+  }
+  try {
+    const parsed = new URL(rawPrivacyUrl);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      throw new Error("only http/https");
+    }
+  } catch {
+    throw new Error("Érvénytelen URL formátum. Csak http:// vagy https:// protokollal kezdődő link fogadható el.");
+  }
+
   const obj = {
     user_id: user.id,
     company_name: (formData.get("company_name") as string).trim(),
     tax_number: (formData.get("tax_number") as string)?.trim() || null,
     address: (formData.get("address") as string).trim(),
     website: (formData.get("website") as string)?.trim() || null,
+    privacy_policy_url: rawPrivacyUrl,
     contact_name: (formData.get("contact_name") as string).trim(),
     contact_email: (formData.get("contact_email") as string).trim(),
     contact_phone: (formData.get("contact_phone") as string)?.trim() || null,
@@ -37,8 +51,28 @@ export async function registerEmployer(formData: FormData) {
     throw new Error("A feltételek elfogadása kötelező.");
   }
 
-  const { error } = await supabase.from("employers").insert(obj);
+  const { data: newEmployer, error } = await supabase.from("employers").insert(obj).select("id").single();
   if (error) throw new Error(error.message);
+
+  // Consent napló – munkáltatói feltételek
+  const admin = createAdminClient();
+  try {
+    await admin.from("vm_consent_log").insert([
+      {
+        user_id: user.id,
+        employer_id: newEmployer?.id ?? null,
+        consent_type: "employer_terms_acceptance",
+        employer_privacy_url: rawPrivacyUrl,
+        metadata: { company_name: obj.company_name },
+      },
+      {
+        user_id: user.id,
+        employer_id: newEmployer?.id ?? null,
+        consent_type: "employer_fair_selection_declaration",
+        metadata: { accepts_no_diagnosis_req: true },
+      },
+    ]);
+  } catch { /* audit log nem blokkolja a fő műveletet */ }
 
   // Admin értesítő e-mail
   const adminEmail = process.env.ADMIN_EMAIL;
@@ -49,6 +83,7 @@ export async function registerEmployer(formData: FormData) {
       subject: `[Védett Munka] Új munkáltatói regisztráció: ${obj.company_name}`,
       html: `<p>Új munkáltatói regisztráció érkezett: <strong>${obj.company_name}</strong></p>
              <p>Kapcsolattartó: ${obj.contact_name} &lt;${obj.contact_email}&gt;</p>
+             <p>Adatkezelési link: <a href="${rawPrivacyUrl}">${rawPrivacyUrl}</a></p>
              <p><a href="${process.env.NEXT_PUBLIC_SITE_URL}/admin/vedettmunka/munkaltatok">Admin kezelés</a></p>`,
     }).catch(() => null);
   }
@@ -144,10 +179,11 @@ export async function upsertJobAlert(formData: FormData) {
   if (!user) throw new Error("Nincs bejelentkezve.");
 
   const categories = formData.getAll("categories") as string[];
+  const enabled = formData.get("enabled") === "true";
 
   const obj = {
     user_id: user.id,
-    enabled: formData.get("enabled") === "true",
+    enabled,
     categories,
     work_type: (formData.get("work_type") as string) || null,
     city: (formData.get("city") as string)?.trim() || null,
@@ -168,6 +204,58 @@ export async function upsertJobAlert(formData: FormData) {
     .upsert(obj, { onConflict: "user_id" });
   if (error) throw new Error(error.message);
 
+  // Consent log feliratkozáskor
+  if (enabled) {
+    const admin = createAdminClient();
+    try {
+      await admin.from("vm_consent_log").insert({
+        user_id: user.id,
+        consent_type: "job_alert_subscribe",
+        metadata: { categories, frequency: obj.frequency },
+      });
+    } catch { /* nem blokkolja a fő műveletet */ }
+  }
+
+  revalidatePath("/vedettmunka/ertesito");
+}
+
+export async function quickToggleAlert(enable: boolean) {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Nincs bejelentkezve.");
+
+  const { data: existing } = await supabase
+    .from("job_alerts")
+    .select("id")
+    .eq("user_id", user.id)
+    .single();
+
+  if (existing) {
+    const { error } = await supabase
+      .from("job_alerts")
+      .update({ enabled: enable })
+      .eq("user_id", user.id);
+    if (error) throw new Error(error.message);
+  } else if (enable) {
+    const { error } = await supabase
+      .from("job_alerts")
+      .insert({ user_id: user.id, enabled: true, frequency: "heti", categories: [] });
+    if (error) throw new Error(error.message);
+  }
+
+  // Consent log feliratkozáskor / leiratkozáskor
+  if (enable) {
+    const admin = createAdminClient();
+    try {
+      await admin.from("vm_consent_log").insert({
+        user_id: user.id,
+        consent_type: "job_alert_subscribe",
+        metadata: { source: "quick_toggle" },
+      });
+    } catch { /* nem blokkolja a fő műveletet */ }
+  }
+
+  revalidatePath("/vedettmunka");
   revalidatePath("/vedettmunka/ertesito");
 }
 
@@ -189,6 +277,27 @@ export async function reportJob(formData: FormData) {
   revalidatePath("/vedettmunka/allasok");
 }
 
+// ─── Segédfüggvény: admin audit log bejegyzés ──────────────────
+
+async function writeAuditLog(
+  adminUserId: string,
+  actionType: string,
+  targetType: string,
+  targetId: string | null,
+  metadata?: Record<string, unknown>
+) {
+  const admin = createAdminClient();
+  try {
+    await admin.from("vm_admin_audit_log").insert({
+      admin_user_id: adminUserId,
+      action_type: actionType,
+      target_type: targetType,
+      target_id: targetId ?? null,
+      metadata: metadata ?? null,
+    });
+  } catch { /* ne blokkolja a fő műveletet */ }
+}
+
 // ─── Admin: munkáltató státusz ──────────────────────────────────
 
 export async function adminUpdateEmployerStatus(
@@ -196,12 +305,44 @@ export async function adminUpdateEmployerStatus(
   status: string,
   note?: string
 ) {
+  const supabase = createClient();
+  const { data: { user: adminUser } } = await supabase.auth.getUser();
+
   const admin = createAdminClient();
+
+  // Jóváhagyás csak érvényes adatkezelési link esetén engedélyezett
+  if (status === "approved") {
+    const { data: emp } = await admin
+      .from("employers")
+      .select("privacy_policy_url, company_name")
+      .eq("id", id)
+      .single();
+    if (!emp?.privacy_policy_url) {
+      throw new Error(
+        "A munkáltató nem hagyható jóvá adatkezelési tájékoztató link nélkül. " +
+        "Kérd meg a munkáltatót, hogy adja meg a linkjét, vagy vedd fel a kapcsolatot velük."
+      );
+    }
+  }
+
   const { error } = await admin
     .from("employers")
     .update({ status, admin_note: note ?? null, updated_at: new Date().toISOString() })
     .eq("id", id);
   if (error) throw new Error(error.message);
+
+  if (adminUser) {
+    const actionMap: Record<string, string> = {
+      approved: "employer_approved",
+      rejected: "employer_rejected",
+      suspended: "employer_suspended",
+    };
+    await writeAuditLog(adminUser.id, actionMap[status] ?? "employer_status_changed", "employer", id, {
+      to_status: status,
+      admin_note: note ?? null,
+    });
+  }
+
   revalidatePath("/admin/vedettmunka/munkaltatok");
 }
 
@@ -212,7 +353,32 @@ export async function adminUpdateJobStatus(
   status: string,
   note?: string
 ) {
+  const supabase = createClient();
+  const { data: { user: adminUser } } = await supabase.auth.getUser();
+
   const admin = createAdminClient();
+
+  // Publikálás csak érvényes adatkezelési linkkel rendelkező munkáltatóhoz engedélyezett
+  if (status === "published") {
+    const { data: job } = await admin
+      .from("job_posts")
+      .select("employer_id, employers(privacy_policy_url)")
+      .eq("id", id)
+      .single();
+    const empRows = job?.employers as { privacy_policy_url: string | null }[] | null;
+    const employerPrivacyUrl = empRows?.[0]?.privacy_policy_url ?? null;
+    if (!employerPrivacyUrl) {
+      throw new Error(
+        "Ez a hirdetés nem publikálható, mert a munkáltatónak nincs megadva adatkezelési tájékoztató linkje."
+      );
+    }
+  }
+
+  const { data: prevJob } = await admin
+    .from("job_posts")
+    .select("status")
+    .eq("id", id)
+    .single();
 
   const update: Record<string, unknown> = {
     status,
@@ -222,12 +388,20 @@ export async function adminUpdateJobStatus(
   if (status === "published") {
     update.published_at = new Date().toISOString();
     update.expires_at = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString(); // 60 nap
-    // Értesítők küldése async (nem blokkoló)
     sendJobAlertEmails(id).catch(() => null);
   }
 
   const { error } = await admin.from("job_posts").update(update).eq("id", id);
   if (error) throw new Error(error.message);
+
+  if (adminUser) {
+    await writeAuditLog(adminUser.id, "job_status_changed", "job_post", id, {
+      from_status: prevJob?.status ?? null,
+      to_status: status,
+      admin_note: note ?? null,
+    });
+  }
+
   revalidatePath("/admin/vedettmunka/hirdetesek");
 }
 
@@ -238,6 +412,9 @@ export async function adminUpdateReportStatus(
   status: string,
   note?: string
 ) {
+  const supabase = createClient();
+  const { data: { user: adminUser } } = await supabase.auth.getUser();
+
   const admin = createAdminClient();
   const { error } = await admin
     .from("job_reports")
@@ -248,6 +425,14 @@ export async function adminUpdateReportStatus(
     })
     .eq("id", id);
   if (error) throw new Error(error.message);
+
+  if (adminUser) {
+    await writeAuditLog(adminUser.id, "job_report_status_changed", "job_report", id, {
+      to_status: status,
+      admin_note: note ?? null,
+    });
+  }
+
   revalidatePath("/admin/vedettmunka/jelentesek");
 }
 

@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { Briefcase, FileText, Bell, Building2, CheckCircle2, Users, Heart, Eye } from "lucide-react";
-import { getPublishedJobs } from "@/lib/vedettmunka/data";
+import { getPublishedJobs, getMyJobAlert } from "@/lib/vedettmunka/data";
+import { createClient } from "@/lib/supabase/server";
+import ErtesitoCta from "./ErtesitoCta";
 
 export const metadata = {
   title: "Védett Munka – Befogadó munkahelyek álláskeresőknek",
@@ -9,8 +11,21 @@ export const metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function VedettMunkaPage() {
-  const recentJobs = await getPublishedJobs({});
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  const [recentJobs, myAlert] = await Promise.all([
+    getPublishedJobs({}),
+    user ? getMyJobAlert() : Promise.resolve(null),
+  ]);
   const latestJobs = recentJobs.slice(0, 3);
+
+  // null = guest, true = subscribed+enabled, false = logged in but no/disabled alert
+  const alertEnabled: boolean | null = user === null
+    ? null
+    : myAlert?.enabled === true
+    ? true
+    : false;
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6">
@@ -91,6 +106,9 @@ export default async function VedettMunkaPage() {
           </div>
         </section>
       )}
+
+      {/* Állásértesítő CTA */}
+      <ErtesitoCta initialEnabled={alertEnabled} />
 
       {/* Munkáltatóknak */}
       <section className="mt-12 rounded-2xl border border-sni-brand-teal/20 bg-sni-brand-teal/5 p-6">

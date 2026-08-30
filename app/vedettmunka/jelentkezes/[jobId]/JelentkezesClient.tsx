@@ -7,6 +7,8 @@ import { Upload, FileText, CheckCircle2 } from "lucide-react";
 interface Props {
   jobId: string;
   jobTitle: string;
+  companyName: string;
+  employerPrivacyUrl: string | null;
   applicationEmail: string;
   defaultName: string;
   defaultEmail: string;
@@ -15,7 +17,7 @@ interface Props {
 }
 
 export default function JelentkezesClient({
-  jobId, jobTitle, applicationEmail, defaultName, defaultEmail, userId, employerId,
+  jobId, jobTitle, companyName, employerPrivacyUrl, applicationEmail, defaultName, defaultEmail, userId, employerId,
 }: Props) {
   const [step, setStep] = useState<"cv" | "details" | "done">("cv");
   const [cvFile, setCvFile] = useState<File | null>(null);
@@ -154,16 +156,42 @@ export default function JelentkezesClient({
 
       {/* Adatkezelési beleegyezés */}
       <div className="rounded-xl bg-gray-50 p-4 text-xs text-gray-600">
-        <p className="font-semibold text-gray-700 mb-1">4. Adatkezelési tájékoztató</p>
-        <p>
-          A jelentkezés elküldésével elfogadod, hogy a megadott adataidat és csatolt önéletrajzodat
-          továbbítjuk az adott munkáltatónak (<strong>{applicationEmail}</strong>).
-          A Védett Munka nem tárolja tartósan az önéletrajzodat.
-          A munkáltató a jelentkezési adatokat a saját kiválasztási folyamatában kezeli.
+        <p className="font-semibold text-gray-700 mb-2">4. Adattovábbítási hozzájárulás</p>
+
+        {/* Munkáltatói adatkezelési tájékoztató link */}
+        {employerPrivacyUrl ? (
+          <p className="mb-3">
+            A jelentkezés elküldése előtt kérjük, olvasd el a munkáltató saját adatkezelési tájékoztatóját:{" "}
+            <a
+              href={employerPrivacyUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-semibold text-sni-brand-blue underline"
+            >
+              {companyName} adatkezelési tájékoztatója
+            </a>
+          </p>
+        ) : (
+          <p className="mb-3 text-amber-700">
+            A munkáltató adatkezelési tájékoztatója jelenleg nem érhető el ezen az oldalon. Kérd el közvetlenül a munkáltatótól.
+          </p>
+        )}
+
+        <p className="mb-3">
+          A Védett Munka technikai közvetítőként továbbítja a megadott adataidat és csatolt önéletrajzodat
+          kizárólag a megjelölt munkáltató részére. A VédettMunka nem tárolja tartósan az önéletrajzodat.
+          A munkáltató a fogadástól kezdve önálló adatkezelőként jár el.
         </p>
-        <label className="mt-3 flex items-start gap-2">
-          <input type="checkbox" required className="mt-0.5 rounded" />
-          <span>Megértettem és elfogadom. <span className="text-red-500">*</span></span>
+
+        <label className="mt-2 flex items-start gap-2">
+          <input type="checkbox" name="data_forwarding_consent" required className="mt-0.5 rounded" />
+          <span>
+            Kérem, hogy a VédettMunka a jelen jelentkezésben megadott adataimat és a csatolt önéletrajzomat
+            kizárólag a(z) <strong>{companyName}</strong> részére, a(z) <strong>{jobTitle}</strong> állásra
+            történő jelentkezésem céljából továbbítsa. Tudomásul veszem, hogy a továbbítást követően
+            a munkáltató önálló adatkezelőként jár el.
+            <span className="text-red-500"> *</span>
+          </span>
         </label>
       </div>
 

@@ -73,9 +73,14 @@ function Input({ label, value, onChange, type = "text", placeholder = "" }: {
   );
 }
 
+const ALLOWED_PHOTO_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
+const MAX_PHOTO_SIZE = 2 * 1024 * 1024; // 2 MB
+
 export default function CvSzerkesztoClient() {
   const [step, setStep] = useState(0);
   const [cv, setCv] = useState<CvData>(EMPTY_CV);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  const [draftDeleted, setDraftDeleted] = useState(false);
   const router = useRouter();
   const photoRef = useRef<HTMLInputElement>(null);
 
@@ -89,13 +94,31 @@ export default function CvSzerkesztoClient() {
 
   function save(updated: CvData) {
     setCv(updated);
+    setDraftDeleted(false);
     try { localStorage.setItem(CV_KEY, JSON.stringify(updated)); } catch {}
+  }
+
+  function handleDeleteDraft() {
+    try { localStorage.removeItem(CV_KEY); } catch {}
+    setCv(EMPTY_CV);
+    setStep(0);
+    setDraftDeleted(true);
   }
 
   function handlePhoto(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
+    setPhotoError(null);
     if (!file) return;
-    if (file.size > 5 * 1024 * 1024) { alert("A fénykép mérete legfeljebb 5 MB lehet."); return; }
+    if (!ALLOWED_PHOTO_MIME.has(file.type)) {
+      setPhotoError("Csak JPG, PNG vagy WEBP formátumú képet tölthetsz fel.");
+      if (photoRef.current) photoRef.current.value = "";
+      return;
+    }
+    if (file.size > MAX_PHOTO_SIZE) {
+      setPhotoError("A fénykép mérete legfeljebb 2 MB lehet.");
+      if (photoRef.current) photoRef.current.value = "";
+      return;
+    }
     const reader = new FileReader();
     reader.onload = (ev) => save({ ...cv, foto_base64: ev.target?.result as string });
     reader.readAsDataURL(file);
@@ -113,6 +136,36 @@ export default function CvSzerkesztoClient() {
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6">
+      {/* Adatvédelmi tájékoztató */}
+      <div className="mb-5 rounded-2xl border border-blue-100 bg-blue-50 px-5 py-4 text-sm text-blue-800">
+        <p className="font-semibold mb-1">Az önéletrajzkészítőről</p>
+        <p>
+          Az önéletrajz adatai és az opcionálisan feltöltött fénykép a <strong>böngésződben kerülnek feldolgozásra</strong>.
+          A VédettMunka nem menti őket szerveroldali CV-adatbázisba.
+          A PDF-et letöltés után a saját eszközödön tárolod.
+        </p>
+        <p className="mt-2 text-xs text-blue-700">
+          A VédettMunka nem kér diagnózist, egészségügyi dokumentumot, fogyatékossági igazolást
+          vagy megváltozott munkaképességet igazoló iratot. Kérjük, ilyen dokumentumot ne tölts fel a CV-készítőbe.
+        </p>
+      </div>
+
+      {/* Piszkozat törlése */}
+      <div className="mb-4 flex justify-end">
+        <button
+          type="button"
+          onClick={handleDeleteDraft}
+          className="rounded-full border border-red-200 px-4 py-1.5 text-xs font-semibold text-red-500 hover:bg-red-50"
+        >
+          Piszkozat törlése erről az eszközről
+        </button>
+      </div>
+      {draftDeleted && (
+        <div className="mb-4 rounded-xl bg-green-50 px-4 py-2.5 text-sm font-medium text-green-700">
+          ✓ Az önéletrajz-piszkozatot töröltük erről az eszközről.
+        </div>
+      )}
+
       {/* Haladásjelző */}
       <div className="mb-6">
         <div className="flex items-center justify-between text-xs text-gray-400 mb-1">
@@ -137,8 +190,11 @@ export default function CvSzerkesztoClient() {
             {/* Fénykép */}
             <div>
               <p className="text-sm font-semibold text-gray-700 mb-1">Fénykép (opcionális)</p>
+              <p className="text-xs text-gray-400 mb-1">
+                A fénykép feltöltése nem kötelező. Csak akkor tölts fel képet, ha szeretnéd, hogy szerepeljen az önéletrajzodban.
+              </p>
               <p className="text-xs text-gray-400 mb-2">
-                A fénykép nem kötelező. Csak akkor tölts fel képet, ha szeretnéd, hogy szerepeljen az önéletrajzodban.
+                Csak JPG, PNG vagy WEBP formátum, legfeljebb 2 MB. A kép a böngésződben marad – nem kerül szerverre.
               </p>
               <div className="flex items-center gap-4">
                 {cv.foto_base64 && (
@@ -147,7 +203,7 @@ export default function CvSzerkesztoClient() {
                 <div className="flex flex-col gap-2">
                   <button
                     type="button"
-                    onClick={() => photoRef.current?.click()}
+                    onClick={() => { setPhotoError(null); photoRef.current?.click(); }}
                     className="rounded-full border border-gray-200 px-4 py-1.5 text-xs font-semibold hover:border-sni-brand-teal"
                   >
                     {cv.foto_base64 ? "Csere" : "Fotó feltöltése"}
@@ -155,16 +211,24 @@ export default function CvSzerkesztoClient() {
                   {cv.foto_base64 && (
                     <button
                       type="button"
-                      onClick={() => save({ ...cv, foto_base64: null })}
+                      onClick={() => { save({ ...cv, foto_base64: null }); setPhotoError(null); }}
                       className="rounded-full border border-red-100 px-4 py-1.5 text-xs font-semibold text-red-500 hover:bg-red-50"
                     >
                       Törlés
                     </button>
                   )}
                 </div>
-                <input ref={photoRef} type="file" accept="image/*" className="hidden" onChange={handlePhoto} />
+                <input
+                  ref={photoRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={handlePhoto}
+                />
               </div>
-              <p className="mt-1 text-xs text-gray-400">A feltöltött képet csak az önéletrajz elkészítéséhez használjuk, nem tároljuk tartósan.</p>
+              {photoError && (
+                <p className="mt-2 text-xs font-semibold text-red-600">{photoError}</p>
+              )}
             </div>
 
             <Input label="Teljes neve" value={cv.nev} onChange={(v) => save({ ...cv, nev: v })} placeholder="pl. Kovács Anna" />

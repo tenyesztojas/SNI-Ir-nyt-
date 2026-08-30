@@ -135,8 +135,23 @@ export default function CvElozetesClient() {
         .cv-job-meta { font-size: 10pt; color: #555; }
       `}</style>
 
+      {/* Adatvédelmi tájékoztató */}
+      <div className="print:hidden mx-auto max-w-3xl px-4 pt-6 pb-0 sm:px-6">
+        <div className="mb-4 rounded-2xl border border-blue-100 bg-blue-50 px-5 py-3 text-sm text-blue-800">
+          <p className="font-semibold mb-1">Az önéletrajzkészítőről</p>
+          <p className="text-xs">
+            Az önéletrajz adatai kizárólag a <strong>böngésződben kerülnek feldolgozásra</strong>.
+            A VédettMunka nem menti őket szerveroldali CV-adatbázisba. A letöltött PDF-et a saját eszközödön tárolod.
+          </p>
+          <p className="mt-1 text-xs text-blue-700">
+            A VédettMunka nem kér diagnózist, egészségügyi dokumentumot vagy fogyatékossági igazolást.
+            Kérjük, ilyen adatot ne tölts fel a CV-készítőbe.
+          </p>
+        </div>
+      </div>
+
       {/* Vezérlő gomb sáv */}
-      <div className="print:hidden mx-auto max-w-3xl px-4 pt-6 pb-2 sm:px-6 flex flex-wrap gap-3 items-center">
+      <div className="print:hidden mx-auto max-w-3xl px-4 pb-2 sm:px-6 flex flex-wrap gap-3 items-center">
         <Link href="/vedettmunka/oneletrajz/szerkeszto"
           className="rounded-full border border-gray-200 px-5 py-2 text-sm font-semibold hover:border-sni-brand-teal">
           ← Szerkesztés

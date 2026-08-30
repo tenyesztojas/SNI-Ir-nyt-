@@ -54,6 +54,20 @@ export default async function AdminMunkaltatokPage({
                 <h2 className="mt-1 font-bold text-sni-brand-navy">{emp.company_name}</h2>
                 <p className="text-sm text-gray-600">{emp.contact_name} · {emp.contact_email}</p>
                 {emp.website && <a href={emp.website} target="_blank" rel="noopener noreferrer" className="text-xs text-sni-brand-blue hover:underline">{emp.website}</a>}
+                {((emp as unknown as { privacy_policy_url?: string | null }).privacy_policy_url) ? (
+                  <a
+                    href={(emp as unknown as { privacy_policy_url: string }).privacy_policy_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-green-700 hover:underline"
+                  >
+                    ✓ Adatkezelési tájékoztató link
+                  </a>
+                ) : (
+                  <span className="text-xs font-semibold text-red-600">
+                    ⚠ Hiányzik az adatkezelési tájékoztató link – jóváhagyás nem adható!
+                  </span>
+                )}
               </div>
               <EmployerActionButtons employerId={emp.id} currentStatus={emp.status} />
             </div>

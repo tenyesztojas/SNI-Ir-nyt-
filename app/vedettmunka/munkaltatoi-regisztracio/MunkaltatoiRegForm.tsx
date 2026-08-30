@@ -78,6 +78,26 @@ export default function MunkaltatoiRegForm() {
       <Field name="address" label="Székhely / telephely" required placeholder="Pl. 1051 Budapest, Minta utca 1." />
       <Field name="website" label="Weboldal" type="url" placeholder="https://..." />
 
+      <div className="flex flex-col gap-1">
+        <label className="flex flex-col gap-1">
+          <span className="text-sm font-semibold text-gray-700">
+            Munkáltatói adatkezelési tájékoztató linkje <span className="text-red-500">*</span>
+          </span>
+          <span className="text-xs text-gray-400">
+            A jelentkezőknek a jelentkezés elküldése előtt meg kell ismerniük a munkáltató saját adatkezelési tájékoztatóját. Kérjük, add meg a működő linket.
+          </span>
+          <input
+            name="privacy_policy_url"
+            type="url"
+            required
+            placeholder="https://ceg.hu/adatkezeles"
+            pattern="https?://.+"
+            className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm outline-none focus:border-sni-brand-teal focus:ring-2 focus:ring-sni-brand-teal/20"
+          />
+        </label>
+        <p className="text-xs text-blue-600">Javasolt: https:// protokoll. Csak nyilvánosan elérhető link fogadható el.</p>
+      </div>
+
       <hr className="my-1" />
       <p className="text-xs font-bold uppercase tracking-wide text-gray-400">Kapcsolattartó</p>
       <Field name="contact_name" label="Kapcsolattartó neve" required placeholder="Pl. Kovács Anna" />
