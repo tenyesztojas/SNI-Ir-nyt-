@@ -89,26 +89,25 @@ function Input({
 }
 
 /** Migrál régi localStorage formátumból (szuletesi_ev → szuletesi_datum, stb.) */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function migrateLegacyCv(raw: any): CvData {
+function migrateLegacyCv(raw: Record<string, unknown>): CvData {
+  const str = (v: unknown): string => (typeof v === "string" ? v : "");
+  const vegzettsegek = Array.isArray(raw.vegzettsegek)
+    ? (raw.vegzettsegek as CvData["vegzettsegek"])
+    : (raw.iskolai_vegzettseg || raw.iskola_helye || raw.iskola_eve)
+      ? [{ szint: str(raw.iskolai_vegzettseg), hely: str(raw.iskola_helye), ev: str(raw.iskola_eve) }]
+      : [{ szint: "", hely: "", ev: "" }];
+  const szakmak = Array.isArray(raw.szakmak)
+    ? (raw.szakmak as CvData["szakmak"])
+    : (raw.szakma || raw.szakma_helye || raw.szakma_eve)
+      ? [{ nev: str(raw.szakma), hely: str(raw.szakma_helye), ev: str(raw.szakma_eve) }]
+      : [{ nev: "", hely: "", ev: "" }];
   return {
     ...EMPTY_CV,
-    ...raw,
-    // régi szuletesi_ev mező migráció
-    szuletesi_datum: raw.szuletesi_datum ?? (raw.szuletesi_ev ? `${raw.szuletesi_ev}-01-01` : ""),
-    weboldal: raw.weboldal ?? "",
-    // régi iskolai_vegzettseg → vegzettsegek tömb
-    vegzettsegek: raw.vegzettsegek ?? (
-      (raw.iskolai_vegzettseg || raw.iskola_helye || raw.iskola_eve)
-        ? [{ szint: raw.iskolai_vegzettseg ?? "", hely: raw.iskola_helye ?? "", ev: raw.iskola_eve ?? "" }]
-        : [{ szint: "", hely: "", ev: "" }]
-    ),
-    // régi szakma → szakmak tömb
-    szakmak: raw.szakmak ?? (
-      (raw.szakma || raw.szakma_helye || raw.szakma_eve)
-        ? [{ nev: raw.szakma ?? "", hely: raw.szakma_helye ?? "", ev: raw.szakma_eve ?? "" }]
-        : [{ nev: "", hely: "", ev: "" }]
-    ),
+    ...(raw as Partial<CvData>),
+    szuletesi_datum: str(raw.szuletesi_datum) || (raw.szuletesi_ev ? `${raw.szuletesi_ev}-01-01` : ""),
+    weboldal: str(raw.weboldal),
+    vegzettsegek,
+    szakmak,
   };
 }
 
