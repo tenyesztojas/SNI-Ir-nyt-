@@ -75,7 +75,8 @@ export default function CvElozetesClient() {
       // Kliensoldali dynamic import – nem fut SSR közben
       const html2pdf = (await import("html2pdf.js")).default;
 
-      await html2pdf(element).set({
+      // Builder minta: html2pdf() visszaadja a lánc-objektumot
+      await html2pdf().set({
         margin: 0,
         filename: "oneletrajz.pdf",
         image: { type: "jpeg", quality: 0.98 },
