@@ -54,8 +54,7 @@ export default function CvElozetesClient() {
     try {
       const saved = localStorage.getItem(CV_KEY);
       if (saved) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const raw: any = JSON.parse(saved);
+        const raw = JSON.parse(saved) as Record<string, unknown>;
         // Migráció: régi szuletesi_ev → szuletesi_datum
         if (raw.szuletesi_ev && !raw.szuletesi_datum) {
           raw.szuletesi_datum = `${raw.szuletesi_ev}-01-01`;
