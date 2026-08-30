@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import type { CvData } from "@/lib/vedettmunka/types";
 import { EMPTY_CV } from "@/lib/vedettmunka/types";
+import { MEGYEK, TELEPULESEK, EGYEB_OPCIO } from "@/lib/vedettmunka/telepulesek";
 
 const CV_KEY = "vm_cv_draft";
 
@@ -105,6 +106,7 @@ function migrateLegacyCv(raw: Record<string, unknown>): CvData {
     ...EMPTY_CV,
     ...(raw as Partial<CvData>),
     szuletesi_datum: str(raw.szuletesi_datum) || (raw.szuletesi_ev ? `${raw.szuletesi_ev}-01-01` : ""),
+    lakhely_megye: str(raw.lakhely_megye),
     weboldal: str(raw.weboldal),
     vegzettsegek,
     szakmak,
@@ -117,13 +119,22 @@ export default function CvSzerkesztoClient() {
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [draftDeleted, setDraftDeleted] = useState(false);
+  const [lakhelyEgyeb, setLakhelyEgyeb] = useState(false);
   const router = useRouter();
   const photoRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     try {
       const saved = localStorage.getItem(CV_KEY);
-      if (saved) setCv(migrateLegacyCv(JSON.parse(saved)));
+      if (saved) {
+        const migrated = migrateLegacyCv(JSON.parse(saved));
+        setCv(migrated);
+        // Ha a tárolt lakhely nem szerepel a megye listájában → szabad szöveges mód
+        if (migrated.lakhely_megye && migrated.lakhely) {
+          const opts = TELEPULESEK[migrated.lakhely_megye] ?? [];
+          if (!opts.includes(migrated.lakhely)) setLakhelyEgyeb(true);
+        }
+      }
     } catch {}
   }, []);
 
@@ -309,7 +320,62 @@ export default function CvSzerkesztoClient() {
               />
             </label>
 
-            <Input label="Lakóhely" value={cv.lakhely} onChange={(v) => save({ ...cv, lakhely: v })} placeholder="pl. Budapest" />
+            {/* Lakóhely: megye → település */}
+            <div className="flex flex-col gap-3">
+              <label className="flex flex-col gap-1">
+                <span className="text-sm font-semibold text-gray-700">Megye / főváros</span>
+                <select
+                  value={cv.lakhely_megye}
+                  onChange={(e) => {
+                    setLakhelyEgyeb(false);
+                    save({ ...cv, lakhely_megye: e.target.value, lakhely: "" });
+                  }}
+                  className="rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-sni-brand-teal bg-white"
+                >
+                  <option value="">– Válassz –</option>
+                  {MEGYEK.map((m) => <option key={m} value={m}>{m}</option>)}
+                </select>
+              </label>
+              {cv.lakhely_megye && (
+                <label className="flex flex-col gap-1">
+                  <span className="text-sm font-semibold text-gray-700">Település</span>
+                  {lakhelyEgyeb ? (
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={cv.lakhely}
+                        onChange={(e) => save({ ...cv, lakhely: e.target.value })}
+                        placeholder="Írja be a település nevét"
+                        className="flex-1 rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-sni-brand-teal"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => { setLakhelyEgyeb(false); save({ ...cv, lakhely: "" }); }}
+                        className="rounded-xl border border-gray-200 px-3 py-2 text-xs text-gray-500 hover:border-gray-400"
+                      >Vissza</button>
+                    </div>
+                  ) : (
+                    <select
+                      value={cv.lakhely}
+                      onChange={(e) => {
+                        if (e.target.value === EGYEB_OPCIO) {
+                          setLakhelyEgyeb(true);
+                          save({ ...cv, lakhely: "" });
+                        } else {
+                          save({ ...cv, lakhely: e.target.value });
+                        }
+                      }}
+                      className="rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-sni-brand-teal bg-white"
+                    >
+                      <option value="">– Válassz települést –</option>
+                      {(TELEPULESEK[cv.lakhely_megye] ?? []).map((t) => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
+                  )}
+                </label>
+              )}
+            </div>
 
             {/* Telefonszám – csak számok és elválasztók */}
             <label className="flex flex-col gap-1">

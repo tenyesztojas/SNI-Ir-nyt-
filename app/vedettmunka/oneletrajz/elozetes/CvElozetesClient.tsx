@@ -72,6 +72,7 @@ export default function CvElozetesClient() {
             : [{ nev: "", hely: "", ev: "" }];
         }
         if (!raw.weboldal) raw.weboldal = "";
+        if (!raw.lakhely_megye) raw.lakhely_megye = "";
         setCv({ ...EMPTY_CV, ...raw });
       } else {
         setCv(EMPTY_CV);
@@ -211,7 +212,12 @@ export default function CvElozetesClient() {
                 <div style={{ width: "100%", color: "#34D8C3", fontSize: 9, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.08em", marginTop: 4 }}>Elérhetőség</div>
                 {cv.telefon && <div style={{ fontSize: 10, color: "#e2e8f0" }}>📞 {cv.telefon}</div>}
                 {cv.email && <div style={{ fontSize: 10, color: "#e2e8f0", wordBreak: "break-all" }}>✉ {cv.email}</div>}
-                {cv.lakhely && <div style={{ fontSize: 10, color: "#e2e8f0" }}>📍 {cv.lakhely}</div>}
+                {(cv.lakhely || cv.lakhely_megye) && (
+                  <div style={{ fontSize: 10, color: "#e2e8f0" }}>
+                    📍 {cv.lakhely || cv.lakhely_megye}
+                    {cv.lakhely && cv.lakhely_megye && ` (${cv.lakhely_megye})`}
+                  </div>
+                )}
                 {cv.szuletesi_datum && <div style={{ fontSize: 10, color: "#e2e8f0" }}>🎂 {formatDatum(cv.szuletesi_datum)}</div>}
                 {cv.weboldal && (
                   <>

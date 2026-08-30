@@ -145,7 +145,8 @@ export interface CvData {
   // 1. Alapadatok
   nev: string;
   szuletesi_datum: string;   // YYYY-MM-DD (full date)
-  lakhely: string;
+  lakhely_megye: string;     // megye (legördülőből)
+  lakhely: string;           // település (legördülőből vagy szabad szöveg)
   telefon: string;
   email: string;
   weboldal: string;          // weboldal / podcast URL (opcionális)
@@ -187,6 +188,7 @@ export interface CvData {
 export const EMPTY_CV: CvData = {
   nev: "",
   szuletesi_datum: "",
+  lakhely_megye: "",
   lakhely: "",
   telefon: "",
   email: "",
