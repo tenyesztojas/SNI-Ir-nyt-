@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { SZELLEMI_KATEGORIAK, FIZIKAI_KATEGORIAK, HUNGARIAN_COUNTIES } from "@/lib/vedettmunka/categories";
+import { SZELLEMI_KATEGORIAK, FIZIKAI_KATEGORIAK } from "@/lib/vedettmunka/categories";
 
 interface Props {
   defaults: Record<string, string | undefined>;
+  counties: string[];
 }
 
 const CHECKBOXES = [
@@ -18,7 +19,7 @@ const CHECKBOXES = [
   { name: "low_verbal", label: "Kevés beszélgetés emberekkel" },
 ];
 
-export default function AllasokFilterClient({ defaults }: Props) {
+export default function AllasokFilterClient({ defaults, counties }: Props) {
   const [workType, setWorkType] = useState(defaults.work_type ?? "");
 
   const kategoriak =
@@ -85,14 +86,14 @@ export default function AllasokFilterClient({ defaults }: Props) {
       </label>
 
       <label className="flex flex-col gap-1">
-        <span className="text-xs font-semibold text-gray-500">Vármegye</span>
+        <span className="text-xs font-semibold text-gray-500">Megye</span>
         <select
           name="county"
           defaultValue={defaults.county ?? ""}
           className="rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-sni-brand-teal"
         >
           <option value="">Mindegy</option>
-          {HUNGARIAN_COUNTIES.map((c) => (
+          {counties.map((c) => (
             <option key={c} value={c}>{c}</option>
           ))}
         </select>

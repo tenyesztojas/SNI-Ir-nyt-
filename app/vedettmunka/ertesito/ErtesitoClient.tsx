@@ -93,7 +93,7 @@ export default function ErtesitoClient({ initialAlert }: { initialAlert: JobAler
       </label>
 
       <label className="flex flex-col gap-1">
-        <span className="text-sm font-semibold text-gray-700">Vármegye</span>
+        <span className="text-sm font-semibold text-gray-700">Megye</span>
         <select value={county} onChange={(e) => setCounty(e.target.value)}
           className="rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-sni-brand-teal">
           <option value="">Mindegy</option>

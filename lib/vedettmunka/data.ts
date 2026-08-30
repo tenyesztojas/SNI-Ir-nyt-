@@ -49,6 +49,19 @@ export async function getPublishedJobs(filters: Partial<{
   return (data ?? []) as (JobPost & { employers: { company_name: string } | null })[];
 }
 
+/** Az összes aktív hirdetésben szereplő, nem üres megye lista (rendezve) */
+export async function getPublishedJobCounties(): Promise<string[]> {
+  const supabase = createClient();
+  const { data } = await supabase
+    .from("job_posts")
+    .select("county")
+    .eq("status", "published")
+    .not("county", "is", null)
+    .neq("county", "");
+  const unique = [...new Set((data ?? []).map((r: { county: string }) => r.county).filter(Boolean))];
+  return unique.sort((a, b) => a.localeCompare(b, "hu"));
+}
+
 export async function getPublishedJobById(id: string): Promise<(JobPost & { employers: Employer | null }) | null> {
   const supabase = createClient();
   const { data } = await supabase

@@ -114,7 +114,7 @@ export default function HirdetesForm() {
       <div className="grid gap-4 sm:grid-cols-2">
         <Field name="city" label="Város" required placeholder="pl. Budapest" />
         <label className="flex flex-col gap-1">
-          <span className="text-sm font-semibold text-gray-700">Vármegye <span className="text-red-500">*</span></span>
+          <span className="text-sm font-semibold text-gray-700">Megye <span className="text-red-500">*</span></span>
           <select name="county" required className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-sni-brand-teal">
             <option value="">— Válassz —</option>
             {HUNGARIAN_COUNTIES.map((c) => <option key={c} value={c}>{c}</option>)}

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Briefcase, MapPin, Clock, Home, Blend, Building2 } from "lucide-react";
-import { getPublishedJobs } from "@/lib/vedettmunka/data";
+import { getPublishedJobs, getPublishedJobCounties } from "@/lib/vedettmunka/data";
 import type { JobPost } from "@/lib/vedettmunka/types";
 import AllasokFilterClient from "./AllasokFilterClient";
 
@@ -43,7 +43,10 @@ export default async function AllasokPage({
     q: searchParams.q || undefined,
   };
 
-  const jobs = await getPublishedJobs(filters);
+  const [jobs, availableCounties] = await Promise.all([
+    getPublishedJobs(filters),
+    getPublishedJobCounties(),
+  ]);
 
   const locationIcon = {
     munkahelyen: <Building2 size={14} />,
@@ -66,7 +69,7 @@ export default async function AllasokPage({
       <div className="mt-6 flex flex-col gap-6 lg:flex-row">
         {/* Szűrők */}
         <aside className="shrink-0 lg:w-64">
-          <AllasokFilterClient defaults={searchParams} />
+          <AllasokFilterClient defaults={searchParams} counties={availableCounties} />
         </aside>
 
         {/* Eredmények */}
