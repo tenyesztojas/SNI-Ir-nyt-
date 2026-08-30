@@ -127,7 +127,7 @@ export default function HirdetesForm() {
       <RadioGroup name="work_location_type" label="Munkavégzés módja" required options={[
         { value: "munkahelyen", label: "Munkahelyen" },
         { value: "otthonrol", label: "Otthonról" },
-        { value: "hibrid", label: "Hibrid" },
+        { value: "hibrid", label: "Otthon és munkahelyen is" },
       ]} />
 
       <hr className="my-1" />

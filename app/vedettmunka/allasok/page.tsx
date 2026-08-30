@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { Briefcase, MapPin, Clock, Home, Blend, Building2 } from "lucide-react";
 import { getPublishedJobs } from "@/lib/vedettmunka/data";
-import { HUNGARIAN_COUNTIES } from "@/lib/vedettmunka/categories";
 import type { JobPost } from "@/lib/vedettmunka/types";
+import AllasokFilterClient from "./AllasokFilterClient";
 
 export const metadata = { title: "Állások" };
 export const dynamic = "force-dynamic";
@@ -10,12 +10,12 @@ export const dynamic = "force-dynamic";
 function jobTags(job: JobPost): string[] {
   const tags: string[] = [];
   if (job.part_time_available === "igen") tags.push("Részmunkaidő");
-  if (job.mentor_available === "van") tags.push("Mentor van");
+  if (job.mentor_available === "van") tags.push("Támogató személy van");
   if (job.start_end_flexibility === "rugalmas") tags.push("Rugalmas munkaidő");
-  if (job.noise_level === "csendes") tags.push("Csendesebb");
-  if (job.verbal_interaction_level === "nem" || job.verbal_interaction_level === "ritkan") tags.push("Kevés beszélgetés");
-  if (job.open_to_neurodivergent) tags.push("Neurodivergens jelentkezőknek is");
-  if (job.open_to_disabled) tags.push("Megváltozott munkaképességűeknek is");
+  if (job.noise_level === "csendes") tags.push("Csendesebb munkakörnyezet");
+  if (job.verbal_interaction_level === "nem" || job.verbal_interaction_level === "ritkan") tags.push("Kevés beszélgetés emberekkel");
+  if (job.open_to_neurodivergent) tags.push("Neurodivergens jelölteknek is");
+  if (job.open_to_disabled) tags.push("Megváltozott munkaképességű személyeknek is");
   if (job.open_to_parents) tags.push("Szülőknek is alkalmas");
   if (job.written_instructions_available === "igen") tags.push("Írásban is kaphatók a feladatok");
   return tags.slice(0, 5);
@@ -28,6 +28,7 @@ export default async function AllasokPage({
 }) {
   const filters = {
     work_type: searchParams.work_type || undefined,
+    category: searchParams.category || undefined,
     city: searchParams.city || undefined,
     county: searchParams.county || undefined,
     work_location_type: searchParams.location || undefined,
@@ -37,6 +38,8 @@ export default async function AllasokPage({
     open_to_parents: searchParams.parents === "1",
     mentor: searchParams.mentor === "1",
     written_instructions: searchParams.written === "1",
+    quiet_environment: searchParams.quiet === "1",
+    low_verbal: searchParams.low_verbal === "1",
     q: searchParams.q || undefined,
   };
 
@@ -50,116 +53,20 @@ export default async function AllasokPage({
   const locationLabel = {
     munkahelyen: "Munkahelyen",
     otthonrol: "Otthonról",
-    hibrid: "Hibrid",
+    hibrid: "Otthon és munkahelyen is",
   };
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
       <h1 className="text-2xl font-extrabold text-sni-brand-navy">Állások keresése</h1>
       <p className="mt-1 text-sm text-gray-500">
-        {jobs.length} hirdetés{jobs.length !== 1 ? "" : ""} – befogadó munkáltatóktól
+        {jobs.length} hirdetés – befogadó munkáltatóktól
       </p>
 
       <div className="mt-6 flex flex-col gap-6 lg:flex-row">
         {/* Szűrők */}
-        <aside className="shrink-0 lg:w-60">
-          <form method="GET" className="flex flex-col gap-4 rounded-2xl border border-gray-100 bg-white p-5">
-            <h2 className="font-bold text-sni-brand-navy">Szűrők</h2>
-
-            <label className="flex flex-col gap-1">
-              <span className="text-xs font-semibold text-gray-500">Keresés</span>
-              <input
-                name="q"
-                defaultValue={searchParams.q}
-                placeholder="pl. raktáros, admin..."
-                className="rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-sni-brand-teal"
-              />
-            </label>
-
-            <label className="flex flex-col gap-1">
-              <span className="text-xs font-semibold text-gray-500">Munkatípus</span>
-              <select
-                name="work_type"
-                defaultValue={searchParams.work_type ?? ""}
-                className="rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-sni-brand-teal"
-              >
-                <option value="">Mindegy</option>
-                <option value="szellemi">Szellemi munka</option>
-                <option value="fizikai">Fizikai munka</option>
-              </select>
-            </label>
-
-            <label className="flex flex-col gap-1">
-              <span className="text-xs font-semibold text-gray-500">Város</span>
-              <input
-                name="city"
-                defaultValue={searchParams.city}
-                placeholder="pl. Budapest"
-                className="rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-sni-brand-teal"
-              />
-            </label>
-
-            <label className="flex flex-col gap-1">
-              <span className="text-xs font-semibold text-gray-500">Vármegye</span>
-              <select
-                name="county"
-                defaultValue={searchParams.county ?? ""}
-                className="rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-sni-brand-teal"
-              >
-                <option value="">Mindegy</option>
-                {HUNGARIAN_COUNTIES.map((c) => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
-            </label>
-
-            <label className="flex flex-col gap-1">
-              <span className="text-xs font-semibold text-gray-500">Munkavégzés helye</span>
-              <select
-                name="location"
-                defaultValue={searchParams.location ?? ""}
-                className="rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-sni-brand-teal"
-              >
-                <option value="">Mindegy</option>
-                <option value="munkahelyen">Munkahelyen</option>
-                <option value="otthonrol">Otthonról</option>
-                <option value="hibrid">Hibrid</option>
-              </select>
-            </label>
-
-            <div className="flex flex-col gap-2">
-              <span className="text-xs font-semibold text-gray-500">Feltételek</span>
-              {[
-                { name: "part_time", label: "Részmunkaidő" },
-                { name: "nd", label: "Neurodivergens jelölőknek is" },
-                { name: "disabled", label: "Megváltozott munkaképességűeknek is" },
-                { name: "parents", label: "Szülőknek is alkalmas" },
-                { name: "mentor", label: "Mentor van" },
-                { name: "written", label: "Írásos feladatok" },
-              ].map(({ name, label }) => (
-                <label key={name} className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    name={name}
-                    value="1"
-                    defaultChecked={searchParams[name] === "1"}
-                    className="rounded"
-                  />
-                  {label}
-                </label>
-              ))}
-            </div>
-
-            <button
-              type="submit"
-              className="rounded-full bg-sni-brand-teal py-2 text-sm font-bold text-white transition hover:bg-sni-brand-blue"
-            >
-              Keresés
-            </button>
-            <a href="/vedettmunka/allasok" className="text-center text-xs text-gray-400 hover:underline">
-              Szűrők törlése
-            </a>
-          </form>
+        <aside className="shrink-0 lg:w-64">
+          <AllasokFilterClient defaults={searchParams} />
         </aside>
 
         {/* Eredmények */}
@@ -188,9 +95,16 @@ export default async function AllasokPage({
                           <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${job.work_type === "szellemi" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"}`}>
                             {job.work_type === "szellemi" ? "Szellemi" : "Fizikai"}
                           </span>
-                          <span className="flex items-center gap-1 text-xs text-gray-400">
-                            {locationIcon[loc]} {locationLabel[loc]}
-                          </span>
+                          {loc && locationLabel[loc] && (
+                            <span className="flex items-center gap-1 text-xs text-gray-400">
+                              {locationIcon[loc]} {locationLabel[loc]}
+                            </span>
+                          )}
+                          {job.job_category && (
+                            <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-xs text-gray-600">
+                              {job.job_category}
+                            </span>
+                          )}
                         </div>
                         <h2 className="mt-2 text-lg font-extrabold text-sni-brand-navy">{job.title}</h2>
                         <p className="mt-0.5 text-sm text-gray-600">
@@ -212,7 +126,7 @@ export default async function AllasokPage({
                               <span
                                 key={tag}
                                 className="rounded-full bg-sni-brand-teal/10 px-2.5 py-0.5 text-xs font-medium text-sni-brand-teal"
-                              >
+              >
                                 {tag}
                               </span>
                             ))}

@@ -10,12 +10,15 @@ export async function getPublishedJobs(filters: Partial<{
   city: string;
   county: string;
   work_location_type: string;
+  category: string;
   part_time: boolean;
   open_to_neurodivergent: boolean;
   open_to_disabled: boolean;
   open_to_parents: boolean;
   mentor: boolean;
   written_instructions: boolean;
+  quiet_environment: boolean;
+  low_verbal: boolean;
   q: string;
 }> = {}): Promise<(JobPost & { employers: { company_name: string } | null })[]> {
   const supabase = createClient();
@@ -26,6 +29,7 @@ export async function getPublishedJobs(filters: Partial<{
     .order("published_at", { ascending: false });
 
   if (filters.work_type) query = query.eq("work_type", filters.work_type);
+  if (filters.category) query = query.eq("job_category", filters.category);
   if (filters.city) query = query.ilike("city", `%${filters.city}%`);
   if (filters.county) query = query.eq("county", filters.county);
   if (filters.work_location_type) query = query.eq("work_location_type", filters.work_location_type);
@@ -35,6 +39,8 @@ export async function getPublishedJobs(filters: Partial<{
   if (filters.part_time) query = query.eq("part_time_available", "igen");
   if (filters.mentor) query = query.eq("mentor_available", "van");
   if (filters.written_instructions) query = query.eq("written_instructions_available", "igen");
+  if (filters.quiet_environment) query = query.eq("noise_level", "csendes");
+  if (filters.low_verbal) query = query.in("verbal_interaction_level", ["nem", "ritkan"]);
   if (filters.q) {
     query = query.or(`title.ilike.%${filters.q}%,tasks_description.ilike.%${filters.q}%`);
   }
