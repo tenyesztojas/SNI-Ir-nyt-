@@ -357,6 +357,81 @@ export default function AszfPage() {
       <div className="mt-8 rounded-xl border border-gray-200 bg-gray-50 px-4 py-4 text-xs text-gray-500 italic">
         <strong className="not-italic font-semibold text-gray-700">Jogi megjegyzés:</strong> A jelen dokumentum mintaszövegként készült. A dokumentum véglegesítése előtt – különösen az Adatkezelési Tájékoztatóval való összhang, az igazolási eljárás (7.3. pont) és az esetleges anonimizált üzenetküldő funkció (7.6. pont) tényleges megvalósítása tekintetében – elengedhetetlen ügyvéd/jogász általi felülvizsgálat.
       </div>
+
+      {/* ─── Közösségi segítség ÁSZF kiegészítés ─── */}
+      <div className="mt-12 mb-6 border-t-2 border-sni-brand-teal pt-8">
+        <h2 className="text-2xl font-bold text-sni-text">Közösségi segítség funkció és felhasználói jelentések – ÁSZF kiegészítés</h2>
+        <p className="text-sm text-gray-500 mt-1">Hatályos: 2026. augusztus 30. napjától</p>
+        <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          A jelen kiegészítés a VédettSarok meglévő Általános Szerződési Feltételeinek a Közösségi segítség funkcióra és a felhasználói jelentések kezelésére vonatkozó kiegészítése. A meglévő ÁSZF általános rendelkezései e funkcióra is alkalmazandók, kivéve, ha a jelen kiegészítés eltérően rendelkezik.
+        </div>
+      </div>
+
+      <Section id="ks-1" title="KS 1. A Közösségi segítség funkció">
+        <Sub n="KS 1.1.">
+          <P>A Közösségi segítség funkció (a továbbiakban: „KS funkció") a VédettSarok webapplikációjában elérhető, önkéntes alapú, egymás közötti segítségkérési és -felajánlási felület. A KS funkció célja, hogy a közösség tagjai számára lehetőséget biztosítson egymás megtalálásához és kölcsönös támogatásához.</P>
+        </Sub>
+        <Sub n="KS 1.2.">
+          <P>A KS funkció nem minősül egészségügyi, személyszállítási, gyermekfelügyeleti, szociális vagy bármely más, hatósági engedélyhez vagy szakképzettséghez kötött szolgáltatásnak. A VédettSarok kizárólag a kapcsolatfelvételi felületet biztosítja; a konkrét segítség tartalmáért, minőségéért, biztonságáért és jogszerűségéért a segítséget nyújtó felhasználó felel.</P>
+        </Sub>
+        <Sub n="KS 1.3.">
+          <P>A KS funkció aktiválása önkéntes, és a felelősségi nyilatkozat elfogadásához kötött. A funkció bármikor kikapcsolható.</P>
+        </Sub>
+      </Section>
+
+      <Section id="ks-2" title="KS 2. Felhasználói felelősség és tiltott magatartások">
+        <Sub n="KS 2.1.">
+          <P>A KS funkció keretében tilos:</P>
+          <LetterList items={[
+            "a) gyermek személyes adatait (nevet, lakcímet, iskola vagy óvoda nevét, egészségügyi adatot) nyilvánosan megosztani;",
+            "b) felügyeleti jellegű, fizikai kontaktust igénylő, közvetítői jogkörbe tartozó vagy veszélyes tevékenységet közvetítői felügyelet nélkül felajánlani;",
+            "c) pénzért, ellenszolgáltatásért vagy üzletszerűen segítséget hirdetni vagy kérni;",
+            "d) másokat megtévesztő, zaklató vagy fenyegető magatartást tanúsítani;",
+            "e) a KS funkciót toborzási, hirdetési vagy más, a funkcióval össze nem egyeztethető célra felhasználni.",
+          ]} />
+        </Sub>
+        <Sub n="KS 2.2.">
+          <P>Gyermek melletti jelenlét vagy szállítás felajánlása kizárólag a szülő vagy törvényes képviselő előzetes, egyedi és írásos (üzenetbeli) hozzájárulásával, és kizárólag az érintett szülő részvételével lehetséges. A VédettSarok e tevékenységek lebonyolításáért semmilyen felelősséget nem vállal.</P>
+        </Sub>
+      </Section>
+
+      <Section id="ks-3" title="KS 3. Felhasználói jelentések">
+        <Sub n="KS 3.1.">
+          <P>A bejelentési rendszer lehetőséget biztosít a KS funkcióval összefüggő visszaélések, biztonsági aggályok, jogsértések vagy bűncselekményre utaló magatartások jelzésére. A bejelentési kategóriák és azok automatikus súlyossági besorolása:</P>
+          <LetterList items={[
+            "Kritikus (azonnali adminisztrátori kezelés): fenyegetés vagy erőszak, gyermekbiztonságot érintő eset, gyermek személyes adatának megosztása, adatvédelem megsértése / doxxing;",
+            "Magas prioritású: veszélyes segítségfelajánlás, átverés vagy csalás, pénzkérés vagy kereskedelmi tevékenység;",
+            "Normál prioritású: zaklatás vagy bántó viselkedés, visszaélés a KS funkcióval, egyéb.",
+          ]} />
+        </Sub>
+        <Sub n="KS 3.2.">
+          <P>A bejelentési felületen minden esetben megjelenik az alábbi tájékoztatás: amennyiben az érintett közvetlen és azonnali veszélyben van, a bejelentési felület nem alkalmas vészhívásra – ilyenkor haladéktalanul a <strong>112</strong> egységes segélyhívó számot kell tárcsázni, illetve a hatáskörrel rendelkező hatóságot kell értesíteni.</P>
+        </Sub>
+        <Sub n="KS 3.3.">
+          <P>A bejelentők személye az érintett felhasználóval nem kerül megosztásra, kivéve, ha ezt jogszabály, bíróság vagy hatóság kötelezően előírja.</P>
+        </Sub>
+        <Sub n="KS 3.4.">
+          <P>A bejelentés benyújtása nem jelent automatikus hatósági bejelentést, és nem helyettesíti azt. A VédettSarok fenntartja a jogot, hogy az ügyet szükség esetén az illetékes hatóságnak jelezze.</P>
+        </Sub>
+      </Section>
+
+      <Section id="ks-4" title="KS 4. Moderációs eljárás és jogorvoslat">
+        <Sub n="KS 4.1.">
+          <P>A bejelentéseket az adminisztrátorok a súlyossági besorolás sorrendjében, kötelező írásos indoklással vizsgálják meg, és döntéseikről audit naplót vezetnek. A döntés ellen a bejelentett felhasználó a döntésről szóló értesítéstől számított 6 hónapon belül fellebbezést nyújthat be a VédettSarok ügyfélszolgálatán keresztül.</P>
+        </Sub>
+        <Sub n="KS 4.2.">
+          <P>A KS funkció felfüggesztése vagy letiltása a VédettSarok belső moderációs döntése alapján történhet. Felfüggesztés esetén az érintett felhasználó a bejelentésben foglalt tájékoztató alapján élhet jogorvoslattal.</P>
+        </Sub>
+      </Section>
+
+      <Section id="ks-5" title="KS 5. Adatmegőrzés és törlés">
+        <Sub n="KS 5.1.">
+          <P>A bejelentésekhez kapcsolódó adatokat a VédettSarok a bejelentés beérkezésétől számítva legalább 6 hónapig – kritikus esetekben legalább 12 hónapig –, hatósági eljárás, jogi igény vagy legalHold jelölés esetén az eljárás lezárultáig megőrzi. Az adatmegőrzés részletes szabályait a VédettSarok Adatkezelési Tájékoztatójának Közösségi segítség kiegészítése tartalmazza.</P>
+        </Sub>
+        <Sub n="KS 5.2.">
+          <P>A megőrzési idő lejárta és a fellebbezési határidő letelte után, amennyiben sem jogi igény, sem legalHold nem áll fenn, a bejelentés személyes adatai anonimizálásra kerülnek.</P>
+        </Sub>
+      </Section>
     </div>
   );
 }

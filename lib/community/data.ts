@@ -11,6 +11,8 @@ import type {
   Notification,
   CommunityHelpSettings,
   CommunityUserReport,
+  ReportAuditLogEntry,
+  ReportAppeal,
 } from "./types";
 
 // Biztonságos oszloplista — user_private_lat/lng szándékosan kihagyva
@@ -345,13 +347,51 @@ export async function adminGetAllHelpSettings() {
   return (data ?? []) as CommunityHelpSettings[];
 }
 
-export async function adminGetUserReports() {
+export async function adminGetUserReports(filters?: {
+  severity?: string;
+  status?: string;
+}) {
   const admin = createAdminClient();
-  const { data } = await admin
+  let query = admin
     .from("community_user_reports")
     .select("*")
+    // Critical first, then high, then normal; within same severity newest first
+    .order("severity", { ascending: true })
     .order("created_at", { ascending: false });
-  return (data ?? []) as CommunityUserReport[];
+
+  if (filters?.severity) query = query.eq("severity", filters.severity);
+  if (filters?.status) query = query.eq("status", filters.status);
+
+  const { data } = await query;
+  // Re-sort: critical < high < normal (ascending alphabetically doesn't work)
+  const severityOrder: Record<string, number> = { critical: 0, high: 1, normal: 2 };
+  const sorted = (data ?? []).sort((a, b) => {
+    const sa = severityOrder[a.severity as string] ?? 2;
+    const sb = severityOrder[b.severity as string] ?? 2;
+    if (sa !== sb) return sa - sb;
+    return new Date(b.created_at as string).getTime() - new Date(a.created_at as string).getTime();
+  });
+  return sorted as CommunityUserReport[];
+}
+
+export async function adminGetReportAuditLog(reportId: string): Promise<ReportAuditLogEntry[]> {
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("community_report_audit_log")
+    .select("*")
+    .eq("report_id", reportId)
+    .order("created_at", { ascending: false });
+  return (data ?? []) as ReportAuditLogEntry[];
+}
+
+export async function adminGetReportAppeals(reportId: string): Promise<ReportAppeal[]> {
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("community_report_appeals")
+    .select("*")
+    .eq("report_id", reportId)
+    .order("created_at", { ascending: false });
+  return (data ?? []) as ReportAppeal[];
 }
 
 // ── Admin: közösségi profilok listája ─────────────────────────

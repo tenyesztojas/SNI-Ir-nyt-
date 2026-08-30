@@ -434,6 +434,80 @@ export default function AdatkezelesiTajekoztato() {
       <div className="mt-8 rounded-xl border border-gray-200 bg-gray-50 px-4 py-4 text-xs text-gray-500 italic">
         <strong className="not-italic font-semibold text-gray-700">Jogi megjegyzés:</strong> A jelen dokumentum mintaszövegként készült, és az ÁSZF 7. és 12. pontjában rögzített Nyilvános Válasz funkcióhoz, valamint az esetleges anonimizált üzenetküldő funkcióhoz igazodóan tartalmazza a szükséges adatvédelmi rendelkezéseket. A dokumentum véglegesítése előtt – az adatfeldolgozói kör tényleges összeállítása, valamint a mindenkori jogszabályi változások figyelembevétele érdekében – elengedhetetlen ügyvéd/adatvédelmi szakjogász általi felülvizsgálat.
       </div>
+
+      {/* ─── Közösségi segítség AT kiegészítés ─── */}
+      <div className="mt-12 mb-6 border-t-2 border-sni-brand-teal pt-8">
+        <h2 className="text-2xl font-bold text-sni-text">Közösségi segítség és felhasználói jelentések – Adatkezelési Tájékoztató kiegészítése</h2>
+        <p className="text-sm text-gray-500 mt-1">Hatályos: 2026. augusztus 30. napjától</p>
+        <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          A jelen kiegészítés a VédettSarok meglévő Adatkezelési Tájékoztatójának a Közösségi segítség funkcióra és a felhasználói bejelentési rendszerre vonatkozó kiegészítése. A meglévő Tájékoztató általános rendelkezései e funkcióra is alkalmazandók, kivéve, ha a jelen kiegészítés eltérően rendelkezik.
+        </div>
+      </div>
+
+      <Section id="ks-at-1" title="KS AT 1. A Közösségi segítség funkció adatkezelése">
+        <Sub n="KS AT 1.1." title="Közösségi segítség beállítások">
+          <DataTable rows={[
+            ["Kezelt adatok", "a funkció engedélyezésének ténye és időpontja, segítségkérési és -felajánlási kategóriák, opcionális szöveges leírások (legfeljebb 500 karakter), láthatósági szint, felelősségi nyilatkozat elfogadásának időpontja"],
+            ["Cél", "a KS funkció működtetése, a felhasználó elérhetővé tétele más tagok számára a beállított láthatósági körben"],
+            ["Jogalap", "az érintett hozzájárulása (GDPR 6. cikk (1) a) pont) – a funkció aktiválása önkéntes"],
+            ["Megőrzési idő", "a funkció kikapcsolásáig, illetve a fiók törléséig"],
+          ]} />
+        </Sub>
+        <Sub n="KS AT 1.2.">
+          <P>A KS funkció keretében megadott szöveges leírásokban az Adatkezelő kifejezetten felhívja a figyelmet arra, hogy ne kerüljön feltüntetésre gyermeknév, pontos lakcím, diagnózis, egészségügyi adat vagy más érzékeny személyes adat.</P>
+        </Sub>
+      </Section>
+
+      <Section id="ks-at-2" title="KS AT 2. Felhasználói bejelentések adatkezelése">
+        <Sub n="KS AT 2.1." title="Bejelentési adatok">
+          <DataTable rows={[
+            ["Kezelt adatok", "bejelentő felhasználói azonosítója, bejelentett felhasználói azonosítója, bejelentési kategória, leírás szövege, automatikusan számított súlyossági szint (kritikus / magas / normál), bejelentés időpontja, moderációs döntés és indoklás, audit napló bejegyzések"],
+            ["Cél", "a közösségi biztonság védelme, visszaélések, jogsértések és bűncselekményre utaló magatartások kivizsgálása, az ÁSZF Közösségi segítség kiegészítésének érvényesítése"],
+            ["Jogalap", "az Adatkezelő jogos érdeke a közösségi platform biztonságának fenntartásában (GDPR 6. cikk (1) f) pont); büntetőjogi vonatkozású vagy hatósági eljárást igénylő esetekben jogi kötelezettség teljesítése (GDPR 6. cikk (1) c) pont)"],
+            ["Megőrzési idő", "legalább 6 hónap (kritikus esetekben legalább 12 hónap) a bejelentéstől számítva; hatósági eljárás, jogi igény vagy legalHold jelölés esetén az eljárás lezárultáig; anonimizálás ezt követően, törlés 24 hónappal az anonimizálás után"],
+          ]} />
+        </Sub>
+        <Sub n="KS AT 2.2.">
+          <P>A bejelentő személye a bejelentett felhasználóval nem kerül megosztásra, kivéve, ha ezt jogszabály, bíróság vagy hatóság kötelezően előírja. A bejelentés leírása a legszükségesebb mértékre korlátozandó; az Adatkezelő a bejelentési felületen kifejezetten felhívja a figyelmet arra, hogy szükségtelenül ne kerüljön megadásra gyermeknév, lakcím, diagnózis vagy más érzékeny adat.</P>
+        </Sub>
+        <Sub n="KS AT 2.3." title="Automatikus súlyossági besorolás">
+          <P>A bejelentési kategória alapján az Adatkezelő szerver oldalon automatikusan meghatározza a bejelentés súlyossági szintjét. Ez az automatizált feldolgozás nem minősül a GDPR 22. cikke szerinti, kizárólag automatizált döntéshozatalnak, mivel minden bejelentést emberi adminisztrátori felülvizsgálat követ. Az érintett az automatikus súlyossági besorolást az Adatkezelő ügyfélszolgálatán keresztül vitathatja.</P>
+        </Sub>
+      </Section>
+
+      <Section id="ks-at-3" title="KS AT 3. Moderációs audit napló">
+        <Sub n="KS AT 3.1.">
+          <DataTable rows={[
+            ["Kezelt adatok", "az intézkedést meghozó adminisztrátor azonosítója, az intézkedés típusa, az előző és új állapot, az indoklás szövege, az intézkedés időpontja"],
+            ["Cél", "az adminisztrátori döntések átláthatósága és elszámoltathatósága, belső jogorvoslat biztosítása"],
+            ["Jogalap", "az Adatkezelő jogos érdeke (GDPR 6. cikk (1) f) pont)"],
+            ["Megőrzési idő", "az érintett bejelentés megőrzési idejével megegyező ideig"],
+          ]} />
+        </Sub>
+      </Section>
+
+      <Section id="ks-at-4" title="KS AT 4. Fellebbezési eljárás">
+        <Sub n="KS AT 4.1.">
+          <DataTable rows={[
+            ["Kezelt adatok", "fellebbező felhasználói azonosítója, fellebbezés szövege, fellebbezési státusz, adminisztrátori válasz, felülvizsgálat időpontja"],
+            ["Cél", "belső fellebbezési eljárás lefolytatása, az érintett jogorvoslathoz való jogának biztosítása"],
+            ["Jogalap", "jogi kötelezettség teljesítése, illetve az Adatkezelő jogos érdeke (GDPR 6. cikk (1) c) és f) pont)"],
+            ["Megőrzési idő", "a fellebbezés lezárásától számított 3 évig"],
+          ]} />
+        </Sub>
+        <Sub n="KS AT 4.2.">
+          <P>A bejelentett felhasználó a moderációs döntésről szóló értesítéstől számított 6 hónapon belül fellebbezést nyújthat be az Adatkezelő ügyfélszolgálatán. A fellebbezési határidő lejárta után a bejelentés adatai – legalHold és nyitott eljárás hiányában – anonimizálásra kerülnek.</P>
+        </Sub>
+      </Section>
+
+      <Section id="ks-at-5" title="KS AT 5. Automatizált adatmegőrzés és anonimizálás">
+        <Sub n="KS AT 5.1.">
+          <P>Az Adatkezelő automatizált folyamat (cron task) útján naponta ellenőrzi a bejelentések megőrzési idejét. A megőrzési idő lejárta és a fellebbezési határidő letelte esetén, ha sem jogi igény, sem hatósági megőrzési kötelezettség (legalHold) nem áll fenn, az Adatkezelő a bejelentés személyazonosításra alkalmas adatait anonimizálja. Az anonimizálástól számított 24 hónap elteltével az anonimizált rekord is törlésre kerül.</P>
+        </Sub>
+        <Sub n="KS AT 5.2.">
+          <P>A legalHold jelölés manuálisan, adminisztrátori döntés alapján kerül alkalmazásra, kizárólag olyan esetekben, amikor folyamatban lévő vagy várható hatósági eljárás, bírósági ügy vagy jogvita indokolja az adatok fokozott megőrzését. A legalHold jelölés feloldása szintén adminisztrátori döntés alapján történik.</P>
+        </Sub>
+      </Section>
     </div>
   );
 }

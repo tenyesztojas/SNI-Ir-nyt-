@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { findCityCoordinates, BUDAPEST_DISTRICT_COORDINATES } from "@/lib/community/types";
 import type { CommunityRole, MessagePrivacy } from "@/lib/community/types";
+import { getReportSeverity, calcRetentionUntil } from "@/lib/community/types";
 import { sendAdminPush } from "@/lib/push";
 
 // ── Nominatim geocoding (szerver oldalon, API kulcs nélkül) ──
@@ -542,6 +543,8 @@ export async function adminDisableHelpSettings(
 // ── Felhasználó jelentése ─────────────────────────────────────
 export async function submitUserReport(params: {
   reportedUserId: string;
+  entityType?: string;
+  entityId?: string | null;
   relatedHelpSettingId?: string | null;
   relatedThreadId?: string | null;
   reason: string;
@@ -572,25 +575,47 @@ export async function submitUserReport(params: {
   if ((count ?? 0) >= 3)
     return { ok: false, error: "Ugyanerről a felhasználóról 24 órán belül legfeljebb 3 jelentést küldhetsz." };
 
+  // Severity auto-számítás kategória alapján (szerver oldalon, nem kliens)
+  const severity = getReportSeverity(params.reason);
+  const retentionUntil = calcRetentionUntil(severity);
+
   const { error } = await supabase
     .from("community_user_reports")
     .insert({
       reporter_user_id: user.id,
       reported_user_id: params.reportedUserId,
+      entity_type: params.entityType ?? "user",
+      entity_id: params.entityId ?? null,
       related_help_setting_id: params.relatedHelpSettingId ?? null,
       related_thread_id: params.relatedThreadId ?? null,
       reason: params.reason,
       description: params.description.trim(),
+      severity,
+      retention_until: retentionUntil,
     });
 
   if (error) return { ok: false, error: error.message };
 
-  // Admin push értesítés
-  await sendAdminPush(
-    "⚠️ Új felhasználói jelentés",
-    "Beérkezett egy közösségi felhasználó-jelentés. Ellenőrzés szükséges.",
-    "/admin/kozosseg/jelentesek"
-  );
+  // Admin értesítés súlyosság szerint
+  if (severity === "critical") {
+    await sendAdminPush(
+      "🚨 KRITIKUS felhasználói jelentés",
+      `Kategória: ${params.reason} — Azonnali ellenőrzés szükséges!`,
+      "/admin/kozosseg/felhasznaloi-jelentesek"
+    );
+  } else if (severity === "high") {
+    await sendAdminPush(
+      "⚠️ Magas prioritású felhasználói jelentés",
+      "Beérkezett egy magas prioritású közösségi felhasználó-jelentés.",
+      "/admin/kozosseg/felhasznaloi-jelentesek"
+    );
+  } else {
+    await sendAdminPush(
+      "ℹ️ Új felhasználói jelentés",
+      "Beérkezett egy közösségi felhasználó-jelentés.",
+      "/admin/kozosseg/felhasznaloi-jelentesek"
+    );
+  }
 
   return { ok: true };
 }
@@ -599,19 +624,131 @@ export async function submitUserReport(params: {
 export async function adminUpdateUserReport(
   reportId: string,
   status: string,
-  adminNote?: string
+  adminNote: string,        // kötelező indoklás
+  severity?: string,        // opcionális súlyosság-felülbírálat
+  justification?: string    // audit napló indoklás (ha különbözik az admin note-tól)
 ): Promise<{ ok: boolean }> {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false };
+
+  const admin = createAdminClient();
+
+  // Előző állapot lekérdezése audit loghoz
+  const { data: prev } = await admin
+    .from("community_user_reports")
+    .select("status, severity")
+    .eq("id", reportId)
+    .maybeSingle();
+
+  const updatePayload: Record<string, unknown> = {
+    status,
+    admin_note: adminNote,
+    reviewed_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
+  // Lezárt státuszok esetén closed_at + appealDeadlineAt beállítása
+  const closedStatuses = ["resolved_no_action", "resolved_warning_sent", "resolved_help_disabled", "resolved_profile_suspended", "rejected"];
+  if (closedStatuses.includes(status)) {
+    const now = new Date();
+    updatePayload.closed_at = now.toISOString();
+    updatePayload.decision_notified_at = now.toISOString();
+    const appealDeadline = new Date(now);
+    appealDeadline.setMonth(appealDeadline.getMonth() + 6);
+    updatePayload.appeal_deadline_at = appealDeadline.toISOString();
+  }
+
+  if (severity) updatePayload.severity = severity;
+
+  await admin
+    .from("community_user_reports")
+    .update(updatePayload)
+    .eq("id", reportId);
+
+  // Audit napló bejegyzés (kötelező)
+  await admin
+    .from("community_report_audit_log")
+    .insert({
+      report_id: reportId,
+      admin_user_id: user.id,
+      action: "status_change",
+      previous_status: prev?.status ?? null,
+      new_status: status,
+      previous_severity: severity ? (prev?.severity ?? null) : null,
+      new_severity: severity ?? null,
+      justification: justification || adminNote,
+    });
+
+  revalidatePath("/admin/kozosseg/felhasznaloi-jelentesek");
+  return { ok: true };
+}
+
+// ── Admin: jelentés ideiglenes elrejtése ─────────────────────
+export async function adminToggleHideReport(
+  reportId: string,
+  hide: boolean
+): Promise<{ ok: boolean }> {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false };
+
   const admin = createAdminClient();
   await admin
     .from("community_user_reports")
     .update({
-      status,
-      admin_note: adminNote ?? null,
-      reviewed_at: new Date().toISOString(),
+      hidden_at: hide ? new Date().toISOString() : null,
       updated_at: new Date().toISOString(),
     })
     .eq("id", reportId);
-  revalidatePath("/admin/kozosseg/jelentesek");
+
+  await admin
+    .from("community_report_audit_log")
+    .insert({
+      report_id: reportId,
+      admin_user_id: user.id,
+      action: hide ? "content_hidden" : "content_unhidden",
+      justification: hide ? "Admin ideiglenes elrejtés" : "Admin elrejtés visszavonva",
+    });
+
+  revalidatePath("/admin/kozosseg/felhasznaloi-jelentesek");
+  return { ok: true };
+}
+
+// ── Admin: súlyosság felülbírálata (önálló action) ───────────
+export async function adminOverrideSeverity(
+  reportId: string,
+  newSeverity: string,
+  justification: string
+): Promise<{ ok: boolean }> {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false };
+
+  const admin = createAdminClient();
+  const { data: prev } = await admin
+    .from("community_user_reports")
+    .select("severity")
+    .eq("id", reportId)
+    .maybeSingle();
+
+  await admin
+    .from("community_user_reports")
+    .update({ severity: newSeverity, updated_at: new Date().toISOString() })
+    .eq("id", reportId);
+
+  await admin
+    .from("community_report_audit_log")
+    .insert({
+      report_id: reportId,
+      admin_user_id: user.id,
+      action: "severity_override",
+      previous_severity: prev?.severity ?? null,
+      new_severity: newSeverity,
+      justification,
+    });
+
+  revalidatePath("/admin/kozosseg/felhasznaloi-jelentesek");
   return { ok: true };
 }
 

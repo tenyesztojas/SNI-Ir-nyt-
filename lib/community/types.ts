@@ -195,16 +195,55 @@ export type UserReportStatus =
   | "resolved_profile_suspended"
   | "rejected";
 
+export type ReportSeverity = "critical" | "high" | "normal";
+export type ReportEntityType = "user" | "help_request" | "help_offer" | "comment" | "message";
+
 export interface CommunityUserReport {
   id: string;
   reporter_user_id: string;
   reported_user_id: string;
+  entity_type: ReportEntityType;
+  entity_id: string | null;
   related_help_setting_id: string | null;
   related_thread_id: string | null;
   reason: string;
   description: string;
+  severity: ReportSeverity;
+  legal_hold: boolean;
+  retention_until: string | null;
+  appeal_deadline_at: string | null;
+  decision_notified_at: string | null;
+  closed_at: string | null;
+  anonymized_at: string | null;
+  hidden_at: string | null;
   status: UserReportStatus;
   admin_note: string | null;
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ReportAuditLogEntry {
+  id: string;
+  report_id: string;
+  admin_user_id: string;
+  action: string;
+  previous_status: string | null;
+  new_status: string | null;
+  previous_severity: string | null;
+  new_severity: string | null;
+  justification: string;
+  created_at: string;
+}
+
+export interface ReportAppeal {
+  id: string;
+  report_id: string;
+  appellant_user_id: string;
+  appeal_text: string;
+  status: "pending" | "under_review" | "upheld" | "rejected";
+  admin_response: string | null;
   reviewed_by: string | null;
   reviewed_at: string | null;
   created_at: string;
@@ -247,17 +286,46 @@ export const HELP_OFFERED_CATEGORIES = [
   { value: "egyeb", label: "Egyéb" },
 ] as const;
 
-export const USER_REPORT_REASONS = [
-  { value: "zaklatas_banto", label: "Zaklatás vagy bántó viselkedés" },
-  { value: "gyanús_veszelyes_felajanlas", label: "Gyanús vagy veszélyes segítségfelajánlás" },
-  { value: "gyermek_adat_megosztasa", label: "Gyermek személyes adatának megosztása" },
-  { value: "erzekeny_adat_megosztasa", label: "Érzékeny adat nyilvános megosztása" },
-  { value: "penzkeresugyzletszeru", label: "Pénzkérés vagy üzletszerű szolgáltatás hirdetése" },
-  { value: "megteveeszto_info", label: "Megtévesztő információ" },
-  { value: "nem_megfelelo_uzenet", label: "Nem megfelelő üzenet vagy kapcsolatfelvétel" },
-  { value: "visszaeles_funkcióval", label: "Visszaélés a közösségi segítség funkcióval" },
-  { value: "egyeb", label: "Egyéb" },
+// ── Bejelentési kategóriák automatikus súlyossággal ─────────
+export const USER_REPORT_CATEGORIES = [
+  { value: "threat_or_violence",    label: "Fenyegetés vagy erőszak",                     severity: "critical" as ReportSeverity },
+  { value: "child_safety",          label: "Gyermekbiztonság",                             severity: "critical" as ReportSeverity },
+  { value: "child_personal_data",   label: "Gyermek személyes adatának megosztása",        severity: "critical" as ReportSeverity },
+  { value: "privacy_or_doxxing",    label: "Adatvédelem megsértése / doxxing",             severity: "critical" as ReportSeverity },
+  { value: "dangerous_help_offer",  label: "Veszélyes segítségfelajánlás",                 severity: "high" as ReportSeverity },
+  { value: "fraud_or_scam",         label: "Átverés vagy csalás",                          severity: "high" as ReportSeverity },
+  { value: "payment_or_commercial", label: "Pénzkérés vagy kereskedelmi tevékenység",      severity: "high" as ReportSeverity },
+  { value: "harassment",            label: "Zaklatás vagy bántó viselkedés",               severity: "normal" as ReportSeverity },
+  { value: "misuse_of_community_help", label: "Visszaélés a közösségi segítség funkcióval", severity: "normal" as ReportSeverity },
+  { value: "other",                 label: "Egyéb",                                        severity: "normal" as ReportSeverity },
 ] as const;
+
+export type UserReportCategory = (typeof USER_REPORT_CATEGORIES)[number]["value"];
+
+/** Kategóriák amelyek gyermekbiztonsági figyelmeztetést igényelnek */
+export const CHILD_WARNING_CATEGORIES: UserReportCategory[] = [
+  "child_personal_data",
+  "child_safety",
+  "dangerous_help_offer",
+  "threat_or_violence",
+];
+
+/** Súlyosság kikeresése kategória alapján */
+export function getReportSeverity(category: string): ReportSeverity {
+  const found = USER_REPORT_CATEGORIES.find((c) => c.value === category);
+  return found?.severity ?? "normal";
+}
+
+/** Visszatartási idő kiszámítása (minimum 6 hónap, critical esetén 12 hónap) */
+export function calcRetentionUntil(severity: ReportSeverity): string {
+  const months = severity === "critical" ? 12 : 6;
+  const d = new Date();
+  d.setMonth(d.getMonth() + months);
+  return d.toISOString();
+}
+
+/** @deprecated Használd a USER_REPORT_CATEGORIES konstanst */
+export const USER_REPORT_REASONS = USER_REPORT_CATEGORIES;
 
 // Városok közelítő koordinátái a térképes megjelenítéshez
 export const CITY_COORDINATES: Record<string, { lat: number; lng: number }> = {
