@@ -17,7 +17,9 @@ export default function ReportUserButton({ reportedUserId, relatedHelpSettingId 
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
 
   const selectedCategory = USER_REPORT_CATEGORIES.find((c) => c.value === reason);
-  const showChildWarning = CHILD_WARNING_CATEGORIES.includes(reason as typeof CHILD_WARNING_CATEGORIES[number]);
+  const showChildWarning = CHILD_WARNING_CATEGORIES.includes(
+    reason as (typeof CHILD_WARNING_CATEGORIES)[number]
+  );
 
   function handleOpen() {
     setOpen(true);
@@ -54,7 +56,10 @@ export default function ReportUserButton({ reportedUserId, relatedHelpSettingId 
         text: "Köszönjük, megkaptuk a jelentést. Az adminisztrátorok megvizsgálják, és szükség esetén intézkednek.",
       });
     } else {
-      setResult({ ok: false, text: res.error ?? "A jelentést most nem sikerült elküldeni. Kérjük, próbáld újra később." });
+      setResult({
+        ok: false,
+        text: res.error ?? "A jelentést most nem sikerült elküldeni. Kérjük, próbáld újra később.",
+      });
     }
   }
 
@@ -83,17 +88,21 @@ export default function ReportUserButton({ reportedUserId, relatedHelpSettingId 
               role="alert"
               aria-live="assertive"
             >
-              <p className="font-bold text-base mb-1">⚠️ Azonnali veszély esetén hívd a 112-t!</p>
+              <p className="font-bold text-base mb-1">
+                ⚠️ Azonnali veszély esetén ne várj a VédettSarok válaszára.
+              </p>
               <p className="text-sm leading-snug">
-                Ha te vagy valaki más közvetlen veszélyben van, ne ezt az űrlapot használd.{" "}
+                Ha valaki közvetlen veszélyben van, gyermek veszélyeztetése, erőszak, fenyegetés,
+                eltűnés, baleset vagy más sürgős helyzet merül fel, azonnal hívd a{" "}
                 <a
                   href="tel:112"
                   className="font-bold underline focus:outline-none focus:ring-2 focus:ring-white rounded"
                   aria-label="Hívás: 112 segélyhívó"
                 >
-                  Hívd a 112-t
-                </a>{" "}
-                azonnal. Ez az űrlap nem helyettesíti a hatósági bejelentést vagy a sürgősségi segítséget.
+                  112-t
+                </a>
+                . A VédettSarokban tett jelentés nem helyettesíti a rendőrségi, mentőszolgálati,
+                gyermekvédelmi vagy más hatósági bejelentést.
               </p>
             </div>
 
@@ -114,7 +123,10 @@ export default function ReportUserButton({ reportedUserId, relatedHelpSettingId 
                   {/* 112 emlékeztető a siker üzenetben */}
                   <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
                     Ha valaki közvetlen veszélyben van, hívd a{" "}
-                    <a href="tel:112" className="font-bold underline">112-t</a> haladéktalanul. Ez az értesítés nem jelent azonnali hatósági intézkedést.
+                    <a href="tel:112" className="font-bold underline">
+                      112-t
+                    </a>{" "}
+                    haladéktalanul. Ez az értesítés nem jelent azonnali hatósági intézkedést.
                   </div>
                   <button
                     onClick={() => setOpen(false)}
@@ -133,7 +145,10 @@ export default function ReportUserButton({ reportedUserId, relatedHelpSettingId 
                     </span>
                     <select
                       value={reason}
-                      onChange={(e) => { setReason(e.target.value); setResult(null); }}
+                      onChange={(e) => {
+                        setReason(e.target.value);
+                        setResult(null);
+                      }}
                       required
                       aria-required="true"
                       className="rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-sni-brand-teal focus:ring-2 focus:ring-sni-brand-teal/20"
@@ -162,10 +177,20 @@ export default function ReportUserButton({ reportedUserId, relatedHelpSettingId 
                       aria-live="polite"
                     >
                       {selectedCategory.severity === "critical" && (
-                        <><strong>Kritikus bejelentés.</strong> Az adminisztrátorok kiemelten foglalkoznak ezzel az esettel. Ha közvetlen veszély áll fenn, hívd a <a href="tel:112" className="font-bold underline">112-t</a>.</>
+                        <>
+                          <strong>Kritikus bejelentés.</strong> Az adminisztrátorok kiemelten
+                          foglalkoznak ezzel az esettel. Ha közvetlen veszély áll fenn, hívd a{" "}
+                          <a href="tel:112" className="font-bold underline">
+                            112-t
+                          </a>
+                          .
+                        </>
                       )}
                       {selectedCategory.severity === "high" && (
-                        <><strong>Magas prioritású bejelentés.</strong> Az adminisztrátorok hamarosan megvizsgálják.</>
+                        <>
+                          <strong>Magas prioritású bejelentés.</strong> Az adminisztrátorok hamarosan
+                          megvizsgálják.
+                        </>
                       )}
                       {selectedCategory.severity === "normal" && (
                         <>Az adminisztrátorok megvizsgálják a bejelentést.</>
@@ -180,37 +205,68 @@ export default function ReportUserButton({ reportedUserId, relatedHelpSettingId 
                       role="alert"
                       aria-live="assertive"
                     >
-                      <p className="font-bold mb-1">🚸 Gyermekbiztonsági eset</p>
-                      <p>
-                        Ha gyermeket érintő közvetlen veszélyről tudsz (bántalmazás, eltűnés, veszélyeztetettség),{" "}
-                        <strong>azonnal hívd a <a href="tel:112" className="underline">112-t</a></strong>{" "}
-                        vagy értesítsd a Gyermekjóléti Szolgálatot. Ez az értesítés nem helyettesíti a hatósági bejelentést.
+                      <p className="font-bold mb-1">🚸 Gyermek biztonságát érintő ügy</p>
+                      <p className="mb-2">
+                        Ha egy gyermek közvetlen veszélyben lehet, azonnal hívd a{" "}
+                        <a
+                          href="tel:112"
+                          className="font-bold underline focus:outline-none focus:ring-2 focus:ring-red-400 rounded"
+                          aria-label="Hívás: 112 segélyhívó"
+                        >
+                          112-t
+                        </a>
+                        . Ha nem azonnali veszélyhelyzetről van szó, de gyermek veszélyeztetésére,
+                        elhanyagolására vagy bántalmazására utaló információt észlelsz, a jelentés
+                        mellett jelezheted azt az illetékes gyermekjóléti szolgálatnak is.
+                      </p>
+                      <p className="text-xs text-red-700 border-t border-red-200 pt-2">
+                        <strong>Adatvédelmi megjegyzés:</strong> A jelentésben ne adj meg
+                        szükségtelenül gyermeknevet, pontos címet, iskola vagy óvoda nevét, fényképet,
+                        egészségügyi adatot, TAJ-számot vagy más azonosító adatot.
                       </p>
                     </div>
                   )}
 
                   {/* Leírás */}
-                  <label className="flex flex-col gap-1">
-                    <span className="text-xs font-semibold text-gray-600">
-                      Részletes leírás <span className="text-red-500" aria-hidden="true">*</span>
-                    </span>
+                  <div className="flex flex-col gap-1">
+                    <label
+                      htmlFor="report-description"
+                      className="text-xs font-semibold text-gray-600"
+                    >
+                      Részletes leírás{" "}
+                      <span className="text-red-500" aria-hidden="true">
+                        *
+                      </span>
+                    </label>
+                    {/* Adatminimalizálási figyelmeztetés – mező felett */}
+                    <p className="text-xs text-gray-400 leading-snug mb-1">
+                      Csak a kivizsgáláshoz szükséges információt add meg. Ne írj be TAJ-számot,
+                      okmányadatot, banki adatot, pontos lakcímet, gyermek teljes nevét,
+                      intézményének nevét, fényképét vagy részletes egészségügyi adatot.
+                    </p>
                     <textarea
+                      id="report-description"
                       value={description}
                       onChange={(e) => setDescription(e.target.value.slice(0, 1000))}
                       required
                       aria-required="true"
                       rows={4}
-                      placeholder="Írd le röviden, mi történt. Csak annyi információt adj meg, amennyi a helyzet megértéséhez szükséges. Ne írj le szükségtelenül gyermeknevet, pontos lakcímet, diagnózist vagy egészségügyi adatot."
+                      placeholder="Írd le röviden, mi történt. Csak annyi információt adj meg, amennyi a helyzet megértéséhez szükséges."
                       className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-sni-brand-teal focus:ring-2 focus:ring-sni-brand-teal/20 resize-none"
                       aria-describedby="desc-counter desc-privacy"
                     />
-                    <p id="desc-counter" className="text-right text-xs text-gray-400" aria-live="polite">
+                    <p
+                      id="desc-counter"
+                      className="text-right text-xs text-gray-400"
+                      aria-live="polite"
+                    >
                       {description.length}/1000
                     </p>
-                  </label>
+                  </div>
 
                   <p id="desc-privacy" className="text-xs text-gray-400">
-                    Adatvédelmi megjegyzés: A bejelentés tartalma és a bejelentő személye az érintett felhasználóval nem kerül megosztásra, kivéve, ha ezt jogszabály, bíróság vagy hatóság kötelezően előírja.
+                    A bejelentés tartalma és a bejelentő személye az érintett felhasználóval nem kerül
+                    megosztásra, kivéve, ha ezt jogszabály, bíróság vagy hatóság kötelezően előírja.
                   </p>
 
                   {result && !result.ok && (
@@ -222,6 +278,20 @@ export default function ReportUserButton({ reportedUserId, relatedHelpSettingId 
                       {result.text}
                     </p>
                   )}
+
+                  {/* Küldés előtti megjegyzés */}
+                  <p className="text-xs text-gray-400 leading-snug">
+                    A jelentést a VédettSarok biztonsági és moderációs célból vizsgálja. Nem
+                    garantálható az azonnali válasz vagy intézkedés. Közvetlen veszély esetén hívd a{" "}
+                    <a
+                      href="tel:112"
+                      className="font-semibold underline focus:outline-none focus:ring-2 focus:ring-gray-400 rounded"
+                      aria-label="Hívás: 112 segélyhívó"
+                    >
+                      112-t
+                    </a>
+                    .
+                  </p>
 
                   <div className="flex gap-3">
                     <button
