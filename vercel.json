@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/expire-vedettmunka-jobs",
+      "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/send-weekly-job-alerts",
+      "schedule": "0 7 * * 1"
+    }
+  ]
+}
