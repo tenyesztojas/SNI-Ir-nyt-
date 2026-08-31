@@ -51,10 +51,7 @@ export default async function UjMunkatarsPage() {
 
         {/* Tömeges meghívás */}
         <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-soft">
-          <h2 className="text-base font-bold text-sni-text mb-1">Tömeges meghívás (CSV)</h2>
-          <p className="text-xs text-gray-400 mb-4">
-            Formátum: <code className="bg-gray-100 px-1 rounded">Vezetéknév,Keresztnév,Email,Telephely,Munkakör</code>
-          </p>
+          <h2 className="text-base font-bold text-sni-text mb-4">Tömeges meghívás (Excel / CSV)</h2>
           <BulkInviteForm courseVersions={courseVersions} />
         </div>
       </div>
