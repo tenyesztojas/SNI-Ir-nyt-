@@ -1,12 +1,13 @@
 "use client";
 import Link from "next/link";
-import { LayoutDashboard, Package, Calendar, BookOpen, ArrowLeft } from "lucide-react";
+import { LayoutDashboard, Package, Calendar, BookOpen, GraduationCap, ArrowLeft } from "lucide-react";
 
 const NAV = [
   { key: "dashboard", href: "/szolgaltato/dashboard", label: "Áttekintés", icon: LayoutDashboard },
   { key: "szolgaltatasok", href: "/szolgaltato/szolgaltatasok", label: "Szolgáltatások", icon: Package },
   { key: "elerheto", href: "/szolgaltato/elerheto", label: "Elérhetőség", icon: Calendar },
   { key: "foglalasok", href: "/szolgaltato/foglalasok", label: "Foglalások", icon: BookOpen },
+  { key: "akademia", href: "/akademia", label: "Védett Akadémia", icon: GraduationCap },
 ];
 
 export default function ProviderNav({ companyName, active }: { companyName: string; active: string }) {

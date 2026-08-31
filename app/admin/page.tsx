@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { MapPin, Star, Flag, Mail, Users, PlusCircle, Map, MessageCircle, Tv2, Briefcase, FlaskConical } from "lucide-react";
+import { MapPin, Star, Flag, Mail, Users, PlusCircle, Map, MessageCircle, Tv2, Briefcase, FlaskConical, GraduationCap } from "lucide-react";
 import { getApprovedPlaces, getFlaggedReviews, getPendingReports } from "@/lib/data";
 import PushNotifButton from "@/components/PushNotifButton";
 import AdminPwaStats from "@/components/AdminPwaStats";
@@ -90,6 +90,9 @@ export default async function AdminOverviewPage() {
         </Link>
         <Link href="/admin/kozosseg/jelentesek" className="btn-secondary inline-flex items-center gap-2">
           <Flag size={16} /> Közösségi jelentések
+        </Link>
+        <Link href="/admin/akademia" className="btn-secondary inline-flex items-center gap-2">
+          <GraduationCap size={16} /> Védett Akadémia
         </Link>
         <Link
           href="/admin/vedett-utvonal"

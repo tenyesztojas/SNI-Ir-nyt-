@@ -24,6 +24,7 @@ const RATE_RULES: Array<{ pattern: RegExp; limit: number; windowMs: number }> = 
   { pattern: /^\/api\/igenylas-verify/,  limit: 10,  windowMs: 60_000  }, // igénylés verify: 10/perc
   { pattern: /^\/api\/auth/,             limit: 20,  windowMs: 60_000  }, // OAuth: 20/perc
   { pattern: /^\/belepes/,               limit: 20,  windowMs: 60_000  }, // bejelentkezés oldal
+  { pattern: /^\/akademia\/meghivo\//,   limit: 30,  windowMs: 60_000  }, // magic link landing: 30/perc (token brute-force védelem)
   { pattern: /^\/api\/admin\/vedett-utvonal/, limit: 30, windowMs: 60_000 }, // Védett Útvonal admin API: 30/perc
   { pattern: /^\/api\//,                 limit: 60,  windowMs: 60_000  }, // minden más API: 60/perc
 ];
