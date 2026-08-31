@@ -5,6 +5,11 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isCurrentUserAdmin } from "@/lib/data";
 import { ProviderProfile, ServicePackage, AvailabilitySlot } from "@/lib/types";
+import { sendAdminPush } from "@/lib/push";
+import { getResend } from "@/lib/resend";
+
+const ADMIN_EMAIL = "holvay.csaba@gmail.com";
+const FROM_EMAIL = process.env.RESEND_FROM_EMAIL ?? "onboarding@resend.dev";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Szolgáltató regisztráció benyújtása
@@ -52,6 +57,63 @@ export async function submitProviderRegistration(input: {
 
   if (error) return { error: "Nem sikerült a regisztráció benyújtása." };
   revalidatePath("/admin/szolgaltatok");
+
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://vedettsarok.hu";
+  const resend = getResend();
+
+  // Admin push értesítő
+  await sendAdminPush(
+    "🏢 Új szolgáltató regisztráció",
+    `${input.companyName} (${input.contactName}) benyújtotta regisztrációját`,
+    "/admin/szolgaltatok"
+  );
+
+  // Admin e-mail
+  await resend.emails.send({
+    from: `VédettSarok <${FROM_EMAIL}>`,
+    to: ADMIN_EMAIL,
+    subject: `Új szolgáltató regisztráció: ${input.companyName}`,
+    html: `
+      <div style="font-family:sans-serif;max-width:600px;margin:0 auto;color:#1a1a2e">
+        <div style="background:#123A5C;padding:24px 32px;border-radius:12px 12px 0 0">
+          <h1 style="color:#34D8C3;font-size:20px;margin:0">Új szolgáltató regisztráció</h1>
+        </div>
+        <div style="background:#fff;padding:24px 32px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px">
+          <table style="width:100%;border-collapse:collapse;font-size:14px">
+            <tr><td style="padding:6px 0;color:#666;width:140px">Cég neve:</td><td style="font-weight:700">${input.companyName}</td></tr>
+            <tr><td style="padding:6px 0;color:#666">Kapcsolattartó:</td><td>${input.contactName}</td></tr>
+            <tr><td style="padding:6px 0;color:#666">E-mail:</td><td>${input.contactEmail}</td></tr>
+            ${input.contactPhone ? `<tr><td style="padding:6px 0;color:#666">Telefon:</td><td>${input.contactPhone}</td></tr>` : ""}
+            ${input.taxNumber ? `<tr><td style="padding:6px 0;color:#666">Adószám:</td><td>${input.taxNumber}</td></tr>` : ""}
+            <tr><td style="padding:6px 0;color:#666">Foglalás típusa:</td><td>${input.bookingType}</td></tr>
+            ${input.customDescription ? `<tr><td style="padding:6px 0;color:#666">Leírás:</td><td style="white-space:pre-wrap">${input.customDescription}</td></tr>` : ""}
+          </table>
+          <a href="${baseUrl}/admin/szolgaltatok" style="display:inline-block;background:#34D8C3;color:#123A5C;font-weight:700;padding:12px 24px;border-radius:999px;text-decoration:none;margin-top:16px">
+            Regisztrációk kezelése
+          </a>
+        </div>
+      </div>`,
+  }).catch(() => {}); // e-mail hiba soha ne törje a flow-t
+
+  // Visszaigazolás a regisztrálónak
+  await resend.emails.send({
+    from: `VédettSarok <${FROM_EMAIL}>`,
+    to: input.contactEmail,
+    subject: "Szolgáltatói regisztrációd megérkezett – VédettSarok",
+    html: `
+      <div style="font-family:sans-serif;max-width:600px;margin:0 auto;color:#1a1a2e">
+        <div style="background:#123A5C;padding:24px 32px;border-radius:12px 12px 0 0">
+          <h1 style="color:#34D8C3;font-size:20px;margin:0">VédettSarok</h1>
+          <p style="color:#e2e8f0;font-size:14px;margin:6px 0 0">Regisztrációs visszaigazolás</p>
+        </div>
+        <div style="background:#fff;padding:24px 32px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px">
+          <p style="font-size:15px">Kedves <strong>${input.contactName}</strong>!</p>
+          <p>Megkaptuk a <strong>${input.companyName}</strong> szolgáltatói regisztrációját. Csapatunk hamarosan átnézi és értesítünk az eredményről.</p>
+          <p style="font-size:13px;color:#888;margin-top:24px">Ha kérdésed van, írj nekünk: <a href="mailto:${ADMIN_EMAIL}">${ADMIN_EMAIL}</a></p>
+        </div>
+      </div>`,
+  }).catch(() => {});
+
   return {};
 }
 
@@ -109,6 +171,32 @@ export async function approveProviderRegistration(
     .neq("role", "admin");
 
   revalidatePath("/admin/szolgaltatok");
+
+  // Jóváhagyó e-mail a regisztrálónak
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://vedettsarok.hu";
+  const resend = getResend();
+  await resend.emails.send({
+    from: `VédettSarok <${FROM_EMAIL}>`,
+    to: reg.contact_email,
+    subject: "Szolgáltatói regisztrációd jóváhagyva – VédettSarok",
+    html: `
+      <div style="font-family:sans-serif;max-width:600px;margin:0 auto;color:#1a1a2e">
+        <div style="background:#123A5C;padding:24px 32px;border-radius:12px 12px 0 0">
+          <h1 style="color:#34D8C3;font-size:20px;margin:0">VédettSarok</h1>
+          <p style="color:#e2e8f0;font-size:14px;margin:6px 0 0">Regisztráció jóváhagyva ✓</p>
+        </div>
+        <div style="background:#fff;padding:24px 32px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px">
+          <p style="font-size:15px">Kedves <strong>${reg.contact_name}</strong>!</p>
+          <p>Örömmel értesítünk, hogy a <strong>${reg.company_name}</strong> szolgáltatói regisztrációját <strong>jóváhagytuk</strong>.</p>
+          <p>Mostantól bejelentkezés után eléred a szolgáltatói dashboardot, ahol beállíthatod a szolgáltatásaidat és a foglalási naptáradat.</p>
+          <a href="${baseUrl}/szolgaltato/dashboard" style="display:inline-block;background:#34D8C3;color:#123A5C;font-weight:700;padding:12px 24px;border-radius:999px;text-decoration:none;margin-top:16px">
+            Megnyitom a dashboardot
+          </a>
+          <p style="font-size:13px;color:#888;margin-top:24px">Ha kérdésed van, írj: <a href="mailto:${ADMIN_EMAIL}">${ADMIN_EMAIL}</a></p>
+        </div>
+      </div>`,
+  }).catch(() => {});
+
   return {};
 }
 
@@ -130,6 +218,36 @@ export async function rejectProviderRegistration(
 
   if (error) return { error: "Nem sikerült az elutasítás." };
   revalidatePath("/admin/szolgaltatok");
+
+  // Elutasító e-mail a regisztrálónak
+  const { data: reg } = await adminClient
+    .from("provider_registrations")
+    .select("contact_email, contact_name, company_name")
+    .eq("id", registrationId)
+    .single();
+
+  if (reg) {
+    const resend = getResend();
+    await resend.emails.send({
+      from: `VédettSarok <${FROM_EMAIL}>`,
+      to: reg.contact_email,
+      subject: "Szolgáltatói regisztrációdról – VédettSarok",
+      html: `
+        <div style="font-family:sans-serif;max-width:600px;margin:0 auto;color:#1a1a2e">
+          <div style="background:#123A5C;padding:24px 32px;border-radius:12px 12px 0 0">
+            <h1 style="color:#34D8C3;font-size:20px;margin:0">VédettSarok</h1>
+          </div>
+          <div style="background:#fff;padding:24px 32px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px">
+            <p style="font-size:15px">Kedves <strong>${reg.contact_name}</strong>!</p>
+            <p>Sajnálattal értesítünk, hogy a <strong>${reg.company_name}</strong> szolgáltatói regisztrációját ezúttal nem tudjuk jóváhagyni.</p>
+            ${reason ? `<p><strong>Indok:</strong> ${reason}</p>` : ""}
+            <p>Ha kérdésed van vagy szeretnéd felülvizsgáltatni a döntést, vedd fel velünk a kapcsolatot:</p>
+            <p><a href="mailto:${ADMIN_EMAIL}">${ADMIN_EMAIL}</a></p>
+          </div>
+        </div>`,
+    }).catch(() => {});
+  }
+
   return {};
 }
 
