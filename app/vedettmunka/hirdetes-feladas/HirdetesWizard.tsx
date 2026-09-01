@@ -280,7 +280,7 @@ export default function HirdetesWizard() {
           <div className="flex flex-col gap-4">
             <div className="rounded-xl bg-blue-50 border border-blue-100 px-4 py-3 text-xs text-blue-700">
               Írj egyszerűen és érthetően. Kerüld a HR-zsargont.<br />
-              Pl. ne „Dinamikus munkakör", hanem „A feladataid naponta változhatnak."
+              Pl. ne &bdquo;Dinamikus munkakör&rdquo;, hanem &bdquo;A feladataid naponta változhatnak.&rdquo;
             </div>
             <Field label="Mik lesznek a feladataid?" required>
               <Textarea name="tasks_description" value={data.tasks_description as string}
