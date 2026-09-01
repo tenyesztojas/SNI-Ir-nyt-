@@ -2,6 +2,8 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Employer, JobPost, JobAlert, JobReport, JobApplicationLog } from "./types";
 import type { JobFilters } from "./categories";
+import type { VmAttribute, VmJobAttributeValue, VmWorkProfile } from "./attributes";
+import { deriveAttributesFromJobPost } from "./attributes";
 
 // ─── Publikus lekérdezések ──────────────────────────────────────
 
@@ -182,4 +184,71 @@ export async function adminGetVmKpis() {
     reports_open: repRows.filter((r) => r.status === "open").length,
     applications_total: (apps.data ?? []).length,
   };
+}
+
+// ─── Attribútum / piktogram lekérdezések ───────────────────────
+
+/** Összes aktív attribútum a DB-ből */
+export async function getAllAttributes(): Promise<VmAttribute[]> {
+  const supabase = createClient();
+  const { data } = await supabase
+    .from("vm_job_attributes")
+    .select("*")
+    .eq("is_active", true)
+    .order("category")
+    .order("display_order");
+  return (data ?? []) as VmAttribute[];
+}
+
+/** Egy álláshoz tartozó attribútumok (DB + legacy levezetés) */
+export async function getJobAttributes(jobPostId: string, job?: JobPost): Promise<string[]> {
+  const supabase = createClient();
+  const { data } = await supabase
+    .from("vm_job_attribute_values")
+    .select("attribute_slug, value")
+    .eq("job_post_id", jobPostId)
+    .eq("value", "true");
+
+  const dbSlugs = (data ?? []).map((r) => (r as VmJobAttributeValue).attribute_slug);
+
+  // Backward compat: régi állásokhoz levezetett attribútumok
+  const legacySlugs = job ? deriveAttributesFromJobPost(job) : [];
+  return [...new Set([...dbSlugs, ...legacySlugs])];
+}
+
+/** Állás attribútumainak beállítása (teljes felülírás) */
+export async function setJobAttributes(jobPostId: string, slugs: string[]): Promise<void> {
+  const admin = createAdminClient();
+  // Delete existing
+  await admin.from("vm_job_attribute_values").delete().eq("job_post_id", jobPostId);
+  if (slugs.length === 0) return;
+  // Insert new
+  const rows = slugs.map((slug) => ({ job_post_id: jobPostId, attribute_slug: slug, value: "true" }));
+  await admin.from("vm_job_attribute_values").insert(rows);
+}
+
+/** Saját Munkaprofil lekérése */
+export async function getMyWorkProfile(): Promise<VmWorkProfile | null> {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { data } = await supabase
+    .from("vm_work_profiles")
+    .select("*")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  return data as VmWorkProfile | null;
+}
+
+/** Saját Munkaprofil mentése (upsert) */
+export async function saveMyWorkProfile(attributeSlugs: string[], notes?: string): Promise<void> {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Nem vagy bejelentkezve.");
+  await supabase.from("vm_work_profiles").upsert({
+    user_id: user.id,
+    attribute_slugs: attributeSlugs,
+    notes: notes ?? null,
+    updated_at: new Date().toISOString(),
+  }, { onConflict: "user_id" });
 }

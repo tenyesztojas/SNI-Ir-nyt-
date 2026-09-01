@@ -171,6 +171,126 @@ export async function submitJobPost(formData: FormData) {
   revalidatePath("/vedettmunka/hirdetes-feladas");
 }
 
+// ─── Wizard alapú hirdetésfeladás (+ attribútumok) ─────────────
+
+export async function submitJobPostWizard(
+  data: Record<string, string | string[] | boolean>,
+  attributeSlugs: string[]
+): Promise<{ ok: boolean; error?: string }> {
+  "use server";
+  try {
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { ok: false, error: "Nincs bejelentkezve." };
+
+    const { data: employer } = await supabase
+      .from("employers")
+      .select("id, status")
+      .eq("user_id", user.id)
+      .single();
+
+    if (!employer || employer.status !== "approved") {
+      return { ok: false, error: "Csak jóváhagyott munkáltató adhat fel hirdetést." };
+    }
+
+    const obj = {
+      employer_id: employer.id,
+      title:                    (data.title as string ?? "").trim(),
+      city:                     (data.city as string ?? "").trim(),
+      county:                   (data.county as string ?? "").trim(),
+      workplace_address:        (data.workplace_address as string)?.trim() || null,
+      work_type:                (data.work_type as string) || "szellemi",
+      job_category:             (data.job_category as string ?? "").trim(),
+      work_location_type:       (data.work_location_type as string) || "munkahelyen",
+      daily_hours:              (data.daily_hours as string ?? "").trim(),
+      working_days:             (data.working_days as string ?? "").trim(),
+      working_hours_from:       (data.working_hours_from as string)?.trim() || null,
+      working_hours_to:         (data.working_hours_to as string)?.trim() || null,
+      break_description:        (data.break_description as string)?.trim() || null,
+      schedule_type:            (data.schedule_type as string) || "allando",
+      salary_range:             (data.salary_range as string ?? "").trim(),
+      tasks_description:        (data.tasks_description as string ?? "").trim(),
+      requirements_description: (data.requirements_description as string ?? "").trim(),
+      application_deadline:     (data.application_deadline as string) || null,
+      expected_start_date:      (data.expected_start_date as string)?.trim() || null,
+      training_description:     (data.training_description as string)?.trim() || null,
+      mentor_available:         (data.mentor_available as string) || "meg_egyeztetes_alatt",
+      interview_process:        (data.interview_process as string)?.trim() || null,
+      contact_name:             (data.contact_name as string)?.trim() || null,
+      contact_email:            (data.contact_email as string)?.trim() || null,
+      application_email:        (data.application_email as string ?? "").trim(),
+      required_documents:       (data.required_documents as string)?.trim() || null,
+      notes:                    (data.notes as string)?.trim() || null,
+      support_description:      (data.support_description as string ?? "").trim(),
+      noise_level:              (data.noise_level as string) || null,
+      verbal_interaction_level: (data.verbal_interaction_level as string) || null,
+      interaction_with:         Array.isArray(data.interaction_with) ? data.interaction_with : [],
+      written_instructions_available: (data.written_instructions_available as string) || null,
+      break_flexibility:        (data.break_flexibility as string) || null,
+      start_end_flexibility:    (data.start_end_flexibility as string) || null,
+      part_time_available:      (data.part_time_available as string) || null,
+      open_to_parents:          data.open_to_parents === true || data.open_to_parents === "true",
+      open_to_neurodivergent:   data.open_to_neurodivergent === true || data.open_to_neurodivergent === "true",
+      open_to_disabled:         data.open_to_disabled === true || data.open_to_disabled === "true",
+      status: "submitted",
+    };
+
+    const { data: inserted, error } = await supabase
+      .from("job_posts")
+      .insert(obj)
+      .select("id")
+      .single();
+    if (error) return { ok: false, error: error.message };
+
+    // Attribútumok mentése
+    if (inserted?.id && attributeSlugs.length > 0) {
+      const admin = createAdminClient();
+      const rows = attributeSlugs.map((slug) => ({
+        job_post_id: inserted.id,
+        attribute_slug: slug,
+        value: "true",
+      }));
+      await admin.from("vm_job_attribute_values").insert(rows);
+    }
+
+    // Admin értesítő
+    const adminEmail = process.env.ADMIN_EMAIL;
+    if (adminEmail) {
+      await resend.emails.send({
+        from: "Védett Munka <noreply@vedettsarok.hu>",
+        to: adminEmail,
+        subject: `[Védett Munka] Új hirdetés jóváhagyásra vár: ${obj.title}`,
+        html: `<p>Új hirdetés érkezett a wizardon keresztül: <strong>${obj.title}</strong></p>
+               <p><a href="${process.env.NEXT_PUBLIC_SITE_URL}/admin/vedettmunka/hirdetesek">Admin kezelés</a></p>`,
+      }).catch(() => null);
+    }
+
+    return { ok: true };
+  } catch (e: unknown) {
+    return { ok: false, error: e instanceof Error ? e.message : "Ismeretlen hiba" };
+  }
+}
+
+// ─── Saját Munkaprofil mentése ──────────────────────────────────
+
+export async function saveWorkProfile(slugs: string[], notes: string): Promise<{ ok: boolean; error?: string }> {
+  "use server";
+  try {
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { ok: false, error: "Nincs bejelentkezve." };
+    await supabase.from("vm_work_profiles").upsert({
+      user_id: user.id,
+      attribute_slugs: slugs,
+      notes: notes || null,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "user_id" });
+    return { ok: true };
+  } catch (e: unknown) {
+    return { ok: false, error: e instanceof Error ? e.message : "Hiba" };
+  }
+}
+
 // ─── Állásértesítő ──────────────────────────────────────────────
 
 export async function upsertJobAlert(formData: FormData) {

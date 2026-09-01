@@ -2,37 +2,46 @@
 
 import { useState } from "react";
 import { SZELLEMI_KATEGORIAK, FIZIKAI_KATEGORIAK } from "@/lib/vedettmunka/categories";
+import VmIcon from "@/components/vedettmunka/VmIcon";
 
 interface Props {
   defaults: Record<string, string | undefined>;
   counties: string[];
 }
 
-const CHECKBOXES = [
-  { name: "part_time",  label: "Részmunkaidő" },
-  { name: "nd",         label: "Neurodivergens jelölteknek" },
-  { name: "disabled",   label: "Megváltozott munkaképességű személyeknek" },
-  { name: "parents",    label: "Szülőknek is alkalmas" },
-  { name: "mentor",     label: "Támogató személy van" },
-  { name: "written",    label: "Írásos feladatok elérhetők" },
-  { name: "quiet",      label: "Csendesebb munkakörnyezet" },
-  { name: "low_verbal", label: "Kevés beszélgetés emberekkel" },
+// Vizuális toggle szűrők piktogrammal
+const VM_FILTERS: { name: string; slug: string; label: string; param: string }[] = [
+  { name: "Fokozatos betanítás",    slug: "gradual_training",    label: "Fokozatos betanítás",    param: "betanitas"  },
+  { name: "Kijelölt segítő",        slug: "assigned_mentor",     label: "Kijelölt segítő",        param: "mentor"     },
+  { name: "Csendesebb környezet",   slug: "quieter_env",         label: "Csendesebb környezet",   param: "quiet"      },
+  { name: "Kis csapat",             slug: "small_team",          label: "Kis csapat",             param: "kis_csapat" },
+  { name: "Kevés beszélgetés",      slug: "low_verbal",          label: "Kevés beszélgetés",      param: "low_verbal" },
+  { name: "Írásban is kapod",       slug: "written_tasks",       label: "Írásban is megkapod",    param: "written"    },
+  { name: "Részmunkaidő",           slug: "part_time",           label: "Részmunkaidő",           param: "part_time"  },
+  { name: "Rugalmas munkaidő",      slug: "flexible_hours",      label: "Rugalmas munkaidő",      param: "flex"       },
+  { name: "Home office",            slug: "home_office",         label: "Home office",            param: "home_office"},
+  { name: "Kiszámítható munkarend", slug: "predictable_schedule",label: "Kiszám. munkarend",      param: "pred_sched" },
 ];
 
 export default function AllasokFilterClient({ defaults, counties }: Props) {
   const [workType, setWorkType] = useState(defaults.work_type ?? "");
 
   const kategoriak =
-    workType === "szellemi"
-      ? SZELLEMI_KATEGORIAK
-      : workType === "fizikai"
-      ? FIZIKAI_KATEGORIAK
-      : [];
+    workType === "szellemi" ? SZELLEMI_KATEGORIAK
+    : workType === "fizikai" ? FIZIKAI_KATEGORIAK
+    : [];
+
+  const activeParams = new Set(
+    Object.entries(defaults)
+      .filter(([, v]) => v === "1")
+      .map(([k]) => k)
+  );
 
   return (
-    <form method="GET" className="flex flex-col gap-4 rounded-2xl border border-gray-100 bg-white p-5">
+    <form method="GET" className="flex flex-col gap-5 rounded-2xl border border-gray-100 bg-white p-5 shadow-soft">
       <h2 className="font-bold text-sni-brand-navy">Szűrők</h2>
 
+      {/* Keresés */}
       <label className="flex flex-col gap-1">
         <span className="text-xs font-semibold text-gray-500">Keresés</span>
         <input
@@ -43,6 +52,7 @@ export default function AllasokFilterClient({ defaults, counties }: Props) {
         />
       </label>
 
+      {/* Munkatípus */}
       <label className="flex flex-col gap-1">
         <span className="text-xs font-semibold text-gray-500">Munkatípus</span>
         <select
@@ -57,6 +67,7 @@ export default function AllasokFilterClient({ defaults, counties }: Props) {
         </select>
       </label>
 
+      {/* Kategória */}
       {kategoriak.length > 0 && (
         <label className="flex flex-col gap-1">
           <span className="text-xs font-semibold text-gray-500">Kategória</span>
@@ -67,24 +78,13 @@ export default function AllasokFilterClient({ defaults, counties }: Props) {
           >
             <option value="">Mindegy</option>
             {kategoriak.map((k) => (
-              <option key={k.value} value={k.value}>
-                {k.description ? `${k.label} – ${k.description}` : k.label}
-              </option>
+              <option key={k.value} value={k.value}>{k.label}</option>
             ))}
           </select>
         </label>
       )}
 
-      <label className="flex flex-col gap-1">
-        <span className="text-xs font-semibold text-gray-500">Város</span>
-        <input
-          name="city"
-          defaultValue={defaults.city}
-          placeholder="pl. Budapest"
-          className="rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-sni-brand-teal"
-        />
-      </label>
-
+      {/* Megye */}
       <label className="flex flex-col gap-1">
         <span className="text-xs font-semibold text-gray-500">Megye</span>
         <select
@@ -93,12 +93,11 @@ export default function AllasokFilterClient({ defaults, counties }: Props) {
           className="rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-sni-brand-teal"
         >
           <option value="">Mindegy</option>
-          {counties.map((c) => (
-            <option key={c} value={c}>{c}</option>
-          ))}
+          {counties.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
       </label>
 
+      {/* Munkavégzés helye */}
       <label className="flex flex-col gap-1">
         <span className="text-xs font-semibold text-gray-500">Munkavégzés helye</span>
         <select
@@ -107,37 +106,62 @@ export default function AllasokFilterClient({ defaults, counties }: Props) {
           className="rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-sni-brand-teal"
         >
           <option value="">Mindegy</option>
-          <option value="munkahelyen">Munkahelyen</option>
-          <option value="otthonrol">Otthonról</option>
-          <option value="hibrid">Otthon és munkahelyen is</option>
+          <option value="munkahelyen">Helyszíni</option>
+          <option value="otthonrol">Home office</option>
+          <option value="hibrid">Hibrid</option>
         </select>
       </label>
 
-      <div className="flex flex-col gap-2">
-        <span className="text-xs font-semibold text-gray-500">Feltételek</span>
-        {CHECKBOXES.map(({ name, label }) => (
-          <label key={name} className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              name={name}
-              value="1"
-              defaultChecked={defaults[name] === "1"}
-              className="rounded"
-            />
-            {label}
-          </label>
-        ))}
+      {/* VédettMunka vizuális szűrők */}
+      <div>
+        <span className="text-xs font-semibold text-gray-500 block mb-2">
+          Milyen munkahelyet keresel?
+        </span>
+        <div className="flex flex-col gap-1.5">
+          {VM_FILTERS.map(({ slug, label, param }) => {
+            const active = activeParams.has(param);
+            return (
+              <label
+                key={param}
+                className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition
+                  ${active
+                    ? "border-sni-brand-teal bg-sni-brand-teal/10 text-sni-brand-navy"
+                    : "border-gray-100 bg-gray-50 text-gray-600 hover:border-sni-brand-teal/40 hover:bg-sni-brand-teal/5"
+                  }`}
+              >
+                <input
+                  type="checkbox"
+                  name={param}
+                  value="1"
+                  defaultChecked={active}
+                  className="sr-only"
+                />
+                <VmIcon name={slug} size={14} className={active ? "text-sni-brand-teal" : "text-gray-400"} />
+                {label}
+                {active && (
+                  <span className="ml-auto h-2 w-2 rounded-full bg-sni-brand-teal" />
+                )}
+              </label>
+            );
+          })}
+        </div>
       </div>
 
-      <button
-        type="submit"
-        className="rounded-full bg-sni-brand-teal py-2 text-sm font-bold text-white transition hover:bg-sni-brand-blue"
-      >
-        Keresés
-      </button>
-      <a href="/vedettmunka/allasok" className="text-center text-xs text-gray-400 hover:underline">
-        Szűrők törlése
-      </a>
+      {/* Gombok */}
+      <div className="flex gap-2">
+        <button
+          type="submit"
+          className="flex-1 rounded-full bg-sni-brand-navy py-2 text-sm font-bold text-white transition hover:bg-sni-brand-blue"
+        >
+          Szűrés
+        </button>
+        <a
+          href="/vedettmunka/allasok"
+          className="flex-1 rounded-full border border-gray-200 py-2 text-center text-sm font-semibold text-gray-500 transition hover:border-gray-400"
+        >
+          Törlés
+        </a>
+      </div>
     </form>
   );
 }
