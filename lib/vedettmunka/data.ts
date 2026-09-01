@@ -64,6 +64,29 @@ export async function getPublishedJobCounties(): Promise<string[]> {
   return unique.sort((a, b) => a.localeCompare(b, "hu"));
 }
 
+/** Az összes aktív hirdetésben szereplő megye+város pár (szűrő dropdownhoz) */
+export async function getPublishedJobLocations(): Promise<{ county: string; city: string }[]> {
+  const supabase = createClient();
+  const { data } = await supabase
+    .from("job_posts")
+    .select("county, city")
+    .eq("status", "published")
+    .not("city", "is", null)
+    .neq("city", "");
+  const seen = new Set<string>();
+  return (data ?? [])
+    .filter((r: { county: string; city: string }) => r.county && r.city)
+    .filter((r: { county: string; city: string }) => {
+      const key = `${r.county}|${r.city}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((a: { county: string; city: string }, b: { county: string; city: string }) =>
+      a.city.localeCompare(b.city, "hu")
+    );
+}
+
 export async function getPublishedJobById(id: string): Promise<(JobPost & { employers: Employer | null }) | null> {
   const supabase = createClient();
   const { data } = await supabase
