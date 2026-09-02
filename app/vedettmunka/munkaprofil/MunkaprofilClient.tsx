@@ -77,8 +77,8 @@ export default function MunkaprofilClient({
                         : "border-gray-100 bg-gray-50 text-gray-600 hover:border-sni-brand-teal/40"
                       }`}
                   >
-                    <div className={`mt-0.5 shrink-0 ${active ? "text-sni-brand-teal" : "text-gray-400"}`}>
-                      <VmIcon name={slug} size={44} />
+                    <div className={`shrink-0 ${active ? "text-sni-brand-teal" : "text-gray-400"}`}>
+                      <VmIcon name={slug} size={88} />
                     </div>
                     <div>
                       <p className="text-xs font-bold leading-snug">{info?.title ?? slug}</p>
