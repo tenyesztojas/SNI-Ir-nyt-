@@ -11,6 +11,7 @@ interface VmIconProps {
 
 /* ─── Slug → SVG fájlnév ─────────────────────────────────────────── */
 const OFFICIAL: Record<string, string> = {
+  // ── Eredeti 24 illusztrációs ikon ───────────────────────────────
   accessible:           "akadalymentes_munkahely",
   company_bus:          "ceges_busz",
   quieter_env:          "csendes_kornyezet",
@@ -23,7 +24,7 @@ const OFFICIAL: Record<string, string> = {
   assigned_mentor:      "kijelolt_segito",
   small_team:           "kis_csapat",
   predictable_schedule: "kiszamithato_munkarend",
-  public_transport:     "konnyu_megkozelites",
+  public_transport:     "tomegkozlekedessel_elerheto",
   commute_support:      "munkaba_jaras_tamogatasa",
   uniform_provided:     "munkaruha",
   safety_equipment:     "munkavedelmi_eszkozok",
@@ -35,44 +36,48 @@ const OFFICIAL: Record<string, string> = {
   part_time:            "reszmunkaido",
   flexible_hours:       "rugalmas_munkaido",
   apply_phone:          "telefonos_jelentkezes",
+
+  // ── Új illusztrációs ikonok ──────────────────────────────────────
+  // Kiszámíthatóság
+  advance_notice:       "elore_jelzik_a_valtozasokat",
+  routine_tasks:        "kiszamithato_feladatok",
+  // Betanítás
+  can_ask_questions:    "lehet_kerdezni",
+  // Helyszín
+  onsite:               "munkahelyen",
+  fixed_location:       "allando_munkahely",
+  // Szünetek
+  regular_breaks:       "rendszeres_szunetek",
+  flexible_breaks:      "szunet_kerheto",
+  quiet_room:           "nyugodtabb_hely_elerheto",
+  // Munka jellege
+  seated_work:          "ulomunka",
+  standing_work:        "allomunka",
+  computer_work:        "szamitogepes_munka",
+  physical_work:        "fizikai_munka",
+  repetitive_tasks:     "ismetlodo_feladatok",
+  varied_tasks:         "valtozatos_feladatok",
+  // Munkaidő
+  full_time:            "teljes_munkaido",
+  predictable_shift:    "kiszamithato_muszak",
+  no_weekend:           "hetvegi_munka_nincs",
+  no_night:             "ejszakai_munka_nincs",
+  // Munkakörnyezet
+  calmer_env:           "nyugodtabb_kornyezet",
+  large_team:           "nagyobb_csapat",
+  high_communication:   "sok_kommunikacio",
+  low_customer:         "keves_ugyfelkapcsolat",
+  team_work:            "csapatmunka",
+  // Szenzoros
+  noise_low:            "zajszint_alacsony",
+  noise_medium:         "zajszint_kozepes",
+  noise_high:           "zajszint_magas",
+  natural_light:        "termeszetes_feny",
+  calm_visual:          "nyugodtabb_vizualis_kornyezet",
 };
 
-/* ─── Inline SVG fallback ────────────────────────────────────────── */
+/* ─── Inline SVG fallback (csak slugokhoz, amelyeknek még nincs rajzolt ikonjuk) ── */
 const FALLBACK_ICONS: Record<string, JSX.Element> = {
-  fixed_location: (
-    <g strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" fill="none">
-      <path d="M12 22s-8-4.5-8-11.8A8 8 0 0 1 12 2a8 8 0 0 1 8 8.2c0 7.3-8 11.8-8 11.8z"/>
-      <circle cx="12" cy="10" r="3"/>
-    </g>
-  ),
-  calmer_env: (
-    <g strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" fill="none">
-      <path d="M17 8C8 10 5.9 16.17 3.82 22"/>
-      <path d="M9.5 9.5c1 2 2.5 3.5 5 4.5"/>
-      <path d="M18.97 9.26a10 10 0 1 0-13.97 13.97"/>
-    </g>
-  ),
-  computer_work: (
-    <g strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" fill="none">
-      <rect x="2" y="3" width="20" height="14" rx="2"/>
-      <path d="M8 21h8M12 17v4"/>
-    </g>
-  ),
-  varied_tasks: (
-    <g strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" fill="none">
-      <rect x="3" y="3" width="7" height="7" rx="1"/>
-      <rect x="14" y="3" width="7" height="7" rx="1"/>
-      <rect x="3" y="14" width="7" height="7" rx="1"/>
-      <circle cx="17.5" cy="17.5" r="3.5"/>
-    </g>
-  ),
-  can_ask_questions: (
-    <g strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" fill="none">
-      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
-      <path d="M12 17h.01"/>
-    </g>
-  ),
   regular_feedback: (
     <g strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" fill="none">
       <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
