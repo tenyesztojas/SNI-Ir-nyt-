@@ -106,7 +106,7 @@ function AttributePicker({
               }`}
           >
             <div className={`mt-0.5 shrink-0 ${active ? "text-sni-brand-teal" : "text-gray-400"}`}>
-              <VmIcon name={slug} size={44} />
+              <VmIcon name={slug} size={48} />
             </div>
             <div>
               <p className="text-xs font-bold leading-snug">{info?.title ?? slug}</p>

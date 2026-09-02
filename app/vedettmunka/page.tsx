@@ -95,7 +95,7 @@ export default async function VedettMunkaPage() {
               className="flex flex-col rounded-2xl border border-gray-100 bg-white shadow-soft overflow-hidden"
             >
               <div className="flex items-center justify-center bg-sni-brand-teal/10 py-6 px-4">
-                <VmIcon name={icon} size={100} />
+                <VmIcon name={icon} size={110} />
               </div>
               <div className="p-4">
                 <p className="text-sm font-bold text-sni-brand-navy leading-snug">{title}</p>
