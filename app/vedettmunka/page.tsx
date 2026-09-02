@@ -92,13 +92,15 @@ export default async function VedettMunkaPage() {
           {WHAT_YOU_LEARN.map(({ icon, title, desc }) => (
             <div
               key={title}
-              className="flex flex-col items-start rounded-2xl border border-gray-100 bg-white p-4 shadow-soft"
+              className="flex flex-col rounded-2xl border border-gray-100 bg-white shadow-soft overflow-hidden"
             >
-              <div className="mb-3 flex h-20 w-20 items-center justify-center rounded-2xl bg-sni-brand-teal/10 text-sni-brand-teal">
-                <VmIcon name={icon} size={56} />
+              <div className="flex items-center justify-center bg-sni-brand-teal/10 py-6 px-4">
+                <VmIcon name={icon} size={100} />
               </div>
-              <p className="text-sm font-bold text-sni-brand-navy leading-snug">{title}</p>
-              <p className="mt-1 text-xs text-gray-500 leading-relaxed">{desc}</p>
+              <div className="p-4">
+                <p className="text-sm font-bold text-sni-brand-navy leading-snug">{title}</p>
+                <p className="mt-1 text-xs text-gray-500 leading-relaxed">{desc}</p>
+              </div>
             </div>
           ))}
         </div>
@@ -115,7 +117,7 @@ export default async function VedettMunkaPage() {
               key={slug}
               className="inline-flex items-center gap-1.5 rounded-full border border-sni-brand-teal/30 bg-white px-3 py-1.5 text-xs font-semibold text-sni-brand-navy shadow-sm"
             >
-              <VmIcon name={slug} size={20} className="text-sni-brand-teal" />
+              <VmIcon name={slug} size={28} className="text-sni-brand-teal" />
               {label}
             </span>
           ))}
@@ -164,7 +166,7 @@ export default async function VedettMunkaPage() {
       {/* ── MUNKAPROFIL ─────────────────────────────────────── */}
       <section className="mt-4 rounded-2xl border border-sni-brand-teal/20 bg-sni-brand-teal/5 p-6 flex items-start gap-4">
         <div className="shrink-0 flex h-11 w-11 items-center justify-center rounded-xl bg-sni-brand-teal/20 text-sni-brand-teal">
-          <VmIcon name="predictable_tasks" size={22} />
+          <VmIcon name="predictable_tasks" size={32} />
         </div>
         <div>
           <h3 className="font-bold text-sni-brand-navy">Saját Munkaprofil</h3>

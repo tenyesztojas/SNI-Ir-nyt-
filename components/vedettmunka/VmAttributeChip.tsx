@@ -42,13 +42,13 @@ export default function VmAttributeChip({ slug, showDesc = false, size = "sm", c
   const sizeClass = size === "md"
     ? "px-3 py-2 text-sm gap-2"
     : "px-2.5 py-1.5 text-xs gap-1.5";
-  const iconSize = size === "md" ? 28 : 22;
+  const iconSize = size === "md" ? 40 : 32;
 
   if (showDesc) {
     return (
       <div className={`flex items-start gap-3 rounded-xl border p-3 ${colorClass} ${className}`}>
         <div className="mt-0.5 shrink-0">
-          <VmIcon name={slug} size={32} />
+          <VmIcon name={slug} size={48} />
         </div>
         <div>
           <p className="font-semibold leading-tight">{label.title}</p>

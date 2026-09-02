@@ -171,7 +171,7 @@ export default function AllasokFilterClient({ defaults, locations }: Props) {
                   defaultChecked={active}
                   className="sr-only"
                 />
-                <VmIcon name={slug} size={20} className={active ? "text-sni-brand-teal" : "text-gray-400"} />
+                <VmIcon name={slug} size={32} className={active ? "text-sni-brand-teal" : "text-gray-400"} />
                 {label}
                 {active && (
                   <span className="ml-auto h-2 w-2 rounded-full bg-sni-brand-teal" />

@@ -30,8 +30,8 @@ function Section({
       }`}
     >
       <div className="mb-3 flex items-center gap-2">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-sni-brand-navy/8 text-sni-brand-navy">
-          <VmIcon name={icon} size={24} />
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-sni-brand-navy/8 text-sni-brand-navy">
+          <VmIcon name={icon} size={36} />
         </div>
         <h2 className="font-bold text-sni-brand-navy">{title}</h2>
       </div>
@@ -139,7 +139,7 @@ export default async function AllasAdatlapPage({ params }: { params: { id: strin
                 key={slug}
                 className="inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1.5 text-xs font-semibold text-white"
               >
-                <VmIcon name={slug} size={20} />
+                <VmIcon name={slug} size={32} />
                 {ATTRIBUTE_LABELS[slug]?.title ?? slug}
               </span>
             ))}
@@ -265,8 +265,8 @@ export default async function AllasAdatlapPage({ params }: { params: { id: strin
                 {selectionSteps.map((step, i) => (
                   <div key={step.key} className="flex items-start gap-3">
                     <div className="flex flex-col items-center">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sni-brand-teal/15 text-sni-brand-teal">
-                        <VmIcon name={step.icon} size={22} />
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-sni-brand-teal/15 text-sni-brand-teal">
+                        <VmIcon name={step.icon} size={36} />
                       </div>
                       {i < selectionSteps.length - 1 && (
                         <div className="w-0.5 flex-1 bg-gray-100 my-1" style={{ minHeight: 16 }} />
