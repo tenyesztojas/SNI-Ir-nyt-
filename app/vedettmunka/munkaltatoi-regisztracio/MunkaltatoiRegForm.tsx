@@ -121,7 +121,16 @@ export default function MunkaltatoiRegForm() {
       <label className="flex items-start gap-3">
         <input type="checkbox" name="accepts_vm_terms" value="true" required className="mt-0.5 rounded" />
         <span className="text-sm text-gray-700">
-          Elfogadom a <strong>Védett Munka munkáltatói feltételeit</strong> és vállalom a méltányos, diszkriminációmentes kiválasztást. <span className="text-red-500">*</span>
+          Elfogadom a{" "}
+          <a
+            href="/vedettmunka/munkaltatok"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-bold text-sni-brand-blue underline hover:text-sni-brand-teal"
+          >
+            Védett Munka munkáltatói feltételeit
+          </a>{" "}
+          és vállalom a méltányos, diszkriminációmentes kiválasztást. <span className="text-red-500">*</span>
         </span>
       </label>
 

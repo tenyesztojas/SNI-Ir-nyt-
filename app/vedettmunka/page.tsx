@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getPublishedJobs, getMyJobAlert } from "@/lib/vedettmunka/data";
+import { getPublishedJobs, getMyJobAlert, getMyEmployer } from "@/lib/vedettmunka/data";
 import { createClient } from "@/lib/supabase/server";
 import ErtesitoCta from "./ErtesitoCta";
 import VmIcon from "@/components/vedettmunka/VmIcon";
@@ -34,9 +34,10 @@ export default async function VedettMunkaPage() {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
-  const [recentJobs, myAlert] = await Promise.all([
+  const [recentJobs, myAlert, myEmployer] = await Promise.all([
     getPublishedJobs({}),
     user ? getMyJobAlert() : Promise.resolve(null),
+    user ? getMyEmployer() : Promise.resolve(null),
   ]);
   const latestJobs = recentJobs.slice(0, 3);
   const alertEnabled: boolean | null = user === null ? null
@@ -195,7 +196,42 @@ export default async function VedettMunkaPage() {
         </div>
       </section>
 
-      {/* ── MUNKÁLTATÓKNAK ──────────────────────────────────── */}
+      {/* ── MUNKÁLTATÓKNAK / MUNKÁLTATÓI PROFIL ─────────────── */}
+      {myEmployer ? (
+        <section className="mt-8 rounded-2xl bg-sni-brand-navy p-6 text-white">
+          <p className="text-xs font-semibold uppercase tracking-widest text-sni-brand-teal mb-1">Munkáltatói fiók</p>
+          <h2 className="text-lg font-extrabold">{myEmployer.company_name}</h2>
+          {myEmployer.status === "approved" ? (
+            <>
+              <p className="mt-1 text-sm text-blue-100">A profilod jóváhagyva. Feladhatsz új állásokat.</p>
+              <div className="mt-4 flex flex-wrap gap-3">
+                <Link
+                  href="/vedettmunka/hirdetes-feladas"
+                  className="rounded-full bg-sni-brand-teal px-5 py-2 text-sm font-bold text-sni-brand-navy transition hover:bg-white"
+                >
+                  + Új hirdetés feladása
+                </Link>
+                <Link
+                  href="/admin/vedettmunka/hirdetesek"
+                  className="rounded-full border border-white/40 px-5 py-2 text-sm font-semibold text-white transition hover:bg-white/10"
+                >
+                  Hirdetéseim
+                </Link>
+              </div>
+            </>
+          ) : myEmployer.status === "pending_review" ? (
+            <p className="mt-2 text-sm text-amber-200">
+              A regisztrációd jóváhagyásra vár. Értesítünk, amint elkészülünk (1–2 munkanap).
+            </p>
+          ) : myEmployer.status === "rejected" ? (
+            <p className="mt-2 text-sm text-red-300">
+              A regisztrációd elutasításra került. Kérdés esetén írj az info@vedettsarok.hu címre.
+            </p>
+          ) : (
+            <p className="mt-2 text-sm text-gray-300">Profil státusza: {myEmployer.status}</p>
+          )}
+        </section>
+      ) : (
       <section className="mt-8 rounded-2xl bg-sni-brand-navy p-6 text-white">
         <h2 className="text-lg font-extrabold">Te is hirdetsz állást?</h2>
         <p className="mt-2 text-sm text-blue-100 leading-relaxed">
@@ -217,6 +253,7 @@ export default async function VedettMunkaPage() {
           </Link>
         </div>
       </section>
+      )}
 
     </div>
   );

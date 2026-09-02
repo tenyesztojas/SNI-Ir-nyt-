@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Resend } from "resend";
+import { sendAdminPush } from "@/lib/push";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -87,6 +88,13 @@ export async function registerEmployer(formData: FormData) {
              <p><a href="${process.env.NEXT_PUBLIC_SITE_URL}/admin/vedettmunka/munkaltatok">Admin kezelés</a></p>`,
     }).catch(() => null);
   }
+
+  // Admin PWA push értesítés
+  await sendAdminPush(
+    "Új munkáltatói regisztráció",
+    `${obj.company_name} – ${obj.contact_name}`,
+    "/admin/vedettmunka/munkaltatok"
+  );
 
   revalidatePath("/vedettmunka/munkaltatoi-regisztracio");
 }
@@ -431,12 +439,14 @@ export async function adminUpdateEmployerStatus(
   const admin = createAdminClient();
 
   // Jóváhagyás csak érvényes adatkezelési link esetén engedélyezett
+  // Fetch employer adatok (jóváhagyás-ellenőrzés + e-mail küldés)
+  const { data: emp } = await admin
+    .from("employers")
+    .select("privacy_policy_url, company_name, contact_name, contact_email")
+    .eq("id", id)
+    .single();
+
   if (status === "approved") {
-    const { data: emp } = await admin
-      .from("employers")
-      .select("privacy_policy_url, company_name")
-      .eq("id", id)
-      .single();
     if (!emp?.privacy_policy_url) {
       throw new Error(
         "A munkáltató nem hagyható jóvá adatkezelési tájékoztató link nélkül. " +
@@ -450,6 +460,33 @@ export async function adminUpdateEmployerStatus(
     .update({ status, admin_note: note ?? null, updated_at: new Date().toISOString() })
     .eq("id", id);
   if (error) throw new Error(error.message);
+
+  // Jóváhagyáskor e-mail a munkáltatónak
+  if (status === "approved" && emp?.contact_email) {
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://vedettsarok.hu";
+    await resend.emails.send({
+      from: "Védett Munka <noreply@vedettsarok.hu>",
+      to: emp.contact_email,
+      subject: `Üdvözöljük a VédettMunka platformján! – ${emp.company_name}`,
+      html: `
+        <div style="font-family:sans-serif;max-width:560px;margin:0 auto">
+          <h2 style="color:#123A5C">Elfogadtuk a regisztrációját!</h2>
+          <p>Kedves ${emp.contact_name ?? emp.company_name}!</p>
+          <p>Örömmel tájékoztatjuk, hogy a <strong>${emp.company_name}</strong> munkáltatói regisztrációját jóváhagytuk a <strong>VédettMunka</strong> platformján.</p>
+          <p>Köszöntjük a VédettSarok közösségében! Mostantól feladhat állásokat és befogadó munkáltatóként megjelenhet az álláskereső felületen.</p>
+          <p style="margin-top:24px">
+            <a href="${siteUrl}/vedettmunka/hirdetes-feladas"
+               style="background:#34D8C3;color:#123A5C;padding:12px 24px;border-radius:999px;text-decoration:none;font-weight:bold;display:inline-block">
+              Hirdetés feladása →
+            </a>
+          </p>
+          <p style="margin-top:24px;font-size:13px;color:#666">
+            Ha kérdése van, írjon nekünk a <a href="mailto:info@vedettsarok.hu">info@vedettsarok.hu</a> címre.
+          </p>
+        </div>
+      `,
+    }).catch(() => null);
+  }
 
   if (adminUser) {
     const actionMap: Record<string, string> = {
