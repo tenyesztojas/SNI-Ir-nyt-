@@ -66,7 +66,7 @@ VALUES
     'Céges busz',
     'A munkáltató céges buszt biztosít a munkába járáshoz.',
     'ceges_busz',
-    'boolean', '[]', 105, true
+    'boolean', '{}', 105, true
   ),
   (
     'uniform_provided',
@@ -74,7 +74,7 @@ VALUES
     'Munkaruha biztosított',
     'A munkáltató biztosítja a szükséges munkaruhát.',
     'munkaruha',
-    'boolean', '[]', 145, true
+    'boolean', '{}', 145, true
   ),
   (
     'safety_equipment',
@@ -82,7 +82,7 @@ VALUES
     'Munkavédelmi eszközök biztosítottak',
     'A szükséges munkavédelmi eszközöket a munkáltató adja.',
     'munkavedelmi_eszkozok',
-    'boolean', '[]', 146, true
+    'boolean', '{}', 146, true
   ),
   (
     'apply_cv',
@@ -90,7 +90,7 @@ VALUES
     'Jelentkezés önéletrajzzal',
     'Önéletrajz beküldésével lehet jelentkezni.',
     'jelentkezes_oneletrajzzal',
-    'boolean', '[]', 200, true
+    'boolean', '{}', 200, true
   ),
   (
     'apply_phone',
@@ -98,7 +98,7 @@ VALUES
     'Telefonos jelentkezés',
     'Telefonon is lehet érdeklődni és jelentkezni.',
     'telefonos_jelentkezes',
-    'boolean', '[]', 201, true
+    'boolean', '{}', 201, true
   ),
   (
     'apply_email',
@@ -106,7 +106,7 @@ VALUES
     'E-mailes jelentkezés',
     'E-mailben lehet jelentkezni az állásra.',
     'emailes_jelentkezes',
-    'boolean', '[]', 202, true
+    'boolean', '{}', 202, true
   )
 ON CONFLICT (slug) DO UPDATE SET
   title_hu      = EXCLUDED.title_hu,
