@@ -106,26 +106,6 @@ export default async function VedettMunkaPage() {
         </div>
       </section>
 
-      {/* ── PIKTOGRAM RENDSZER PREVIEW ───────────────────────── */}
-      <section className="mt-12 rounded-2xl border border-sni-brand-teal/20 bg-gradient-to-r from-sni-brand-teal/5 to-blue-50 p-6">
-        <p className="text-xs font-semibold uppercase tracking-widest text-sni-brand-blue mb-3">
-          Az állások piktogramjai megmutatják
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {PREVIEW_ATTRS.map(({ slug, label }) => (
-            <span
-              key={slug}
-              className="inline-flex items-center gap-1.5 rounded-full border border-sni-brand-teal/30 bg-white px-3 py-1.5 text-xs font-semibold text-sni-brand-navy shadow-sm"
-            >
-              <VmIcon name={slug} size={28} className="text-sni-brand-teal" />
-              {label}
-            </span>
-          ))}
-          <span className="inline-flex items-center px-3 py-1.5 text-xs text-gray-400">
-            …és még sok más
-          </span>
-        </div>
-      </section>
 
       {/* ── LEGÚJABB ÁLLÁSOK ─────────────────────────────────── */}
       {latestJobs.length > 0 && (
