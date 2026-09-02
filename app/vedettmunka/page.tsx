@@ -71,6 +71,12 @@ export default async function VedettMunkaPage() {
           >
             Munkáltató vagyok
           </Link>
+          <Link
+            href="/vedettmunka/oneletrajz"
+            className="rounded-full border-2 border-white/40 px-8 py-3 font-bold text-white transition hover:bg-white/10"
+          >
+            Önéletrajzot készítek
+          </Link>
         </div>
       </div>
 
@@ -154,25 +160,6 @@ export default async function VedettMunkaPage() {
 
       {/* ── ÁLLÁSÉRTESÍTŐ ────────────────────────────────────── */}
       <ErtesitoCta initialEnabled={alertEnabled} />
-
-      {/* ── ÖNÉLETRAJZ ──────────────────────────────────────── */}
-      <section className="mt-8 rounded-2xl border border-gray-100 bg-white p-6 shadow-soft flex items-start gap-4">
-        <div className="shrink-0 flex h-11 w-11 items-center justify-center rounded-xl bg-sni-brand-navy/10 text-sni-brand-navy">
-          <VmIcon name="written_tasks" size={22} />
-        </div>
-        <div>
-          <h3 className="font-bold text-sni-brand-navy">Segítünk önéletrajzot írni</h3>
-          <p className="mt-1 text-sm text-gray-600">
-            Lépésről lépésre, egyszerű kérdésekkel. PDF-ben le is töltheted.
-          </p>
-          <Link
-            href="/vedettmunka/oneletrajz"
-            className="mt-3 inline-block rounded-full border border-sni-brand-navy px-5 py-2 text-sm font-semibold text-sni-brand-navy transition hover:bg-sni-brand-navy hover:text-white"
-          >
-            CV készítése
-          </Link>
-        </div>
-      </section>
 
       {/* ── MUNKAPROFIL ─────────────────────────────────────── */}
       <section className="mt-4 rounded-2xl border border-sni-brand-teal/20 bg-sni-brand-teal/5 p-6 flex items-start gap-4">
