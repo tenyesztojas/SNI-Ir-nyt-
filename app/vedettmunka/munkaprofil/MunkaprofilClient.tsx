@@ -78,7 +78,7 @@ export default function MunkaprofilClient({
                       }`}
                   >
                     <div className={`mt-0.5 shrink-0 ${active ? "text-sni-brand-teal" : "text-gray-400"}`}>
-                      <VmIcon name={slug} size={18} />
+                      <VmIcon name={slug} size={28} />
                     </div>
                     <div>
                       <p className="text-xs font-bold leading-snug">{info?.title ?? slug}</p>
@@ -143,7 +143,7 @@ export default function MunkaprofilClient({
           <div className="flex flex-wrap gap-1.5">
             {[...selected].map((slug) => (
               <span key={slug} className="inline-flex items-center gap-1.5 rounded-full bg-sni-brand-teal/10 px-2.5 py-1 text-xs font-semibold text-sni-brand-navy">
-                <VmIcon name={slug} size={12} />
+                <VmIcon name={slug} size={18} />
                 {ATTRIBUTE_LABELS[slug]?.title ?? slug}
               </span>
             ))}

@@ -88,8 +88,8 @@ export default async function VedettMunkaPage() {
               key={title}
               className="flex flex-col items-start rounded-2xl border border-gray-100 bg-white p-4 shadow-soft"
             >
-              <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-xl bg-sni-brand-teal/10 text-sni-brand-teal">
-                <VmIcon name={icon} size={20} />
+              <div className="mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-sni-brand-teal/10 text-sni-brand-teal">
+                <VmIcon name={icon} size={28} />
               </div>
               <p className="text-sm font-bold text-sni-brand-navy leading-snug">{title}</p>
               <p className="mt-1 text-xs text-gray-500 leading-relaxed">{desc}</p>
@@ -109,7 +109,7 @@ export default async function VedettMunkaPage() {
               key={slug}
               className="inline-flex items-center gap-1.5 rounded-full border border-sni-brand-teal/30 bg-white px-3 py-1.5 text-xs font-semibold text-sni-brand-navy shadow-sm"
             >
-              <VmIcon name={slug} size={13} className="text-sni-brand-teal" />
+              <VmIcon name={slug} size={20} className="text-sni-brand-teal" />
               {label}
             </span>
           ))}
