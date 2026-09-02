@@ -15,9 +15,9 @@ const LOC_ICON = {
   hibrid:      <Blend size={13} className="shrink-0" />,
 };
 const LOC_LABEL = {
-  munkahelyen: "Helyszíni",
-  otthonrol:   "Home office",
-  hibrid:      "Hibrid",
+  munkahelyen: "Munkahelyen",
+  otthonrol:   "Otthoni munkavégzés",
+  hibrid:      "Munkavégzés otthon és munkahelyen",
 };
 
 export default async function AllasokPage({

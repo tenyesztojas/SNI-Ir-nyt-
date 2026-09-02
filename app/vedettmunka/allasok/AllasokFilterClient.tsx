@@ -13,7 +13,7 @@ interface Props {
 const VM_FILTERS: { slug: string; label: string; param: string }[] = [
   { slug: "gradual_training",    label: "Fokozatos betanítás",           param: "betanitas"  },
   { slug: "assigned_mentor",     label: "Kijelölt segítő",               param: "mentor"     },
-  { slug: "quieter_env",         label: "Csendesebb környezet",          param: "quiet"      },
+  { slug: "quieter_env",         label: "Csendes környezet",             param: "quiet"      },
   { slug: "small_team",          label: "Kis csapat",                    param: "kis_csapat" },
   { slug: "low_verbal",          label: "Kevés beszélgetés",             param: "low_verbal" },
   { slug: "written_tasks",       label: "Írásban is megkapod a feladatot", param: "written"  },

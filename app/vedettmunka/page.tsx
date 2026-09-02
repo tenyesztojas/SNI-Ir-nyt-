@@ -24,10 +24,10 @@ const WHAT_YOU_LEARN = [
 const PREVIEW_ATTRS: { slug: string; label: string }[] = [
   { slug: "gradual_training",    label: "Fokozatos betanítás" },
   { slug: "predictable_schedule",label: "Kiszámítható munkarend" },
-  { slug: "quieter_env",         label: "Csendesebb környezet" },
+  { slug: "quieter_env",         label: "Csendes környezet" },
   { slug: "small_team",          label: "Kis csapat" },
   { slug: "part_time",           label: "Részmunkaidő" },
-  { slug: "home_office",         label: "Home office" },
+  { slug: "home_office",         label: "Otthoni munkavégzés" },
 ];
 
 export default async function VedettMunkaPage() {

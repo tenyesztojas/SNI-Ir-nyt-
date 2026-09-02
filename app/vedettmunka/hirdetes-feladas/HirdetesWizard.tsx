@@ -257,9 +257,9 @@ export default function HirdetesWizard() {
             <Field label="Munkavégzés helye" required>
               <div className="flex gap-2">
                 {[
-                  { v: "munkahelyen", l: "Helyszíni" },
-                  { v: "otthonrol",   l: "Home office" },
-                  { v: "hibrid",      l: "Hibrid" },
+                  { v: "munkahelyen", l: "Munkahelyen" },
+                  { v: "otthonrol",   l: "Otthon" },
+                  { v: "hibrid",      l: "Munkahelyen és otthon" },
                 ].map(({ v, l }) => (
                   <button key={v} type="button" onClick={() => set("work_location_type", v)}
                     className={`flex-1 rounded-xl border py-2 text-sm font-semibold transition
@@ -384,6 +384,10 @@ export default function HirdetesWizard() {
             <div className="mt-2">
               <p className="text-xs font-bold uppercase text-gray-400 mb-2">Megközelíthetőség</p>
               <AttributePicker slugGroup={WIZARD_STEP_ATTRIBUTES.megkozelites} selected={selectedAttrs} onToggle={toggleAttr} />
+            </div>
+            <div className="mt-2">
+              <p className="text-xs font-bold uppercase text-gray-400 mb-2">Jelentkezési mód</p>
+              <AttributePicker slugGroup={WIZARD_STEP_ATTRIBUTES.jelentkezes_mod} selected={selectedAttrs} onToggle={toggleAttr} />
             </div>
           </div>
         )}

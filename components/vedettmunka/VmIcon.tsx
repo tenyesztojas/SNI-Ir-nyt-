@@ -1,6 +1,6 @@
 // VédettMunka 2.0 – SVG ikon library
-// Egységes stílus: 24×24 viewBox, stroke-based, stroke-width 1.75, lekerekített végek
-// Minden ikon "slug" alapján renderel.
+// Hivatalos VédettMunka piktogramok: /public/vedettmunka/icons/*.svg
+// Ha nincs hivatalos SVG a slughoz, visszaesik az inline ikonra.
 
 interface VmIconProps {
   name: string;
@@ -8,25 +8,40 @@ interface VmIconProps {
   className?: string;
 }
 
+// ─── Slug → hivatalos SVG fájlnév ────────────────────────────────
+// Csak azok a slugok szerepelnek itt, amelyekhez van feltöltött SVG.
+const OFFICIAL_ICON_FILE: Record<string, string> = {
+  accessible:          "akadalymentes_munkahely",
+  company_bus:         "ceges_busz",
+  quieter_env:         "csendes_kornyezet",
+  predictable_tasks:   "egyertelmu_feladatok",
+  apply_email:         "emailes_jelentkezes",
+  gradual_training:    "fokozatos_betanitas",
+  written_tasks:       "irasos_feladatok",
+  apply_cv:            "jelentkezes_oneletrajzzal",
+  low_verbal:          "keves_beszelgetes",
+  assigned_mentor:     "kijelolt_segito",
+  small_team:          "kis_csapat",
+  predictable_schedule:"kiszamithato_munkarend",
+  public_transport:    "konnyu_megkozelites",
+  commute_support:     "munkaba_jaras_tamogatasa",
+  uniform_provided:    "munkaruha",
+  safety_equipment:    "munkavedelmi_eszkozok",
+  hybrid:              "munkavegzes_otthon_es_munkahelyen",
+  independent_work:    "onallo_munkavegzes",
+  home_office:         "otthoni_munkavegzes",
+  parking:             "parkolas",
+  regular_feedback:    "rendszeres_visszajelzes",
+  part_time:           "reszmunkaido",
+  flexible_hours:      "rugalmas_munkaido",
+  apply_phone:         "telefonos_jelentkezes",
+};
+
+// ─── Inline SVG fallback (slugokhoz, amelyekhez nincs hivatalos SVG) ─
 const S = { strokeWidth: 1.75, strokeLinecap: "round" as const, strokeLinejoin: "round" as const, fill: "none" };
 
 const ICONS: Record<string, JSX.Element> = {
   // ── Kiszámíthatóság ─────────────────────────────────────────
-  predictable_tasks: (
-    <g {...S}>
-      <rect x="4" y="3" width="16" height="18" rx="2"/>
-      <path d="M8 8h8M8 12h6M8 16h4"/>
-      <path d="M15 12l1.5 1.5L19 10" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"/>
-    </g>
-  ),
-  predictable_schedule: (
-    <g {...S}>
-      <rect x="3" y="4" width="18" height="17" rx="2"/>
-      <path d="M3 9h18M8 2v4M16 2v4"/>
-      <path d="M7 14h2v2H7z" fill="currentColor" stroke="none"/>
-      <path d="M11 14h2v2h-2z" fill="currentColor" stroke="none"/>
-    </g>
-  ),
   advance_notice: (
     <g {...S}>
       <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
@@ -43,19 +58,6 @@ const ICONS: Record<string, JSX.Element> = {
   ),
 
   // ── Betanítás ───────────────────────────────────────────────
-  gradual_training: (
-    <g {...S}>
-      <path d="M4 20h3v-4H4zM9 20h3v-8H9zM14 20h3V8h-3zM19 20h1V4h-1"/>
-      <path d="M2 20h20"/>
-    </g>
-  ),
-  assigned_mentor: (
-    <g {...S}>
-      <circle cx="9" cy="7" r="3"/>
-      <path d="M3 20v-1a6 6 0 0 1 12 0v1"/>
-      <path d="M17 11l2 2 4-4"/>
-    </g>
-  ),
   can_ask_questions: (
     <g {...S}>
       <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
@@ -63,42 +65,13 @@ const ICONS: Record<string, JSX.Element> = {
       <path d="M12 17h.01"/>
     </g>
   ),
-  regular_feedback: (
-    <g {...S}>
-      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-    </g>
-  ),
-  written_tasks: (
-    <g {...S}>
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-      <polyline points="14 2 14 8 20 8"/>
-      <line x1="16" y1="13" x2="8" y2="13"/>
-      <line x1="16" y1="17" x2="8" y2="17"/>
-      <polyline points="10 9 9 9 8 9"/>
-    </g>
-  ),
 
   // ── Munkakörnyezet ──────────────────────────────────────────
-  quieter_env: (
-    <g {...S}>
-      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
-      <line x1="23" y1="9" x2="17" y2="15"/>
-      <line x1="17" y1="9" x2="23" y2="15"/>
-    </g>
-  ),
   calmer_env: (
     <g {...S}>
       <path d="M17 8C8 10 5.9 16.17 3.82 22"/>
       <path d="M9.5 9.5c1 2 2.5 3.5 5 4.5"/>
       <path d="M18.97 9.26a10 10 0 1 0-13.97 13.97"/>
-    </g>
-  ),
-  small_team: (
-    <g {...S}>
-      <circle cx="9" cy="8" r="3"/>
-      <circle cx="16" cy="8" r="2"/>
-      <path d="M3 20v-1a6 6 0 0 1 12 0v1"/>
-      <path d="M16 15c2.21 0 4 1.79 4 4v1"/>
     </g>
   ),
   large_team: (
@@ -109,12 +82,6 @@ const ICONS: Record<string, JSX.Element> = {
       <path d="M2 20v-.5A4.5 4.5 0 0 1 9.5 15"/>
       <path d="M7 20v-.5a5.5 5.5 0 0 1 10 0v.5"/>
       <path d="M14.5 15A4.5 4.5 0 0 1 22 19.5V20"/>
-    </g>
-  ),
-  low_verbal: (
-    <g {...S}>
-      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-      <line x1="9" y1="10" x2="15" y2="10"/>
     </g>
   ),
   high_communication: (
@@ -130,13 +97,6 @@ const ICONS: Record<string, JSX.Element> = {
       <circle cx="12" cy="8" r="4"/>
       <path d="M6 20v-2a6 6 0 0 1 6-6"/>
       <path d="M16 17l4-4m0 4l-4-4"/>
-    </g>
-  ),
-  independent_work: (
-    <g {...S}>
-      <circle cx="12" cy="8" r="4"/>
-      <path d="M6 20v-2a6 6 0 0 1 12 0v2"/>
-      <path d="M12 15v3"/>
     </g>
   ),
   team_work: (
@@ -240,15 +200,7 @@ const ICONS: Record<string, JSX.Element> = {
       <path d="M12 6v6l4 2"/>
     </g>
   ),
-  part_time: (
-    <g {...S}>
-      <path d="M12 21a9 9 0 0 1 0-18"/>
-      <path d="M12 3a9 9 0 0 1 9 9"/>
-      <path d="M12 6v6l3 3"/>
-      <line x1="12" y1="3" x2="12" y2="12" opacity="0.3"/>
-    </g>
-  ),
-  flexible_hours: (
+  flexible_hours_schedule: (
     <g {...S}>
       <circle cx="12" cy="12" r="9"/>
       <path d="M12 6v6l3 3"/>
@@ -284,20 +236,6 @@ const ICONS: Record<string, JSX.Element> = {
       <polyline points="9 22 9 12 15 12 15 22"/>
     </g>
   ),
-  home_office: (
-    <g {...S}>
-      <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-      <rect x="8" y="13" width="8" height="5" rx="1"/>
-      <path d="M10 13v-2h4v2"/>
-    </g>
-  ),
-  hybrid: (
-    <g {...S}>
-      <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-      <path d="M12 22V12"/>
-      <path d="M8 12h8"/>
-    </g>
-  ),
   fixed_location: (
     <g {...S}>
       <path d="M12 22s-8-4.5-8-11.8A8 8 0 0 1 12 2a8 8 0 0 1 8 8.2c0 7.3-8 11.8-8 11.8z"/>
@@ -306,29 +244,7 @@ const ICONS: Record<string, JSX.Element> = {
   ),
 
   // ── Megközelíthetőség ───────────────────────────────────────
-  accessible: (
-    <g {...S}>
-      <circle cx="16" cy="4" r="1"/>
-      <path d="M10 9l6-1 2 5-5 3v5"/>
-      <path d="M10 9L7 15h6"/>
-      <path d="M8 19a4 4 0 1 0 8 0"/>
-    </g>
-  ),
-  public_transport: (
-    <g {...S}>
-      <path d="M8 6v6M16 6v6"/>
-      <path d="M3 6h18v9a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V6z"/>
-      <path d="M5 18l-1 3M19 18l1 3"/>
-      <path d="M3 10h18"/>
-    </g>
-  ),
-  parking: (
-    <g {...S}>
-      <rect x="3" y="3" width="18" height="18" rx="4"/>
-      <path d="M9 17V7h4a3 3 0 0 1 0 6H9"/>
-    </g>
-  ),
-  commute_support: (
+  commute_support_fallback: (
     <g {...S}>
       <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
     </g>
@@ -363,8 +279,33 @@ const ICONS: Record<string, JSX.Element> = {
   ),
 };
 
+// ─── Alapértelmezett fallback ikon ────────────────────────────────
+const FALLBACK: JSX.Element = (
+  <g strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" fill="none">
+    <rect x="4" y="3" width="16" height="18" rx="2"/>
+    <path d="M8 8h8M8 12h6M8 16h4"/>
+  </g>
+);
+
 export default function VmIcon({ name, size = 20, className = "" }: VmIconProps) {
-  const icon = ICONS[name] ?? ICONS["predictable_tasks"];
+  // Ha van hivatalos SVG, azt használjuk
+  const officialFile = OFFICIAL_ICON_FILE[name];
+  if (officialFile) {
+    return (
+      <img
+        src={`/vedettmunka/icons/${officialFile}.svg`}
+        width={size}
+        height={size}
+        alt=""
+        aria-hidden="true"
+        className={className}
+        style={{ display: "inline-block", flexShrink: 0 }}
+      />
+    );
+  }
+
+  // Fallback: inline SVG
+  const icon = ICONS[name] ?? FALLBACK;
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
