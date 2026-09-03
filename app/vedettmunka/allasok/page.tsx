@@ -1,23 +1,17 @@
 import Link from "next/link";
-import { Briefcase, MapPin, Clock, Building2, Home, Blend } from "lucide-react";
+import { Briefcase, MapPin, Clock } from "lucide-react";
 import { getPublishedJobs, getPublishedJobLocations } from "@/lib/vedettmunka/data";
-import { deriveAttributesFromJobPost } from "@/lib/vedettmunka/attributes";
+import { ATTRIBUTE_LABELS, deriveAttributesFromJobPost } from "@/lib/vedettmunka/attributes";
 import type { JobPost } from "@/lib/vedettmunka/types";
 import AllasokFilterClient from "./AllasokFilterClient";
-import VmAttributeChip from "@/components/vedettmunka/VmAttributeChip";
 
-export const metadata = { title: "Állások keresése" };
+export const metadata = { title: "Lehetőségek keresése – VédettKarrier" };
 export const dynamic = "force-dynamic";
 
-const LOC_ICON = {
-  munkahelyen: <Building2 size={13} className="shrink-0" />,
-  otthonrol:   <Home size={13} className="shrink-0" />,
-  hibrid:      <Blend size={13} className="shrink-0" />,
-};
-const LOC_LABEL = {
-  munkahelyen: "Munkahelyen",
-  otthonrol:   "Otthoni munkavégzés",
-  hibrid:      "Munkavégzés otthon és munkahelyen",
+const LOC_LABEL: Record<string, string> = {
+  munkahelyen: "Helyszínen",
+  otthonrol:   "Otthonról",
+  hibrid:      "Vegyes (helyszín + otthon)",
 };
 
 export default async function AllasokPage({
@@ -46,11 +40,11 @@ export default async function AllasokPage({
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
-      <h1 className="text-2xl font-extrabold text-sni-brand-navy">Állások keresése</h1>
+      <h1 className="text-2xl font-extrabold text-sni-brand-navy">Lehetőségek keresése</h1>
       <p className="mt-1 text-sm text-gray-500">
         {jobs.length === 0
           ? "Nincs találat – próbáld más szűrőkkel"
-          : `${jobs.length} hirdetés befogadó munkáltatóktól`}
+          : `${jobs.length} lehetőségkártya befogadó partnerektől`}
       </p>
 
       <div className="mt-6 flex flex-col gap-6 lg:flex-row">
@@ -72,7 +66,7 @@ export default async function AllasokPage({
           ) : (
             <div className="flex flex-col gap-4">
               {jobs.map((job) => {
-                const loc = job.work_location_type as keyof typeof LOC_ICON;
+                const loc = job.work_location_type as string;
                 const attrs = deriveAttributesFromJobPost(job).slice(0, 5);
 
                 return (
@@ -85,11 +79,11 @@ export default async function AllasokPage({
                       <span className={`rounded-full px-2.5 py-0.5 font-semibold ${
                         job.work_type === "szellemi" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700"
                       }`}>
-                        {job.work_type === "szellemi" ? "Szellemi" : "Fizikai"}
+                        {job.work_type === "szellemi" ? "Szellemi munka" : "Fizikai munka"}
                       </span>
                       {loc && LOC_LABEL[loc] && (
-                        <span className="flex items-center gap-1 text-gray-400">
-                          {LOC_ICON[loc]} {LOC_LABEL[loc]}
+                        <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-gray-600">
+                          {LOC_LABEL[loc]}
                         </span>
                       )}
                       {job.job_category && (
@@ -126,11 +120,16 @@ export default async function AllasokPage({
                       )}
                     </div>
 
-                    {/* Piktogram chipek */}
+                    {/* Jellemzők — egyszerű szöveges badge-ek piktogram nélkül */}
                     {attrs.length > 0 && (
                       <div className="mt-3 flex flex-wrap gap-1.5">
                         {attrs.map((slug) => (
-                          <VmAttributeChip key={slug} slug={slug} size="sm" />
+                          <span
+                            key={slug}
+                            className="rounded-full border border-sni-brand-teal/30 bg-sni-brand-teal/5 px-2.5 py-0.5 text-xs font-semibold text-sni-brand-navy"
+                          >
+                            {ATTRIBUTE_LABELS[slug]?.title ?? slug}
+                          </span>
                         ))}
                       </div>
                     )}

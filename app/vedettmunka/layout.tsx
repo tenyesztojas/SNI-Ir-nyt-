@@ -1,17 +1,16 @@
 import type { ReactNode } from "react";
 
 export const metadata = {
-  title: { template: "%s – Védett Munka", default: "Védett Munka" },
+  title: { template: "%s – VédettKarrier", default: "VédettKarrier" },
   description:
-    "Neurodivergens, megváltozott munkaképességű és érintett gyermeket nevelő szülők számára is befogadó álláshirdetések.",
+    "Rugalmas munkák, megbízások és lehetőségek a VédettSarok közösségének. Otthonról végezhető, részmunkaidős, előre tervezhető lehetőségek.",
 };
 
 export default function VedettMunkaLayout({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Védett Munka sávos fejléc */}
       <div className="bg-sni-brand-navy py-2 text-center text-xs font-semibold tracking-wide text-sni-brand-teal">
-        Védett Munka — neurodivergens és megváltozott munkaképességű álláskeresők számára is befogadó állások
+        VédettKarrier — rugalmas munkák és lehetőségek a VédettSarok közösségének
       </div>
       {children}
     </div>

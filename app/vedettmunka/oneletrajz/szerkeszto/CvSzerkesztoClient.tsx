@@ -6,18 +6,18 @@ import type { CvData } from "@/lib/vedettmunka/types";
 import { EMPTY_CV } from "@/lib/vedettmunka/types";
 import { MEGYEK, TELEPULESEK, EGYEB_OPCIO } from "@/lib/vedettmunka/telepulesek";
 
-const CV_KEY = "vm_cv_draft";
+const CV_KEY = "vk_bemutatkozo_draft";
 
 const STEPS = [
-  "Alapadatok",
-  "Jogosítványok",
-  "Iskolai végzettség",
-  "Szakma",
-  "Munkahelyek",
-  "Számítógépes ismeretek",
-  "Idegennyelv-ismeret",
-  "Munkába állás",
-  "Egyéb információ",
+  "Ki vagy te?",
+  "Van jogosítványod?",
+  "Milyen iskolát végeztél?",
+  "Milyen szakmád van?",
+  "Hol dolgoztál eddig?",
+  "Milyen gépeket használsz?",
+  "Milyen nyelveken tudsz?",
+  "Mikor tudnál kezdeni?",
+  "Van még valami?",
   "Kész!",
 ];
 

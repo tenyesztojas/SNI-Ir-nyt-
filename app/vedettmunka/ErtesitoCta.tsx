@@ -34,10 +34,10 @@ export default function ErtesitoCta({ initialEnabled }: Props) {
         <div className="flex items-start gap-4">
           <Bell className="mt-0.5 shrink-0 text-sni-brand-teal" size={26} />
           <div>
-            <h2 className="text-lg font-extrabold text-sni-brand-navy">Állásértesítő</h2>
+            <h2 className="text-lg font-extrabold text-sni-brand-navy">Lehetőségfigyelő</h2>
             <p className="mt-1 text-sm leading-relaxed text-gray-600">
-              Bejelentkezés után bekapcsolhatod az állásértesítőt – e-mailben jelzünk, ha új,
-              számodra megfelelő állás jelenik meg.
+              Bejelentkezés után bekapcsolhatod a lehetőségfigyelőt – e-mailben jelzünk, ha új,
+              általad keresett lehetőség jelenik meg.
             </p>
             <Link
               href="/belepes"
@@ -62,7 +62,7 @@ export default function ErtesitoCta({ initialEnabled }: Props) {
         )}
         <div className="flex-1">
           <div className="flex flex-wrap items-center gap-3">
-            <h2 className="text-lg font-extrabold text-sni-brand-navy">Állásértesítő</h2>
+            <h2 className="text-lg font-extrabold text-sni-brand-navy">Lehetőségfigyelő</h2>
             {enabled && (
               <span className="rounded-full bg-sni-brand-teal/15 px-2.5 py-0.5 text-xs font-semibold text-sni-brand-teal">
                 Bekapcsolva
@@ -72,12 +72,12 @@ export default function ErtesitoCta({ initialEnabled }: Props) {
 
           {enabled ? (
             <p className="mt-1 text-sm leading-relaxed text-gray-600">
-              E-mailben értesítünk, ha új állás jelenik meg.
+              E-mailben értesítünk, ha új lehetőség jelenik meg.
               Bármikor leiratkozhatsz, vagy pontosíthatod a szűrőket a beállításokban.
             </p>
           ) : (
             <p className="mt-1 text-sm leading-relaxed text-gray-600">
-              Kapcsold be, és e-mailben szólunk, ha új, számodra megfelelő állás jelenik meg.
+              Kapcsold be, és e-mailben szólunk, ha új, általad keresett lehetőség jelenik meg.
               Bármikor leiratkozhatsz.
             </p>
           )}
@@ -112,7 +112,7 @@ export default function ErtesitoCta({ initialEnabled }: Props) {
                   disabled={isPending}
                   className="rounded-full bg-sni-brand-teal px-6 py-2.5 text-sm font-bold text-sni-brand-navy transition hover:bg-sni-brand-blue hover:text-white disabled:opacity-50"
                 >
-                  {isPending ? "..." : "Feliratkozom az állásértesítőre"}
+                  {isPending ? "..." : "Lehetőségfigyelő bekapcsolása"}
                 </button>
                 {initialEnabled === false && (
                   <Link

@@ -47,7 +47,35 @@ const securityHeaders = [
   { key: "Content-Security-Policy", value: cspDirectives },
 ];
 
+// /vedettkarrier/* → /vedettmunka/* átirányítás (publikus névváltozás)
+const VEDETTKARRIER_REDIRECTS = [
+  "allasok",
+  "allasok/:id*",
+  "munkaltatok",
+  "munkaltatoi-regisztracio",
+  "hirdetes-feladas",
+  "oneletrajz",
+  "oneletrajz/szerkeszto",
+  "ertesito",
+  "karrieriranytu",
+  "jelentkezes/:jobId*",
+  "munkaprofil",
+  "admin/:path*",
+].map((path) => ({
+  source: `/vedettkarrier/${path}`,
+  destination: `/vedettmunka/${path}`,
+  permanent: false,
+}));
+
 const nextConfig = {
+  async redirects() {
+    return [
+      // /vedettkarrier (főoldal)
+      { source: "/vedettkarrier", destination: "/vedettmunka", permanent: false },
+      ...VEDETTKARRIER_REDIRECTS,
+    ];
+  },
+
   async headers() {
     return [
       {

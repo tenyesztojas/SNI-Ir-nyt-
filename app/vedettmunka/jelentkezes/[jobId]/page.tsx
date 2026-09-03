@@ -4,10 +4,16 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getPublishedJobById } from "@/lib/vedettmunka/data";
 import JelentkezesClient from "./JelentkezesClient";
 
-export const metadata = { title: "Jelentkezés" };
+export const metadata = { title: "Jelentkezés – VédettKarrier" };
 export const dynamic = "force-dynamic";
 
-export default async function JelentkezesPage({ params }: { params: { jobId: string } }) {
+export default async function JelentkezesPage({
+  params,
+  searchParams,
+}: {
+  params: { jobId: string };
+  searchParams: Record<string, string | undefined>;
+}) {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect(`/belepes?next=/vedettmunka/jelentkezes/${params.jobId}`);
@@ -30,16 +36,52 @@ export default async function JelentkezesPage({ params }: { params: { jobId: str
 
   const companyName = employerRow?.company_name ?? (job.employers as { company_name: string } | null)?.company_name ?? "";
   const privacyUrl = employerRow?.privacy_policy_url ?? null;
+  const isErdeklodes = searchParams.tipus === "erdeklodes";
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6">
       <a href={`/vedettmunka/allasok/${job.id}`} className="text-sm text-sni-brand-blue hover:underline">
-        ← Vissza az álláshirdetéshez
+        ← Vissza a lehetőségkártyához
       </a>
-      <h1 className="mt-3 text-2xl font-extrabold text-sni-brand-navy">Jelentkezés</h1>
+
+      {/* Mód-váltó */}
+      <div className="mt-4 flex gap-2">
+        <a
+          href={`/vedettmunka/jelentkezes/${job.id}?tipus=erdeklodes`}
+          className={`rounded-full px-5 py-2 text-sm font-semibold transition ${
+            isErdeklodes
+              ? "bg-sni-brand-teal text-sni-brand-navy"
+              : "border border-gray-200 text-gray-500 hover:border-sni-brand-teal"
+          }`}
+        >
+          Érdeklődöm
+        </a>
+        <a
+          href={`/vedettmunka/jelentkezes/${job.id}`}
+          className={`rounded-full px-5 py-2 text-sm font-semibold transition ${
+            !isErdeklodes
+              ? "bg-sni-brand-navy text-white"
+              : "border border-gray-200 text-gray-500 hover:border-sni-brand-navy"
+          }`}
+        >
+          Jelentkezem
+        </a>
+      </div>
+
+      <h1 className="mt-4 text-2xl font-extrabold text-sni-brand-navy">
+        {isErdeklodes ? "Érdeklődés" : "Jelentkezés"}
+      </h1>
       <p className="mt-1 text-sm text-gray-600">
-        Pozíció: <strong>{job.title}</strong> · {companyName}
+        <strong>{job.title}</strong> · {companyName}
       </p>
+
+      {isErdeklodes && (
+        <div className="mt-3 rounded-xl bg-blue-50 border border-blue-100 px-4 py-3 text-sm text-blue-700">
+          Még nem szeretnél teljes jelentkezést küldeni? Küldhetsz rövid érdeklődést is a hirdető partnernek.
+          Dokumentumcsatolás nem kötelező.
+        </div>
+      )}
+
       <div className="mt-6 rounded-2xl border border-gray-100 bg-white p-6">
         <JelentkezesClient
           jobId={job.id}
@@ -51,6 +93,7 @@ export default async function JelentkezesPage({ params }: { params: { jobId: str
           defaultEmail={user.email ?? ""}
           userId={user.id}
           employerId={job.employer_id}
+          isErdeklodes={isErdeklodes}
         />
       </div>
     </div>
