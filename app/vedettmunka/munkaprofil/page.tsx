@@ -18,7 +18,7 @@ export default async function MunkaprofilPage() {
     <div className="mx-auto max-w-2xl px-4 py-10 sm:px-6">
       {/* Fejléc */}
       <Link href="/vedettmunka" className="text-sm text-sni-brand-blue hover:underline">
-        ← VédettMunka
+        ← VédettKarrier
       </Link>
       <div className="mt-4 rounded-2xl bg-gradient-to-br from-sni-brand-navy to-sni-brand-blue p-6 text-white">
         <h1 className="text-2xl font-extrabold">Saját Munkaprofil</h1>

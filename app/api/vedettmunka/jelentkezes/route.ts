@@ -46,7 +46,7 @@ export async function POST(request: Request) {
       // Méret limit
       if (cvFile.size > MAX_CV_SIZE) {
         return NextResponse.json(
-          { error: "Az önéletrajz fájl mérete legfeljebb 5 MB lehet." },
+          { error: "A csatolt dokumentum mérete legfeljebb 5 MB lehet." },
           { status: 400 }
         );
       }
@@ -54,7 +54,7 @@ export async function POST(request: Request) {
       // MIME-típus ellenőrzés
       if (!ALLOWED_CV_MIME.has(cvFile.type)) {
         return NextResponse.json(
-          { error: "Csak PDF, DOC vagy DOCX formátumú önéletrajzot csatolhatsz." },
+          { error: "Csak PDF, DOC vagy DOCX formátumú dokumentumot csatolhatsz." },
           { status: 400 }
         );
       }
@@ -63,7 +63,7 @@ export async function POST(request: Request) {
       const ext = "." + cvFile.name.split(".").pop()?.toLowerCase();
       if (!ALLOWED_CV_EXT.has(ext)) {
         return NextResponse.json(
-          { error: "Csak PDF, DOC vagy DOCX formátumú önéletrajzot csatolhatsz." },
+          { error: "Csak PDF, DOC vagy DOCX formátumú dokumentumot csatolhatsz." },
           { status: 400 }
         );
       }
@@ -83,7 +83,7 @@ export async function POST(request: Request) {
       .single();
 
     if (!job) {
-      return NextResponse.json({ error: "Az állás nem található." }, { status: 404 });
+      return NextResponse.json({ error: "A lehetőség nem található." }, { status: 404 });
     }
 
     const applicationEmail = job.application_email;
@@ -95,27 +95,30 @@ export async function POST(request: Request) {
     // ── E-mail összeállítása és küldése ───────────────────────────
     const resend = getResend();
 
+    const tipus = (formData.get("tipus") as string | null) === "erdeklodes" ? "érdeklődés" : "jelentkezés";
+
     const htmlBody = `
-      <h2 style="color:#123A5C">Új jelentkezés – Védett Munka</h2>
-      <p><strong>Pozíció:</strong> ${jobTitle}</p>
-      <p><strong>Munkáltató:</strong> ${companyName}</p>
+      <h2 style="color:#123A5C">Új ${tipus} – VédettKarrier</h2>
+      <p><strong>Lehetőség:</strong> ${jobTitle}</p>
+      <p><strong>Karrierpartner:</strong> ${companyName}</p>
       <hr>
-      <p><strong>Jelölt neve:</strong> ${name}</p>
+      <p><strong>Neve:</strong> ${name}</p>
       <p><strong>E-mail:</strong> <a href="mailto:${email}">${email}</a></p>
       ${message ? `<p><strong>Üzenet:</strong></p><p style="white-space:pre-wrap">${message.replace(/</g, "&lt;")}</p>` : ""}
       <hr>
       <p style="font-size:12px;color:#888">
-        Ez a jelentkezés a Védett Munka felületen keresztül érkezett.<br>
-        A jelölt az adattovábbítási hozzájárulást megadta.<br>
-        A Védett Munka technikai platformként továbbítja az adatokat – a CV-t nem tárolja tartósan. A VédettMunka nem munkaerő-közvetítő szolgáltatás.
+        Ez a ${tipus} a VédettKarrier felületen keresztül érkezett.<br>
+        A felhasználó az adattovábbítási hozzájárulást megadta.<br>
+        ${cvFilename ? "A felhasználó által csatolt dokumentum mellékelve." : "Nem érkezett csatolt dokumentum."}<br>
+        A VédettKarrier technikai platformként továbbítja az adatokat – nem tárolja a bemutatkozó lapot tartósan, és nem munkaerő-közvetítő szolgáltatás.
       </p>
     `;
 
     const { error: emailError } = await resend.emails.send({
-      from: "Védett Munka <noreply@vedettsarok.hu>",
+      from: "VédettKarrier <noreply@vedettsarok.hu>",
       to: applicationEmail,
       replyTo: email,
-      subject: `[Védett Munka] Új jelentkezés: ${jobTitle} – ${name}`,
+      subject: `[VédettKarrier] Új ${tipus}: ${jobTitle} – ${name}`,
       html: htmlBody,
       attachments: attachments.length > 0 ? attachments : undefined,
     });

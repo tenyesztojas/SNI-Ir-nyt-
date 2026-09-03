@@ -191,10 +191,10 @@ export default function HirdetesForm() {
         Miben támogató vagy rugalmas ez a munkakörnyezet? <span className="text-red-500 normal-case font-normal">*</span>
       </p>
       <Field name="support_description" label="" required as="textarea" rows={4}
-        placeholder="Ez a kötelező Védett Munka-mező. Írd le konkrétan, miben segít a munkakörnyezet: pl. van kijelölt mentor, a feladatokat írásban is megkapja, rugalmas a munkaidő, csendes irodai légkör, stb." />
+        placeholder="Ez a kötelező VédettKarrier-mező. Írd le konkrétan, miben segít a munkakörnyezet: pl. van kijelölt mentor, a feladatokat írásban is megkapja, rugalmas a munkaidő, csendes irodai légkör, stb." />
 
       <hr className="my-1" />
-      <p className="text-xs font-bold uppercase tracking-wide text-gray-400">Milyen ez a munkahely? (Védett Munka kérdések)</p>
+      <p className="text-xs font-bold uppercase tracking-wide text-gray-400">Milyen ez a munkahely? (VédettKarrier kérdések)</p>
 
       <RadioGroup name="phone_required_level" label="Kell telefonálni a munka során?" options={[
         { value: "nem", label: "Nem" }, { value: "ritkan", label: "Ritkán" },

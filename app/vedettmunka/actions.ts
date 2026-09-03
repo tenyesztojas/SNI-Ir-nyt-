@@ -79,9 +79,9 @@ export async function registerEmployer(formData: FormData) {
   const adminEmail = process.env.ADMIN_EMAIL;
   if (adminEmail) {
     await resend.emails.send({
-      from: "Védett Munka <noreply@vedettsarok.hu>",
+      from: "VédettKarrier <noreply@vedettsarok.hu>",
       to: adminEmail,
-      subject: `[Védett Munka] Új munkáltatói regisztráció: ${obj.company_name}`,
+      subject: `[VédettKarrier] Új karrierpartneri regisztráció: ${obj.company_name}`,
       html: `<p>Új munkáltatói regisztráció érkezett: <strong>${obj.company_name}</strong></p>
              <p>Kapcsolattartó: ${obj.contact_name} &lt;${obj.contact_email}&gt;</p>
              <p>Adatkezelési link: <a href="${rawPrivacyUrl}">${rawPrivacyUrl}</a></p>
@@ -168,10 +168,10 @@ export async function submitJobPost(formData: FormData) {
   const adminEmail = process.env.ADMIN_EMAIL;
   if (adminEmail) {
     await resend.emails.send({
-      from: "Védett Munka <noreply@vedettsarok.hu>",
+      from: "VédettKarrier <noreply@vedettsarok.hu>",
       to: adminEmail,
-      subject: `[Védett Munka] Új hirdetés jóváhagyásra vár: ${obj.title}`,
-      html: `<p>Új hirdetés érkezett: <strong>${obj.title}</strong></p>
+      subject: `[VédettKarrier] Új lehetőség jóváhagyásra vár: ${obj.title}`,
+      html: `<p>Új lehetőség érkezett: <strong>${obj.title}</strong></p>
              <p><a href="${process.env.NEXT_PUBLIC_SITE_URL}/admin/vedettmunka/hirdetesek">Admin kezelés</a></p>`,
     }).catch(() => null);
   }
@@ -265,10 +265,10 @@ export async function submitJobPostWizard(
     const adminEmail = process.env.ADMIN_EMAIL;
     if (adminEmail) {
       await resend.emails.send({
-        from: "Védett Munka <noreply@vedettsarok.hu>",
+        from: "VédettKarrier <noreply@vedettsarok.hu>",
         to: adminEmail,
-        subject: `[Védett Munka] Új hirdetés jóváhagyásra vár: ${obj.title}`,
-        html: `<p>Új hirdetés érkezett a wizardon keresztül: <strong>${obj.title}</strong></p>
+        subject: `[VédettKarrier] Új lehetőség jóváhagyásra vár: ${obj.title}`,
+        html: `<p>Új lehetőség érkezett a wizardon keresztül: <strong>${obj.title}</strong></p>
                <p><a href="${process.env.NEXT_PUBLIC_SITE_URL}/admin/vedettmunka/hirdetesek">Admin kezelés</a></p>`,
       }).catch(() => null);
     }
@@ -299,7 +299,7 @@ export async function saveWorkProfile(slugs: string[], notes: string): Promise<{
   }
 }
 
-// ─── Állásértesítő ──────────────────────────────────────────────
+// ─── Lehetőségfigyelő ──────────────────────────────────────────────
 
 export async function upsertJobAlert(formData: FormData) {
   const supabase = createClient();
@@ -461,23 +461,23 @@ export async function adminUpdateEmployerStatus(
     .eq("id", id);
   if (error) throw new Error(error.message);
 
-  // Jóváhagyáskor e-mail a munkáltatónak
+  // Jóváhagyáskor e-mail a karrierpartnernek
   if (status === "approved" && emp?.contact_email) {
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://vedettsarok.hu";
     await resend.emails.send({
-      from: "Védett Munka <noreply@vedettsarok.hu>",
+      from: "VédettKarrier <noreply@vedettsarok.hu>",
       to: emp.contact_email,
-      subject: `Üdvözöljük a VédettMunka platformján! – ${emp.company_name}`,
+      subject: `Üdvözöljük a VédettKarrier platformján! – ${emp.company_name}`,
       html: `
         <div style="font-family:sans-serif;max-width:560px;margin:0 auto">
           <h2 style="color:#123A5C">Elfogadtuk a regisztrációját!</h2>
           <p>Kedves ${emp.contact_name ?? emp.company_name}!</p>
-          <p>Örömmel tájékoztatjuk, hogy a <strong>${emp.company_name}</strong> munkáltatói regisztrációját jóváhagytuk a <strong>VédettMunka</strong> platformján.</p>
-          <p>Köszöntjük a VédettSarok közösségében! Mostantól feladhat állásokat és befogadó munkáltatóként megjelenhet az álláskereső felületen.</p>
+          <p>Örömmel tájékoztatjuk, hogy a <strong>${emp.company_name}</strong> karrierpartneri regisztrációját jóváhagytuk a <strong>VédettKarrier</strong> platformján.</p>
+          <p>Köszöntjük a VédettSarok közösségében! Mostantól feladhat lehetőségeket és befogadó karrierpartnerként megjelenhet a VédettKarrier felületen.</p>
           <p style="margin-top:24px">
             <a href="${siteUrl}/vedettmunka/hirdetes-feladas"
                style="background:#34D8C3;color:#123A5C;padding:12px 24px;border-radius:999px;text-decoration:none;font-weight:bold;display:inline-block">
-              Hirdetés feladása →
+              Lehetőség feladása →
             </a>
           </p>
           <p style="margin-top:24px;font-size:13px;color:#666">
@@ -593,7 +593,7 @@ export async function adminUpdateReportStatus(
   revalidatePath("/admin/vedettmunka/jelentesek");
 }
 
-// ─── Állásértesítő e-mailek küldése (publikáláskor) ─────────────
+// ─── Lehetőségfigyelő e-mailek küldése (publikáláskor) ─────────────
 
 async function sendJobAlertEmails(jobId: string) {
   const admin = createAdminClient();
@@ -628,13 +628,13 @@ async function sendJobAlertEmails(jobId: string) {
     if (workTypeMatch && ndMatch && disabledMatch && parentsMatch && ptMatch && cityMatch && countyMatch) {
       const companyName = (job.employers as { company_name: string } | null)?.company_name ?? "";
       await resend.emails.send({
-        from: "Védett Munka <noreply@vedettsarok.hu>",
+        from: "VédettKarrier <noreply@vedettsarok.hu>",
         to: profile.email,
-        subject: `[Védett Munka] Új állás: ${job.title}`,
-        html: `<p>Új álláslehetőség jelent meg a Védett Munka felületen:</p>
+        subject: `[VédettKarrier] Új lehetőség: ${job.title}`,
+        html: `<p>Új lehetőség jelent meg a VédettKarrier felületen:</p>
                <p><strong>${job.title}</strong> – ${companyName} – ${job.city}</p>
-               <p><a href="${process.env.NEXT_PUBLIC_SITE_URL}/vedettmunka/allasok/${job.id}">Megnézem az állást</a></p>
-               <hr><p style="font-size:12px;">Értesítőd módosításához: <a href="${process.env.NEXT_PUBLIC_SITE_URL}/vedettmunka/ertesito">Védett Munka értesítők</a></p>`,
+               <p><a href="${process.env.NEXT_PUBLIC_SITE_URL}/vedettmunka/allasok/${job.id}">Megnézem a lehetőséget</a></p>
+               <hr><p style="font-size:12px;">Lehetőségfigyelőd módosításához: <a href="${process.env.NEXT_PUBLIC_SITE_URL}/vedettmunka/ertesito">VédettKarrier lehetőségfigyelő</a></p>`,
       }).catch(() => null);
     }
   }

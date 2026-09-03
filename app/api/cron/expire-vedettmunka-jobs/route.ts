@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 export const runtime = "nodejs";
 
 /**
- * Cron: lejárt VédettMunka hirdetések lezárása
+ * Cron: lejárt VédettKarrier lehetőségek lezárása
  * Vercel Cron hívja naponta (vercel.json: "0 3 * * *")
  * CRON_SECRET fejléc védi jogosulatlan hívás ellen.
  */

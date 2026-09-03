@@ -172,11 +172,21 @@ export interface CvData {
   }>;
   nem_dolgozott: boolean;
 
-  // 6. Számítógépes ismeretek
-  szamitogep: string[];
+  // 3. Kihagyva jelzők
+  szakma_kihagyva?: boolean;
+  nyelv_kihagyva?: boolean;
 
-  // 7. Nyelvismeret
-  nyelvek: Array<{ nyelv: string; szint: string }>;
+  // 6. Digitális eszközök (kategóriaalapú, szabad szöveges)
+  szamitogep: string[];          // legacy – megőrzve backward-compat-hoz
+  digitalis_eszkozok: {
+    irodai: string;              // "Irodai szoftverek"
+    egyeb_prog: string;          // "Egyéb programok"
+    kozossegi: string;           // "Közösségi média alkalmazások"
+    egyeb_dig: string;           // "Egyéb digitális tudás"
+  };
+
+  // 7. Nyelvismeret (vizsga mező is)
+  nyelvek: Array<{ nyelv: string; szint: string; vizsga?: string }>;
 
   // 8. Munkába állás
   munkaba_allas: string;
@@ -199,10 +209,13 @@ export const EMPTY_CV: CvData = {
   egyeb_jogositvany: "",
   vegzettsegek: [{ szint: "", hely: "", ev: "" }],
   szakmak: [{ nev: "", hely: "", ev: "" }],
+  szakma_kihagyva: false,
   munkahelyek: [{ hol: "", mit: "", mettol: "", meddig: "" }],
   nem_dolgozott: false,
   szamitogep: [],
-  nyelvek: [{ nyelv: "", szint: "" }],
+  digitalis_eszkozok: { irodai: "", egyeb_prog: "", kozossegi: "", egyeb_dig: "" },
+  nyelvek: [{ nyelv: "", szint: "", vizsga: "" }],
+  nyelv_kihagyva: false,
   munkaba_allas: "azonnal",
   egyeb_info: "",
 };

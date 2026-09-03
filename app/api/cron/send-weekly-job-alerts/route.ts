@@ -15,7 +15,7 @@ function makeUnsubscribeToken(userId: string): string {
 }
 
 /**
- * Cron: heti állásértesítő e-mailek küldése
+ * Cron: heti lehetőségfigyelő e-mailek küldése
  * Vercel Cron hívja hétfőnként (vercel.json: "0 7 * * 1")
  * CRON_SECRET Bearer token védi.
  */
@@ -137,22 +137,22 @@ export async function GET(request: Request) {
     const html = `
       <div style="font-family:sans-serif;max-width:600px;margin:0 auto;color:#1a1a2e">
         <div style="background:#123A5C;padding:24px 32px;border-radius:12px 12px 0 0">
-          <h1 style="color:#34D8C3;font-size:20px;margin:0">Védett Munka</h1>
-          <p style="color:#e2e8f0;font-size:14px;margin:6px 0 0">Heti állásértesítő</p>
+          <h1 style="color:#34D8C3;font-size:20px;margin:0">VédettKarrier</h1>
+          <p style="color:#e2e8f0;font-size:14px;margin:6px 0 0">Heti lehetőségfigyelő</p>
         </div>
         <div style="background:#fff;padding:24px 32px;border:1px solid #e5e7eb;border-top:none">
-          <p style="font-size:15px">Az elmúlt héten <strong>${matching.length} új állás</strong> jelent meg, amely megfelel az értesítőd beállításainak:</p>
+          <p style="font-size:15px">Az elmúlt héten <strong>${matching.length} új lehetőség</strong> jelent meg, amely megfelel a lehetőségfigyelőd beállításainak:</p>
           <table style="width:100%;border-collapse:collapse;margin:16px 0">
             ${jobListHtml}
           </table>
           <a href="${baseUrl}/vedettmunka/allasok"
              style="display:inline-block;background:#34D8C3;color:#123A5C;font-weight:700;padding:12px 24px;border-radius:999px;text-decoration:none;margin-top:8px">
-            Összes állás megtekintése
+            Összes lehetőség megtekintése
           </a>
         </div>
         <div style="background:#f9fafb;padding:16px 32px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px">
           <p style="font-size:11px;color:#888;margin:0">
-            Ezt az értesítőt azért kaptad, mert feliratkoztál a Védett Munka heti állásértesítőjére.<br>
+            Ezt az értesítőt azért kaptad, mert feliratkoztál a VédettKarrier heti lehetőségfigyelőjére.<br>
             <a href="${unsubUrl}" style="color:#888">Leiratkozás egy kattintással</a> ·
             <a href="${baseUrl}/vedettmunka/ertesito" style="color:#888">Beállítások módosítása</a>
           </p>
@@ -160,9 +160,9 @@ export async function GET(request: Request) {
       </div>`;
 
     const { error: emailError } = await resend.emails.send({
-      from: "Védett Munka <ertesito@vedettsarok.hu>",
+      from: "VédettKarrier <ertesito@vedettsarok.hu>",
       to: userEmail,
-      subject: `[Védett Munka] ${matching.length} új állás az elmúlt héten`,
+      subject: `[VédettKarrier] ${matching.length} új lehetőség az elmúlt héten`,
       html,
     });
 

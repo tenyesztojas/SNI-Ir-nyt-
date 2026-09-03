@@ -128,7 +128,7 @@ export default function MunkaltatoiRegForm() {
             rel="noopener noreferrer"
             className="font-bold text-sni-brand-blue underline hover:text-sni-brand-teal"
           >
-            Védett Munka munkáltatói feltételeit
+            VédettKarrier karrierpartneri feltételeit
           </a>{" "}
           és vállalom a méltányos, diszkriminációmentes kiválasztást. <span className="text-red-500">*</span>
         </span>
@@ -142,7 +142,7 @@ export default function MunkaltatoiRegForm() {
       </label>
 
       <div className="rounded-xl bg-blue-50 px-4 py-3 text-xs text-blue-700">
-        A Védett Munka speciális álláshirdető felület. A hirdető munkáltató tudomásul veszi, hogy a platformon neurodivergens, megváltozott munkaképességű, fogyatékossággal élő, illetve érintett gyermeket nevelő álláskeresők is megjelennek.
+        A VédettKarrier speciális lehetőségközvetítő felület. A hirdető karrierpartner tudomásul veszi, hogy a platformon neurodivergens, megváltozott munkaképességű, fogyatékossággal élő, illetve érintett gyermeket nevelő álláskeresők is megjelennek.
       </div>
 
       {error && <p className="rounded-xl bg-red-50 px-4 py-2 text-sm text-red-600">{error}</p>}

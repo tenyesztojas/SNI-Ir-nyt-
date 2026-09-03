@@ -12,12 +12,12 @@ const STEPS = [
   "Ki vagy te?",
   "Van jogosítványod?",
   "Milyen iskolát végeztél?",
-  "Milyen szakmád van?",
+  "Milyen szakmai végzettséged van?",
   "Hol dolgoztál eddig?",
-  "Milyen gépeket használsz?",
-  "Milyen nyelveken tudsz?",
-  "Mikor tudnál kezdeni?",
-  "Van még valami?",
+  "Milyen digitális eszközöket használsz?",
+  "Milyen nyelveken beszélsz?",
+  "Mikor tudnál munkába állni?",
+  "Mit szeretnél még elmondani?",
   "Kész!",
 ];
 
@@ -40,43 +40,35 @@ const MUNKABA_ALLAS_OPTIONS = [
   "később",
 ];
 
-const SZAMITOGEP_OPTIONS = [
-  "Microsoft Word",
-  "Microsoft Excel",
-  "E-mail használat",
-  "Internet használat",
-];
-
 const NYELV_SZINTEK = [
-  "nem beszélem",
-  "kicsit értem",
-  "alap szinten beszélem",
-  "jól beszélem",
-  "nagyon jól beszélem",
+  { value: "alapszinten_eri", label: "Alapszinten értem", desc: "Egyszerű szavakat és mondatokat megértek." },
+  { value: "egyszeruen_hasznalom", label: "Egyszerű helyzetekben használom", desc: "Röviden tudok beszélni vagy írni." },
+  { value: "jol_hasznalom", label: "Jól használom", desc: "Munkában is tudom használni." },
+  { value: "nagyon_jol", label: "Nagyon jól használom", desc: "Magabiztosan beszélek és írok." },
+  { value: "nyelvvizsga", label: "Nyelvvizsgám is van", desc: "" },
 ];
 
 const ALLOWED_PHOTO_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
-const MAX_PHOTO_SIZE = 2 * 1024 * 1024; // 2 MB
+const MAX_PHOTO_SIZE = 2 * 1024 * 1024;
 
-/** Csak számjegyek, +, -, szóköz, (), . karakterek */
 function filterPhone(v: string) {
   return v.replace(/[^\d\s+\-().]/g, "");
 }
 
-/** Csak 4 számjegy (évszám) */
 function filterEv(v: string) {
   return v.replace(/\D/g, "").slice(0, 4);
 }
 
 function Input({
-  label, value, onChange, type = "text", placeholder = "", maxLength,
+  label, value, onChange, type = "text", placeholder = "", maxLength, hint,
 }: {
   label: string; value: string; onChange: (v: string) => void;
-  type?: string; placeholder?: string; maxLength?: number;
+  type?: string; placeholder?: string; maxLength?: number; hint?: string;
 }) {
   return (
     <label className="flex flex-col gap-1">
       <span className="text-sm font-semibold text-gray-700">{label}</span>
+      {hint && <span className="text-xs text-gray-400">{hint}</span>}
       <input
         type={type}
         value={value}
@@ -89,7 +81,6 @@ function Input({
   );
 }
 
-/** Migrál régi localStorage formátumból (szuletesi_ev → szuletesi_datum, stb.) */
 function migrateLegacyCv(raw: Record<string, unknown>): CvData {
   const str = (v: unknown): string => (typeof v === "string" ? v : "");
   const vegzettsegek = Array.isArray(raw.vegzettsegek)
@@ -102,19 +93,22 @@ function migrateLegacyCv(raw: Record<string, unknown>): CvData {
     : (raw.szakma || raw.szakma_helye || raw.szakma_eve)
       ? [{ nev: str(raw.szakma), hely: str(raw.szakma_helye), ev: str(raw.szakma_eve) }]
       : [{ nev: "", hely: "", ev: "" }];
+  const digitalis_eszkozok = (raw.digitalis_eszkozok && typeof raw.digitalis_eszkozok === "object")
+    ? (raw.digitalis_eszkozok as CvData["digitalis_eszkozok"])
+    : EMPTY_CV.digitalis_eszkozok;
   return {
     ...EMPTY_CV,
     ...(raw as Partial<CvData>),
     szuletesi_datum: (() => {
       const d = str(raw.szuletesi_datum) || str(raw.szuletesi_ev);
       if (!d) return "";
-      // Ha YYYY-MM-DD formátum → csak az év
       return d.length > 4 ? d.slice(0, 4) : d;
     })(),
     lakhely_megye: str(raw.lakhely_megye),
     weboldal: str(raw.weboldal),
     vegzettsegek,
     szakmak,
+    digitalis_eszkozok,
   };
 }
 
@@ -135,7 +129,6 @@ export default function CvSzerkesztoClient() {
       if (saved) {
         const migrated = migrateLegacyCv(JSON.parse(saved));
         setCv(migrated);
-        // Ha a tárolt lakhely nem szerepel a megye listájában → szabad szöveges mód
         if (migrated.lakhely_megye && migrated.lakhely) {
           const opts = TELEPULESEK[migrated.lakhely_megye] ?? [];
           if (!opts.includes(migrated.lakhely)) setLakhelyEgyeb(true);
@@ -202,19 +195,33 @@ export default function CvSzerkesztoClient() {
 
   const isLast = step === STEPS.length - 1;
 
+  function SkipButton({ onClick }: { onClick: () => void }) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className="self-start rounded-full border border-gray-200 px-5 py-1.5 text-xs font-semibold text-gray-400 hover:border-gray-300 hover:text-gray-500"
+      >
+        Kihagyom ezt a részt
+      </button>
+    );
+  }
+
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6">
+
       {/* Adatvédelmi tájékoztató */}
       <div className="mb-5 rounded-2xl border border-blue-100 bg-blue-50 px-5 py-4 text-sm text-blue-800">
-        <p className="font-semibold mb-1">Az önéletrajzkészítőről</p>
-        <p>
-          Az önéletrajz adatai és az opcionálisan feltöltött fénykép a <strong>böngésződben kerülnek feldolgozásra</strong>.
-          A VédettMunka nem menti őket szerveroldali CV-adatbázisba.
+        <p className="font-semibold mb-1">A bemutatkozó lapról</p>
+        <p className="text-xs">
+          A bemutatkozó lap adatai és az opcionálisan feltöltött fénykép a{" "}
+          <strong>böngésződben kerülnek feldolgozásra</strong>.
+          A VédettKarrier nem menti őket szerveroldali dokumentum-adatbázisba.
           A PDF-et letöltés után a saját eszközödön tárolod.
         </p>
         <p className="mt-2 text-xs text-blue-700">
-          A VédettMunka nem kér diagnózist, egészségügyi dokumentumot, fogyatékossági igazolást
-          vagy megváltozott munkaképességet igazoló iratot. Kérjük, ilyen dokumentumot ne tölts fel a CV-készítőbe.
+          A VédettKarrier nem kér diagnózist, egészségügyi dokumentumot, fogyatékossági igazolást
+          vagy gyermekre vonatkozó adatot. Kérjük, ilyen adatot ne írj be és ne tölts fel.
         </p>
       </div>
 
@@ -230,7 +237,7 @@ export default function CvSzerkesztoClient() {
       </div>
       {draftDeleted && (
         <div className="mb-4 rounded-xl bg-green-50 px-4 py-2.5 text-sm font-medium text-green-700">
-          ✓ Az önéletrajz-piszkozatot töröltük erről az eszközről.
+          ✓ A bemutatkozó lap piszkozatát töröltük erről az eszközről.
         </div>
       )}
 
@@ -250,12 +257,12 @@ export default function CvSzerkesztoClient() {
 
       <div className="rounded-2xl border border-gray-100 bg-white p-6">
 
-        {/* 0. Alapadatok */}
+        {/* 0. Ki vagy te? */}
         {step === 0 && (
           <div className="flex flex-col gap-4">
-            <h2 className="font-extrabold text-sni-brand-navy text-lg">Alapadatok</h2>
+            <h2 className="font-extrabold text-sni-brand-navy text-lg">Ki vagy te?</h2>
 
-            {/* Fénykép – drag & drop + tallózás */}
+            {/* Fénykép */}
             <div>
               <p className="text-sm font-semibold text-gray-700 mb-1">Fénykép (opcionális)</p>
               <p className="text-xs text-gray-400 mb-2">
@@ -268,171 +275,107 @@ export default function CvSzerkesztoClient() {
                 onDrop={handleDrop}
                 onClick={() => { setPhotoError(null); photoRef.current?.click(); }}
                 className={`flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed px-6 py-5 cursor-pointer transition-colors ${
-                  dragOver
-                    ? "border-sni-brand-teal bg-teal-50"
-                    : "border-gray-200 hover:border-sni-brand-teal hover:bg-gray-50"
+                  dragOver ? "border-sni-brand-teal bg-teal-50" : "border-gray-200 hover:border-sni-brand-teal hover:bg-gray-50"
                 }`}
               >
                 {cv.foto_base64 ? (
-                  <img
-                    src={cv.foto_base64}
-                    alt="Fotó"
-                    className="h-24 w-24 rounded-xl object-cover border border-gray-200"
-                  />
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={cv.foto_base64} alt="Fotó" className="h-24 w-24 rounded-xl object-cover border border-gray-200" />
                 ) : (
                   <div className="text-3xl text-gray-300">🖼</div>
                 )}
                 <p className="text-xs text-gray-500 text-center">
-                  {cv.foto_base64
-                    ? "Kattints a cseréhez vagy húzz ide egy újabb képet"
-                    : "Húzd ide a képet, vagy kattints a tallózáshoz"}
+                  {cv.foto_base64 ? "Kattints a cseréhez" : "Húzd ide a képet, vagy kattints a tallózáshoz"}
                 </p>
                 {cv.foto_base64 && (
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      save({ ...cv, foto_base64: null });
-                      setPhotoError(null);
-                    }}
-                    className="rounded-full border border-red-100 px-4 py-1 text-xs font-semibold text-red-500 hover:bg-red-50"
-                  >
+                  <button type="button" onClick={(e) => { e.stopPropagation(); save({ ...cv, foto_base64: null }); setPhotoError(null); }}
+                    className="rounded-full border border-red-100 px-4 py-1 text-xs font-semibold text-red-500 hover:bg-red-50">
                     Fotó törlése
                   </button>
                 )}
               </div>
-              <input
-                ref={photoRef}
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                className="hidden"
-                onChange={handlePhoto}
-              />
-              {photoError && (
-                <p className="mt-2 text-xs font-semibold text-red-600">{photoError}</p>
-              )}
+              <input ref={photoRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handlePhoto} />
+              {photoError && <p className="mt-2 text-xs font-semibold text-red-600">{photoError}</p>}
             </div>
 
-            <Input label="Teljes neve" value={cv.nev} onChange={(v) => save({ ...cv, nev: v })} placeholder="pl. Kovács Anna" />
+            <Input label="Mi a neved?" hint="Azt a nevet írd ide, amit a jelentkezésben használni szeretnél."
+              value={cv.nev} onChange={(v) => save({ ...cv, nev: v })} placeholder="pl. Kovács Anna" />
 
-            {/* Születési év – csak 4 számjegy */}
             <label className="flex flex-col gap-1">
-              <span className="text-sm font-semibold text-gray-700">Születési év</span>
-              <input
-                type="text"
-                value={cv.szuletesi_datum}
+              <span className="text-sm font-semibold text-gray-700">Mikor születtél?</span>
+              <span className="text-xs text-gray-400">Elég az évet megadni.</span>
+              <input type="text" value={cv.szuletesi_datum}
                 onChange={(e) => save({ ...cv, szuletesi_datum: filterEv(e.target.value) })}
-                placeholder="pl. 1985"
-                maxLength={4}
-                inputMode="numeric"
-                className="rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-sni-brand-teal"
-              />
+                placeholder="pl. 1985" maxLength={4} inputMode="numeric"
+                className="rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-sni-brand-teal" />
             </label>
 
-            {/* Lakóhely: megye → település */}
             <div className="flex flex-col gap-3">
               <label className="flex flex-col gap-1">
-                <span className="text-sm font-semibold text-gray-700">Megye / főváros</span>
-                <select
-                  value={cv.lakhely_megye}
-                  onChange={(e) => {
-                    setLakhelyEgyeb(false);
-                    save({ ...cv, lakhely_megye: e.target.value, lakhely: "" });
-                  }}
-                  className="rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-sni-brand-teal bg-white"
-                >
+                <span className="text-sm font-semibold text-gray-700">Honnan keresel munkalehetőséget?</span>
+                <span className="text-xs text-gray-400">Elég a vármegyét megadni. Pontos címet ne írj ide.</span>
+                <select value={cv.lakhely_megye}
+                  onChange={(e) => { setLakhelyEgyeb(false); save({ ...cv, lakhely_megye: e.target.value, lakhely: "" }); }}
+                  className="rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-sni-brand-teal bg-white">
                   <option value="">– Válassz –</option>
                   {MEGYEK.map((m) => <option key={m} value={m}>{m}</option>)}
                 </select>
               </label>
               {cv.lakhely_megye && (
                 <label className="flex flex-col gap-1">
-                  <span className="text-sm font-semibold text-gray-700">Település</span>
+                  <span className="text-sm font-semibold text-gray-700">Település (opcionális)</span>
                   {lakhelyEgyeb ? (
                     <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={cv.lakhely}
+                      <input type="text" value={cv.lakhely}
                         onChange={(e) => save({ ...cv, lakhely: e.target.value })}
                         placeholder="Írja be a település nevét"
-                        className="flex-1 rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-sni-brand-teal"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => { setLakhelyEgyeb(false); save({ ...cv, lakhely: "" }); }}
-                        className="rounded-xl border border-gray-200 px-3 py-2 text-xs text-gray-500 hover:border-gray-400"
-                      >Vissza</button>
+                        className="flex-1 rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-sni-brand-teal" />
+                      <button type="button" onClick={() => { setLakhelyEgyeb(false); save({ ...cv, lakhely: "" }); }}
+                        className="rounded-xl border border-gray-200 px-3 py-2 text-xs text-gray-500 hover:border-gray-400">Vissza</button>
                     </div>
                   ) : (
-                    <select
-                      value={cv.lakhely}
+                    <select value={cv.lakhely}
                       onChange={(e) => {
-                        if (e.target.value === EGYEB_OPCIO) {
-                          setLakhelyEgyeb(true);
-                          save({ ...cv, lakhely: "" });
-                        } else {
-                          save({ ...cv, lakhely: e.target.value });
-                        }
+                        if (e.target.value === EGYEB_OPCIO) { setLakhelyEgyeb(true); save({ ...cv, lakhely: "" }); }
+                        else { save({ ...cv, lakhely: e.target.value }); }
                       }}
-                      className="rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-sni-brand-teal bg-white"
-                    >
+                      className="rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-sni-brand-teal bg-white">
                       <option value="">– Válassz települést –</option>
-                      {(TELEPULESEK[cv.lakhely_megye] ?? []).map((t) => (
-                        <option key={t} value={t}>{t}</option>
-                      ))}
+                      {(TELEPULESEK[cv.lakhely_megye] ?? []).map((t) => <option key={t} value={t}>{t}</option>)}
                     </select>
                   )}
                 </label>
               )}
             </div>
 
-            {/* Telefonszám – csak számok és elválasztók */}
             <label className="flex flex-col gap-1">
-              <span className="text-sm font-semibold text-gray-700">Telefonszám</span>
-              <input
-                type="tel"
-                value={cv.telefon}
+              <span className="text-sm font-semibold text-gray-700">Mi a telefonszámod? (opcionális)</span>
+              <span className="text-xs text-gray-400">Ezt csak akkor add meg, ha szeretnéd, hogy telefonon is elérjenek.</span>
+              <input type="tel" value={cv.telefon}
                 onChange={(e) => save({ ...cv, telefon: filterPhone(e.target.value) })}
-                placeholder="+36 20 123 4567"
-                inputMode="tel"
-                className="rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-sni-brand-teal"
-              />
+                placeholder="+36 20 123 4567" inputMode="tel"
+                className="rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-sni-brand-teal" />
             </label>
 
-            {/* E-mail – valós formátum validáció */}
             <label className="flex flex-col gap-1">
-              <span className="text-sm font-semibold text-gray-700">E-mail</span>
-              <input
-                type="email"
-                value={cv.email}
-                onChange={(e) => {
-                  save({ ...cv, email: e.target.value });
-                  setEmailError(e.target.value.length > 0 && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.target.value));
-                }}
+              <span className="text-sm font-semibold text-gray-700">Mi az e-mail-címed?</span>
+              <span className="text-xs text-gray-400">Erre az e-mail-címre írhatnak neked.</span>
+              <input type="email" value={cv.email}
+                onChange={(e) => { save({ ...cv, email: e.target.value }); setEmailError(e.target.value.length > 0 && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.target.value)); }}
                 onBlur={(e) => setEmailError(e.target.value.length > 0 && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.target.value))}
                 placeholder="email@pelda.hu"
-                className={`rounded-xl border px-3 py-2 text-sm outline-none ${emailError ? "border-red-400 focus:border-red-400" : "border-gray-200 focus:border-sni-brand-teal"}`}
-              />
+                className={`rounded-xl border px-3 py-2 text-sm outline-none ${emailError ? "border-red-400" : "border-gray-200 focus:border-sni-brand-teal"}`} />
               {emailError && <span className="text-xs text-red-500">Kérjük, valós e-mail-formátumban add meg. (pl. nev@pelda.hu)</span>}
             </label>
 
-            {/* Saját weboldal / szakmai oldal (opcionális) */}
             <label className="flex flex-col gap-1">
-              <span className="text-sm font-semibold text-gray-700">Saját weboldalam, szakmai oldalam (opcionális)</span>
-              <span className="text-xs text-gray-400">Ha van saját weboldalad, LinkedIn-profilod, portfóliód — itt feltüntetheted. Pl.: https://nevem.hu</span>
-              <input
-                type="url"
-                value={cv.weboldal}
+              <span className="text-sm font-semibold text-gray-700">Van saját weboldalad vagy szakmai oldalad? (opcionális)</span>
+              <span className="text-xs text-gray-400">Ide írhatsz saját honlapot, portfóliót, LinkedIn-profilt vagy más szakmai oldalt. Ha nincs ilyen, hagyd üresen.</span>
+              <input type="url" value={cv.weboldal}
                 onChange={(e) => save({ ...cv, weboldal: e.target.value })}
-                onBlur={(e) => {
-                  const v = e.target.value.trim();
-                  if (v && !v.startsWith("http://") && !v.startsWith("https://")) {
-                    save({ ...cv, weboldal: `https://${v}` });
-                  }
-                }}
+                onBlur={(e) => { const v = e.target.value.trim(); if (v && !v.startsWith("http")) save({ ...cv, weboldal: `https://${v}` }); }}
                 placeholder="https://nevem.hu"
-                className="rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-sni-brand-teal"
-              />
+                className="rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-sni-brand-teal" />
             </label>
           </div>
         )}
@@ -440,153 +383,116 @@ export default function CvSzerkesztoClient() {
         {/* 1. Jogosítványok */}
         {step === 1 && (
           <div className="flex flex-col gap-4">
-            <h2 className="font-extrabold text-sni-brand-navy text-lg">Jogosítványok</h2>
+            <h2 className="font-extrabold text-sni-brand-navy text-lg">Van jogosítványod?</h2>
+            <p className="text-xs text-gray-400">Ha nincs, lépj tovább – ez a rész nem kötelező.</p>
             <label className="flex items-center gap-3 cursor-pointer">
               <input type="checkbox" checked={cv.b_jogositvany} onChange={(e) => save({ ...cv, b_jogositvany: e.target.checked })} className="rounded" />
-              <span className="text-sm">B kategóriás jogosítvány</span>
+              <span className="text-sm">B kategóriás jogosítvány (személyautó)</span>
             </label>
             <label className="flex items-center gap-3 cursor-pointer">
               <input type="checkbox" checked={cv.targonca_jogositvany} onChange={(e) => save({ ...cv, targonca_jogositvany: e.target.checked })} className="rounded" />
               <span className="text-sm">Targoncavezető-jogosítvány</span>
             </label>
-            <Input label="Egyéb jogosítvány / engedély" value={cv.egyeb_jogositvany} onChange={(v) => save({ ...cv, egyeb_jogositvany: v })} placeholder="pl. ADR, targoncavezető..." />
+            <Input label="Egyéb jogosítvány / engedély (opcionális)" value={cv.egyeb_jogositvany}
+              onChange={(v) => save({ ...cv, egyeb_jogositvany: v })} placeholder="pl. ADR, emelőgép..." />
           </div>
         )}
 
-        {/* 2. Iskolai végzettség – több is felvihető */}
+        {/* 2. Iskolai végzettség */}
         {step === 2 && (
           <div className="flex flex-col gap-4">
-            <h2 className="font-extrabold text-sni-brand-navy text-lg">Iskolai végzettség</h2>
-            <p className="text-xs text-gray-400">Ha több iskolát is elvégeztél, add hozzá mindegyiket.</p>
+            <h2 className="font-extrabold text-sni-brand-navy text-lg">Milyen iskolát végeztél?</h2>
+            <p className="text-xs text-gray-400">Ha több iskolát is elvégeztél, add hozzá mindegyiket. Ha nem szeretnéd megadni, kattints a „Kihagyom" gombra.</p>
             {cv.vegzettsegek.map((v, i) => (
               <div key={i} className="rounded-xl border border-gray-100 p-4 flex flex-col gap-3">
                 <p className="text-xs font-bold text-gray-400">{i + 1}. végzettség</p>
                 <label className="flex flex-col gap-1">
                   <span className="text-sm font-semibold text-gray-700">Milyen iskolát végeztél?</span>
-                  <select
-                    value={v.szint}
-                    onChange={(e) => {
-                      const list = [...cv.vegzettsegek];
-                      list[i] = { ...list[i], szint: e.target.value };
-                      save({ ...cv, vegzettsegek: list });
-                    }}
-                    className="rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-sni-brand-teal"
-                  >
+                  <select value={v.szint}
+                    onChange={(e) => { const list = [...cv.vegzettsegek]; list[i] = { ...list[i], szint: e.target.value }; save({ ...cv, vegzettsegek: list }); }}
+                    className="rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-sni-brand-teal">
                     <option value="">— Válassz —</option>
                     {VEGZETTSEG_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
                   </select>
                 </label>
-                <Input label="Hol végezted? (település)" value={v.hely}
-                  onChange={(val) => {
-                    const list = [...cv.vegzettsegek];
-                    list[i] = { ...list[i], hely: val };
-                    save({ ...cv, vegzettsegek: list });
-                  }} placeholder="pl. Budapest" />
+                <Input label="Hol végezted? (opcionális)" value={v.hely}
+                  onChange={(val) => { const list = [...cv.vegzettsegek]; list[i] = { ...list[i], hely: val }; save({ ...cv, vegzettsegek: list }); }}
+                  placeholder="pl. Budapest" />
                 <label className="flex flex-col gap-1">
-                  <span className="text-sm font-semibold text-gray-700">Mikor? (évszám)</span>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={v.ev}
-                    onChange={(e) => {
-                      const list = [...cv.vegzettsegek];
-                      list[i] = { ...list[i], ev: filterEv(e.target.value) };
-                      save({ ...cv, vegzettsegek: list });
-                    }}
-                    placeholder="pl. 2010"
-                    maxLength={4}
-                    className="rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-sni-brand-teal"
-                  />
+                  <span className="text-sm font-semibold text-gray-700">Mikor? (évszám, opcionális)</span>
+                  <input type="text" inputMode="numeric" value={v.ev}
+                    onChange={(e) => { const list = [...cv.vegzettsegek]; list[i] = { ...list[i], ev: filterEv(e.target.value) }; save({ ...cv, vegzettsegek: list }); }}
+                    placeholder="pl. 2010" maxLength={4}
+                    className="rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-sni-brand-teal" />
                 </label>
                 {cv.vegzettsegek.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => save({ ...cv, vegzettsegek: cv.vegzettsegek.filter((_, j) => j !== i) })}
-                    className="self-start text-xs text-red-500 hover:underline"
-                  >
-                    Törlés
-                  </button>
+                  <button type="button" onClick={() => save({ ...cv, vegzettsegek: cv.vegzettsegek.filter((_, j) => j !== i) })}
+                    className="self-start text-xs text-red-500 hover:underline">Törlés</button>
                 )}
               </div>
             ))}
-            <button
-              type="button"
+            <button type="button"
               onClick={() => save({ ...cv, vegzettsegek: [...cv.vegzettsegek, { szint: "", hely: "", ev: "" }] })}
-              className="self-start rounded-full border border-sni-brand-teal px-4 py-1.5 text-xs font-semibold text-sni-brand-teal"
-            >
+              className="self-start rounded-full border border-sni-brand-teal px-4 py-1.5 text-xs font-semibold text-sni-brand-teal">
               + Újabb végzettség
             </button>
           </div>
         )}
 
-        {/* 3. Szakma – több is felvihető */}
+        {/* 3. Szakma */}
         {step === 3 && (
           <div className="flex flex-col gap-4">
-            <h2 className="font-extrabold text-sni-brand-navy text-lg">Szakma</h2>
-            <p className="text-xs text-gray-400">Ha több szakmád is van, add hozzá mindegyiket.</p>
-            {cv.szakmak.map((s, i) => (
-              <div key={i} className="rounded-xl border border-gray-100 p-4 flex flex-col gap-3">
-                <p className="text-xs font-bold text-gray-400">{i + 1}. szakma</p>
-                <Input label="Szakma megnevezése" value={s.nev}
-                  onChange={(val) => {
-                    const list = [...cv.szakmak];
-                    list[i] = { ...list[i], nev: val };
-                    save({ ...cv, szakmak: list });
-                  }} placeholder="pl. villanyszerelő" />
-                <Input label="Hol végezted?" value={s.hely}
-                  onChange={(val) => {
-                    const list = [...cv.szakmak];
-                    list[i] = { ...list[i], hely: val };
-                    save({ ...cv, szakmak: list });
-                  }} placeholder="pl. Budapest" />
-                <label className="flex flex-col gap-1">
-                  <span className="text-sm font-semibold text-gray-700">Mikor? (évszám)</span>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={s.ev}
-                    onChange={(e) => {
-                      const list = [...cv.szakmak];
-                      list[i] = { ...list[i], ev: filterEv(e.target.value) };
-                      save({ ...cv, szakmak: list });
-                    }}
-                    placeholder="pl. 2012"
-                    maxLength={4}
-                    className="rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-sni-brand-teal"
-                  />
-                </label>
-                {cv.szakmak.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => save({ ...cv, szakmak: cv.szakmak.filter((_, j) => j !== i) })}
-                    className="self-start text-xs text-red-500 hover:underline"
-                  >
-                    Törlés
-                  </button>
-                )}
+            <h2 className="font-extrabold text-sni-brand-navy text-lg">Milyen szakmai végzettséged van?</h2>
+            <p className="text-xs text-gray-400">Írd le, milyen szakmát, tanfolyamot vagy képzést végeztél. Ha nincs, kattints a „Kihagyom" gombra.</p>
+            {!cv.szakma_kihagyva && (
+              <>
+                {cv.szakmak.map((s, i) => (
+                  <div key={i} className="rounded-xl border border-gray-100 p-4 flex flex-col gap-3">
+                    <p className="text-xs font-bold text-gray-400">{i + 1}. szakma / képzés</p>
+                    <Input label="Mit tanultál? Milyen szakmád van?"
+                      hint="Pl. villanyszerelő, könyvelő, ECDL-tanfolyam, pék..." value={s.nev}
+                      onChange={(val) => { const list = [...cv.szakmak]; list[i] = { ...list[i], nev: val }; save({ ...cv, szakmak: list }); }}
+                      placeholder="pl. számítógép-kezelő tanfolyam" />
+                    <Input label="Hol végezted? (opcionális)" value={s.hely}
+                      onChange={(val) => { const list = [...cv.szakmak]; list[i] = { ...list[i], hely: val }; save({ ...cv, szakmak: list }); }}
+                      placeholder="pl. Budapest" />
+                    <label className="flex flex-col gap-1">
+                      <span className="text-sm font-semibold text-gray-700">Mikor? (évszám, opcionális)</span>
+                      <input type="text" inputMode="numeric" value={s.ev}
+                        onChange={(e) => { const list = [...cv.szakmak]; list[i] = { ...list[i], ev: filterEv(e.target.value) }; save({ ...cv, szakmak: list }); }}
+                        placeholder="pl. 2012" maxLength={4}
+                        className="rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-sni-brand-teal" />
+                    </label>
+                    {cv.szakmak.length > 1 && (
+                      <button type="button" onClick={() => save({ ...cv, szakmak: cv.szakmak.filter((_, j) => j !== i) })}
+                        className="self-start text-xs text-red-500 hover:underline">Törlés</button>
+                    )}
+                  </div>
+                ))}
+                <button type="button"
+                  onClick={() => save({ ...cv, szakmak: [...cv.szakmak, { nev: "", hely: "", ev: "" }] })}
+                  className="self-start rounded-full border border-sni-brand-teal px-4 py-1.5 text-xs font-semibold text-sni-brand-teal">
+                  + Újabb szakma / képzés
+                </button>
+              </>
+            )}
+            {cv.szakma_kihagyva && (
+              <div className="rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-500">
+                Ezt a részt kihagytad. Ha mégis kitöltenéd, kattints a „Visszaveszem" gombra.
               </div>
-            ))}
-            <button
-              type="button"
-              onClick={() => save({ ...cv, szakmak: [...cv.szakmak, { nev: "", hely: "", ev: "" }] })}
-              className="self-start rounded-full border border-sni-brand-teal px-4 py-1.5 text-xs font-semibold text-sni-brand-teal"
-            >
-              + Újabb szakma
-            </button>
+            )}
+            <SkipButton onClick={() => save({ ...cv, szakma_kihagyva: !cv.szakma_kihagyva })} />
           </div>
         )}
 
         {/* 4. Munkahelyek */}
         {step === 4 && (
           <div className="flex flex-col gap-4">
-            <h2 className="font-extrabold text-sni-brand-navy text-lg">Munkahelyek</h2>
+            <h2 className="font-extrabold text-sni-brand-navy text-lg">Hol dolgoztál eddig?</h2>
+            <p className="text-xs text-gray-400">Írd le röviden, hol dolgoztál, mikor, és mit csináltál ott. Ha még nem dolgoztál sehol, jelöld be lent.</p>
             <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={cv.nem_dolgozott}
-                onChange={(e) => save({ ...cv, nem_dolgozott: e.target.checked })}
-                className="rounded"
-              />
+              <input type="checkbox" checked={cv.nem_dolgozott}
+                onChange={(e) => save({ ...cv, nem_dolgozott: e.target.checked })} className="rounded" />
               <span className="text-sm">Még nem dolgoztam sehol / álláskereső vagyok</span>
             </label>
             {!cv.nem_dolgozott && (
@@ -594,44 +500,29 @@ export default function CvSzerkesztoClient() {
                 {cv.munkahelyek.map((m, i) => (
                   <div key={i} className="rounded-xl border border-gray-100 p-4 flex flex-col gap-3">
                     <p className="text-xs font-bold text-gray-400">{i + 1}. munkahely</p>
-                    <Input label="Hol dolgoztál?" value={m.hol} onChange={(v) => {
-                      const list = [...cv.munkahelyek];
-                      list[i] = { ...list[i], hol: v };
-                      save({ ...cv, munkahelyek: list });
-                    }} placeholder="pl. Minta Kft., Budapest" />
-                    <Input label="Mit csináltál?" value={m.mit} onChange={(v) => {
-                      const list = [...cv.munkahelyek];
-                      list[i] = { ...list[i], mit: v };
-                      save({ ...cv, munkahelyek: list });
-                    }} placeholder="pl. raktáros, adatrögzítő" />
+                    <Input label="Hol dolgoztál?" value={m.hol}
+                      onChange={(v) => { const list = [...cv.munkahelyek]; list[i] = { ...list[i], hol: v }; save({ ...cv, munkahelyek: list }); }}
+                      placeholder="pl. Minta Kft., Budapest" />
+                    <Input label="Mit csináltál ott?" value={m.mit}
+                      onChange={(v) => { const list = [...cv.munkahelyek]; list[i] = { ...list[i], mit: v }; save({ ...cv, munkahelyek: list }); }}
+                      placeholder="pl. raktáros, adatrögzítő" />
                     <div className="grid gap-3 sm:grid-cols-2">
-                      <Input label="Mettől?" value={m.mettol} onChange={(v) => {
-                        const list = [...cv.munkahelyek];
-                        list[i] = { ...list[i], mettol: v };
-                        save({ ...cv, munkahelyek: list });
-                      }} placeholder="pl. 2020.01" />
-                      <Input label="Meddig?" value={m.meddig} onChange={(v) => {
-                        const list = [...cv.munkahelyek];
-                        list[i] = { ...list[i], meddig: v };
-                        save({ ...cv, munkahelyek: list });
-                      }} placeholder="pl. 2023.06 vagy jelenleg" />
+                      <Input label="Mettől?" value={m.mettol}
+                        onChange={(v) => { const list = [...cv.munkahelyek]; list[i] = { ...list[i], mettol: v }; save({ ...cv, munkahelyek: list }); }}
+                        placeholder="pl. 2020.01" />
+                      <Input label="Meddig?" value={m.meddig}
+                        onChange={(v) => { const list = [...cv.munkahelyek]; list[i] = { ...list[i], meddig: v }; save({ ...cv, munkahelyek: list }); }}
+                        placeholder="pl. 2023.06 vagy jelenleg" />
                     </div>
                     {cv.munkahelyek.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => save({ ...cv, munkahelyek: cv.munkahelyek.filter((_, j) => j !== i) })}
-                        className="self-start text-xs text-red-500 hover:underline"
-                      >
-                        Törlés
-                      </button>
+                      <button type="button" onClick={() => save({ ...cv, munkahelyek: cv.munkahelyek.filter((_, j) => j !== i) })}
+                        className="self-start text-xs text-red-500 hover:underline">Törlés</button>
                     )}
                   </div>
                 ))}
-                <button
-                  type="button"
+                <button type="button"
                   onClick={() => save({ ...cv, munkahelyek: [...cv.munkahelyek, { hol: "", mit: "", mettol: "", meddig: "" }] })}
-                  className="self-start rounded-full border border-sni-brand-teal px-4 py-1.5 text-xs font-semibold text-sni-brand-teal"
-                >
+                  className="self-start rounded-full border border-sni-brand-teal px-4 py-1.5 text-xs font-semibold text-sni-brand-teal">
                   + Újabb munkahely
                 </button>
               </>
@@ -639,69 +530,106 @@ export default function CvSzerkesztoClient() {
           </div>
         )}
 
-        {/* 5. Számítógépes ismeretek */}
+        {/* 5. Digitális eszközök */}
         {step === 5 && (
-          <div className="flex flex-col gap-4">
-            <h2 className="font-extrabold text-sni-brand-navy text-lg">Számítógépes ismeretek</h2>
-            {SZAMITOGEP_OPTIONS.map((o) => (
-              <label key={o} className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={cv.szamitogep.includes(o)}
-                  onChange={(e) => {
-                    const list = e.target.checked ? [...cv.szamitogep, o] : cv.szamitogep.filter((s) => s !== o);
-                    save({ ...cv, szamitogep: list });
-                  }}
-                  className="rounded"
-                />
-                <span className="text-sm">{o}</span>
-              </label>
-            ))}
-            <Input label="Egyéb" value={cv.szamitogep.find((s) => !SZAMITOGEP_OPTIONS.includes(s)) ?? ""}
-              onChange={(v) => {
-                const base = cv.szamitogep.filter((s) => SZAMITOGEP_OPTIONS.includes(s));
-                save({ ...cv, szamitogep: v ? [...base, v] : base });
-              }} placeholder="pl. SAP, AutoCAD..." />
+          <div className="flex flex-col gap-5">
+            <h2 className="font-extrabold text-sni-brand-navy text-lg">Milyen digitális eszközöket használsz?</h2>
+            <p className="text-xs text-gray-400">Jelöld be, milyen típusú programokat használsz, és röviden írd le, mit ismersz. Ha nem szeretnéd kitölteni, lépj tovább.</p>
+
+            {(["irodai", "egyeb_prog", "kozossegi", "egyeb_dig"] as const).map((key) => {
+              const labels: Record<typeof key, { cim: string; hint: string; placeholder: string }> = {
+                irodai: {
+                  cim: "Irodai szoftverek",
+                  hint: "Sorold fel, mit használsz magabiztosan.",
+                  placeholder: "Például: szövegszerkesztő, táblázatkezelő, prezentációkészítő, online dokumentumok…",
+                },
+                egyeb_prog: {
+                  cim: "Egyéb programok",
+                  hint: "Sorold fel, milyen egyéb programokat használsz.",
+                  placeholder: "Például: grafikai program, számlázóprogram, ügyviteli rendszer, webes felület…",
+                },
+                kozossegi: {
+                  cim: "Közösségi média alkalmazások",
+                  hint: "Sorold fel, milyen közösségi média felületeket használsz.",
+                  placeholder: "Például: Facebook, Instagram, TikTok, YouTube, LinkedIn…",
+                },
+                egyeb_dig: {
+                  cim: "Egyéb digitális tudás",
+                  hint: "Írd le, milyen más digitális dolgot tudsz.",
+                  placeholder: "Például: weboldal kezelése, képszerkesztés, videóvágás, online ügyintézés…",
+                },
+              };
+              const { cim, hint, placeholder } = labels[key];
+              const val = cv.digitalis_eszkozok[key];
+              return (
+                <div key={key} className="rounded-xl border border-gray-100 p-4 flex flex-col gap-2">
+                  <p className="text-sm font-bold text-sni-brand-navy">{cim}</p>
+                  <p className="text-xs text-gray-400">{hint}</p>
+                  <textarea
+                    value={val}
+                    onChange={(e) => save({ ...cv, digitalis_eszkozok: { ...cv.digitalis_eszkozok, [key]: e.target.value } })}
+                    rows={2}
+                    placeholder={placeholder}
+                    className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-sni-brand-teal"
+                  />
+                </div>
+              );
+            })}
           </div>
         )}
 
-        {/* 6. Idegennyelv-ismeret */}
+        {/* 6. Nyelvek */}
         {step === 6 && (
           <div className="flex flex-col gap-4">
-            <h2 className="font-extrabold text-sni-brand-navy text-lg">Idegennyelv-ismeret</h2>
-            {cv.nyelvek.map((l, i) => (
-              <div key={i} className="grid gap-3 sm:grid-cols-2 rounded-xl border border-gray-100 p-3">
-                <Input label="Nyelv" value={l.nyelv} onChange={(v) => {
-                  const list = [...cv.nyelvek];
-                  list[i] = { ...list[i], nyelv: v };
-                  save({ ...cv, nyelvek: list });
-                }} placeholder="pl. angol" />
+            <h2 className="font-extrabold text-sni-brand-navy text-lg">Milyen nyelveken beszélsz?</h2>
+            <p className="text-xs text-gray-400">Írd le, milyen nyelvet használsz, és milyen szinten. Ha nem szeretnéd megadni, kattints a „Kihagyom" gombra.</p>
+
+            {!cv.nyelv_kihagyva && cv.nyelvek.map((l, i) => (
+              <div key={i} className="rounded-xl border border-gray-100 p-4 flex flex-col gap-3">
+                <Input label="Milyen nyelv?" value={l.nyelv}
+                  onChange={(v) => { const list = [...cv.nyelvek]; list[i] = { ...list[i], nyelv: v }; save({ ...cv, nyelvek: list }); }}
+                  placeholder="pl. angol" />
                 <label className="flex flex-col gap-1">
-                  <span className="text-sm font-semibold text-gray-700">Szint</span>
-                  <select
-                    value={l.szint}
-                    onChange={(e) => {
-                      const list = [...cv.nyelvek];
-                      list[i] = { ...list[i], szint: e.target.value };
-                      save({ ...cv, nyelvek: list });
-                    }}
-                    className="rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-sni-brand-teal"
-                  >
-                    <option value="">— Válassz —</option>
-                    {NYELV_SZINTEK.map((s) => <option key={s} value={s}>{s}</option>)}
-                  </select>
+                  <span className="text-sm font-semibold text-gray-700">Milyen szinten?</span>
+                  <div className="flex flex-col gap-1.5">
+                    {NYELV_SZINTEK.map((s) => (
+                      <label key={s.value} className={`flex items-start gap-2.5 cursor-pointer rounded-xl border px-3 py-2 text-sm transition ${l.szint === s.value ? "border-sni-brand-teal bg-sni-brand-teal/5" : "border-gray-100 hover:border-sni-brand-teal/40"}`}>
+                        <input type="radio" name={`szint_${i}`} value={s.value} checked={l.szint === s.value}
+                          onChange={() => { const list = [...cv.nyelvek]; list[i] = { ...list[i], szint: s.value }; save({ ...cv, nyelvek: list }); }}
+                          className="mt-0.5 accent-sni-brand-teal" />
+                        <span>
+                          <span className="font-semibold">{s.label}</span>
+                          {s.desc && <span className="text-xs text-gray-400 block">{s.desc}</span>}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
                 </label>
+                {l.szint === "nyelvvizsga" && (
+                  <Input label="Milyen nyelvvizsgád van?" value={l.vizsga ?? ""}
+                    onChange={(v) => { const list = [...cv.nyelvek]; list[i] = { ...list[i], vizsga: v }; save({ ...cv, nyelvek: list }); }}
+                    placeholder="Például: angol B2, német C1…" />
+                )}
                 {cv.nyelvek.length > 1 && (
                   <button type="button" onClick={() => save({ ...cv, nyelvek: cv.nyelvek.filter((_, j) => j !== i) })}
-                    className="col-span-2 self-start text-xs text-red-500 hover:underline">Törlés</button>
+                    className="self-start text-xs text-red-500 hover:underline">Törlés</button>
                 )}
               </div>
             ))}
-            <button type="button"
-              onClick={() => save({ ...cv, nyelvek: [...cv.nyelvek, { nyelv: "", szint: "" }] })}
-              className="self-start rounded-full border border-sni-brand-teal px-4 py-1.5 text-xs font-semibold text-sni-brand-teal">
-              + Újabb nyelv
-            </button>
+
+            {!cv.nyelv_kihagyva && (
+              <button type="button"
+                onClick={() => save({ ...cv, nyelvek: [...cv.nyelvek, { nyelv: "", szint: "", vizsga: "" }] })}
+                className="self-start rounded-full border border-sni-brand-teal px-4 py-1.5 text-xs font-semibold text-sni-brand-teal">
+                + Újabb nyelv
+              </button>
+            )}
+            {cv.nyelv_kihagyva && (
+              <div className="rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-500">
+                Ezt a részt kihagytad.
+              </div>
+            )}
+            <SkipButton onClick={() => save({ ...cv, nyelv_kihagyva: !cv.nyelv_kihagyva })} />
           </div>
         )}
 
@@ -709,6 +637,7 @@ export default function CvSzerkesztoClient() {
         {step === 7 && (
           <div className="flex flex-col gap-4">
             <h2 className="font-extrabold text-sni-brand-navy text-lg">Mikor tudnál munkába állni?</h2>
+            <p className="text-xs text-gray-400">Válaszd azt, ami most leginkább igaz rád.</p>
             <div className="flex flex-col gap-2">
               {MUNKABA_ALLAS_OPTIONS.map((o) => (
                 <label key={o} className="flex items-center gap-3 cursor-pointer">
@@ -721,16 +650,19 @@ export default function CvSzerkesztoClient() {
           </div>
         )}
 
-        {/* 8. Egyéb */}
+        {/* 8. Amit még el szeretnél mondani */}
         {step === 8 && (
           <div className="flex flex-col gap-4">
-            <h2 className="font-extrabold text-sni-brand-navy text-lg">Egyéb információ</h2>
-            <p className="text-sm text-gray-500">Miben vagy jó? Vagy mit szeretsz csinálni, elfoglalni magad?</p>
+            <h2 className="font-extrabold text-sni-brand-navy text-lg">Mit szeretnél még elmondani magadról?</h2>
+            <p className="text-sm text-gray-500">
+              Ide leírhatsz bármit, amit fontosnak tartasz. Például: kreatív elfoglaltságaid, kedvenc időtöltésed,
+              sport, önkéntes munka, hobbik, erősségek, vagy bármi, ami segít jobban megismerni téged.
+            </p>
             <textarea
               value={cv.egyeb_info}
               onChange={(e) => save({ ...cv, egyeb_info: e.target.value })}
               rows={5}
-              placeholder="pl. Szeretem a precíz munkát, jól dolgozom csapatban. Szabadidőmben kertészkedem..."
+              placeholder="Például: szeretek rajzolni, szeretek állatokkal foglalkozni, sportolok, szívesen segítek másoknak, szeretek rendszerezni, pontos vagyok…"
               className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-sni-brand-teal"
             />
           </div>
@@ -740,8 +672,10 @@ export default function CvSzerkesztoClient() {
         {step === 9 && (
           <div className="text-center py-4">
             <p className="text-5xl mb-4">🎉</p>
-            <h2 className="text-xl font-extrabold text-sni-brand-navy">Kész az önéletrajzod!</h2>
-            <p className="mt-2 text-sm text-gray-600">Kattints az Előnézet megtekintése gombra a PDF letöltéshez.</p>
+            <h2 className="text-xl font-extrabold text-sni-brand-navy">Elkészült a bemutatkozó lapod!</h2>
+            <p className="mt-2 text-sm text-gray-600">
+              Kattints az „Előnézet megtekintése" gombra a PDF letöltéshez.
+            </p>
           </div>
         )}
 
@@ -753,11 +687,8 @@ export default function CvSzerkesztoClient() {
               ← Vissza
             </button>
           ) : <span />}
-          <button
-            type="button"
-            onClick={goNext}
-            className="rounded-full bg-sni-brand-teal px-6 py-2 text-sm font-bold text-sni-brand-navy transition hover:bg-sni-brand-blue hover:text-white"
-          >
+          <button type="button" onClick={goNext}
+            className="rounded-full bg-sni-brand-teal px-6 py-2 text-sm font-bold text-sni-brand-navy transition hover:bg-sni-brand-blue hover:text-white">
             {isLast ? "Előnézet megtekintése" : "Tovább →"}
           </button>
         </div>

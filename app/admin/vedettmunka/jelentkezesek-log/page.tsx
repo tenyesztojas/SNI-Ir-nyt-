@@ -20,10 +20,10 @@ export default async function JelentkezesekLogPage() {
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
-      <Link href="/admin/vedettmunka" className="text-sm text-sni-brand-blue hover:underline">← Védett Munka admin</Link>
-      <h1 className="mt-3 text-2xl font-bold text-sni-text">Jelentkezési napló ({logs.length})</h1>
+      <Link href="/admin/vedettmunka" className="text-sm text-sni-brand-blue hover:underline">← VédettKarrier admin</Link>
+      <h1 className="mt-3 text-2xl font-bold text-sni-text">Érdeklődési/Jelentkezési napló ({logs.length})</h1>
       <p className="mt-1 text-xs text-gray-400">
-        Csak technikai adatok tárolódnak. CV tartalom nem kerül mentésre.
+        Csak technikai adatok tárolódnak. Csatolt dokumentum tartalma nem kerül mentésre.
       </p>
 
       <div className="mt-5 overflow-x-auto">
@@ -32,8 +32,8 @@ export default async function JelentkezesekLogPage() {
             <tr className="border-b border-gray-100 text-left text-xs font-semibold text-gray-400">
               <th className="pb-2 pr-4">Dátum</th>
               <th className="pb-2 pr-4">Jelölt</th>
-              <th className="pb-2 pr-4">Állás</th>
-              <th className="pb-2 pr-4">CV fájlnév</th>
+              <th className="pb-2 pr-4">Lehetőség</th>
+              <th className="pb-2 pr-4">Csatolt dokumentum</th>
               <th className="pb-2">Státusz</th>
             </tr>
           </thead>
