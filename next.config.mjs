@@ -1,31 +1,16 @@
 /** @type {import('next').NextConfig} */
 
-const supabaseHost = process.env.NEXT_PUBLIC_SUPABASE_URL
-  ? new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).hostname
-  : "*.supabase.co";
-
-// Content-Security-Policy — megakadályozza az XSS és külső tartalom-injektálást
-const cspDirectives = [
-  // Scriptek: saját + Google OAuth/reCAPTCHA + Google Analytics + Leaflet CDN
-  // Megjegyzés: cdnjs.cloudflare.com eltávolítva – html2pdf.js és html2canvas npm-ből töltődik
-  `script-src 'self' 'unsafe-inline' https://www.google.com https://www.gstatic.com https://www.googletagmanager.com https://unpkg.com`,
-  // Stílusok: saját + inline (Tailwind/CSS-in-JS) + Leaflet CDN
-  `style-src 'self' 'unsafe-inline' https://unpkg.com`,
-  // Képek: saját + minden HTTPS forrás (képek nem futtatnak kódot, külső domain-ek nem prediktálhatók)
-  `img-src 'self' data: blob: https:`,
-  // API hívások: saját + Supabase + Google OAuth + Google Analytics
-  `connect-src 'self' https://${supabaseHost} https://*.supabase.co wss://*.supabase.co https://oauth2.googleapis.com https://www.googleapis.com https://www.google-analytics.com https://region1.google-analytics.com https://www.googletagmanager.com https://unpkg.com`,
-  // Frame: csak reCAPTCHA
-  `frame-src https://www.google.com https://www.youtube.com https://www.youtube-nocookie.com`,
-  // Font: saját (fontsource npm csomagból, nem CDN)
-  `font-src 'self'`,
-  // Alap: minden más tiltva
-  `default-src 'self'`,
-  // Nem engedünk beágyazást
-  `frame-ancestors 'none'`,
-  // HTTPS-re frissítés
-  `upgrade-insecure-requests`,
-].join("; ");
+// ─────────────────────────────────────────────────────────────────────────────
+// Content-Security-Policy → MIDDLEWARE-BE KÖLTÖZÖTT (middleware.ts)
+//
+// A CSP requestenként egyedi nonce-t tartalmaz (script-src 'nonce-...' + 'strict-dynamic').
+// Statikus next.config.mjs headerekben nonce nem alkalmazható.
+// A middleware minden kérésre beállítja a CSP headert.
+//
+// A többi biztonsági header itt marad (nem igényel per-request adatot).
+// Duplikáció elkerülése: a middleware is beállítja ezeket, de next.config.mjs
+// fallback-ként megőrzi – ez redundáns de nem ütköző.
+// ─────────────────────────────────────────────────────────────────────────────
 
 const securityHeaders = [
   // Clickjacking ellen
@@ -34,7 +19,7 @@ const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
   // XSS védelem (régi böngészőknek)
   { key: "X-XSS-Protection", value: "1; mode=block" },
-  // Referrer szivárgás ellen
+  // Referrer szivárgás ellen (share-token route miatt különösen fontos)
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   // HTTPS kényszer (1 év, aldomainek is)
   { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains; preload" },
@@ -43,8 +28,7 @@ const securityHeaders = [
     key: "Permissions-Policy",
     value: "camera=(), microphone=(), geolocation=(self), interest-cohort=()",
   },
-  // CSP
-  { key: "Content-Security-Policy", value: cspDirectives },
+  // CSP NEM KERÜL IDE – a middleware.ts kezeli nonce-alapon
 ];
 
 // /vedettkarrier/* → /vedettmunka/* átirányítás (publikus névváltozás)

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Script from "next/script";
+import { headers } from "next/headers";
 import "@fontsource/nunito/400.css";
 import "@fontsource/nunito/500.css";
 import "@fontsource/nunito/600.css";
@@ -28,6 +29,11 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  // Nonce-alapú CSP: a middleware requestenként generál nonce-t és átadja x-nonce headerben.
+  // Next.js 14 App Router automatikusan alkalmazza a nonce-t a saját inline scriptjeire.
+  // Az itt lévő custom inline scriptek kézzel kapják meg.
+  const nonce = headers().get("x-nonce") ?? undefined;
+
   return (
     <html lang="hu">
       <head>
@@ -37,13 +43,16 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <meta name="apple-mobile-web-app-title" content="VédettSarok" />
+        {/* Service Worker regisztráció – nonce szükséges CSP nonce-alapú módban */}
         <script
+          nonce={nonce}
           dangerouslySetInnerHTML={{
             __html: `if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js'))}`,
           }}
         />
         {/* Akadálymentességi beállítások anti-flash: hydration előtt alkalmazza a mentett prefs-t */}
         <script
+          nonce={nonce}
           dangerouslySetInnerHTML={{
             __html: `(function(){try{var p=JSON.parse(localStorage.getItem('vs-a11y')||'{}');var h=document.documentElement;if(p.fontScale&&p.fontScale!==100)h.setAttribute('data-font-scale',p.fontScale);if(p.grayscale)h.setAttribute('data-grayscale','1');if(p.contrast&&p.contrast!=='none')h.setAttribute('data-contrast',p.contrast);if(p.underlineLinks)h.setAttribute('data-underline-links','1');if(p.readableFont)h.setAttribute('data-readable-font','1');}catch(e){}})();`,
           }}
@@ -58,12 +67,13 @@ export default function RootLayout({
           <PWASessionTracker />
         </AccessibilityProvider>
 
-        {/* Google Analytics */}
+        {/* Google Analytics – nonce szükséges a CSP script-src nonce-alapú engedélyhez */}
         <Script
+          nonce={nonce}
           src="https://www.googletagmanager.com/gtag/js?id=G-T748C867DW"
           strategy="afterInteractive"
         />
-        <Script id="ga-init" strategy="afterInteractive">
+        <Script nonce={nonce} id="ga-init" strategy="afterInteractive">
           {`window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-T748C867DW');`}
         </Script>
       </body>
