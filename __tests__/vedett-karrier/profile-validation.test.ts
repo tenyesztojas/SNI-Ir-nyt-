@@ -12,7 +12,8 @@ import {
   HiSchema, RpSchema, SmSchema, BpSchema, FrSchema,
   validateCategoriesAgainstDomain, validateFrequencyAgainstDomain,
 } from '../../lib/vedett-karrier/profile/validation.ts'
-import { computeCompletionPct, computeProfileVersionHash, isAnswered } from '../../lib/vedett-karrier/profile/completion.ts'
+import { computeCompletionPct, isAnswered } from '../../lib/vedett-karrier/profile/completion.ts'
+import { computeProfileVersionHash } from '../../lib/vedett-karrier/profile/hash.server.ts'
 import type { SavedDimensionRow } from '../../lib/vedett-karrier/profile/types.ts'
 
 // ─────────────────────────────────────────────────────────────────────────────

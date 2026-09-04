@@ -27,7 +27,7 @@ import type {
   BooleanEmployerValue,
   FrequencyEmployerValue,
   EmployerDimensionValue,
-} from '../types/index.js'
+} from '../types/index'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Explanation keys – determinisztikus, nem AI generált

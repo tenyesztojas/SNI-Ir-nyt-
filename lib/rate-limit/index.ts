@@ -12,9 +12,9 @@
  *   ne csak az első rate-limitelt kéréskor.
  */
 
-import { MemoryRateLimiter } from './memory.js'
-import { UpstashRateLimiter } from './upstash.js'
-import type { RateLimiter } from './types.js'
+import { MemoryRateLimiter } from './memory'
+import { UpstashRateLimiter } from './upstash'
+import type { RateLimiter } from './types'
 
 function createRateLimiter(): RateLimiter {
   if (process.env.NODE_ENV === 'production') {
@@ -41,4 +41,4 @@ function createRateLimiter(): RateLimiter {
 }
 
 export const rateLimiter: RateLimiter = createRateLimiter()
-export type { RateLimiter, RateLimitResult } from './types.js'
+export type { RateLimiter, RateLimitResult } from './types'

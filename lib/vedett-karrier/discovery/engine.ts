@@ -21,7 +21,7 @@ import type {
   DisplayPriorityTuple,
   JobFamilyRow,
   UserSkillRow,
-} from '../types/discovery.js'
+} from '../types/discovery'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants

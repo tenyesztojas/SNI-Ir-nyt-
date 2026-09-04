@@ -6,8 +6,8 @@
  * számítódik. NEM page visit. NEM time spent.
  */
 
-import { VKMM_SUB_DIMENSIONS } from '../seed/vkmm-seed.js'
-import type { JobRoleEnvValueRow } from '../types/employer.js'
+import { VKMM_SUB_DIMENSIONS } from '../seed/vkmm-seed'
+import type { JobRoleEnvValueRow } from '../types/employer'
 
 /** Az aktív sub_dimension-ök száma (51) */
 export const TOTAL_ACTIVE_SUB_DIMENSIONS = VKMM_SUB_DIMENSIONS.filter(s => s.is_active).length

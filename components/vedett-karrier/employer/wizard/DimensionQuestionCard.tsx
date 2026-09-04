@@ -8,13 +8,13 @@
  */
 
 import { useState, useTransition } from 'react'
-import OrdinalInput from '../inputs/OrdinalInput.js'
-import CategoricalInput from '../inputs/CategoricalInput.js'
-import BooleanInput from '../inputs/BooleanInput.js'
-import FrequencyInput from '../inputs/FrequencyInput.js'
-import { saveJobRoleDimension } from '../../../../lib/vedett-karrier/employer/actions.js'
-import type { EmployerDimensionValue } from '../../../../lib/vedett-karrier/types/employer.js'
-import type { VkmmSubDimension } from '../../../../lib/vedett-karrier/types/index.js'
+import OrdinalInput from '../inputs/OrdinalInput'
+import CategoricalInput from '../inputs/CategoricalInput'
+import BooleanInput from '../inputs/BooleanInput'
+import FrequencyInput from '../inputs/FrequencyInput'
+import { saveJobRoleDimension } from '../../../../lib/vedett-karrier/employer/actions'
+import type { EmployerDimensionValue } from '../../../../lib/vedett-karrier/types/employer'
+import type { VkmmSubDimension } from '../../../../lib/vedett-karrier/types/index'
 
 interface Props {
   roleId: string

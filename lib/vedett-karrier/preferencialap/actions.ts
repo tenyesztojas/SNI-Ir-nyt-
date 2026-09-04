@@ -11,24 +11,24 @@
  * - service_role key soha nem kerül kliensre
  */
 
-import { createClient } from '../../supabase/server.js'
-import { loadSavedDimensions } from '../profile/data.js'
-import { VKMM_SUB_DIMENSIONS } from '../seed/vkmm-seed.js'
+import { createClient } from '../../supabase/server'
+import { loadSavedDimensions } from '../profile/data'
+import { VKMM_SUB_DIMENSIONS } from '../seed/vkmm-seed'
 import {
   generatePreferenceDimensionBlocks,
   buildPreferenceDocumentText,
-} from './template.js'
+} from './template'
 import {
   upsertPreferenceDocument,
   sharePreferenceDocument,
   unsharePreferenceDocument,
   deletePreferenceDocument as dbDelete,
-} from './data.js'
+} from './data'
 import type {
   PreferenceDocumentActionResult,
   GeneratePreferenceDocumentInput,
   SavePreferenceDocumentInput,
-} from '../types/preferencialap.js'
+} from '../types/preferencialap'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // generateAndSavePreferenceDocument

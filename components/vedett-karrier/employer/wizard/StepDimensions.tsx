@@ -8,10 +8,10 @@
  * A VKMM taxonómia NEM változik — csak UX csoportosítás.
  */
 
-import type { VkmmSubDimension } from '../../../../lib/vedett-karrier/types/index.js'
-import type { JobRoleEnvValueRow, EmployerDimensionValue } from '../../../../lib/vedett-karrier/types/employer.js'
-import DimensionQuestionCard from './DimensionQuestionCard.js'
-import { WIZARD_STEP_LABELS } from '../../../../lib/vedett-karrier/types/employer.js'
+import type { VkmmSubDimension } from '../../../../lib/vedett-karrier/types/index'
+import type { JobRoleEnvValueRow, EmployerDimensionValue } from '../../../../lib/vedett-karrier/types/employer'
+import DimensionQuestionCard from './DimensionQuestionCard'
+import { WIZARD_STEP_LABELS } from '../../../../lib/vedett-karrier/types/employer'
 
 const STEP_CONTEXT: Record<number, string> = {
   2: 'Ebben a részben a munkaterület fizikai jellemzőit rögzítsd – milyen ingerek érik azt, aki ebben a munkakörben dolgozik.',

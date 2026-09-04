@@ -7,8 +7,8 @@
  * Employer NEM fér hozzá – nincs employer policy a work_preference_documents táblán.
  */
 
-import { createClient } from '../../supabase/server.js'
-import type { PreferenceDocumentRow } from '../types/preferencialap.js'
+import { createClient } from '../../supabase/server'
+import type { PreferenceDocumentRow } from '../types/preferencialap'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Olvasás

@@ -16,12 +16,12 @@
  * - Nincs belső ATS / jelöltpipeline
  */
 
-import { createClient } from '../../supabase/server.js'
+import { createClient } from '../../supabase/server'
 import type {
   JobOpportunityRow,
   CreateOpportunityInput,
   UpdateOpportunityInput,
-} from '../types/opportunity.js'
+} from '../types/opportunity'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Publikus lista (user / anon)

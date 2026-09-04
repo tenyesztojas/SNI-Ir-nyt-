@@ -154,17 +154,17 @@ export default async function NewOpportunityPage({ searchParams }: Props) {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Külső URL (ha „Külső weboldal")</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Külső URL (ha „Külső weboldal&quot;)</label>
           <input name="application_url" type="url" maxLength={2000} className="w-full border border-gray-300 rounded px-3 py-2 text-sm" />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">E-mail cím (ha „E-mail")</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">E-mail cím (ha „E-mail&quot;)</label>
           <input name="application_email" type="email" maxLength={300} className="w-full border border-gray-300 rounded px-3 py-2 text-sm" />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Útmutató szövege (ha „Leírt útmutató")</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Útmutató szövege (ha „Leírt útmutató&quot;)</label>
           <textarea name="application_instructions_hu" rows={3} maxLength={2000} className="w-full border border-gray-300 rounded px-3 py-2 text-sm" />
         </div>
 

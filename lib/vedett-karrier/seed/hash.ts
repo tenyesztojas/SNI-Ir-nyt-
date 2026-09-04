@@ -6,7 +6,7 @@
  */
 
 import { createHash } from 'node:crypto'
-import type { VkmmSeedData } from '../types/index.js'
+import type { VkmmSeedData } from '../types/index'
 
 /**
  * Returns a stable hex SHA-256 of the seed data.

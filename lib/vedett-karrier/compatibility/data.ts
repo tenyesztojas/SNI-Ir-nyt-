@@ -8,7 +8,7 @@
  */
 
 import { createClient } from '@/lib/supabase/server'
-import type { CompatibilityResult } from '../types/index.js'
+import type { CompatibilityResult } from '../types/index'
 
 export const COMPATIBILITY_ENGINE_VERSION = '1.0.0'
 

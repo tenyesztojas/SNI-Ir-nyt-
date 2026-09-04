@@ -7,7 +7,7 @@
  * FONTOS: csak validateVkmmSeed() PASS után kerülhet DB-be.
  */
 
-import type { VkmmDimension, VkmmSubDimension, VkmmSeedData } from '../types/index.js'
+import type { VkmmDimension, VkmmSubDimension, VkmmSeedData } from '../types/index'
 
 export const VKMM_DIMENSIONS: VkmmDimension[] = [
   { code: 'env',        name_hu: 'Fizikai munkakörnyezet',        display_order: 1,  is_active: true },

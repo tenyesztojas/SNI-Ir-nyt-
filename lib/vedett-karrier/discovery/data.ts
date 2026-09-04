@@ -8,11 +8,11 @@
  */
 
 import { createClient } from '@/lib/supabase/server'
-import { getAllJobFamilies } from '../families/data.js'
-import { loadUserSkills } from '../skills/data.js'
-import { loadCareerInterests } from '../interests/data.js'
-import type { DiscoveryInput } from './engine.js'
-import type { JobFamilyEnvProfileRow } from '../types/discovery.js'
+import { getAllJobFamilies } from '../families/data'
+import { loadUserSkills } from '../skills/data'
+import { loadCareerInterests } from '../interests/data'
+import type { DiscoveryInput } from './engine'
+import type { JobFamilyEnvProfileRow } from '../types/discovery'
 
 /**
  * Assembles all discovery input for a user.

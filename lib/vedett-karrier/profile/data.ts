@@ -7,9 +7,10 @@
  */
 
 import { createClient } from '@/lib/supabase/server'
-import type { SavedDimensionRow } from './types.js'
-import { computeCompletionPct, computeProfileVersionHash } from './completion.js'
-import { VKMM_SEED } from '../seed/vkmm-seed.js'
+import type { SavedDimensionRow } from './types'
+import { computeCompletionPct } from './completion'
+import { computeProfileVersionHash } from './hash.server'
+import { VKMM_SEED } from '../seed/vkmm-seed'
 
 const TOTAL_SUB_DIM_COUNT = VKMM_SEED.subDimensions.length // 51
 

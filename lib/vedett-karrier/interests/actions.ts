@@ -9,8 +9,8 @@
 
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
-import { upsertCareerInterest, deleteCareerInterest } from './data.js'
-import type { SaveCareerInterestResult } from '../types/discovery.js'
+import { upsertCareerInterest, deleteCareerInterest } from './data'
+import type { SaveCareerInterestResult } from '../types/discovery'
 
 const SaveInterestSchema = z.object({
   jobFamilySlug: z.string().min(1).max(100),

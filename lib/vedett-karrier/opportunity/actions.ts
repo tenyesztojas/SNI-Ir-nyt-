@@ -17,20 +17,20 @@
  */
 
 import { z } from 'zod'
-import { createClient } from '../../supabase/server.js'
-import { getEmployerByUserId, isEmployerApproved, getJobRoleByIdForEmployer } from '../employer/data.js'
+import { createClient } from '../../supabase/server'
+import { getEmployerByUserId, isEmployerApproved, getJobRoleByIdForEmployer } from '../employer/data'
 import {
   createOpportunity as dbCreate,
   updateOpportunity as dbUpdate,
   activateOpportunity as dbActivate,
   closeOpportunity as dbClose,
   getOpportunityByIdForEmployer,
-} from './data.js'
+} from './data'
 import type {
   OpportunityActionResult,
   CreateOpportunityInput,
   UpdateOpportunityInput,
-} from '../types/opportunity.js'
+} from '../types/opportunity'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Zod schemas

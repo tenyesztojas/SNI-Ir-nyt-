@@ -7,7 +7,7 @@
  * NEM: alkalmas/nem alkalmas, százalék, hiánypontszám, "hiányosságod".
  */
 
-import type { LightSkillBridgeResult, SkillRow, UserSkillRow } from '../types/discovery.js'
+import type { LightSkillBridgeResult, SkillRow, UserSkillRow } from '../types/discovery'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Next step templates (determinisztikus, NEM AI)

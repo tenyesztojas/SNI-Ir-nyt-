@@ -4,7 +4,7 @@
  */
 
 import { createClient } from '@/lib/supabase/server'
-import type { JobFamilyRow, JobFamilyEnvProfileRow } from '../types/discovery.js'
+import type { JobFamilyRow, JobFamilyEnvProfileRow } from '../types/discovery'
 
 export async function getAllJobFamilies(): Promise<JobFamilyRow[]> {
   const supabase = await createClient()
@@ -14,7 +14,6 @@ export async function getAllJobFamilies(): Promise<JobFamilyRow[]> {
     .eq('is_active', true)
     .order('display_order')
   if (error) return []
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((row: any) => ({
     ...row,
     typical_tasks_json:    Array.isArray(row.typical_tasks_json)    ? row.typical_tasks_json    : [],
@@ -65,7 +64,6 @@ export async function getJobFamilySkillCodes(jobFamilyId: string): Promise<{ cod
     .select('relevance, skills!inner(code)')
     .eq('job_family_id', jobFamilyId)
   if (error || !data) return []
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data as any[]).map(row => ({
     code: row.skills.code,
     relevance: row.relevance,

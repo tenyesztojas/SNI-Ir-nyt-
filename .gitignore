@@ -8,3 +8,5 @@ out
 
 # Védett Útvonal — nyers GTFS forrásfájlok (nagy méretű, sosem commitolható)
 /data-sources
+
+.fuse_hidden*

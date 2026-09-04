@@ -6,7 +6,7 @@
  * Az exportált validateVkmmSeed() PASS után szabad a seed-et DB-be tölteni.
  */
 
-import type { VkmmSeedData, VkmmSubDimension } from '../types/index.js'
+import type { VkmmSeedData, VkmmSubDimension } from '../types/index'
 
 const EXPECTED_DIMENSION_CODES = [
   'env', 'comm', 'social', 'task_struct', 'task_dyn',

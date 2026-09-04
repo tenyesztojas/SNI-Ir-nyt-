@@ -14,7 +14,7 @@
  * Ez atomi pipeline-ban küldve, a sorrend garantálja a helyes TTL kezelést.
  */
 
-import type { RateLimiter, RateLimitResult } from './types.js'
+import type { RateLimiter, RateLimitResult } from './types'
 
 function getEnv() {
   const url   = process.env.UPSTASH_REDIS_REST_URL

@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
-import { rateLimiter } from "./lib/rate-limit/index.js";
+import { rateLimiter } from "./lib/rate-limit/index";
 
 const supabaseUrl     = process.env.NEXT_PUBLIC_SUPABASE_URL  ?? "";
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";

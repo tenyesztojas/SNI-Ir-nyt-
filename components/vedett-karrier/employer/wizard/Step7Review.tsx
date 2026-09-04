@@ -9,11 +9,11 @@
  */
 
 import { useState, useTransition } from 'react'
-import { activateJobRole } from '../../../../lib/vedett-karrier/employer/actions.js'
-import { checkActivationGate } from '../../../../lib/vedett-karrier/employer/actions.js'
-import type { JobRoleRow, WorkplaceRow, JobRoleEnvValueRow } from '../../../../lib/vedett-karrier/types/employer.js'
-import type { VkmmSubDimension } from '../../../../lib/vedett-karrier/types/index.js'
-import { VKMM_DIMENSIONS } from '../../../../lib/vedett-karrier/seed/vkmm-seed.js'
+import { activateJobRole } from '../../../../lib/vedett-karrier/employer/actions'
+import { checkActivationGate } from '../../../../lib/vedett-karrier/employer/activation'
+import type { JobRoleRow, WorkplaceRow, JobRoleEnvValueRow } from '../../../../lib/vedett-karrier/types/employer'
+import type { VkmmSubDimension } from '../../../../lib/vedett-karrier/types/index'
+import { VKMM_DIMENSIONS } from '../../../../lib/vedett-karrier/seed/vkmm-seed'
 
 interface Props {
   role: JobRoleRow

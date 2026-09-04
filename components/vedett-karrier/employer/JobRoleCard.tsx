@@ -7,7 +7,7 @@
  */
 
 import Link from 'next/link'
-import type { JobRoleRow, WorkplaceRow } from '../../../lib/vedett-karrier/types/employer.js'
+import type { JobRoleRow, WorkplaceRow } from '../../../lib/vedett-karrier/types/employer'
 
 const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
   draft:    { label: 'Piszkozat', cls: 'bg-gray-100 text-gray-600' },

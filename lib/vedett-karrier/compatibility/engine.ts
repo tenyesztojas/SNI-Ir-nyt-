@@ -27,8 +27,8 @@ import type {
   UserDimensionPreference,
   VkmmSubDimension,
   JobRoleEnvValueRow,
-} from '../types/index.js'
-import type { SavedDimensionRow } from '../profile/types.js'
+} from '../types/index'
+import type { SavedDimensionRow } from '../profile/types'
 import {
   handleHI,
   handleRP,
@@ -36,7 +36,7 @@ import {
   handleBP,
   handleFR,
   ExplKey,
-} from './handlers.js'
+} from './handlers'
 
 export const COMPATIBILITY_ENGINE_VERSION = '1.0.0'
 

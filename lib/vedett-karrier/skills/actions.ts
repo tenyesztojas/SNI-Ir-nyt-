@@ -8,8 +8,8 @@
 
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
-import { upsertUserSkill, deleteUserSkill } from './data.js'
-import type { SaveUserSkillResult } from '../types/discovery.js'
+import { upsertUserSkill, deleteUserSkill } from './data'
+import type { SaveUserSkillResult } from '../types/discovery'
 
 const SaveSkillSchema = z.object({
   skillCode: z.string().min(1).max(100),

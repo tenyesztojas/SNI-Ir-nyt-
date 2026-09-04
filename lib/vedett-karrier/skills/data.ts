@@ -6,7 +6,7 @@
  */
 
 import { createClient } from '@/lib/supabase/server'
-import type { UserSkillRow, SkillRow, SaveUserSkillPayload, SaveUserSkillResult } from '../types/discovery.js'
+import type { UserSkillRow, SkillRow, SaveUserSkillPayload, SaveUserSkillResult } from '../types/discovery'
 
 /**
  * Loads all skills reference data (public).
@@ -43,7 +43,6 @@ export async function loadUserSkills(userId: string): Promise<UserSkillRow[]> {
     `)
     .eq('user_id', userId)
   if (error) return []
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((row: any) => ({
     id: row.id,
     user_id: row.user_id,

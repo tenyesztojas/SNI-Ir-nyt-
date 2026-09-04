@@ -9,7 +9,7 @@
  * silently – startup error-t dob.
  */
 
-import type { RateLimiter, RateLimitResult } from './types.js'
+import type { RateLimiter, RateLimitResult } from './types'
 
 interface Window {
   count: number

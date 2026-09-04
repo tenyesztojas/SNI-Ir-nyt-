@@ -6,7 +6,7 @@
  * A DB row típusok: lib/vedett-karrier/types/index.ts – CareerProfileRow, career_profile_dimensions
  */
 
-import type { ImportanceLevel, VkmmDimension, VkmmSubDimension } from '../types/index.js'
+import type { ImportanceLevel, VkmmDimension, VkmmSubDimension } from '../types/index'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Wizard input értékek – comparison_type alapján különböző struktúra

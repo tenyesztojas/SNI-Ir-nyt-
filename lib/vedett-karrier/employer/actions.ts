@@ -16,7 +16,7 @@
  */
 
 import { z } from 'zod'
-import { createClient } from '../../supabase/server.js'
+import { createClient } from '../../supabase/server'
 import {
   getEmployerByUserId,
   isEmployerApproved,
@@ -28,15 +28,15 @@ import {
   activateJobRole as dbActivateJobRole,
   updateJobRoleCompletionAndHash,
   createWorkplace as dbCreateWorkplace,
-} from './data.js'
-import { computeProfileCompletionPct } from './completion.js'
-import { computeRoleProfileHash } from './hash.js'
+} from './data'
+import { computeProfileCompletionPct } from './completion'
+import { computeRoleProfileHash } from './hash'
 import type {
   CreateJobRoleInput,
   UpdateJobRoleBasicsInput,
   EmployerDimensionValue,
-  ActivationGateResult,
-} from '../types/employer.js'
+} from '../types/employer'
+import { checkActivationGate } from './activation'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Zod schemas
@@ -256,29 +256,4 @@ export async function activateJobRole(
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Activation gate (server-side ellenőrzés)
-// ─────────────────────────────────────────────────────────────────────────────
-
-export function checkActivationGate(role: {
-  title_hu: string
-  workplace_id: string | null
-  job_family_slug: string | null
-  summary_hu: string | null
-  main_tasks_json: string[]
-  profile_completion_pct: number
-  status: string
-}): ActivationGateResult {
-  const missing: string[] = []
-
-  if (!role.title_hu?.trim()) missing.push('Munkakör megnevezése')
-  if (!role.workplace_id) missing.push('Telephely')
-  if (!role.job_family_slug) missing.push('Munkakörcsalád')
-  if (!role.summary_hu?.trim()) missing.push('Tényszerű összefoglaló')
-  if (!role.main_tasks_json || role.main_tasks_json.length === 0) missing.push('Fő feladatok')
-  if (role.profile_completion_pct < 80) {
-    missing.push(`VKMM profil kitöltése (jelenlegi: ${role.profile_completion_pct}%, minimum: 80%)`)
-  }
-
-  return { canActivate: missing.length === 0, missingItems: missing }
-}
+// checkActivationGate → lib/vedett-karrier/employer/activation.ts

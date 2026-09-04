@@ -19,11 +19,11 @@
  */
 
 import { createClient } from '@/lib/supabase/server'
-import { SaveDimensionSchema, validateCategoriesAgainstDomain, validateFrequencyAgainstDomain } from './validation.js'
-import { upsertDimensionPreference, loadSavedDimensions, updateProfileVersionHash } from './data.js'
-import { computeCompletionPct } from './completion.js'
-import { VKMM_SEED } from '../seed/vkmm-seed.js'
-import type { SaveDimensionResult } from './types.js'
+import { SaveDimensionSchema, validateCategoriesAgainstDomain, validateFrequencyAgainstDomain } from './validation'
+import { upsertDimensionPreference, loadSavedDimensions, updateProfileVersionHash } from './data'
+import { computeCompletionPct } from './completion'
+import { VKMM_SEED } from '../seed/vkmm-seed'
+import type { SaveDimensionResult } from './types'
 
 const TOTAL_SUB_DIM_COUNT = VKMM_SEED.subDimensions.length
 
@@ -143,7 +143,7 @@ export async function saveDimensionPreference(
 
   // 10. Version hash recalculation
   await updateProfileVersionHash(data.careerProfileId, allRows)
-  const { computeProfileVersionHash } = await import('./completion.js')
+  const { computeProfileVersionHash } = await import('./hash.server')
   const versionHash = computeProfileVersionHash(allRows)
 
   return { ok: true, completionPct, versionHash }

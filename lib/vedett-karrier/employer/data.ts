@@ -11,7 +11,7 @@
  * 3. RLS backstop (Supabase policy szinten is)
  */
 
-import { createClient } from '../../supabase/server.js'
+import { createClient } from '../../supabase/server'
 import type {
   EmployerRow,
   WorkplaceRow,
@@ -20,7 +20,7 @@ import type {
   CreateWorkplaceInput,
   CreateJobRoleInput,
   UpdateJobRoleBasicsInput,
-} from '../types/employer.js'
+} from '../types/employer'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Employer lookup

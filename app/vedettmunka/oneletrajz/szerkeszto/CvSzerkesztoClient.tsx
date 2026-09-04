@@ -402,7 +402,7 @@ export default function CvSzerkesztoClient() {
         {step === 2 && (
           <div className="flex flex-col gap-4">
             <h2 className="font-extrabold text-sni-brand-navy text-lg">Milyen iskolát végeztél?</h2>
-            <p className="text-xs text-gray-400">Ha több iskolát is elvégeztél, add hozzá mindegyiket. Ha nem szeretnéd megadni, kattints a „Kihagyom" gombra.</p>
+            <p className="text-xs text-gray-400">Ha több iskolát is elvégeztél, add hozzá mindegyiket. Ha nem szeretnéd megadni, kattints a „Kihagyom&quot; gombra.</p>
             {cv.vegzettsegek.map((v, i) => (
               <div key={i} className="rounded-xl border border-gray-100 p-4 flex flex-col gap-3">
                 <p className="text-xs font-bold text-gray-400">{i + 1}. végzettség</p>
@@ -443,7 +443,7 @@ export default function CvSzerkesztoClient() {
         {step === 3 && (
           <div className="flex flex-col gap-4">
             <h2 className="font-extrabold text-sni-brand-navy text-lg">Milyen szakmai végzettséged van?</h2>
-            <p className="text-xs text-gray-400">Írd le, milyen szakmát, tanfolyamot vagy képzést végeztél. Ha nincs, kattints a „Kihagyom" gombra.</p>
+            <p className="text-xs text-gray-400">Írd le, milyen szakmát, tanfolyamot vagy képzést végeztél. Ha nincs, kattints a „Kihagyom&quot; gombra.</p>
             {!cv.szakma_kihagyva && (
               <>
                 {cv.szakmak.map((s, i) => (
@@ -478,7 +478,7 @@ export default function CvSzerkesztoClient() {
             )}
             {cv.szakma_kihagyva && (
               <div className="rounded-xl bg-gray-50 px-4 py-3 text-sm text-gray-500">
-                Ezt a részt kihagytad. Ha mégis kitöltenéd, kattints a „Visszaveszem" gombra.
+                Ezt a részt kihagytad. Ha mégis kitöltenéd, kattints a „Visszaveszem&quot; gombra.
               </div>
             )}
             <SkipButton onClick={() => save({ ...cv, szakma_kihagyva: !cv.szakma_kihagyva })} />
@@ -582,7 +582,7 @@ export default function CvSzerkesztoClient() {
         {step === 6 && (
           <div className="flex flex-col gap-4">
             <h2 className="font-extrabold text-sni-brand-navy text-lg">Milyen nyelveken beszélsz?</h2>
-            <p className="text-xs text-gray-400">Írd le, milyen nyelvet használsz, és milyen szinten. Ha nem szeretnéd megadni, kattints a „Kihagyom" gombra.</p>
+            <p className="text-xs text-gray-400">Írd le, milyen nyelvet használsz, és milyen szinten. Ha nem szeretnéd megadni, kattints a „Kihagyom&quot; gombra.</p>
 
             {!cv.nyelv_kihagyva && cv.nyelvek.map((l, i) => (
               <div key={i} className="rounded-xl border border-gray-100 p-4 flex flex-col gap-3">
@@ -674,7 +674,7 @@ export default function CvSzerkesztoClient() {
             <p className="text-5xl mb-4">🎉</p>
             <h2 className="text-xl font-extrabold text-sni-brand-navy">Elkészült a bemutatkozó lapod!</h2>
             <p className="mt-2 text-sm text-gray-600">
-              Kattints az „Előnézet megtekintése" gombra a PDF letöltéshez.
+              Kattints az „Előnézet megtekintése&quot; gombra a PDF letöltéshez.
             </p>
           </div>
         )}

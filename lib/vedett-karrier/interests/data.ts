@@ -7,7 +7,7 @@
  */
 
 import { createClient } from '@/lib/supabase/server'
-import type { CareerInterestRow, SaveCareerInterestPayload, SaveCareerInterestResult } from '../types/discovery.js'
+import type { CareerInterestRow, SaveCareerInterestPayload, SaveCareerInterestResult } from '../types/discovery'
 
 /**
  * Loads all career interests for the authenticated user.
@@ -27,7 +27,6 @@ export async function loadCareerInterests(userId: string): Promise<CareerInteres
     .eq('user_id', userId)
 
   if (error) return []
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((row: any) => ({
     id: row.id,
     user_id: row.user_id,

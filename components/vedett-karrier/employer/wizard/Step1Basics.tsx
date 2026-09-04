@@ -9,9 +9,9 @@
  */
 
 import { useState, useTransition } from 'react'
-import { updateJobRoleBasics } from '../../../../lib/vedett-karrier/employer/actions.js'
-import type { JobRoleRow, WorkplaceRow } from '../../../../lib/vedett-karrier/types/employer.js'
-import type { JobFamilyRow } from '../../../../lib/vedett-karrier/types/discovery.js'
+import { updateJobRoleBasics } from '../../../../lib/vedett-karrier/employer/actions'
+import type { JobRoleRow, WorkplaceRow } from '../../../../lib/vedett-karrier/types/employer'
+import type { JobFamilyRow } from '../../../../lib/vedett-karrier/types/discovery'
 
 interface Props {
   role: JobRoleRow

@@ -10,7 +10,7 @@
  * Tesztelhetőség érdekében a hash input string is exportált.
  */
 
-import type { JobRoleEnvValueRow } from '../types/employer.js'
+import type { JobRoleEnvValueRow } from '../types/employer'
 
 export interface HashableJobRoleProfile {
   /** job_role alapadatok */

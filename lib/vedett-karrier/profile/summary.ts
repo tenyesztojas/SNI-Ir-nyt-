@@ -11,10 +11,10 @@
  * - Csak ténylegesen kitöltött aldimenziókhoz generál mondatot
  */
 
-import type { SavedDimensionRow } from './types.js'
-import type { VkmmSubDimension, VkmmDimension } from '../types/index.js'
-import type { ProfileSummaryData, SummaryItem } from './types.js'
-import { isAnswered } from './completion.js'
+import type { SavedDimensionRow } from './types'
+import type { VkmmSubDimension, VkmmDimension } from '../types/index'
+import type { ProfileSummaryData, SummaryItem } from './types'
+import { isAnswered } from './completion'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Template-alapú mondatgenerátorok (aldimenzió kódonként)

@@ -9,14 +9,14 @@
  */
 
 import { useState, useCallback } from 'react'
-import type { JobRoleRow, WorkplaceRow, EmployerDimensionValue } from '../../../../lib/vedett-karrier/types/employer.js'
-import type { VkmmSubDimension } from '../../../../lib/vedett-karrier/types/index.js'
-import type { JobFamilyRow } from '../../../../lib/vedett-karrier/types/discovery.js'
-import Step1Basics from './Step1Basics.js'
-import StepDimensions from './StepDimensions.js'
-import Step7Review from './Step7Review.js'
-import { WIZARD_STEP_LABELS, WIZARD_STEP_DIMENSIONS } from '../../../../lib/vedett-karrier/types/employer.js'
-import type { JobRoleEnvValueRow } from '../../../../lib/vedett-karrier/types/employer.js'
+import type { JobRoleRow, WorkplaceRow, EmployerDimensionValue } from '../../../../lib/vedett-karrier/types/employer'
+import type { VkmmSubDimension } from '../../../../lib/vedett-karrier/types/index'
+import type { JobFamilyRow } from '../../../../lib/vedett-karrier/types/discovery'
+import Step1Basics from './Step1Basics'
+import StepDimensions from './StepDimensions'
+import Step7Review from './Step7Review'
+import { WIZARD_STEP_LABELS, WIZARD_STEP_DIMENSIONS } from '../../../../lib/vedett-karrier/types/employer'
+import type { JobRoleEnvValueRow } from '../../../../lib/vedett-karrier/types/employer'
 
 interface Props {
   role: JobRoleRow

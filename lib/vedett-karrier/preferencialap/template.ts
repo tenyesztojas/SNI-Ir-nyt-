@@ -13,7 +13,7 @@
  * - unknown = true → "Még nem töltöttem ki"
  */
 
-import type { SavedDimensionRow } from '../profile/types.js'
+import type { SavedDimensionRow } from '../profile/types'
 import type { VkmmSubDimension } from '../types'
 import type { PreferenceDimensionBlock } from '../types/preferencialap'
 
