@@ -4,18 +4,21 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 interface Props {
-  params: { id: string };
-  searchParams: { v?: string };
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ v?: string }>;
 }
 
 export default async function DocxImportPage({ params, searchParams }: Props) {
+  const { id } = await params;
+  const { v } = await searchParams;
+
   const admin = createAdminClient();
 
   // Get course
   const { data: course } = await admin
     .from("academy_courses")
     .select("id, title")
-    .eq("id", params.id)
+    .eq("id", id)
     .maybeSingle();
 
   if (!course) notFound();
@@ -24,20 +27,27 @@ export default async function DocxImportPage({ params, searchParams }: Props) {
   const { data: versions } = await admin
     .from("academy_course_versions")
     .select("id, version, status")
-    .eq("course_id", params.id)
+    .eq("course_id", id)
     .order("created_at", { ascending: false });
 
-  const selectedVersionId = searchParams.v ?? versions?.[0]?.id;
-  const selectedVersion = (versions ?? []).find((v) => v.id === selectedVersionId);
+  const selectedVersionId = v ?? versions?.[0]?.id;
+  const selectedVersion = (versions ?? []).find(
+    (version) => version.id === selectedVersionId
+  );
 
   if (!selectedVersion) {
     return (
       <div>
-        <Link href={`/admin/akademia/kurzusok/${params.id}`} className="text-xs text-gray-400 hover:text-sni-brand-blue">
+        <Link
+          href={`/admin/akademia/kurzusok/${id}`}
+          className="text-xs text-gray-400 hover:text-sni-brand-blue"
+        >
           ← Vissza a kurzushoz
         </Link>
-        <div className="mt-6 rounded-xl bg-amber-50 border border-amber-200 px-5 py-4 text-sm text-amber-800">
-          Ehhez a kurzushoz még nincs verzió. Hozz létre egyet a kurzus szerkesztő oldalon.
+
+        <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-800">
+          Ehhez a kurzushoz még nincs verzió. Hozz létre egyet a kurzus
+          szerkesztő oldalon.
         </div>
       </div>
     );
@@ -45,28 +55,35 @@ export default async function DocxImportPage({ params, searchParams }: Props) {
 
   return (
     <div className="max-w-3xl">
-      <div className="flex items-center gap-3 mb-6">
-        <Link href={`/admin/akademia/kurzusok/${params.id}`} className="text-xs text-gray-400 hover:text-sni-brand-blue">
+      <div className="mb-6 flex items-center gap-3">
+        <Link
+          href={`/admin/akademia/kurzusok/${id}`}
+          className="text-xs text-gray-400 hover:text-sni-brand-blue"
+        >
           ← {course.title}
         </Link>
+
         <span className="text-gray-300">›</span>
-        <span className="text-xs font-semibold text-gray-600">DOCX import</span>
+        <span className="text-xs font-semibold text-gray-600">
+          DOCX import
+        </span>
       </div>
 
       {/* Version selector */}
       {(versions?.length ?? 0) > 1 && (
-        <div className="flex gap-2 mb-6 flex-wrap">
-          {(versions ?? []).map((v) => (
+        <div className="mb-6 flex flex-wrap gap-2">
+          {(versions ?? []).map((version) => (
             <Link
-              key={v.id}
-              href={`/admin/akademia/kurzusok/${params.id}/import?v=${v.id}`}
+              key={version.id}
+              href={`/admin/akademia/kurzusok/${id}/import?v=${version.id}`}
               className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
-                v.id === selectedVersionId
+                version.id === selectedVersionId
                   ? "bg-sni-brand-teal text-sni-brand-navy"
                   : "border border-gray-200 text-gray-500 hover:border-sni-brand-teal"
               }`}
             >
-              {v.version} {v.status === "published" ? "🟢" : "🟡"}
+              {version.version}{" "}
+              {version.status === "published" ? "🟢" : "🟡"}
             </Link>
           ))}
         </div>

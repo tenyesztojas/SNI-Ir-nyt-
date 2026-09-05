@@ -1,5 +1,4 @@
 import Link from "next/link";
-import dynamic from "next/dynamic";
 import { notFound } from "next/navigation";
 import { Phone, Globe, Mail, MapPin, Star, CheckCircle2, ArrowLeft } from "lucide-react";
 import {
@@ -23,16 +22,9 @@ import ReportButton from "@/components/ReportButton";
 import PlaceClaimButton from "@/components/PlaceClaimButton";
 import PlaceResponseSection from "@/components/PlaceResponseSection";
 import BookingWidget from "@/components/BookingWidget";
+import PlaceDetailMap from "@/components/PlaceDetailMapClient";
 import NavigateButton from "@/components/NavigateButton";
 
-const PlaceDetailMap = dynamic(() => import("@/components/PlaceDetailMapInner"), {
-  ssr: false,
-  loading: () => (
-    <div className="mt-6 flex h-56 items-center justify-center rounded-2xl bg-gray-100 text-sm text-gray-400 sm:h-64">
-      Térkép betöltése...
-    </div>
-  ),
-});
 
 function websiteHref(value: string): string {
   if (value.includes("@")) return `mailto:${value}`;

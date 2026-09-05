@@ -3,7 +3,10 @@ import { adminGetEmployers } from "@/lib/vedettmunka/data";
 import { EMPLOYER_STATUS_LABELS } from "@/lib/vedettmunka/types";
 import EmployerActionButtons from "./EmployerActionButtons";
 
-export const metadata = { title: "Admin – VédettKarrier karrierpartnerek" };
+export const metadata = {
+  title: "Admin – VédettKarrier karrierpartnerek",
+};
+
 export const dynamic = "force-dynamic";
 
 const STATUS_COLOR: Record<string, string> = {
@@ -13,77 +16,177 @@ const STATUS_COLOR: Record<string, string> = {
   suspended: "bg-gray-100 text-gray-600",
 };
 
+interface PageProps {
+  searchParams: Promise<{
+    status?: string;
+  }>;
+}
+
 export default async function AdminMunkaltatokPage({
   searchParams,
-}: {
-  searchParams: Record<string, string | undefined>;
-}) {
-  const status = searchParams.status;
+}: PageProps) {
+  const { status } = await searchParams;
+
   const employers = await adminGetEmployers(status);
+
+  const statusOptions = [
+    undefined,
+    "pending_review",
+    "approved",
+    "rejected",
+    "suspended",
+  ] as const;
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
-      <Link href="/admin/vedettmunka" className="text-sm text-sni-brand-blue hover:underline">← VédettKarrier admin</Link>
-      <h1 className="mt-3 text-2xl font-bold text-sni-text">Munkáltatók ({employers.length})</h1>
+      <Link
+        href="/admin/vedettmunka"
+        className="text-sm text-sni-brand-blue hover:underline"
+      >
+        ← VédettKarrier admin
+      </Link>
+
+      <h1 className="mt-3 text-2xl font-bold text-sni-text">
+        Munkáltatók ({employers.length})
+      </h1>
 
       {/* Szűrők */}
       <div className="mt-4 flex flex-wrap gap-2">
-        {[undefined, "pending_review", "approved", "rejected", "suspended"].map((s) => (
-          <a
+        {statusOptions.map((s) => (
+          <Link
             key={s ?? "all"}
-            href={s ? `?status=${s}` : "?"}
-            className={`rounded-full px-3 py-1 text-xs font-semibold transition ${(!status && !s) || status === s ? "bg-sni-brand-navy text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
+            href={
+              s
+                ? `/admin/vedettmunka/munkaltatok?status=${s}`
+                : "/admin/vedettmunka/munkaltatok"
+            }
+            className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
+              (!status && !s) || status === s
+                ? "bg-sni-brand-navy text-white"
+                : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+            }`}
           >
-            {s ? EMPLOYER_STATUS_LABELS[s as keyof typeof EMPLOYER_STATUS_LABELS] : "Összes"}
-          </a>
+            {s
+              ? EMPLOYER_STATUS_LABELS[
+                  s as keyof typeof EMPLOYER_STATUS_LABELS
+                ]
+              : "Összes"}
+          </Link>
         ))}
       </div>
 
       <div className="mt-5 flex flex-col gap-4">
-        {employers.length === 0 && <p className="text-sm text-gray-400">Nincs találat.</p>}
-        {employers.map((emp) => (
-          <div key={emp.id} className="rounded-2xl border border-gray-100 bg-white p-5">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${STATUS_COLOR[emp.status]}`}>
-                    {EMPLOYER_STATUS_LABELS[emp.status]}
-                  </span>
-                  <span className="text-xs text-gray-400">{new Date(emp.created_at).toLocaleDateString("hu-HU")}</span>
+        {employers.length === 0 && (
+          <p className="text-sm text-gray-400">
+            Nincs találat.
+          </p>
+        )}
+
+        {employers.map((emp) => {
+          const privacyPolicyUrl = (
+            emp as unknown as {
+              privacy_policy_url?: string | null;
+            }
+          ).privacy_policy_url;
+
+          return (
+            <div
+              key={emp.id}
+              className="rounded-2xl border border-gray-100 bg-white p-5"
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                        STATUS_COLOR[emp.status] ??
+                        "bg-gray-100 text-gray-600"
+                      }`}
+                    >
+                      {EMPLOYER_STATUS_LABELS[emp.status] ?? emp.status}
+                    </span>
+
+                    <span className="text-xs text-gray-400">
+                      {new Date(emp.created_at).toLocaleDateString("hu-HU")}
+                    </span>
+                  </div>
+
+                  <h2 className="mt-1 font-bold text-sni-brand-navy">
+                    {emp.company_name}
+                  </h2>
+
+                  <p className="text-sm text-gray-600">
+                    {emp.contact_name} · {emp.contact_email}
+                  </p>
+
+                  {emp.website && (
+                    <a
+                      href={emp.website}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block text-xs text-sni-brand-blue hover:underline"
+                    >
+                      {emp.website}
+                    </a>
+                  )}
+
+                  {privacyPolicyUrl ? (
+                    <a
+                      href={privacyPolicyUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block text-xs text-green-700 hover:underline"
+                    >
+                      ✓ Adatkezelési tájékoztató link
+                    </a>
+                  ) : (
+                    <span className="block text-xs font-semibold text-red-600">
+                      ⚠ Hiányzik az adatkezelési tájékoztató link – jóváhagyás
+                      nem adható!
+                    </span>
+                  )}
                 </div>
-                <h2 className="mt-1 font-bold text-sni-brand-navy">{emp.company_name}</h2>
-                <p className="text-sm text-gray-600">{emp.contact_name} · {emp.contact_email}</p>
-                {emp.website && <a href={emp.website} target="_blank" rel="noopener noreferrer" className="text-xs text-sni-brand-blue hover:underline">{emp.website}</a>}
-                {((emp as unknown as { privacy_policy_url?: string | null }).privacy_policy_url) ? (
-                  <a
-                    href={(emp as unknown as { privacy_policy_url: string }).privacy_policy_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-green-700 hover:underline"
-                  >
-                    ✓ Adatkezelési tájékoztató link
-                  </a>
-                ) : (
-                  <span className="text-xs font-semibold text-red-600">
-                    ⚠ Hiányzik az adatkezelési tájékoztató link – jóváhagyás nem adható!
+
+                <EmployerActionButtons
+                  employerId={emp.id}
+                  currentStatus={emp.status}
+                />
+              </div>
+
+              {emp.description && (
+                <p className="mt-3 line-clamp-2 text-sm text-gray-600">
+                  {emp.description}
+                </p>
+              )}
+
+              {emp.admin_note && (
+                <p className="mt-2 rounded-lg bg-amber-50 px-3 py-1.5 text-xs text-amber-700">
+                  Admin megjegyzés: {emp.admin_note}
+                </p>
+              )}
+
+              <div className="mt-3 flex flex-wrap gap-2">
+                {emp.open_to_neurodivergent && (
+                  <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-700">
+                    Neurodivergens
+                  </span>
+                )}
+
+                {emp.open_to_disabled && (
+                  <span className="rounded-full bg-purple-50 px-2 py-0.5 text-xs text-purple-700">
+                    Megváltozott munkaképességű
+                  </span>
+                )}
+
+                {emp.open_to_parents && (
+                  <span className="rounded-full bg-green-50 px-2 py-0.5 text-xs text-green-700">
+                    Szülők
                   </span>
                 )}
               </div>
-              <EmployerActionButtons employerId={emp.id} currentStatus={emp.status} />
             </div>
-            {emp.description && (
-              <p className="mt-3 text-sm text-gray-600 line-clamp-2">{emp.description}</p>
-            )}
-            {emp.admin_note && (
-              <p className="mt-2 text-xs text-amber-700 bg-amber-50 rounded-lg px-3 py-1.5">Admin megjegyzés: {emp.admin_note}</p>
-            )}
-            <div className="mt-3 flex flex-wrap gap-2">
-              {emp.open_to_neurodivergent && <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-700">Neurodivergens</span>}
-              {emp.open_to_disabled && <span className="rounded-full bg-purple-50 px-2 py-0.5 text-xs text-purple-700">Megváltozott munkaképességű</span>}
-              {emp.open_to_parents && <span className="rounded-full bg-green-50 px-2 py-0.5 text-xs text-green-700">Szülők</span>}
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
