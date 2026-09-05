@@ -18,9 +18,12 @@ interface Props {
   value: ImportanceLevel
   onChange: (v: ImportanceLevel) => void
   disabled?: boolean
+  /** Egyedi name attribútum — kötelező, ha több ImportanceSelect van egy oldalon.
+   *  Tipikusan: `importance-${sub.code}` */
+  name: string
 }
 
-export default function ImportanceSelect({ value, onChange, disabled }: Props) {
+export default function ImportanceSelect({ value, onChange, disabled, name }: Props) {
   return (
     <div className="mt-4">
       <fieldset>
@@ -32,10 +35,12 @@ export default function ImportanceSelect({ value, onChange, disabled }: Props) {
             <label key={opt.value} className="cursor-pointer">
               <input
                 type="radio"
-                name="importance"
+                name={name}
                 value={opt.value}
                 checked={value === opt.value}
-                onChange={() => !disabled && onChange(opt.value)}
+                onChange={() => {
+                  if (!disabled) onChange(opt.value)
+                }}
                 disabled={disabled}
                 className="sr-only"
                 aria-label={opt.label}

@@ -68,13 +68,19 @@ function matchRule(path: string) {
 //             dokumentált residual risk (nem script-execution kockázat).
 // ─────────────────────────────────────────────────────────────────────────────
 
-function buildCsp(nonce: string, supabaseHost: string): string {
+function buildCsp(nonce: string, supabaseHost: string, isDev: boolean): string {
+  // Development: 'unsafe-eval' szükséges a Next.js webpack HMR + React Refresh runtime-hoz.
+  // Production:  'unsafe-eval' TILOS — kizárólag nonce + strict-dynamic.
+  const scriptSrc = isDev
+    ? `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' 'unsafe-eval' https://www.google.com https://www.gstatic.com https://www.googletagmanager.com https://unpkg.com`
+    : `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' https://www.google.com https://www.gstatic.com https://www.googletagmanager.com https://unpkg.com`;
+
   return [
     `default-src 'self'`,
     // script-src: nonce + strict-dynamic → nem kell 'unsafe-inline'
     // 'strict-dynamic' trust propagation: GTM által betöltött scriptek is engedélyek
     // Host allowlist (fallback régi böngészőknek, strict-dynamic-ot értő böngésző ignorálja):
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' https://www.google.com https://www.gstatic.com https://www.googletagmanager.com https://unpkg.com`,
+    scriptSrc,
     // style-src: 'unsafe-inline' szükséges Tailwind + CSS-in-JS miatt
     // Residual risk: stílus-injektáció, NEM script-execution
     `style-src 'self' 'unsafe-inline' https://unpkg.com`,
@@ -153,7 +159,8 @@ export async function middleware(request: NextRequest) {
     ? new URL(supabaseUrl).hostname
     : "*.supabase.co";
 
-  const csp = buildCsp(nonce, supabaseHost);
+  const isDev = process.env.NODE_ENV === "development";
+  const csp = buildCsp(nonce, supabaseHost, isDev);
 
   // x-nonce headerként átadjuk a Next.js App Routernek és a layout.tsx-nek
   const requestHeaders = new Headers(request.headers);

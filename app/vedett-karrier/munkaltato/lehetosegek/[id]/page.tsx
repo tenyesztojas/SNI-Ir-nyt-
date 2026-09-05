@@ -13,6 +13,7 @@ import { createClient } from '../../../../../lib/supabase/server'
 import { getEmployerByUserId, isEmployerApproved } from '../../../../../lib/vedett-karrier/employer/data'
 import { getOpportunityByIdForEmployer } from '../../../../../lib/vedett-karrier/opportunity/data'
 import { activateJobOpportunity, closeJobOpportunity } from '../../../../../lib/vedett-karrier/opportunity/actions'
+import { buildLoginRedirect } from '../../../../../lib/vedett-karrier/returnTo'
 
 interface Props {
   params: { id: string }
@@ -33,7 +34,7 @@ const METHOD_LABELS: Record<string, string> = {
 export default async function EmployerOpportunityDetailPage({ params }: Props) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/bejelentkezes')
+  if (!user) redirect(buildLoginRedirect(`/vedett-karrier/munkaltato/lehetosegek/${params.id}`))
 
   const employer = await getEmployerByUserId(user.id).catch(() => null)
   if (!employer) notFound()

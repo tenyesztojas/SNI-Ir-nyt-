@@ -29,8 +29,11 @@ export default async function EmployerDashboardPage() {
           <p className="text-sm text-gray-600 mb-6">
             A Védett Karrier munkáltatói felületéhez jóváhagyott munkáltatói fiók szükséges.
           </p>
+          {/* TEMPORARY LEGACY BRIDGE – nincs még /vedett-karrier/munkaltato/regisztracio route.
+              A régi vedettmunka regisztrációs oldal az átmeneti belépési pont.
+              TODO: új VK employer registration page implementálásakor cseréld le. */}
           <Link
-            href="/vedettmunka/munkaltato/regisztracio"
+            href="/vedettmunka/munkaltatoi-regisztracio"
             className="inline-block rounded-full bg-sni-brand-teal px-6 py-3 text-sm font-semibold text-white hover:opacity-90"
           >
             Munkáltatói regisztráció

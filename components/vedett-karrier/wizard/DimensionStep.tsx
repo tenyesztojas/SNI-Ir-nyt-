@@ -115,6 +115,7 @@ function SubDimCard({
               value={state.value as BpInput}
               onChange={handleValueChange}
               disabled={disabled}
+              name={`bp-${sub.code}`}
             />
           )}
           {ct === 'FREQUENCY_RANGE' && (
@@ -131,6 +132,7 @@ function SubDimCard({
             value={state.importanceLevel}
             onChange={handleImportanceChange}
             disabled={disabled}
+            name={`importance-${sub.code}`}
           />
         </div>
       )}

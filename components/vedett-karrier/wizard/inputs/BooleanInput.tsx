@@ -19,6 +19,9 @@ interface Props {
   value: BpInput
   onChange: (v: BpInput) => void
   disabled?: boolean
+  /** Egyedi name attribútum — kötelező, ha több BooleanInput van egy oldalon.
+   *  Tipikusan: `bp-${sub.code}` */
+  name: string
 }
 
 type Choice = 'prefer_true' | 'prefer_false' | 'indifferent' | 'not_wanted'
@@ -69,7 +72,7 @@ function choiceToValue(choice: Choice): BpInput {
   }
 }
 
-export default function BooleanInput({ value, onChange, disabled }: Props) {
+export default function BooleanInput({ value, onChange, disabled, name }: Props) {
   const current = getCurrentChoice(value)
 
   return (
@@ -88,7 +91,7 @@ export default function BooleanInput({ value, onChange, disabled }: Props) {
           >
             <input
               type="radio"
-              name="boolean-choice"
+              name={name}
               value={opt.key}
               checked={isSelected}
               onChange={() => !disabled && onChange(choiceToValue(opt.key))}

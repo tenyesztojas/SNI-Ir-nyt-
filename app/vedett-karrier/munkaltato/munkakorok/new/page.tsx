@@ -1,80 +1,42 @@
-'use client'
 /**
- * Védett Karrier – Új munkakör feltérképezése
+ * Védett Karrier – Új munkakör feltérképezése (Server Component wrapper)
  * Sprint 4
  *
- * Kétlépéses onboarding a wizard előtt:
- * 1. Gyors alapadat form → createJobRole action → redirect to wizard
+ * Server-side authorization gate:
+ * 1. Authenticated user check → redirect /belepes ha nincs session
+ * 2. Employer record lookup → redirect /munkaltato ha nincs employer
+ * 3. Employer approval check → redirect /munkaltato ha nem approved
+ *
+ * Csak sikeres authorization után rendereli a NewJobRoleClient formot.
+ * A form logika és a createJobRole action hívás a client komponensben van.
  */
 
-import { useState, useTransition } from 'react'
-import { useRouter } from 'next/navigation'
-import { createJobRole } from '../../../../../lib/vedett-karrier/employer/actions'
+import { redirect } from 'next/navigation'
+import { createClient } from '../../../../../lib/supabase/server'
+import { getEmployerByUserId, isEmployerApproved } from '../../../../../lib/vedett-karrier/employer/data'
+import NewJobRoleClient from './NewJobRoleClient'
 
-export default function NewJobRolePage() {
-  const router = useRouter()
-  const [title, setTitle] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const [isPending, startTransition] = useTransition()
+export const metadata = { title: 'Új munkakör – Védett Karrier' }
 
-  function handleCreate() {
-    if (!title.trim()) { setError('Add meg a munkakör megnevezését.'); return }
-    setError(null)
-    startTransition(async () => {
-      const result = await createJobRole({ title_hu: title.trim() })
-      if (!result.ok) { setError(result.error); return }
-      router.push(`/vedett-karrier/munkaltato/munkakorok/${result.data.id}/szerkesztes`)
-    })
+export default async function NewJobRolePage() {
+  // 1. Authentication
+  const supabase = createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    redirect('/belepes?next=/vedett-karrier/munkaltato/munkakorok/new')
   }
 
-  return (
-    <main className="min-h-screen bg-gray-50">
-      <div className="max-w-xl mx-auto px-4 py-16">
-        <p className="text-xs text-gray-400 uppercase tracking-wide mb-2">Védett Karrier</p>
-        <h1 className="text-xl font-bold text-gray-900 mb-2">Új munkakör feltérképezése</h1>
-        <p className="text-sm text-gray-500 mb-8">
-          A Védett Karrier rendszerében elsőként a munkakört térképezed fel – nem hirdetést adsz fel.
-          A feltérképezés 7 lépésből áll, és bármikor megszakítható.
-        </p>
+  // 2. Employer record
+  const employer = await getEmployerByUserId(user.id)
+  if (!employer) {
+    redirect('/vedett-karrier/munkaltato')
+  }
 
-        <div className="rounded-xl border border-gray-200 bg-white p-6 space-y-4">
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-1" htmlFor="title">
-              Munkakör megnevezése <span className="text-red-500">*</span>
-            </label>
-            <input
-              id="title"
-              type="text"
-              value={title}
-              onChange={e => setTitle(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleCreate()}
-              maxLength={200}
-              autoFocus
-              className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-sni-brand-teal"
-              placeholder="pl. Raktári munkatárs – Budaörsi logisztikai központ"
-            />
-            <p className="text-xs text-gray-400 mt-1">
-              Ezzel egyedi azonosítót kap a munkakör. Később módosítható.
-            </p>
-          </div>
+  // 3. Employer approval — konzisztens a szerkesztes/page.tsx guard-jával
+  if (!isEmployerApproved(employer)) {
+    redirect('/vedett-karrier/munkaltato')
+  }
 
-          {error && <p className="text-sm text-red-600" role="alert">{error}</p>}
-
-          <button
-            type="button"
-            onClick={handleCreate}
-            disabled={isPending || !title.trim()}
-            className="w-full rounded-full bg-sni-brand-teal py-3 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-50"
-          >
-            {isPending ? 'Létrehozás…' : 'Munkakör létrehozása és feltérképezés indítása →'}
-          </button>
-        </div>
-
-        <p className="text-xs text-gray-400 text-center mt-4">
-          A munkakör piszkozat állapotban jön létre, és csak akkor válik publikusan elérhetővé,
-          ha az összes aktiválási feltétel teljesül.
-        </p>
-      </div>
-    </main>
-  )
+  // Authorization passed — render client form
+  return <NewJobRoleClient />
 }

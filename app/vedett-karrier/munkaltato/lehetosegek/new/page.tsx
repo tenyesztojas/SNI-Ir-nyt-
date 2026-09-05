@@ -18,6 +18,7 @@ import Link from 'next/link'
 import { createClient } from '../../../../../lib/supabase/server'
 import { getEmployerByUserId, isEmployerApproved, getJobRoleByIdForEmployer } from '../../../../../lib/vedett-karrier/employer/data'
 import { createJobOpportunity, activateJobOpportunity } from '../../../../../lib/vedett-karrier/opportunity/actions'
+import { buildLoginRedirect } from '../../../../../lib/vedett-karrier/returnTo'
 
 export const metadata = {
   title: 'Új álláslehetőség – Védett Karrier',
@@ -30,7 +31,13 @@ interface Props {
 export default async function NewOpportunityPage({ searchParams }: Props) {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/bejelentkezes')
+  if (!user) {
+    // jobRoleId query paramétert is megőrizzük a return target-ben
+    const base = '/vedett-karrier/munkaltato/lehetosegek/new'
+    const jobRoleId = searchParams.jobRoleId
+    const returnPath = jobRoleId ? `${base}?jobRoleId=${encodeURIComponent(jobRoleId)}` : base
+    redirect(buildLoginRedirect(returnPath))
+  }
 
   const employer = await getEmployerByUserId(user.id).catch(() => null)
   if (!employer || !isEmployerApproved(employer)) {

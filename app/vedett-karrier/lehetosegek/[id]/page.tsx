@@ -185,7 +185,7 @@ export default async function OpportunityDetailPage({ params }: Props) {
             Bejelentkezve hozzáférhetsz a Kompatibilitási Térképhez – megmutatja, hogyan illeszkedik ez a munkakör a Munkavállalói Profiloddal.
           </p>
           <Link
-            href="/bejelentkezes"
+            href="/belepes"
             className="text-sm font-medium text-blue-700 hover:underline"
           >
             Bejelentkezés vagy regisztráció →

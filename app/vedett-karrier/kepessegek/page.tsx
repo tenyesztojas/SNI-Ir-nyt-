@@ -1,7 +1,7 @@
 /**
  * Védett Karrier – Képességtérkép
  * /vedett-karrier/kepessegek
- * Server Component (auth guard via layout.tsx)
+ * Server Component (auth guard: page-szintű getUser() redirect)
  */
 
 import { createClient } from '@/lib/supabase/server'

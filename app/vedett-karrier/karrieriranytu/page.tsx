@@ -1,7 +1,7 @@
 /**
  * Védett Karrier – Karrieriránytű
  * /vedett-karrier/karrieriranytu
- * Server Component (auth guard via layout.tsx)
+ * Server Component (auth guard: page-szintű getUser() redirect)
  *
  * NEM jelenít: százalék, csillagos score, ranghely, "legjobb találat".
  */

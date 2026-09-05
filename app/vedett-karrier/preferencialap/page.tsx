@@ -30,7 +30,7 @@ export const metadata = {
 export default async function PreferencialapPage() {
   const supabase = createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/bejelentkezes')
+  if (!user) redirect('/belepes?next=/vedett-karrier/preferencialap')
 
   // Aktív karrierprofil
   const { data: profile } = await supabase
