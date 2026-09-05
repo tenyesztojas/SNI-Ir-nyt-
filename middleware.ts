@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import { createServerClient } from "@supabase/ssr";
 import { rateLimiter } from "./lib/rate-limit/index";
 
 const supabaseUrl     = process.env.NEXT_PUBLIC_SUPABASE_URL  ?? "";
@@ -167,25 +167,39 @@ export async function middleware(request: NextRequest) {
   requestHeaders.set("x-nonce", nonce);
 
   // ── Supabase session refresh ───────────────────────────────────────────────
-  let response = NextResponse.next({
-    request: { headers: requestHeaders },
-  });
+let response = NextResponse.next({
+  request: { headers: requestHeaders },
+});
 
-  const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
-    cookies: {
-      get(name: string) {
-        return request.cookies.get(name)?.value;
-      },
-      set(name: string, value: string, options: CookieOptions) {
-        response.cookies.set({ name, value, ...options });
-      },
-      remove(name: string, options: CookieOptions) {
-        response.cookies.set({ name, value: "", ...options });
-      },
+const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
+  cookies: {
+    getAll() {
+      return request.cookies.getAll();
     },
-  });
 
-  await supabase.auth.getUser();
+    setAll(cookiesToSet, headersToSet) {
+      cookiesToSet.forEach(({ name, value }) => {
+        request.cookies.set(name, value);
+      });
+
+      response = NextResponse.next({
+        request: { headers: requestHeaders },
+      });
+
+      cookiesToSet.forEach(({ name, value, options }) => {
+        response.cookies.set(name, value, options);
+      });
+
+      if (headersToSet) {
+        Object.entries(headersToSet).forEach(([name, value]) => {
+          response.headers.set(name, value);
+        });
+      }
+    },
+  },
+});
+
+await supabase.auth.getUser();
 
   // ── Security headers + CSP ─────────────────────────────────────────────────
   // CSP itt, a middleware-ben kerül beállításra (requestenként egyedi nonce miatt)
