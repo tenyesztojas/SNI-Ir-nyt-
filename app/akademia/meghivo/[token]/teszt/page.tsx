@@ -3,10 +3,11 @@ import TestEngine from "@/components/academy/TestEngine";
 import Link from "next/link";
 
 interface Props {
-  params: { token: string };
+  params: Promise<{ token: string }>;
 }
 
-export default async function TesztPage({ params }: Props) {
+export default async function TesztPage(props: Props) {
+  const params = await props.params;
   const { token } = params;
   const ctx = await resolveInvitationToken(token);
 

@@ -3,7 +3,7 @@ import { getCurrentPartnerId, getPartnerProfile } from "@/lib/academy/data";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function AkademiaLayout({ children }: { children: React.ReactNode }) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: userData } = await supabase.auth.getUser();
   if (!userData.user) redirect("/belepes?next=/akademia");
 

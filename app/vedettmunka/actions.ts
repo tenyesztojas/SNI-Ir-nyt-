@@ -12,7 +12,7 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 // ─── Munkáltatói regisztráció ───────────────────────────────────
 
 export async function registerEmployer(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Nincs bejelentkezve.");
 
@@ -102,7 +102,7 @@ export async function registerEmployer(formData: FormData) {
 // ─── Hirdetés feladás ───────────────────────────────────────────
 
 export async function submitJobPost(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Nincs bejelentkezve.");
 
@@ -187,7 +187,7 @@ export async function submitJobPostWizard(
 ): Promise<{ ok: boolean; error?: string }> {
   "use server";
   try {
-    const supabase = createClient();
+    const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { ok: false, error: "Nincs bejelentkezve." };
 
@@ -284,7 +284,7 @@ export async function submitJobPostWizard(
 export async function saveWorkProfile(slugs: string[], notes: string): Promise<{ ok: boolean; error?: string }> {
   "use server";
   try {
-    const supabase = createClient();
+    const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return { ok: false, error: "Nincs bejelentkezve." };
     await supabase.from("vm_work_profiles").upsert({
@@ -302,7 +302,7 @@ export async function saveWorkProfile(slugs: string[], notes: string): Promise<{
 // ─── Lehetőségfigyelő ──────────────────────────────────────────────
 
 export async function upsertJobAlert(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Nincs bejelentkezve.");
 
@@ -348,7 +348,7 @@ export async function upsertJobAlert(formData: FormData) {
 }
 
 export async function quickToggleAlert(enable: boolean) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Nincs bejelentkezve.");
 
@@ -390,7 +390,7 @@ export async function quickToggleAlert(enable: boolean) {
 // ─── Hirdetés jelentése ─────────────────────────────────────────
 
 export async function reportJob(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("A hirdetés jelzéséhez be kell lépni.");
 
@@ -433,7 +433,7 @@ export async function adminUpdateEmployerStatus(
   status: string,
   note?: string
 ) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user: adminUser } } = await supabase.auth.getUser();
 
   const admin = createAdminClient();
@@ -510,7 +510,7 @@ export async function adminUpdateJobStatus(
   status: string,
   note?: string
 ) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user: adminUser } } = await supabase.auth.getUser();
 
   const admin = createAdminClient();
@@ -569,7 +569,7 @@ export async function adminUpdateReportStatus(
   status: string,
   note?: string
 ) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user: adminUser } } = await supabase.auth.getUser();
 
   const admin = createAdminClient();

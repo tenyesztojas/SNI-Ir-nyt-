@@ -5,10 +5,11 @@ import Link from "next/link";
 import type { AcademyCertificate } from "@/lib/academy/types";
 
 interface Props {
-  params: { token: string };
+  params: Promise<{ token: string }>;
 }
 
-export default async function EredmenyPage({ params }: Props) {
+export default async function EredmenyPage(props: Props) {
+  const params = await props.params;
   const { token } = params;
   const ctx = await resolveInvitationToken(token);
 

@@ -37,7 +37,7 @@ import type {
 export async function generateAndSavePreferenceDocument(
   input: SavePreferenceDocumentInput,
 ): Promise<PreferenceDocumentActionResult> {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { ok: false, error: 'Bejelentkezés szükséges.' }
 
@@ -101,7 +101,7 @@ export async function generateAndSavePreferenceDocument(
 export async function shareDocument(
   documentId: string,
 ): Promise<{ ok: boolean; shareToken?: string; error?: string }> {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { ok: false, error: 'Bejelentkezés szükséges.' }
 
@@ -116,7 +116,7 @@ export async function shareDocument(
 export async function unshareDocument(
   documentId: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { ok: false, error: 'Bejelentkezés szükséges.' }
 
@@ -135,7 +135,7 @@ export async function unshareDocument(
 export async function deletePreferenceDocument(
   documentId: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { ok: false, error: 'Bejelentkezés szükséges.' }
 

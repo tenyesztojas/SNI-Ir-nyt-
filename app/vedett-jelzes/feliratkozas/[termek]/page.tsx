@@ -11,15 +11,17 @@ import FeliratkozasForm from "./FeliratkozasForm";
 
 export const dynamic = "force-dynamic";
 
-export async function generateMetadata({ params }: { params: { termek: string } }) {
+export async function generateMetadata(props: { params: Promise<{ termek: string }> }) {
+  const params = await props.params;
   return { title: `Feliratkozás – Védett Jelzés ${params.termek}` };
 }
 
-export default async function FeliratkozasPage({
-  params,
-}: {
-  params: { termek: string };
-}) {
+export default async function FeliratkozasPage(
+  props: {
+    params: Promise<{ termek: string }>;
+  }
+) {
+  const params = await props.params;
   // Validáció
   if (!(PRODUCT_SLUGS as readonly string[]).includes(params.termek)) notFound();
 

@@ -4,10 +4,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import Link from "next/link";
 
 interface Props {
-  params: { token: string };
+  params: Promise<{ token: string }>;
 }
 
-export default async function MeghivoLandingPage({ params }: Props) {
+export default async function MeghivoLandingPage(props: Props) {
+  const params = await props.params;
   const { token } = params;
   const ctx = await resolveInvitationToken(token);
 

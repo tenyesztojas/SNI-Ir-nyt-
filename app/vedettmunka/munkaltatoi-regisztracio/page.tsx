@@ -7,7 +7,7 @@ export const metadata = { title: "Karrierpartner jelentkezés – VédettKarrier
 export const dynamic = "force-dynamic";
 
 export default async function MunkaltatoiRegPage() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/belepes");
 

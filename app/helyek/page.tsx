@@ -1,5 +1,6 @@
 export const dynamic = "force-dynamic";
 
+import Link from "next/link";
 import ViewToggle from "@/components/ViewToggle";
 import PlaceCard from "@/components/PlaceCard";
 import PlacesSearchForm from "@/components/PlacesSearchForm";
@@ -10,11 +11,12 @@ function normalize(s: string) {
   return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
 
-export default async function HelyekPage({
-  searchParams,
-}: {
-  searchParams: { q?: string; kategoria?: string; telepules?: string; orszag?: string };
-}) {
+export default async function HelyekPage(
+  props: {
+    searchParams: Promise<{ q?: string; kategoria?: string; telepules?: string; orszag?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const q = searchParams.q?.trim() ?? "";
   const kategoria = searchParams.kategoria ?? "";
   const telepules = searchParams.telepules ?? "";
@@ -74,9 +76,9 @@ export default async function HelyekPage({
             {isFiltered && " a szűrési feltételeknek megfelelően"}
           </p>
           {isFiltered && (
-            <a href="/helyek" className="text-sm font-semibold text-sni-brand-blue hover:text-sni-brand-teal">
+            <Link href="/helyek" className="text-sm font-semibold text-sni-brand-blue hover:text-sni-brand-teal">
               Szűrők törlése ×
-            </a>
+            </Link>
           )}
         </div>
 
@@ -95,9 +97,9 @@ export default async function HelyekPage({
                 <p className="text-4xl">🔍</p>
                 <p className="mt-3 font-semibold text-gray-700">Nincs a szűrésnek megfelelő hely</p>
                 <p className="mt-1 text-sm text-gray-500">Próbálj más keresőszót vagy kategóriát</p>
-                <a href="/helyek" className="mt-4 inline-flex items-center rounded-full bg-sni-brand-teal px-5 py-2 text-sm font-bold text-white hover:bg-sni-brand-blue">
+                <Link href="/helyek" className="mt-4 inline-flex items-center rounded-full bg-sni-brand-teal px-5 py-2 text-sm font-bold text-white hover:bg-sni-brand-blue">
                   Összes hely
-                </a>
+                </Link>
               </div>
             )
           }

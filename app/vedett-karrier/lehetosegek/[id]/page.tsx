@@ -22,10 +22,11 @@ import { getJobRoleById } from '../../../../lib/vedett-karrier/employer/data'
 import type { JobOpportunityRow } from '../../../../lib/vedett-karrier/types/opportunity'
 
 interface Props {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }
 
-export async function generateMetadata({ params }: Props) {
+export async function generateMetadata(props: Props) {
+  const params = await props.params;
   const opp = await getOpportunityById(params.id).catch(() => null)
   const title = opp?.title_override_hu ?? 'Álláslehetőség'
   return {
@@ -85,13 +86,14 @@ function ContactSection({ opp }: { opp: JobOpportunityRow }) {
   )
 }
 
-export default async function OpportunityDetailPage({ params }: Props) {
+export default async function OpportunityDetailPage(props: Props) {
+  const params = await props.params;
   const opp = await getOpportunityById(params.id).catch(() => null)
 
   // 404 ha nem létezik, lezárt, vagy piszkozat
   if (!opp || opp.status !== 'active') notFound()
 
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
   const role = await getJobRoleById(opp.job_role_id).catch(() => null)

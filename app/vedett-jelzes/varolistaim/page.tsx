@@ -17,11 +17,12 @@ const STATUS_COLORS: Record<string, string> = {
   cancelled: "bg-gray-100 text-gray-500",
 };
 
-export default async function VarolistaPage({
-  searchParams,
-}: {
-  searchParams: { feliratkozott?: string };
-}) {
+export default async function VarolistaPage(
+  props: {
+    searchParams: Promise<{ feliratkozott?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const { user } = await getCurrentUserAndProfile();
   if (!user) redirect("/belepes?next=/vedett-jelzes/varolistaim");
 

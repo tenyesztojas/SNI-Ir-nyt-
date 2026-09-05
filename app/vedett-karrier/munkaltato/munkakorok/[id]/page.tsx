@@ -17,11 +17,12 @@ import type { JobRoleEnvValueRow } from '../../../../../lib/vedett-karrier/types
 import type { VkmmSubDimension } from '../../../../../lib/vedett-karrier/types'
 
 interface Props {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }
 
-export async function generateMetadata({ params }: Props) {
-  const supabase = createClient()
+export async function generateMetadata(props: Props) {
+  const params = await props.params;
+  const supabase = await createClient()
   const role = await getJobRoleById(params.id).catch(() => null)
   return {
     title: role ? `${role.title_hu} – Munkakör-Térkép` : 'Munkakör-Térkép – Védett Karrier',
@@ -45,8 +46,9 @@ function getValueLabel(sub: VkmmSubDimension, row: JobRoleEnvValueRow): string |
   return null
 }
 
-export default async function JobRoleMapPage({ params }: Props) {
-  const supabase = createClient()
+export default async function JobRoleMapPage(props: Props) {
+  const params = await props.params;
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
   const role = await getJobRoleById(params.id)

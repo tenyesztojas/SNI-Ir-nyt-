@@ -22,7 +22,7 @@ export async function submitReview(
   }
   const data = parsed.data;
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: userData } = await supabase.auth.getUser();
   const user = userData.user;
   if (!user) {
@@ -98,7 +98,7 @@ export async function removeReview(
   const isAdmin = await isCurrentUserAdmin();
   if (!isAdmin) return { error: "Nincs jogosultságod ehhez a művelethez." };
 
-  const supabase = createClient();
+  const supabase = await createClient();
 
   // 1. Értékelés eltávolítása (státusz: removed)
   const { error: updateErr } = await supabase
@@ -138,7 +138,7 @@ export async function submitAppeal(input: {
   rejectionReason: string;
   userExplanation: string;
 }): Promise<{ error?: string }> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: userData } = await supabase.auth.getUser();
   if (!userData.user) return { error: "Fellebbezés beküldéséhez be kell jelentkezned." };
 

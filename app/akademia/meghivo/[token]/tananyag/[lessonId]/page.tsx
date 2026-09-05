@@ -7,10 +7,11 @@ import Link from "next/link";
 import type { AcademyModule, AcademyLesson, AcademyContentBlock } from "@/lib/academy/types";
 
 interface Props {
-  params: { token: string; lessonId: string };
+  params: Promise<{ token: string; lessonId: string }>;
 }
 
-export default async function TananyagPage({ params }: Props) {
+export default async function TananyagPage(props: Props) {
+  const params = await props.params;
   const { token, lessonId } = params;
   const ctx = await resolveInvitationToken(token);
 

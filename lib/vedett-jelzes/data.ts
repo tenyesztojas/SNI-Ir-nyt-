@@ -12,7 +12,7 @@ import type {
 // ── Saját jelzés ──────────────────────────────────────────────────────────────
 
 export async function getMySignal(): Promise<VjSignal | null> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
 
@@ -39,7 +39,7 @@ export async function getSignalByQrToken(qrToken: string): Promise<VjSignal | nu
 // ── Termékek ──────────────────────────────────────────────────────────────────
 
 export async function getVjProducts(): Promise<VjProduct[]> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data } = await supabase
     .from("vj_products")
     .select("*")
@@ -48,7 +48,7 @@ export async function getVjProducts(): Promise<VjProduct[]> {
 }
 
 export async function getVjProductBySlug(slug: string): Promise<VjProduct | null> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data } = await supabase
     .from("vj_products")
     .select("*")
@@ -60,7 +60,7 @@ export async function getVjProductBySlug(slug: string): Promise<VjProduct | null
 // ── Fulfillment profil ────────────────────────────────────────────────────────
 
 export async function getMyFulfillmentProfile(): Promise<VjFulfillmentProfile | null> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
 
@@ -76,7 +76,7 @@ export async function getMyFulfillmentProfile(): Promise<VjFulfillmentProfile | 
 // ── Várólisták (felhasználó) ──────────────────────────────────────────────────
 
 export async function getMyWaitlistEntries(): Promise<VjWaitlistEntry[]> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
 
@@ -90,7 +90,7 @@ export async function getMyWaitlistEntries(): Promise<VjWaitlistEntry[]> {
 }
 
 export async function getMyWaitlistEntry(productSlug: string): Promise<VjWaitlistEntry | null> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
 

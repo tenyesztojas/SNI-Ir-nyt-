@@ -35,7 +35,7 @@ export async function saveDimensionPreference(
   rawInput: unknown
 ): Promise<SaveDimensionResult> {
   // 1. Auth
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { ok: false, error: 'Nincs bejelentkezve.' }
 

@@ -15,15 +15,16 @@ import JobRoleWizard from '../../../../../../components/vedett-karrier/employer/
 import type { VkmmSubDimension } from '../../../../../../lib/vedett-karrier/types'
 
 interface Props {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }
 
 export async function generateMetadata({ params }: Props) {
   return { title: 'Munkakör szerkesztése – Védett Karrier' }
 }
 
-export default async function JobRoleEditPage({ params }: Props) {
-  const supabase = createClient()
+export default async function JobRoleEditPage(props: Props) {
+  const params = await props.params;
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect(`/belepes?next=/vedett-karrier/munkaltato/munkakorok/${params.id}/szerkesztes`)
 

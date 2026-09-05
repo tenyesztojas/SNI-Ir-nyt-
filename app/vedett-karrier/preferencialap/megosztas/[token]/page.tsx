@@ -13,10 +13,11 @@ import Link from 'next/link'
 import { getSharedPreferenceDocument } from '../../../../../lib/vedett-karrier/preferencialap/data'
 
 interface Props {
-  params: { token: string }
+  params: Promise<{ token: string }>
 }
 
-export async function generateMetadata({ params }: Props) {
+export async function generateMetadata(props: Props) {
+  const params = await props.params;
   const doc = await getSharedPreferenceDocument(params.token).catch(() => null)
   return {
     title: doc ? `${doc.title_hu} – Védett Karrier` : 'Preferencialap – Védett Karrier',
@@ -30,7 +31,8 @@ export async function generateMetadata({ params }: Props) {
   }
 }
 
-export default async function SharedPreferenceDocPage({ params }: Props) {
+export default async function SharedPreferenceDocPage(props: Props) {
+  const params = await props.params;
   const doc = await getSharedPreferenceDocument(params.token).catch(() => null)
   if (!doc) notFound()
 

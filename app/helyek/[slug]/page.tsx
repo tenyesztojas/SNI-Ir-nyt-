@@ -83,7 +83,8 @@ function pickGradient(str: string) {
   return GRADIENTS[Math.abs(hash) % GRADIENTS.length];
 }
 
-export default async function PlaceDetailPage({ params }: { params: { slug: string } }) {
+export default async function PlaceDetailPage(props: { params: Promise<{ slug: string }> }) {
+  const params = await props.params;
   const place = await getPlaceBySlug(params.slug);
   if (!place) notFound();
 

@@ -12,11 +12,12 @@ import CommunityHelpSection from "./CommunityHelpSection";
 export const metadata = { title: "Közösségi profilom – VédettSarok" };
 export const dynamic = "force-dynamic";
 
-export default async function ProfilomPage({
-  searchParams,
-}: {
-  searchParams: { uj?: string };
-}) {
+export default async function ProfilomPage(
+  props: {
+    searchParams: Promise<{ uj?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const { user } = await getCurrentUserAndProfile();
   if (!user) redirect("/belepes");
 

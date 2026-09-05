@@ -9,7 +9,7 @@ import type { NeurodivergenceType, VjSignalSnapshot, VjFulfillmentSnapshot } fro
 // ── Saját jelzés mentése (create/update) ─────────────────────────────────────
 
 export async function upsertSignal(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/belepes");
 
@@ -44,7 +44,7 @@ export async function upsertSignal(formData: FormData) {
 // ── Túlterhelődtem mód toggle ─────────────────────────────────────────────────
 
 export async function toggleOverwhelmedMode(currentlyActive: boolean) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
 
@@ -59,7 +59,7 @@ export async function toggleOverwhelmedMode(currentlyActive: boolean) {
 // ── Fulfillment profil mentése ────────────────────────────────────────────────
 
 export async function upsertFulfillmentProfile(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/belepes");
 
@@ -89,7 +89,7 @@ export async function upsertFulfillmentProfile(formData: FormData) {
 // ── Waitlist feliratkozás ─────────────────────────────────────────────────────
 
 export async function subscribeToWaitlist(formData: FormData) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/belepes");
 
@@ -147,7 +147,7 @@ export async function subscribeToWaitlist(formData: FormData) {
 // ── Feliratkozás lemondása ────────────────────────────────────────────────────
 
 export async function cancelWaitlistEntry(productSlug: string) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
 

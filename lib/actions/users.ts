@@ -71,7 +71,7 @@ export async function deleteUser(userId: string): Promise<{ error?: string }> {
   const isAdmin = await isCurrentUserAdmin();
   if (!isAdmin) return { error: "Nincs jogosultságod." };
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (user?.id === userId) return { error: "Saját magadat nem törölheted." };
 
@@ -90,7 +90,7 @@ export async function changeUserRole(
   const isAdmin = await isCurrentUserAdmin();
   if (!isAdmin) return { error: "Nincs jogosultságod." };
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (user?.id === userId) return { error: "Saját szerepkörödet nem változtathatod." };
 

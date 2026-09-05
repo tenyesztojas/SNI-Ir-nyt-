@@ -29,7 +29,7 @@ import type {
 
 /** Aktív lehetőségek listája (publikusan elérhető). */
 export async function getActiveOpportunities(): Promise<JobOpportunityRow[]> {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data, error } = await supabase
     .from('vk_opportunities')
     .select('*')
@@ -41,7 +41,7 @@ export async function getActiveOpportunities(): Promise<JobOpportunityRow[]> {
 
 /** Egy aktív lehetőség részletei (publikusan elérhető). */
 export async function getOpportunityById(id: string): Promise<JobOpportunityRow | null> {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data, error } = await supabase
     .from('vk_opportunities')
     .select('*')
@@ -55,7 +55,7 @@ export async function getOpportunityById(id: string): Promise<JobOpportunityRow 
 export async function getActiveOpportunitiesByJobRole(
   jobRoleId: string,
 ): Promise<JobOpportunityRow[]> {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data, error } = await supabase
     .from('vk_opportunities')
     .select('*')
@@ -74,7 +74,7 @@ export async function getActiveOpportunitiesByJobRole(
 export async function getOpportunitiesByEmployerId(
   employerId: string,
 ): Promise<JobOpportunityRow[]> {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data, error } = await supabase
     .from('vk_opportunities')
     .select('*')
@@ -89,7 +89,7 @@ export async function getOpportunityByIdForEmployer(
   id: string,
   employerId: string,
 ): Promise<JobOpportunityRow | null> {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data, error } = await supabase
     .from('vk_opportunities')
     .select('*')
@@ -108,7 +108,7 @@ export async function createOpportunity(
   employerId: string,
   input: CreateOpportunityInput,
 ): Promise<JobOpportunityRow> {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data, error } = await supabase
     .from('vk_opportunities')
     .insert({
@@ -138,7 +138,7 @@ export async function updateOpportunity(
   employerId: string,
   input: UpdateOpportunityInput,
 ): Promise<JobOpportunityRow> {
-  const supabase = createClient()
+  const supabase = await createClient()
   const patch: Record<string, unknown> = {}
   if (input.title_override_hu           !== undefined) patch.title_override_hu           = input.title_override_hu
   if (input.description_hu              !== undefined) patch.description_hu              = input.description_hu
@@ -168,7 +168,7 @@ export async function activateOpportunity(
   id: string,
   employerId: string,
 ): Promise<JobOpportunityRow> {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data, error } = await supabase
     .from('vk_opportunities')
     .update({ status: 'active' })
@@ -186,7 +186,7 @@ export async function closeOpportunity(
   id: string,
   employerId: string,
 ): Promise<JobOpportunityRow> {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data, error } = await supabase
     .from('vk_opportunities')
     .update({ status: 'closed' })

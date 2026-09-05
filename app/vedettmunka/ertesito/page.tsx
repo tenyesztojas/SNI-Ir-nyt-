@@ -6,12 +6,13 @@ import ErtesitoClient from "./ErtesitoClient";
 export const metadata = { title: "Lehetőségfigyelő – VédettKarrier" };
 export const dynamic = "force-dynamic";
 
-export default async function ErtesitoPage({
-  searchParams,
-}: {
-  searchParams: Record<string, string | undefined>;
-}) {
-  const supabase = createClient();
+export default async function ErtesitoPage(
+  props: {
+    searchParams: Promise<Record<string, string | undefined>>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/belepes?next=/vedettmunka/ertesito");
 

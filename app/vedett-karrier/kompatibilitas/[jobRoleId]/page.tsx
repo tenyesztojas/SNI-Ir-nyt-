@@ -32,11 +32,12 @@ import {
 import type { CompatibilityResult } from '../../../../lib/vedett-karrier/types'
 
 interface Props {
-  params: { jobRoleId: string }
-  searchParams?: { filter?: string }
+  params: Promise<{ jobRoleId: string }>
+  searchParams?: Promise<{ filter?: string }>
 }
 
-export async function generateMetadata({ params }: Props) {
+export async function generateMetadata(props: Props) {
+  const params = await props.params;
   const role = await getJobRoleById(params.jobRoleId).catch(() => null)
   return {
     title: role
@@ -119,8 +120,10 @@ function getExplanation(key: string): string {
 // Page
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default async function KompatibilitasPage({ params, searchParams }: Props) {
-  const supabase = createClient()
+export default async function KompatibilitasPage(props: Props) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect(`/belepes?next=/vedett-karrier/kompatibilitas/${params.jobRoleId}`)
 

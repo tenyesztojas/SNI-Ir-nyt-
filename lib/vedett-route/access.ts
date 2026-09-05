@@ -27,7 +27,7 @@ export type VedettRouteAuthResult =
  * kapcsolva (különben soha nem lehetne látni, MIÉRT nem működik a funkció).
  */
 export async function requireVedettRouteAdmin(): Promise<VedettRouteAuthResult> {
-  const supabase = createServerSupabase();
+  const supabase = await createServerSupabase();
   const {
     data: { user },
   } = await supabase.auth.getUser();

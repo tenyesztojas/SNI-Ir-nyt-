@@ -9,11 +9,12 @@ export const metadata = {
 
 export const dynamic = "force-dynamic";
 
-export default async function SajatJelzesPage({
-  searchParams,
-}: {
-  searchParams: { mentve?: string };
-}) {
+export default async function SajatJelzesPage(
+  props: {
+    searchParams: Promise<{ mentve?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const { user } = await getCurrentUserAndProfile();
   if (!user) redirect("/belepes?next=/vedett-jelzes/sajat-jelzes");
 

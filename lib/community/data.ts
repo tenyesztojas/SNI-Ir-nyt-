@@ -28,7 +28,7 @@ const SAFE_PROFILE_COLS = `
 
 // ── Saját profil ──────────────────────────────────────────────
 export async function getOwnCommunityProfile(): Promise<CommunityProfile | null> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
 
@@ -49,7 +49,7 @@ export async function getActiveCommunityMembers(filters?: {
   role?: string;
   goal?: string;
 }): Promise<CommunityProfile[]> {
-  const supabase = createClient();
+  const supabase = await createClient();
 
   let query = supabase
     .from("community_profiles")
@@ -69,7 +69,7 @@ export async function getActiveCommunityMembers(filters?: {
 
 // ── Egy tag profilja (nyilvános) ──────────────────────────────
 export async function getCommunityProfileById(id: string): Promise<CommunityProfile | null> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data } = await supabase
     .from("community_profiles")
     .select(SAFE_PROFILE_COLS)
@@ -82,7 +82,7 @@ export async function getCommunityProfileById(id: string): Promise<CommunityProf
 
 // ── Kapcsolatok ───────────────────────────────────────────────
 export async function getMyConnections(): Promise<CommunityConnection[]> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
 
@@ -132,7 +132,7 @@ export async function getConnectionBetween(
   userId: string,
   otherId: string
 ): Promise<CommunityConnection | null> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data } = await supabase
     .from("community_connections")
     .select("*")
@@ -146,7 +146,7 @@ export async function getConnectionBetween(
 
 // ── Chat szálak ───────────────────────────────────────────────
 export async function getMyThreads(): Promise<CommunityThread[]> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
 
@@ -204,7 +204,7 @@ export async function getMyThreads(): Promise<CommunityThread[]> {
 }
 
 export async function getThreadMessages(threadId: string): Promise<CommunityMessage[]> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
 
@@ -221,7 +221,7 @@ export async function getThreadMessages(threadId: string): Promise<CommunityMess
 
 // ── Értesítések ───────────────────────────────────────────────
 export async function getMyNotifications(): Promise<Notification[]> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
 
@@ -236,7 +236,7 @@ export async function getMyNotifications(): Promise<Notification[]> {
 }
 
 export async function getUnreadNotificationCount(): Promise<number> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return 0;
 
@@ -284,7 +284,7 @@ export async function getUnreadNotificationCount(): Promise<number> {
 
 // ── Közösségi segítség beállítások ───────────────────────────
 export async function getOwnHelpSettings(): Promise<CommunityHelpSettings | null> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
 
@@ -297,7 +297,7 @@ export async function getOwnHelpSettings(): Promise<CommunityHelpSettings | null
 }
 
 export async function getHelpSettingsByUserId(userId: string): Promise<CommunityHelpSettings | null> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
 
@@ -315,7 +315,7 @@ export async function getPublicHelpSettingsList(filters?: {
   help_offered?: boolean;
   category?: string;
 }): Promise<CommunityHelpSettings[]> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
 

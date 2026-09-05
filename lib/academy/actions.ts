@@ -600,7 +600,7 @@ export async function createCourse(input: {
   estimatedMinutes: number;
   validityMonths: number;
 }): Promise<{ ok: boolean; courseId?: string; error?: string }> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: userData } = await supabase.auth.getUser();
   if (!userData.user) return { ok: false, error: "Bejelentkezés szükséges." };
 
@@ -638,7 +638,7 @@ export async function createCourse(input: {
 export async function publishCourseVersion(
   versionId: string
 ): Promise<{ ok: boolean; error?: string }> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: userData } = await supabase.auth.getUser();
   if (!userData.user) return { ok: false, error: "Bejelentkezés szükséges." };
 
@@ -773,7 +773,7 @@ export async function updateFrontlineCount(
 export async function confirmAnnualDeclaration(
   frontlineCount: number
 ): Promise<{ ok: boolean; error?: string }> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: userData } = await supabase.auth.getUser();
   if (!userData.user) return { ok: false, error: "Bejelentkezés szükséges." };
 

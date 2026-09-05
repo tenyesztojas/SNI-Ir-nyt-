@@ -13,7 +13,7 @@ export async function submitReport(input: ReportInput): Promise<{ error?: string
   }
   const data = parsed.data;
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: userData } = await supabase.auth.getUser();
   const user = userData.user;
   if (!user) {
@@ -49,7 +49,7 @@ export async function decideReport(
     return { error: "Nincs jogosultságod ehhez a művelethez." };
   }
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { error } = await supabase.from("reports").update({ status: decision }).eq("id", reportId);
 
   if (error) {

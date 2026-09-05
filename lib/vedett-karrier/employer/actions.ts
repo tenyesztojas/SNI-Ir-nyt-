@@ -97,7 +97,7 @@ async function getAuthAndEmployer(): Promise<
   { ok: true; userId: string; employerId: string; approved: boolean } |
   { ok: false; error: string }
 > {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { ok: false, error: 'Nincs bejelentkezett felhasználó.' }
 

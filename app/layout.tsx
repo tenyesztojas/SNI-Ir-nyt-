@@ -24,15 +24,17 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default async function RootLayout(
+  {
+    children,
+  }: {
+    children: React.ReactNode;
+  }
+) {
   // Nonce-alapú CSP: a middleware requestenként generál nonce-t és átadja x-nonce headerben.
   // Next.js 14 App Router automatikusan alkalmazza a nonce-t a saját inline scriptjeire.
   // Az itt lévő custom inline scriptek kézzel kapják meg.
-  const nonce = headers().get("x-nonce") ?? undefined;
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
 
   return (
     <html lang="hu">

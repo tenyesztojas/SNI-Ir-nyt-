@@ -28,7 +28,7 @@ export async function submitBooking(input: {
   guestPhone?: string;
   guestNote?: string;
 }): Promise<{ error?: string; bookingId?: string }> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: userData } = await supabase.auth.getUser();
   const user = userData.user;
   if (!user) return { error: "Foglaláshoz bejelentkezés szükséges." };
@@ -95,7 +95,7 @@ export async function confirmBooking(
   bookingId: string
 ): Promise<{ error?: string }> {
   const adminClient = createAdminClient();
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: userData } = await supabase.auth.getUser();
   const user = userData.user;
   if (!user) return { error: "Bejelentkezés szükséges." };
@@ -131,7 +131,7 @@ export async function rejectBooking(
   reason: string
 ): Promise<{ error?: string }> {
   const adminClient = createAdminClient();
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: userData } = await supabase.auth.getUser();
   const user = userData.user;
   if (!user) return { error: "Bejelentkezés szükséges." };
@@ -167,7 +167,7 @@ export async function rejectBooking(
 export async function cancelBooking(
   bookingId: string
 ): Promise<{ error?: string }> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: userData } = await supabase.auth.getUser();
   const user = userData.user;
   if (!user) return { error: "Bejelentkezés szükséges." };

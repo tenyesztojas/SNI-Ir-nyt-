@@ -19,11 +19,12 @@ const FILTER_CATEGORIES = [
   { value: "egyeb", label: "Egyéb" },
 ];
 
-export default async function SegitiPage({
-  searchParams,
-}: {
-  searchParams: { filter?: string; category?: string };
-}) {
+export default async function SegitiPage(
+  props: {
+    searchParams: Promise<{ filter?: string; category?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const { user } = await getCurrentUserAndProfile();
   if (!user) redirect("/belepes");
 

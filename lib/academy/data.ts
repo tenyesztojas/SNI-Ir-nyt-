@@ -86,7 +86,7 @@ export async function resolveInvitationToken(
 
 /** Visszaadja a bejelentkezett user provider_profiles.id-ját, vagy null-t */
 export async function getCurrentPartnerId(): Promise<string | null> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: userData } = await supabase.auth.getUser();
   if (!userData.user) return null;
 

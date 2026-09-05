@@ -23,7 +23,7 @@ export async function getPublishedJobs(filters: Partial<{
   low_verbal: boolean;
   q: string;
 }> = {}): Promise<(JobPost & { employers: { company_name: string } | null })[]> {
-  const supabase = createClient();
+  const supabase = await createClient();
   let query = supabase
     .from("job_posts")
     .select("*, employers(company_name)")
@@ -53,7 +53,7 @@ export async function getPublishedJobs(filters: Partial<{
 
 /** Az összes aktív hirdetésben szereplő, nem üres megye lista (rendezve) */
 export async function getPublishedJobCounties(): Promise<string[]> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data } = await supabase
     .from("job_posts")
     .select("county")
@@ -66,7 +66,7 @@ export async function getPublishedJobCounties(): Promise<string[]> {
 
 /** Az összes aktív hirdetésben szereplő megye+város pár (szűrő dropdownhoz) */
 export async function getPublishedJobLocations(): Promise<{ county: string; city: string }[]> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data } = await supabase
     .from("job_posts")
     .select("county, city")
@@ -88,7 +88,7 @@ export async function getPublishedJobLocations(): Promise<{ county: string; city
 }
 
 export async function getPublishedJobById(id: string): Promise<(JobPost & { employers: Employer | null }) | null> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data } = await supabase
     .from("job_posts")
     .select("*, employers(*)")
@@ -101,7 +101,7 @@ export async function getPublishedJobById(id: string): Promise<(JobPost & { empl
 // ─── Saját munkáltatói adatok ───────────────────────────────────
 
 export async function getMyEmployer(): Promise<Employer | null> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
   const { data } = await supabase
@@ -113,7 +113,7 @@ export async function getMyEmployer(): Promise<Employer | null> {
 }
 
 export async function getMyJobPosts(): Promise<JobPost[]> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
   const { data: employer } = await supabase
@@ -133,7 +133,7 @@ export async function getMyJobPosts(): Promise<JobPost[]> {
 // ─── Állásértesítő ──────────────────────────────────────────────
 
 export async function getMyJobAlert(): Promise<JobAlert | null> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
   const { data } = await supabase
@@ -213,7 +213,7 @@ export async function adminGetVmKpis() {
 
 /** Összes aktív attribútum a DB-ből */
 export async function getAllAttributes(): Promise<VmAttribute[]> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data } = await supabase
     .from("vm_job_attributes")
     .select("*")
@@ -225,7 +225,7 @@ export async function getAllAttributes(): Promise<VmAttribute[]> {
 
 /** Egy álláshoz tartozó attribútumok (DB + legacy levezetés) */
 export async function getJobAttributes(jobPostId: string, job?: JobPost): Promise<string[]> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data } = await supabase
     .from("vm_job_attribute_values")
     .select("attribute_slug, value")
@@ -252,7 +252,7 @@ export async function setJobAttributes(jobPostId: string, slugs: string[]): Prom
 
 /** Saját Munkaprofil lekérése */
 export async function getMyWorkProfile(): Promise<VmWorkProfile | null> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
   const { data } = await supabase
@@ -265,7 +265,7 @@ export async function getMyWorkProfile(): Promise<VmWorkProfile | null> {
 
 /** Saját Munkaprofil mentése (upsert) */
 export async function saveMyWorkProfile(attributeSlugs: string[], notes?: string): Promise<void> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("Nem vagy bejelentkezve.");
   await supabase.from("vm_work_profiles").upsert({

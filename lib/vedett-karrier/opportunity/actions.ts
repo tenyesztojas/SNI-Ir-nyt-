@@ -79,7 +79,7 @@ async function resolveApprovedEmployer(userId: string) {
 export async function createJobOpportunity(
   rawInput: CreateOpportunityInput,
 ): Promise<OpportunityActionResult> {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { ok: false, error: 'Bejelentkezés szükséges.' }
 
@@ -113,7 +113,7 @@ export async function updateJobOpportunity(
   opportunityId: string,
   rawInput: UpdateOpportunityInput,
 ): Promise<OpportunityActionResult> {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { ok: false, error: 'Bejelentkezés szükséges.' }
 
@@ -146,7 +146,7 @@ export async function updateJobOpportunity(
 export async function activateJobOpportunity(
   opportunityId: string,
 ): Promise<OpportunityActionResult> {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { ok: false, error: 'Bejelentkezés szükséges.' }
 
@@ -176,7 +176,7 @@ export async function activateJobOpportunity(
 export async function closeJobOpportunity(
   opportunityId: string,
 ): Promise<OpportunityActionResult> {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { ok: false, error: 'Bejelentkezés szükséges.' }
 

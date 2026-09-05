@@ -26,7 +26,7 @@ export async function sendMessage(params: {
   if (trimmed.length < 2) return { error: "Az üzenet legalább 2 karakter legyen." };
   if (trimmed.length > 1000) return { error: "Az üzenet maximum 1000 karakter lehet." };
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: userData } = await supabase.auth.getUser();
   const user = userData.user;
   if (!user) return { error: "Bejelentkezés szükséges." };
@@ -73,7 +73,7 @@ export async function replyToMessage(
   const trimmed = text.trim();
   if (trimmed.length < 2) return { error: "Az üzenet legalább 2 karakter legyen." };
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: userData } = await supabase.auth.getUser();
   const user = userData.user;
   if (!user) return { error: "Bejelentkezés szükséges." };
@@ -112,7 +112,7 @@ export async function setConsent(params: {
 }): Promise<{ error?: string }> {
   const { placeId, reviewId, consentType } = params;
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: userData } = await supabase.auth.getUser();
   const user = userData.user;
   if (!user) return { error: "Bejelentkezés szükséges." };
@@ -157,7 +157,7 @@ export async function blockPlace(
 export async function markMessageRead(
   messageId: string
 ): Promise<{ error?: string }> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: userData } = await supabase.auth.getUser();
   const user = userData.user;
   if (!user) return { error: "Bejelentkezés szükséges." };

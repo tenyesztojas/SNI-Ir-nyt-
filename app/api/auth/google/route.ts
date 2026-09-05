@@ -73,7 +73,7 @@ export async function GET(request: Request) {
     if (linkError) throw linkError;
 
     // Session létrehozása szerver oldalon (nincs böngésző navigáció Supabase-re)
-    const supabase = createClient();
+    const supabase = await createClient();
     const { data: verifyData, error: verifyError } = await supabase.auth.verifyOtp({
       token_hash: linkData.properties.hashed_token,
       type: "magiclink",

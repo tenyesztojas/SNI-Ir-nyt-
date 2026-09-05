@@ -9,7 +9,7 @@ import HeroSearchForm from "@/components/HeroSearchForm";
 import NearbyPlacesPanel from "@/components/NearbyPlacesPanel";
 
 export default async function HomePage() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const [categories, places, programsResult, { user }, communityUnread] = await Promise.all([
     getCategories(),
     getApprovedPlaces(),

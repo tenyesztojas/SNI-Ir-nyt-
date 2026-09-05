@@ -28,7 +28,7 @@ import type {
 
 /** Visszaadja a bejelentkezett user employer rekordját (VM employers tábla). */
 export async function getEmployerByUserId(userId: string): Promise<EmployerRow | null> {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data, error } = await supabase
     .from('employers')
     .select('id, user_id, company_name, status, website, contact_name, contact_email, created_at, updated_at')
@@ -48,7 +48,7 @@ export function isEmployerApproved(employer: EmployerRow | null): boolean {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function getWorkplacesByEmployerId(employerId: string): Promise<WorkplaceRow[]> {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data, error } = await supabase
     .from('vk_employer_workplaces')
     .select('*')
@@ -63,7 +63,7 @@ export async function createWorkplace(
   employerId: string,
   input: CreateWorkplaceInput
 ): Promise<WorkplaceRow> {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data, error } = await supabase
     .from('vk_employer_workplaces')
     .insert({
@@ -85,7 +85,7 @@ export async function createWorkplace(
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function getJobRolesByEmployerId(employerId: string): Promise<JobRoleRow[]> {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data, error } = await supabase
     .from('vk_job_roles')
     .select('*')
@@ -96,7 +96,7 @@ export async function getJobRolesByEmployerId(employerId: string): Promise<JobRo
 }
 
 export async function getJobRoleById(roleId: string): Promise<JobRoleRow | null> {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data, error } = await supabase
     .from('vk_job_roles')
     .select('*')
@@ -111,7 +111,7 @@ export async function getJobRoleByIdForEmployer(
   roleId: string,
   employerId: string
 ): Promise<JobRoleRow | null> {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data, error } = await supabase
     .from('vk_job_roles')
     .select('*')
@@ -126,7 +126,7 @@ export async function createJobRole(
   employerId: string,
   input: CreateJobRoleInput
 ): Promise<JobRoleRow> {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data, error } = await supabase
     .from('vk_job_roles')
     .insert({
@@ -151,7 +151,7 @@ export async function updateJobRoleBasics(
   employerId: string,
   input: UpdateJobRoleBasicsInput
 ): Promise<JobRoleRow> {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data, error } = await supabase
     .from('vk_job_roles')
     .update({
@@ -178,7 +178,7 @@ export async function updateJobRoleCompletionAndHash(
   completionPct: number,
   versionHash: string
 ): Promise<void> {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { error } = await supabase
     .from('vk_job_roles')
     .update({ profile_completion_pct: completionPct, profile_version_hash: versionHash })
@@ -188,7 +188,7 @@ export async function updateJobRoleCompletionAndHash(
 }
 
 export async function activateJobRole(roleId: string, employerId: string): Promise<JobRoleRow> {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data, error } = await supabase
     .from('vk_job_roles')
     .update({ status: 'active', published_at: new Date().toISOString() })
@@ -206,7 +206,7 @@ export async function activateJobRole(roleId: string, employerId: string): Promi
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function getEnvValuesByJobRoleId(roleId: string): Promise<JobRoleEnvValueRow[]> {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data, error } = await supabase
     .from('job_role_env_values')
     .select('*')
@@ -233,7 +233,7 @@ export async function upsertEnvValue(
   const role = await getJobRoleByIdForEmployer(jobRoleId, employerId)
   if (!role) throw new Error('upsertEnvValue: job role nem található vagy nincs jogosultság')
 
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data, error } = await supabase
     .from('job_role_env_values')
     .upsert(

@@ -37,7 +37,7 @@ export async function loadCompatibilityResult(
   userId: string,
   jobRoleId: string,
 ): Promise<CompatibilityResultRow | null> {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data, error } = await supabase
     .from('vk_compatibility_results')
     .select('*')
@@ -87,7 +87,7 @@ export async function upsertCompatibilityResult(input: {
   jobRoleProfileVersionHash:   string
   dimensionResults:            CompatibilityResult[]
 }): Promise<{ error: string | null }> {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { error } = await supabase
     .from('vk_compatibility_results')
     .upsert(

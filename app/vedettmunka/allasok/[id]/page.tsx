@@ -65,7 +65,8 @@ const QUESTIONS = [
   "Kell-e telefonon ügyfélkapcsolatot kezelni?",
 ];
 
-export default async function AllasAdatlapPage({ params }: { params: { id: string } }) {
+export default async function AllasAdatlapPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const job = await getPublishedJobById(params.id);
   if (!job) notFound();
 

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
 import { getCurrentUserAndProfile } from "@/lib/data";
 import { getThreadMessages, getMyThreads, getOwnCommunityProfile } from "@/lib/community/data";
@@ -8,11 +9,12 @@ import AutoRefresh from "./AutoRefresh";
 
 export const dynamic = "force-dynamic";
 
-export default async function ChatThreadPage({
-  params,
-}: {
-  params: { threadId: string };
-}) {
+export default async function ChatThreadPage(
+  props: {
+    params: Promise<{ threadId: string }>;
+  }
+) {
+  const params = await props.params;
   const { user } = await getCurrentUserAndProfile();
   if (!user) redirect("/belepes");
 
@@ -36,9 +38,9 @@ export default async function ChatThreadPage({
     <div className="flex h-[calc(100vh-64px)] flex-col">
       {/* Fejléc */}
       <div className="border-b border-gray-200 bg-white px-4 py-3 sm:px-6 flex items-center gap-3">
-        <a href="/kozosseg/uzenetek" className="text-gray-400 hover:text-sni-brand-teal transition">
+        <Link href="/kozosseg/uzenetek" className="text-gray-400 hover:text-sni-brand-teal transition">
           ← Vissza
-        </a>
+        </Link>
         <div className="h-9 w-9 rounded-full bg-sni-brand-teal/20 flex items-center justify-center text-sni-brand-teal font-bold">
           {other?.display_name?.charAt(0).toUpperCase() ?? "?"}
         </div>

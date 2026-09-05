@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -171,12 +172,12 @@ export default function ConnectionActions({
       {/* Elfogadott kapcsolat */}
       {conn?.status === "accepted" && (
         <div className="flex gap-2">
-          <a
+          <Link
             href="/kozosseg/uzenetek"
             className="flex-1 rounded-xl bg-sni-brand-teal py-2.5 text-center font-semibold text-white hover:bg-sni-brand-blue transition text-sm"
           >
             Üzenet küldése
-          </a>
+          </Link>
           <span className="flex items-center rounded-xl border border-green-200 bg-green-50 px-4 text-sm text-green-700 font-medium">
             ✓ Kapcsolat
           </span>

@@ -11,7 +11,7 @@ function supabaseAdmin() {
 }
 
 export default async function AdminProgramokPage() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/belepes");
 

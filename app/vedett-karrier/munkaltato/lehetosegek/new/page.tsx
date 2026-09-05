@@ -25,11 +25,12 @@ export const metadata = {
 }
 
 interface Props {
-  searchParams: { jobRoleId?: string }
+  searchParams: Promise<{ jobRoleId?: string }>
 }
 
-export default async function NewOpportunityPage({ searchParams }: Props) {
-  const supabase = createClient()
+export default async function NewOpportunityPage(props: Props) {
+  const searchParams = await props.searchParams;
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
     // jobRoleId query paramétert is megőrizzük a return target-ben

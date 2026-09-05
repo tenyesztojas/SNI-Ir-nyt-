@@ -4,7 +4,8 @@ import { getPlaceById, getCurrentUserAndProfile } from "@/lib/data";
 import ReviewForm from "@/components/ReviewForm";
 import Disclaimer from "@/components/Disclaimer";
 
-export default async function WriteReviewPage({ params }: { params: { placeId: string } }) {
+export default async function WriteReviewPage(props: { params: Promise<{ placeId: string }> }) {
+  const params = await props.params;
   const place = await getPlaceById(params.placeId);
   if (!place) notFound();
 

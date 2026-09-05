@@ -42,7 +42,7 @@ export interface ComputeCompatibilityActionResult {
 export async function computeAndSaveCompatibility(
   jobRoleId: string,
 ): Promise<ComputeCompatibilityActionResult> {
-  const supabase = createClient()
+  const supabase = await createClient()
 
   // Auth
   const { data: { user } } = await supabase.auth.getUser()

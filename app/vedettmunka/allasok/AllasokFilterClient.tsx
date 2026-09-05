@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { SZELLEMI_KATEGORIAK, FIZIKAI_KATEGORIAK } from "@/lib/vedettmunka/categories";
 
@@ -186,12 +187,12 @@ export default function AllasokFilterClient({ defaults, locations }: Props) {
         >
           Szűrés
         </button>
-        <a
+        <Link
           href="/vedettmunka/allasok"
           className="flex-1 rounded-full border border-gray-200 py-2 text-center text-sm font-semibold text-gray-500 transition hover:border-gray-400"
         >
           Törlés
-        </a>
+        </Link>
       </div>
     </form>
   );

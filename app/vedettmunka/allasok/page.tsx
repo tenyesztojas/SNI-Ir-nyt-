@@ -14,11 +14,12 @@ const LOC_LABEL: Record<string, string> = {
   hibrid:      "Vegyes (helyszín + otthon)",
 };
 
-export default async function AllasokPage({
-  searchParams,
-}: {
-  searchParams: Record<string, string | undefined>;
-}) {
+export default async function AllasokPage(
+  props: {
+    searchParams: Promise<Record<string, string | undefined>>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const filters = {
     work_type:          searchParams.work_type || undefined,
     category:           searchParams.category  || undefined,
@@ -59,9 +60,9 @@ export default async function AllasokPage({
             <div className="rounded-2xl border border-dashed border-gray-200 bg-white p-12 text-center">
               <Briefcase className="mx-auto mb-3 text-gray-300" size={40} />
               <p className="font-semibold text-gray-500">Nincs találat a megadott szűrőkkel.</p>
-              <a href="/vedettmunka/allasok" className="mt-2 block text-sm text-sni-brand-teal hover:underline">
+              <Link href="/vedettmunka/allasok" className="mt-2 block text-sm text-sni-brand-teal hover:underline">
                 Szűrők törlése
-              </a>
+              </Link>
             </div>
           ) : (
             <div className="flex flex-col gap-4">

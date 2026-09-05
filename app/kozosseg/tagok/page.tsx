@@ -7,11 +7,12 @@ import { ROLE_LABELS, CONNECTION_GOAL_OPTIONS, type CommunityRole } from "@/lib/
 export const metadata = { title: "Közösségi tagok – VédettSarok" };
 export const dynamic = "force-dynamic";
 
-export default async function TagokPage({
-  searchParams,
-}: {
-  searchParams: { varos?: string; role?: string; cel?: string };
-}) {
+export default async function TagokPage(
+  props: {
+    searchParams: Promise<{ varos?: string; role?: string; cel?: string }>;
+  }
+) {
+  const searchParams = await props.searchParams;
   const { user } = await getCurrentUserAndProfile();
   if (!user) redirect("/belepes");
 

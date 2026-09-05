@@ -20,7 +20,7 @@ export const metadata = { title: 'Új munkakör – Védett Karrier' }
 
 export default async function NewJobRolePage() {
   // 1. Authentication
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) {
     redirect('/belepes?next=/vedett-karrier/munkaltato/munkakorok/new')

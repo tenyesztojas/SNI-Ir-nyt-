@@ -37,7 +37,7 @@ export async function submitPlace(input: NewPlaceInput, images: string[] = []): 
   if (!parsed.success) return { error: "Hibás vagy hiányos adatok." };
   const data = parsed.data;
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: userData } = await supabase.auth.getUser();
   const user = userData.user;
   if (!user) return { error: "A hely beküldéséhez be kell jelentkezned." };
@@ -117,7 +117,7 @@ export async function removePlace(
   if (!isAdmin) return { error: "Nincs jogosultságod ehhez a művelethez." };
 
   const admin = createAdminClient();
-  const supabase = createClient();
+  const supabase = await createClient();
 
   const { error } = await admin.from("places").update({ status: "removed" }).eq("id", placeId);
   if (error) return { error: "Nem sikerült eltávolítani." };
@@ -169,7 +169,7 @@ export async function searchPlacesByName(
   query: string
 ): Promise<Array<{ id: string; name: string; city: string; slug: string }>> {
   if (!query || query.trim().length < 3) return [];
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data } = await supabase
     .from("places")
     .select("id, name, city, slug")
@@ -207,7 +207,7 @@ export async function adminCreatePlace(
   if (!input.whyFriendly || input.whyFriendly.length < 5) return { error: "Írd le, miért autizmus/SNI-barát." };
 
   const admin = createAdminClient();
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: userData } = await supabase.auth.getUser();
 
   const baseSlug = slugify(input.name.trim()) || "hely";

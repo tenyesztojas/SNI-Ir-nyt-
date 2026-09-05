@@ -150,7 +150,7 @@ function placeRef(places: ReportRowWithPlace["places"]): { name: string; slug: s
 }
 
 export async function getCategories(): Promise<Category[]> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("categories")
     .select("slug, name, icon")
@@ -165,14 +165,14 @@ export async function getCategoryBySlug(slug: string): Promise<Category | undefi
 }
 
 export async function getVisiblePlaces(): Promise<Place[]> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data, error } = await supabase.from("places").select("*").order("name");
   if (error) throw error;
   return (data ?? []).map(mapPlace);
 }
 
 export async function getApprovedPlaces(): Promise<Place[]> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("places")
     .select("*")
@@ -185,21 +185,21 @@ export async function getApprovedPlaces(): Promise<Place[]> {
 }
 
 export async function getPlaceBySlug(slug: string): Promise<Place | undefined> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data, error } = await supabase.from("places").select("*").eq("slug", slug).maybeSingle();
   if (error) throw error;
   return data ? mapPlace(data) : undefined;
 }
 
 export async function getPlaceById(id: string): Promise<Place | undefined> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data, error } = await supabase.from("places").select("*").eq("id", id).maybeSingle();
   if (error) throw error;
   return data ? mapPlace(data) : undefined;
 }
 
 export async function getPendingPlaces(): Promise<Place[]> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("places")
     .select("*")
@@ -224,7 +224,7 @@ export async function getApprovedReviewsForPlace(placeId: string): Promise<Revie
 }
 
 export async function getPendingReviews(): Promise<Review[]> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("reviews")
     .select(`*, profiles(${PROFILE_SELECT})`)
@@ -236,7 +236,7 @@ export async function getPendingReviews(): Promise<Review[]> {
 
 
 export async function getFlaggedReviews(): Promise<Review[]> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("reviews")
     .select(`*, profiles(${PROFILE_SELECT})`)
@@ -249,7 +249,7 @@ export async function getFlaggedReviews(): Promise<Review[]> {
 
 export async function getAdminReviews(): Promise<Review[]> {
   // Megjelölt + bejelentett közzétett értékelések admin kezeléshez
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("reviews")
     .select(`*, profiles(${PROFILE_SELECT})`)
@@ -261,7 +261,7 @@ export async function getAdminReviews(): Promise<Review[]> {
 }
 
 export async function getOwnPlaces(userId: string): Promise<Place[]> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("places")
     .select("*")
@@ -272,7 +272,7 @@ export async function getOwnPlaces(userId: string): Promise<Place[]> {
 }
 
 export async function getOwnReviews(userId: string): Promise<Review[]> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("reviews")
     .select(`*, profiles(${PROFILE_SELECT})`)
@@ -283,14 +283,14 @@ export async function getOwnReviews(userId: string): Promise<Review[]> {
 }
 
 export async function getFavoritePlaceIds(userId: string): Promise<string[]> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data, error } = await supabase.from("favorites").select("place_id").eq("user_id", userId);
   if (error) throw error;
   return (data ?? []).map((row) => row.place_id);
 }
 
 export async function isPlaceFavorited(userId: string, placeId: string): Promise<boolean> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("favorites")
     .select("place_id")
@@ -302,7 +302,7 @@ export async function isPlaceFavorited(userId: string, placeId: string): Promise
 }
 
 export async function getFavoritePlaces(userId: string): Promise<Place[]> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("favorites")
     .select("created_at, places(*)")
@@ -318,7 +318,7 @@ export async function getFavoritePlaces(userId: string): Promise<Place[]> {
 }
 
 export async function getPendingReports(): Promise<ReportWithPlace[]> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("reports")
     .select("*, places(name, slug)")
@@ -351,7 +351,7 @@ export async function getCurrentUserAndProfile(): Promise<{
   user: { id: string; email?: string } | null;
   profile: Profile | null;
 }> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: userData } = await supabase.auth.getUser();
   const user = userData.user;
   if (!user) return { user: null, profile: null };

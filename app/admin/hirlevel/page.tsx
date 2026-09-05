@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import NewsletterForm from "./NewsletterForm";
 
 export default async function AdminNewsletterPage() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/belepes");
 

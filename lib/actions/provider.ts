@@ -25,7 +25,7 @@ export async function submitProviderRegistration(input: {
   bookingType: "appointment" | "accommodation" | "both";
   customDescription?: string;
 }): Promise<{ error?: string }> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: userData } = await supabase.auth.getUser();
   const user = userData.user;
   if (!user) return { error: "Bejelentkezés szükséges." };
@@ -301,7 +301,7 @@ export async function createServicePackage(input: {
   priceCurrency?: string;
   priceUnit: string;
 }): Promise<{ error?: string; id?: string }> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: userData } = await supabase.auth.getUser();
   const user = userData.user;
   if (!user) return { error: "Bejelentkezés szükséges." };
@@ -349,7 +349,7 @@ export async function updateServicePackage(
     active: boolean;
   }>
 ): Promise<{ error?: string }> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: userData } = await supabase.auth.getUser();
   const user = userData.user;
   if (!user) return { error: "Bejelentkezés szükséges." };
@@ -404,7 +404,7 @@ export async function upsertAvailabilitySlot(input: {
   dateTo?: string;
   capacity?: number;
 }): Promise<{ error?: string }> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: userData } = await supabase.auth.getUser();
   const user = userData.user;
   if (!user) return { error: "Bejelentkezés szükséges." };
@@ -444,7 +444,7 @@ export async function upsertAvailabilitySlot(input: {
 export async function deleteAvailabilitySlot(
   slotId: string
 ): Promise<{ error?: string }> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: userData } = await supabase.auth.getUser();
   const user = userData.user;
   if (!user) return { error: "Bejelentkezés szükséges." };
@@ -464,7 +464,7 @@ export async function updateProviderDescription(
 ): Promise<{ error?: string }> {
   if (description.length > 2000) return { error: "Leírás maximum 2000 karakter lehet." };
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: userData } = await supabase.auth.getUser();
   const user = userData.user;
   if (!user) return { error: "Bejelentkezés szükséges." };

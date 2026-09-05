@@ -23,7 +23,7 @@ export async function getOrCreateCareerProfile(userId: string): Promise<{
   completion_pct: number
   profile_version_hash: string | null
 } | null> {
-  const supabase = createClient()
+  const supabase = await createClient()
 
   // Aktív profil keresése
   const { data: existing } = await supabase
@@ -64,7 +64,7 @@ export async function getOrCreateCareerProfile(userId: string): Promise<{
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function loadSavedDimensions(careerProfileId: string): Promise<SavedDimensionRow[]> {
-  const supabase = createClient()
+  const supabase = await createClient()
 
   const { data, error } = await supabase
     .from('career_profile_dimensions')
@@ -140,7 +140,7 @@ export interface UpsertDimensionInput {
 }
 
 export async function upsertDimensionPreference(input: UpsertDimensionInput): Promise<{ error: string | null }> {
-  const supabase = createClient()
+  const supabase = await createClient()
 
   const { error } = await supabase
     .from('career_profile_dimensions')
@@ -187,7 +187,7 @@ export async function updateProfileVersionHash(
   careerProfileId: string,
   savedRows: SavedDimensionRow[]
 ): Promise<void> {
-  const supabase = createClient()
+  const supabase = await createClient()
   const hash = computeProfileVersionHash(savedRows)
 
   await supabase

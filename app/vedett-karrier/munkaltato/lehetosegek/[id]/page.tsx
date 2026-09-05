@@ -16,7 +16,7 @@ import { activateJobOpportunity, closeJobOpportunity } from '../../../../../lib/
 import { buildLoginRedirect } from '../../../../../lib/vedett-karrier/returnTo'
 
 interface Props {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -31,8 +31,9 @@ const METHOD_LABELS: Record<string, string> = {
   CONTACT_INSTRUCTIONS: 'Útmutató',
 }
 
-export default async function EmployerOpportunityDetailPage({ params }: Props) {
-  const supabase = createClient()
+export default async function EmployerOpportunityDetailPage(props: Props) {
+  const params = await props.params;
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect(buildLoginRedirect(`/vedett-karrier/munkaltato/lehetosegek/${params.id}`))
 

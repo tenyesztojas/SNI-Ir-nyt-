@@ -4,6 +4,7 @@
  * Public – Light Készséghíd csak bejelentkezett usernek
  */
 
+import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { getJobFamilyBySlug } from '@/lib/vedett-karrier/families/data'
 import { createClient } from '@/lib/supabase/server'
@@ -16,10 +17,11 @@ import { loadCareerInterests } from '@/lib/vedett-karrier/interests/data'
 export const dynamic = 'force-dynamic'
 
 interface Props {
-  params: { slug: string }
+  params: Promise<{ slug: string }>
 }
 
-export default async function FamilyDetailPage({ params }: Props) {
+export default async function FamilyDetailPage(props: Props) {
+  const params = await props.params;
   const family = await getJobFamilyBySlug(params.slug)
   if (!family) notFound()
 
@@ -49,7 +51,7 @@ export default async function FamilyDetailPage({ params }: Props) {
       {/* Header */}
       <div className="mb-6">
         <p className="text-xs text-gray-400 mb-1">
-          <a href="/vedett-karrier/munkakorcsaladok" className="hover:underline">← Munkakörcsaládok</a>
+          <Link href="/vedett-karrier/munkakorcsaladok" className="hover:underline">← Munkakörcsaládok</Link>
         </p>
         <h1 className="text-2xl font-bold text-gray-900">{family.name_hu}</h1>
         <p className="mt-2 text-sm text-gray-600">{family.description_hu}</p>

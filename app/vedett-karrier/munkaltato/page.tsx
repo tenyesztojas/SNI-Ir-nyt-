@@ -16,7 +16,7 @@ import JobRoleCard from '../../../components/vedett-karrier/employer/JobRoleCard
 export const metadata = { title: 'Munkáltatói felület – Védett Karrier' }
 
 export default async function EmployerDashboardPage() {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/belepes?next=/vedett-karrier/munkaltato')
 

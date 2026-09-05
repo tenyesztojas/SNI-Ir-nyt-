@@ -17,7 +17,7 @@ import type { PreferenceDocumentRow } from '../types/preferencialap'
 export async function getPreferenceDocumentsByUser(
   userId: string,
 ): Promise<PreferenceDocumentRow[]> {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data, error } = await supabase
     .from('work_preference_documents')
     .select('*')
@@ -34,7 +34,7 @@ export async function getPreferenceDocumentById(
   id: string,
   userId: string,
 ): Promise<PreferenceDocumentRow | null> {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data, error } = await supabase
     .from('work_preference_documents')
     .select('*')
@@ -53,7 +53,7 @@ export async function getPreferenceDocumentById(
 export async function getSharedPreferenceDocument(
   shareToken: string,
 ): Promise<PreferenceDocumentRow | null> {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { data, error } = await supabase
     .from('work_preference_documents')
     .select('*')
@@ -80,7 +80,7 @@ export async function upsertPreferenceDocument(input: {
   selectedDimensionCodes:    string[]
   generatedTextHu:           string
 }): Promise<PreferenceDocumentRow> {
-  const supabase = createClient()
+  const supabase = await createClient()
 
   const payload = {
     user_id:                  input.userId,
@@ -124,7 +124,7 @@ export async function sharePreferenceDocument(
   id: string,
   userId: string,
 ): Promise<{ shareToken: string }> {
-  const supabase = createClient()
+  const supabase = await createClient()
   // Megjegyzés: gen_random_uuid() PostgreSQL függvénnyel generálunk tokent
   // a supabase.rpc('gen_random_uuid') helyett JS-ben generáljuk, hogy ne kelljen RPC
   const shareToken = crypto.randomUUID()
@@ -143,7 +143,7 @@ export async function unsharePreferenceDocument(
   id: string,
   userId: string,
 ): Promise<void> {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { error } = await supabase
     .from('work_preference_documents')
     .update({ is_shared: false, share_token: null })
@@ -157,7 +157,7 @@ export async function deletePreferenceDocument(
   id: string,
   userId: string,
 ): Promise<void> {
-  const supabase = createClient()
+  const supabase = await createClient()
   const { error } = await supabase
     .from('work_preference_documents')
     .delete()

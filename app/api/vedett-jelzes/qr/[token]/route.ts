@@ -6,10 +6,8 @@ import {
 } from "@/lib/vedett-jelzes/types";
 
 // Publikus QR kód megjelenítő oldal — login nem szükséges
-export async function GET(
-  _req: Request,
-  { params }: { params: { token: string } }
-) {
+export async function GET(_req: Request, props: { params: Promise<{ token: string }> }) {
+  const params = await props.params;
   const signal = await getSignalByQrToken(params.token);
 
   if (!signal) {

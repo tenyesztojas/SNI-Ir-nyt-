@@ -8,7 +8,7 @@ export const metadata = { title: "Saját Munkaprofil" };
 export const dynamic = "force-dynamic";
 
 export default async function MunkaprofilPage() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/belepes");
 

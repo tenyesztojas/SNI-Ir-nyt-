@@ -4,7 +4,8 @@ import { getPlaceBySlug, getCurrentUserAndProfile } from "@/lib/data";
 import { createAdminClient } from "@/lib/supabase/admin";
 import PlaceClaimButton from "@/components/PlaceClaimButton";
 
-export default async function PlaceClaimPage({ params }: { params: { slug: string } }) {
+export default async function PlaceClaimPage(props: { params: Promise<{ slug: string }> }) {
+  const params = await props.params;
   const place = await getPlaceBySlug(params.slug);
   if (!place) notFound();
 

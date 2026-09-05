@@ -13,7 +13,7 @@ async function requireAdmin() {
 /** Értékelés jóváhagyása: status = approved, published_at = now */
 export async function approveReview(reviewId: string): Promise<void> {
   await requireAdmin();
-  const supabase = createClient();
+  const supabase = await createClient();
   const { error } = await supabase
     .from("reviews")
     .update({ status: "approved", published_at: new Date().toISOString() })
@@ -29,7 +29,7 @@ export async function rejectReview(
   adminNote?: string
 ): Promise<void> {
   await requireAdmin();
-  const supabase = createClient();
+  const supabase = await createClient();
   const { error } = await supabase
     .from("reviews")
     .update({ status: "rejected", admin_note: adminNote ?? null })
@@ -47,7 +47,7 @@ export async function redactReview(
   adminNote?: string
 ): Promise<void> {
   await requireAdmin();
-  const supabase = createClient();
+  const supabase = await createClient();
   const { error } = await supabase
     .from("reviews")
     .update({
@@ -69,7 +69,7 @@ export async function suspendUser(
   note?: string
 ): Promise<void> {
   await requireAdmin();
-  const supabase = createClient();
+  const supabase = await createClient();
   const { error } = await supabase
     .from("profiles")
     .update({ is_suspended: true, moderation_note: note ?? null })
@@ -81,7 +81,7 @@ export async function suspendUser(
 /** Felfüggesztés feloldása */
 export async function unsuspendUser(userId: string): Promise<void> {
   await requireAdmin();
-  const supabase = createClient();
+  const supabase = await createClient();
   const { error } = await supabase
     .from("profiles")
     .update({ is_suspended: false, moderation_note: null })
@@ -96,7 +96,7 @@ export async function setFraudFlag(
   flag: boolean
 ): Promise<void> {
   await requireAdmin();
-  const supabase = createClient();
+  const supabase = await createClient();
   const { error } = await supabase
     .from("profiles")
     .update({ fraud_risk_flag: flag })

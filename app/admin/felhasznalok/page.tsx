@@ -5,7 +5,7 @@ import { Users, UserPlus, Mail, MailX } from "lucide-react";
 import UserActions from "./UserActions";
 
 export default async function AdminUsersPage() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user: currentUser } } = await supabase.auth.getUser();
 
   const { data: profiles } = await supabase

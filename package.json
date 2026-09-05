@@ -15,7 +15,7 @@
     "@supabase/ssr": "0.4.0",
     "@supabase/supabase-js": "2.45.4",
     "@types/web-push": "^3.6.4",
-    "adm-zip": "^0.5.16",
+    "adm-zip": "^0.6.0",
     "gtfs-realtime-bindings": "^2.2.0",
     "html2canvas": "^1.4.1",
     "html2pdf.js": "^0.14.0",
@@ -38,7 +38,7 @@
     "@types/react-dom": "18.3.0",
     "autoprefixer": "10.4.19",
     "eslint": "8.57.0",
-    "eslint-config-next": "14.2.5",
+    "eslint-config-next": "15.5.24",
     "postcss": "8.4.39",
     "tailwindcss": "3.4.6",
     "typescript": "5.5.4"

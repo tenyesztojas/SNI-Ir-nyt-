@@ -7,14 +7,15 @@ import JelentkezesClient from "./JelentkezesClient";
 export const metadata = { title: "Jelentkezés – VédettKarrier" };
 export const dynamic = "force-dynamic";
 
-export default async function JelentkezesPage({
-  params,
-  searchParams,
-}: {
-  params: { jobId: string };
-  searchParams: Record<string, string | undefined>;
-}) {
-  const supabase = createClient();
+export default async function JelentkezesPage(
+  props: {
+    params: Promise<{ jobId: string }>;
+    searchParams: Promise<Record<string, string | undefined>>;
+  }
+) {
+  const searchParams = await props.searchParams;
+  const params = await props.params;
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect(`/belepes?next=/vedettmunka/jelentkezes/${params.jobId}`);
 

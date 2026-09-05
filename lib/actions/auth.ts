@@ -17,7 +17,7 @@ export async function signInAction(
 
   if (!email || !password) return { error: "Add meg az emailt és a jelszót." };
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error) return { error: "Hibás email vagy jelszó." };
@@ -42,7 +42,7 @@ export async function signUpAction(
   if (password.length < 6) return { error: "A jelszó legalább 6 karakter legyen." };
   if (joinCommunity && !communityCity) return { error: "A közösségi profilhoz add meg a települést." };
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
@@ -112,7 +112,7 @@ export async function changePasswordAction(
   if (newPassword !== confirmPassword)
     return { error: "A két jelszó nem egyezik." };
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: userData } = await supabase.auth.getUser();
   if (!userData.user?.email) return { error: "Nem vagy bejelentkezve." };
 
@@ -131,7 +131,7 @@ export async function changePasswordAction(
 }
 
 export async function signOutAction(): Promise<void> {
-  const supabase = createClient();
+  const supabase = await createClient();
   await supabase.auth.signOut();
   revalidatePath("/", "layout");
   redirect("/");
@@ -143,7 +143,7 @@ export async function updateProfileAction(
   _prevState: ProfileActionState,
   formData: FormData
 ): Promise<ProfileActionState> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: userData } = await supabase.auth.getUser();
   if (!userData.user) return { error: "Nem vagy bejelentkezve." };
 

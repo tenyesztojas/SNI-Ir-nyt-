@@ -20,7 +20,7 @@ export default async function ProgramajanlokPage() {
     .delete()
     .lt("event_date", today);
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: programs } = await supabase
     .from("programs")
     .select("*")

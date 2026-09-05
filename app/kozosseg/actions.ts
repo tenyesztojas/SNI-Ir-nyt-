@@ -133,7 +133,7 @@ export async function upsertCommunityProfile(formData: {
   push_connection_accepted?: boolean;
   profile_visibility?: string;
 }): Promise<{ ok: boolean; error?: string; profileId?: string }> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "Nem vagy bejelentkezve." };
 
@@ -188,7 +188,7 @@ export async function upsertCommunityProfile(formData: {
 export async function setCommunityProfileVisibility(
   visibility: "active" | "hidden"
 ): Promise<{ ok: boolean; error?: string }> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "Nem vagy bejelentkezve." };
 
@@ -208,7 +208,7 @@ export async function sendConnectionRequest(
   receiverUserId: string,
   introMessage?: string
 ): Promise<{ ok: boolean; error?: string }> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "Nem vagy bejelentkezve." };
   if (user.id === receiverUserId) return { ok: false, error: "Magadnak nem küldhetsz jelölést." };
@@ -276,7 +276,7 @@ export async function respondToConnection(
   connectionId: string,
   response: "accepted" | "declined"
 ): Promise<{ ok: boolean; error?: string }> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "Nem vagy bejelentkezve." };
 
@@ -341,7 +341,7 @@ export async function sendMessage(
 ): Promise<{ ok: boolean; error?: string }> {
   if (!body.trim()) return { ok: false, error: "Az üzenet nem lehet üres." };
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "Nem vagy bejelentkezve." };
 
@@ -407,7 +407,7 @@ export async function sendMessage(
 
 // ── Üzenetek olvasottra állítása ─────────────────────────────
 export async function markThreadMessagesRead(threadId: string) {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
 
@@ -425,7 +425,7 @@ export async function markThreadMessagesRead(threadId: string) {
 
 // ── Értesítések olvasottnak jelölése ─────────────────────────
 export async function markAllNotificationsRead() {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
 
@@ -440,7 +440,7 @@ export async function markAllNotificationsRead() {
 
 // ── Felhasználó tiltása ───────────────────────────────────────
 export async function blockUser(targetUserId: string): Promise<{ ok: boolean }> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false };
 
@@ -464,7 +464,7 @@ export async function submitReport(params: {
   reason: string;
   description?: string;
 }): Promise<{ ok: boolean; error?: string }> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "Nem vagy bejelentkezve." };
 
@@ -493,7 +493,7 @@ export async function upsertHelpSettings(params: {
   help_offered_description?: string | null;
   visibility?: string;
 }): Promise<{ ok: boolean; error?: string }> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "Nem vagy bejelentkezve." };
 
@@ -550,7 +550,7 @@ export async function submitUserReport(params: {
   reason: string;
   description: string;
 }): Promise<{ ok: boolean; error?: string }> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "Nem vagy bejelentkezve." };
 
@@ -628,7 +628,7 @@ export async function adminUpdateUserReport(
   severity?: string,        // opcionális súlyosság-felülbírálat
   justification?: string    // audit napló indoklás (ha különbözik az admin note-tól)
 ): Promise<{ ok: boolean }> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false };
 
@@ -689,7 +689,7 @@ export async function adminToggleHideReport(
   reportId: string,
   hide: boolean
 ): Promise<{ ok: boolean }> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false };
 
@@ -721,7 +721,7 @@ export async function adminOverrideSeverity(
   newSeverity: string,
   justification: string
 ): Promise<{ ok: boolean }> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { ok: false };
 

@@ -21,7 +21,7 @@ export async function submitPlaceResponse(
   if (trimmed.length < 10) return { error: "A válasz legalább 10 karakter legyen." };
   if (trimmed.length > 2000) return { error: "A válasz maximum 2000 karakter lehet." };
 
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: userData } = await supabase.auth.getUser();
   const user = userData.user;
   if (!user) return { error: "Bejelentkezés szükséges." };
@@ -115,7 +115,7 @@ export async function deleteOwnResponse(
   responseId: string,
   placeId: string
 ): Promise<{ error?: string }> {
-  const supabase = createClient();
+  const supabase = await createClient();
   const { data: userData } = await supabase.auth.getUser();
   const user = userData.user;
   if (!user) return { error: "Bejelentkezés szükséges." };
