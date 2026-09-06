@@ -56,7 +56,14 @@ function walkEndpointLabel(name: string, adjacentLeg: { mode: string; transitMod
   if (!adjacentLeg || adjacentLeg.mode !== "TRANSIT") return name;
   const suffix = stopTypeSuffix(adjacentLeg.transitMode);
   const route = adjacentLeg.routeShortName ?? adjacentLeg.routeLongName;
-  return route ? `${name} ${suffix} ${route}` : `${name} ${suffix}`;
+  // A járatszámot zárójelbe tesszük, hogy egyértelmű legyen: ha ugyanaz a
+  // kereszteződés-név szerepel mindkét oldalon, de más a zárójeles
+  // járatszám, az KÉT KÜLÖNBÖZŐ, valós fizikai megállóoszlopot jelent
+  // (pl. az 5-ös és a 32-es busznak külön megállója van ugyanannál a
+  // kereszteződésnél) — nem ugyanoda-sétálást, hanem egy valódi, néhány
+  // tíz-száz méteres átszállási gyaloglást a leg-adatban szereplő
+  // (nem kitalált) táv alapján.
+  return route ? `${name} ${suffix} (${route})` : `${name} ${suffix}`;
 }
 
 const FACTOR_LABELS: Record<string, string> = {
