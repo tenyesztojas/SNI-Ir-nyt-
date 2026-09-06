@@ -19,8 +19,14 @@ export interface ProviderStatusEntry {
 export interface VedettRouteStatus {
   featureFlag: { enabled: boolean; accessLevel: string };
   providers: Record<TransitProviderId, ProviderStatusEntry>;
-  routingEngine: { provider: "MOTIS"; configured: boolean; status: "configured" | "not_configured" };
-  upcoming: { sensoryEngine: string };
+  routingEngine: {
+    provider: "MOTIS";
+    configured: boolean;
+    reachable: boolean | null; // null = nem lett tesztelve (nincs konfigurálva)
+    status: "configured" | "not_configured";
+    dataImportedAt: string | null;
+  };
+  sensoryEngine: { version: "v1"; availableFactors: number; totalFactors: number };
 }
 
 async function getProviderStatus(id: TransitProviderId): Promise<ProviderStatusEntry> {
@@ -42,12 +48,32 @@ export async function getVedettRouteStatus(): Promise<VedettRouteStatus> {
     getProviderStatus("MAV_BUS"),
   ]);
 
-  const motisConfigured = Boolean(getMotisBaseUrl());
+  const motisBaseUrl = getMotisBaseUrl();
+  const motisConfigured = Boolean(motisBaseUrl);
+
+  let motisReachable: boolean | null = null;
+  if (motisBaseUrl) {
+    try {
+      const res = await fetch(`${motisBaseUrl}/api/v1/geocode?text=Budapest&numResults=1`, {
+        signal: AbortSignal.timeout(3000),
+        cache: "no-store",
+      });
+      motisReachable = res.ok;
+    } catch {
+      motisReachable = false;
+    }
+  }
 
   return {
     featureFlag: { enabled: isVedettRouteFeatureEnabled(), accessLevel: VEDETT_ROUTE_ACCESS_LEVEL },
     providers: { BKK: bkk, MAV_RAIL: mavRail, MAV_BUS: mavBus },
-    routingEngine: { provider: "MOTIS", configured: motisConfigured, status: motisConfigured ? "configured" : "not_configured" },
-    upcoming: { sensoryEngine: "Hamarosan" },
+    routingEngine: {
+      provider: "MOTIS",
+      configured: motisConfigured,
+      reachable: motisReachable,
+      status: motisConfigured ? "configured" : "not_configured",
+      dataImportedAt: process.env.VEDETT_MOTIS_DATA_IMPORTED_AT ?? null,
+    },
+    sensoryEngine: { version: "v1", availableFactors: 6, totalFactors: 8 },
   };
 }

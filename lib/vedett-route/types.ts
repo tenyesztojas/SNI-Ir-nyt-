@@ -76,6 +76,7 @@ export interface TransitProvider {
 
 export interface JourneyLeg {
   mode: "WALK" | "TRANSIT";
+  transitMode?: string; // a MOTIS nyers módja, pl. SUBWAY/TRAM/BUS/RAIL (Sensory Engine ehhez nyúl)
   routeShortName?: string;
   routeLongName?: string;
   fromName: string;
@@ -97,6 +98,8 @@ export interface Journey {
   legs: JourneyLeg[];
   alerts: ServiceAlert[];
   realtimeAvailable: boolean;
+  fingerprint?: string; // Sprint 2: itinerary-dedup kulcs
+  sensory?: SensoryScore; // Sprint 2: Sensory Engine V1 kimenet
 }
 
 export interface JourneySearchRequest {
@@ -108,3 +111,66 @@ export interface JourneySearchRequest {
 export type JourneySearchResult =
   | { ok: true; journeys: Journey[] }
   | { ok: false; reason: "routing_engine_unavailable" | "no_route_found" | "invalid_request"; message: string };
+
+// --- Sensory Engine V1 + rangsorolás + személyre szabás (Sprint 2) ---
+//
+// SZABÁLY (kőkemény, lásd docs/vedett-route/MOTIS_GO_LIVE_REPORT.md): hiányzó
+// adatforrás SOHA nem számít nulla (azaz "nincs terhelés") értékbe. Egy nem
+// elérhető faktor kimarad a súlyozott átlag számlálójából ÉS nevezőjéből is,
+// és a "missingFactors" listában jelenik meg, csökkentve a "confidence"
+// értéket. Ez a viselkedés az egyetlen elfogadható a specifikáció szerint.
+
+export type SensoryFactorKey =
+  | "transfers"
+  | "modeSwitches"
+  | "underground"
+  | "walking"
+  | "duration"
+  | "waiting"
+  | "crowding" // jelenleg mindig unavailable — nincs valós idejű foglaltsági adatforrásunk
+  | "vehicleAccessibility"; // jelenleg mindig unavailable — nincs jármű-szintű akadálymentességi adat
+
+export interface SensoryFactorResult {
+  key: SensoryFactorKey;
+  available: boolean;
+  rawValue?: number;
+  normalizedLoad?: number; // 0-100, csak ha available
+  weight: number; // a személyre szabott súly (0 = kikapcsolva)
+  reasonUnavailable?: string;
+}
+
+export interface SensoryScore {
+  score: number; // 0-100, magasabb = nagyobb szenzoros terhelés (nem "jobb")
+  confidence: number; // 0-1, az elérhető faktorok súlyaránya az összeshez képest
+  availableFactors: SensoryFactorKey[];
+  missingFactors: SensoryFactorKey[];
+  factors: SensoryFactorResult[];
+}
+
+export type RankingLabel = "CALMEST" | "FASTEST" | "FEWEST_TRANSFERS";
+
+export interface PersonalizationWeights {
+  transfers: number;
+  modeSwitches: number;
+  underground: number;
+  walking: number;
+  duration: number;
+  waiting: number;
+}
+
+export interface RankedJourney {
+  journey: Journey;
+  labels: RankingLabel[];
+  explanation: string;
+}
+
+export interface OrchestratedSearchResult {
+  ok: true;
+  journeys: RankedJourney[];
+  dataCoverage: {
+    provider: "BKK";
+    sensoryConfidenceAvg: number;
+    missingFactorsUnion: SensoryFactorKey[];
+    motisImportedAt: string | null;
+  };
+}

@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test:vedett-route": "node --test __tests__/vedett-route/*.test.ts"
+    "test:vedett-route": "node --test __tests__/vedett-route/*.test.ts",
+    "vedett-route:motis-smoke-test": "node scripts/vedett-route/motis-smoke-test.mjs",
+    "vedett-route:motis-benchmark": "node scripts/vedett-route/motis-benchmark.mjs"
   },
   "dependencies": {
     "@fontsource/nunito": "^5.2.7",

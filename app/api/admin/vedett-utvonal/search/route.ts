@@ -1,19 +1,20 @@
 // POST /api/admin/vedett-utvonal/search
 //
 // Admin ÉS feature flag védett (requireVedettRouteAccess). Bemenet: from/to
-// cím vagy koordináta + indulási időpont. Geokódolás után a Routing Engine
-// (MOTIS) felé továbbítja a kérést — lásd lib/vedett-route/motisClient.ts.
+// cím vagy koordináta + indulási időpont + opcionális személyre szabási
+// súlyok. Geokódolás után a Védett Route Orchestratoron (lásd
+// lib/vedett-route/orchestrator.ts) keresztül valós MOTIS lekérdezéseket
+// futtat, rangsorol, és Sensory Engine V1 pontszámmal tér vissza.
 //
-// FONTOS: amíg a MOTIS instance nincs üzembe állítva, ez a végpont mindig
-// { ok: false, reason: "routing_engine_unavailable" }-t ad vissza. Ez NEM
-// hiba a kódban — ez a dokumentált, szándékos Fázis 1 állapot (lásd
-// docs/vedett-route.md). Sosem generálunk kitalált/AI-becsült útvonalat.
+// FONTOS: amíg a MOTIS instance nincs elérhető, ez a végpont
+// { ok: false, reason: "routing_engine_unavailable" }-t ad vissza. Sosem
+// generálunk kitalált/AI-becsült útvonalat.
 
 import { NextResponse } from "next/server";
 import { requireVedettRouteAccess } from "@/lib/vedett-route/access";
 import { journeySearchSchema } from "@/lib/vedett-route/schemas";
 import { geocodeAddress } from "@/lib/vedett-route/geocode";
-import { planJourneyWithMotis } from "@/lib/vedett-route/motisClient";
+import { searchVedettRoutes } from "@/lib/vedett-route/orchestrator";
 import { vedettRouteLog } from "@/lib/vedett-route/logger";
 
 export async function POST(request: Request) {
@@ -29,7 +30,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const { from, to } = parsed.data;
+  const { from, to, weights } = parsed.data;
   const departAt = parsed.data.departAt ?? new Date().toISOString();
 
   // Múltbeli időpont ellenőrzése (31. pont: routing tesztek).
@@ -55,11 +56,14 @@ export async function POST(request: Request) {
 
   vedettRouteLog("routing_error", "info", { from: fromGeo.name, to: toGeo.name, phase: "search_requested" });
 
-  const result = await planJourneyWithMotis({
-    from: { name: fromGeo.name, lat: fromGeo.lat, lon: fromGeo.lon },
-    to: { name: toGeo.name, lat: toGeo.lat, lon: toGeo.lon },
-    departAt,
-  });
+  const result = await searchVedettRoutes(
+    {
+      from: { name: fromGeo.name, lat: fromGeo.lat, lon: fromGeo.lon },
+      to: { name: toGeo.name, lat: toGeo.lat, lon: toGeo.lon },
+      departAt,
+    },
+    weights
+  );
 
   return NextResponse.json(result);
 }
