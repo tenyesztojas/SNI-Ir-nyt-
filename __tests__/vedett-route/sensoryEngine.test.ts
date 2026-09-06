@@ -63,3 +63,45 @@ test("földalatti (SUBWAY) szakasz növeli az 'underground' faktor terhelését,
   const busFactor = bus.factors.find((f) => f.key === "underground")!;
   assert.ok((subwayFactor.normalizedLoad ?? 0) > (busFactor.normalizedLoad ?? 0));
 });
+
+// Sprint 2 böngészős E2E kapu, 8. pont: explicit szenzoros józanság-ellenőrzések
+// (nem csak az össz-score-ra, hanem az EGYES faktorokra is), hogy a 25
+// útvonalas route-matrix teszt eredménye mögött ne csak a végösszeg legyen
+// helyes, hanem a komponensek is dokumentáltan monoton viselkedésűek legyenek.
+
+test("a 'transfers' faktor terhelése sosem alacsonyabb 3 átszállásnál, mint 0 átszállásnál (nem csak az összesített score, hanem külön a faktor is)", () => {
+  const zero = computeSensoryScore(journey({ transfers: 0 }), DEFAULT_PERSONALIZATION_WEIGHTS);
+  const three = computeSensoryScore(journey({ transfers: 3 }), DEFAULT_PERSONALIZATION_WEIGHTS);
+  const zeroTransfersFactor = zero.factors.find((f) => f.key === "transfers")!;
+  const threeTransfersFactor = three.factors.find((f) => f.key === "transfers")!;
+  assert.ok(
+    (threeTransfersFactor.normalizedLoad ?? 0) >= (zeroTransfersFactor.normalizedLoad ?? 0),
+    "a 3-átszállásos útvonal 'transfers' faktor-terhelése nem lehet alacsonyabb, mint a 0-átszállásosé"
+  );
+});
+
+test("több gyaloglás -> a 'walking' faktor terhelése sosem alacsonyabb, mint kevesebb gyaloglásnál", () => {
+  const lessWalk = computeSensoryScore(journey({ walkingMinutes: 3 }), DEFAULT_PERSONALIZATION_WEIGHTS);
+  const moreWalk = computeSensoryScore(journey({ walkingMinutes: 20 }), DEFAULT_PERSONALIZATION_WEIGHTS);
+  const lessWalkFactor = lessWalk.factors.find((f) => f.key === "walking")!;
+  const moreWalkFactor = moreWalk.factors.find((f) => f.key === "walking")!;
+  assert.ok(
+    (moreWalkFactor.normalizedLoad ?? 0) >= (lessWalkFactor.normalizedLoad ?? 0),
+    "a több gyaloglással járó útvonal 'walking' faktor-terhelése nem lehet alacsonyabb"
+  );
+});
+
+test("egy csak felszíni (metrómentes) legekből álló útvonalon egyetlen leg sem SUBWAY módú", () => {
+  const noSubwayJourney = journey({
+    transfers: 1,
+    legs: [
+      { mode: "TRANSIT", transitMode: "BUS", fromName: "A", toName: "B", durationMinutes: 10, realtime: false },
+      { mode: "TRANSIT", transitMode: "TRAM", fromName: "B", toName: "C", durationMinutes: 8, realtime: false },
+    ],
+  });
+  assert.ok(noSubwayJourney.legs.every((l) => l.transitMode !== "SUBWAY"));
+  // a sensory engine-nek ettől függetlenül helyesen kell számolnia (nem dobhat kivételt, nem hiányozhat adat emiatt)
+  const score = computeSensoryScore(noSubwayJourney, DEFAULT_PERSONALIZATION_WEIGHTS);
+  const undergroundFactor = score.factors.find((f) => f.key === "underground")!;
+  assert.equal(undergroundFactor.normalizedLoad, 0, "metrómentes útvonalon az underground faktor terhelése 0, nem hiányzó adat");
+});
