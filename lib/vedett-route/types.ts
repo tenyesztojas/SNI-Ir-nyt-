@@ -149,7 +149,7 @@ export interface SensoryScore {
   factors: SensoryFactorResult[];
 }
 
-export type RankingLabel = "CALMEST" | "FASTEST" | "FEWEST_TRANSFERS";
+export type RankingLabel = "CALMEST" | "FASTEST" | "FEWEST_TRANSFERS" | "LEAST_WALKING";
 
 export interface PersonalizationWeights {
   transfers: number;

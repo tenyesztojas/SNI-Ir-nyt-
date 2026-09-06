@@ -67,47 +67,52 @@ test("üres bemenetre üres tömböt ad, nem dob kivételt", () => {
   assert.deepEqual(rankJourneys([]), []);
 });
 
-test("a megjelenítési sorrend mindig CALMEST -> FASTEST -> FEWEST_TRANSFERS -> egyéb, még ha az input tömb más sorrendben érkezik is", () => {
-  // A négy journey négy KÜLÖNBÖZŐ, egymást nem átfedő tulajdonságot kap
+test("a megjelenítési sorrend mindig CALMEST -> FASTEST -> FEWEST_TRANSFERS -> LEAST_WALKING, még ha az input tömb más sorrendben érkezik is, és a címkétlen 'egyéb' alternatívák KIMARADNAK (max. 4 kártya)", () => {
+  // Öt journey: négy KÜLÖNBÖZŐ, egymást nem átfedő tulajdonságot kap
   // (leggyorsabb / legkevesebb átszállás / legalacsonyabb sensory score /
-  // egyik sem), hogy a teszt kizárólag a megjelenítési SORRENDET vizsgálja,
-  // ne a címkeodaítélés logikáját (azt már a fenti teszt fedi).
-  const fast = baseJourney({ totalDurationMinutes: 10, transfers: 3 });
-  const fewTransfers = baseJourney({ totalDurationMinutes: 45, transfers: 0 });
-  const calm = baseJourney({ totalDurationMinutes: 35, transfers: 2 });
+  // legkevesebb gyaloglás), az ötödik pedig egyik kategóriában sem a
+  // legjobb — ennek a felhasználó explicit kérése alapján NEM szabad
+  // megjelennie a végeredményben.
+  const fast = baseJourney({ totalDurationMinutes: 10, transfers: 3, walkingMinutes: 20 });
+  const fewTransfers = baseJourney({ totalDurationMinutes: 45, transfers: 0, walkingMinutes: 20 });
+  const calm = baseJourney({ totalDurationMinutes: 35, transfers: 2, walkingMinutes: 20 });
   calm.sensory = { ...calm.sensory!, score: 1 };
-  const other = baseJourney({ totalDurationMinutes: 40, transfers: 1 });
+  const leastWalking = baseJourney({ totalDurationMinutes: 50, transfers: 2, walkingMinutes: 1 });
+  leastWalking.sensory = { ...leastWalking.sensory!, score: 500 };
+  const other = baseJourney({ totalDurationMinutes: 40, transfers: 1, walkingMinutes: 20 });
   other.sensory = { ...other.sensory!, score: 500 };
   fast.sensory = { ...fast.sensory!, score: 500 };
   fewTransfers.sensory = { ...fewTransfers.sensory!, score: 500 };
 
-  // szándékosan "rossz" bemeneti sorrendben adjuk át (fast, other, fewTransfers, calm)
-  const ranked = rankJourneys([fast, other, fewTransfers, calm]);
+  // szándékosan "rossz" bemeneti sorrendben adjuk át
+  const ranked = rankJourneys([fast, other, leastWalking, fewTransfers, calm]);
 
-  assert.equal(ranked.length, 4);
+  assert.equal(ranked.length, 4, "a címkétlen 'other' journey-nek ki kell maradnia, így pontosan 4 kártya marad");
   assert.ok(ranked[0].labels.includes("CALMEST"), "az első kártyának CALMEST címkéjűnek kell lennie");
   assert.ok(ranked[1].labels.includes("FASTEST"), "a másodiknak FASTEST címkéjűnek kell lennie");
   assert.ok(ranked[2].labels.includes("FEWEST_TRANSFERS"), "a harmadiknak FEWEST_TRANSFERS címkéjűnek kell lennie");
+  assert.ok(ranked[3].labels.includes("LEAST_WALKING"), "a negyediknek LEAST_WALKING címkéjűnek kell lennie");
   assert.ok(
-    !ranked[3].labels.includes("CALMEST") &&
-      !ranked[3].labels.includes("FASTEST") &&
-      !ranked[3].labels.includes("FEWEST_TRANSFERS"),
-    "a negyediknek címkézetlen (egyéb) alternatívának kell lennie"
+    !ranked.some((r) => r.journey === other),
+    "a címkétlen 'other' journey nem szerepelhet a végeredményben"
   );
-  assert.equal(ranked[3].journey, other);
 });
 
-test("ha ugyanaz az útvonal egyszerre több címkét is visel (pl. CALMEST és FASTEST), a sorrendben csak egyszer szerepel, a legmagasabb prioritású pozícióban", () => {
+test("ha ugyanaz az útvonal egyszerre több címkét is visel (pl. CALMEST és FASTEST), a sorrendben csak egyszer szerepel, a legmagasabb prioritású pozícióban; a semmilyen kategóriában sem legjobb alternatíva kimarad", () => {
   const best = baseJourney({ totalDurationMinutes: 15, transfers: 0 });
   const worse = baseJourney({ totalDurationMinutes: 45, transfers: 3 });
 
   const ranked = rankJourneys([worse, best]);
 
-  assert.equal(ranked.length, 2);
+  // 'worse' semelyik kategóriában (leggyorsabb / legkevesebb átszállás /
+  // legnyugodtabb / legkevesebb gyaloglás) sem a legjobb, ezért a felhasználó
+  // "csak 4 (vagy kevesebb) kártya" kérése alapján ki kell maradnia.
+  assert.equal(ranked.length, 1);
   assert.equal(ranked[0].journey, best);
   assert.ok(
     ranked[0].labels.includes("CALMEST") &&
       ranked[0].labels.includes("FASTEST") &&
-      ranked[0].labels.includes("FEWEST_TRANSFERS")
+      ranked[0].labels.includes("FEWEST_TRANSFERS") &&
+      ranked[0].labels.includes("LEAST_WALKING")
   );
 });
