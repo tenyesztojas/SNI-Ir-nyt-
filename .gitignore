@@ -10,3 +10,7 @@ out
 /data-sources
 
 .fuse_hidden*
+
+# MOTIS routing engine local data (large binaries, never committed)
+/motis-data
+plan_test_*.json
