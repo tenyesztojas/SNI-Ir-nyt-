@@ -41,20 +41,20 @@ const ROUTES = [
   { id: 4, category: "külső kerület → belváros", from: "Ors vezer tere, Budapest", to: "Deak Ferenc ter, Budapest" },
   { id: 5, category: "külső kerület → belváros", from: "Kobanya-Kispest, Budapest", to: "Astoria, Budapest" },
   { id: 6, category: "belváros → külső kerület", from: "Deak Ferenc ter, Budapest", to: "Ujpest-Kozpont, Budapest" },
-  { id: 7, category: "belváros → külső kerület", from: "Blaha Lujza ter, Budapest", to: "Hataer ut, Budapest" },
+  { id: 7, category: "belváros → külső kerület", from: "Blaha Lujza ter, Budapest", to: "Hatar ut, Budapest" },
   { id: 8, category: "külső kerület → külső kerület", from: "Ors vezer tere, Budapest", to: "Kelenfold vasutallomas, Budapest" },
   { id: 9, category: "külső kerület → külső kerület", from: "Ujpest-Kozpont, Budapest", to: "Kobanya-Kispest, Budapest" },
   { id: 10, category: "metródomináns", from: "Deak Ferenc ter, Budapest", to: "Mexikoi ut, Budapest" },
   { id: 11, category: "metródomináns", from: "Szell Kalman ter, Budapest", to: "Ors vezer tere, Budapest" },
   { id: 12, category: "villamosdomináns", from: "Moricz Zsigmond korter, Budapest", to: "Nyugati palyaudvar, Budapest" },
-  { id: 13, category: "villamosdomináns", from: "Grof Karolyi Sandor ut, Budapest", to: "Bécsi ut, Budapest" },
+  { id: 13, category: "villamosdomináns", from: "Ujpest-Kozpont, Budapest", to: "Bécsi ut, Budapest" },
   { id: 14, category: "buszdomináns", from: "Hüvösvolgy, Budapest", to: "Ors vezer tere, Budapest" },
   { id: 15, category: "buszdomináns", from: "Farkasret, Budapest", to: "Szell Kalman ter, Budapest" },
   { id: 16, category: "több átszállás", from: "Hüvösvolgy, Budapest", to: "Kobanya-Kispest, Budapest" },
   { id: 17, category: "0 átszállásos alternatíva", from: "Deak Ferenc ter, Budapest", to: "Blaha Lujza ter, Budapest" },
   { id: 18, category: "metró nélküli alternatíva", from: "Deak Ferenc ter, Budapest", to: "Blaha Lujza ter, Budapest", noSubway: true },
   { id: 19, category: "hosszabb de kevesebb átszállásos", from: "Kelenfold vasutallomas, Budapest", to: "Ors vezer tere, Budapest" },
-  { id: 20, category: "jelentős gyaloglási különbség", from: "Moricz Zsigmond korter, Budapest", to: "Gellert terr, Budapest" },
+  { id: 20, category: "jelentős gyaloglási különbség", from: "Moricz Zsigmond korter, Budapest", to: "Gellert ter, Budapest" },
   { id: 21, category: "esti időpont", from: "Nyugati palyaudvar, Budapest", to: "Keleti palyaudvar, Budapest", hourOffset: 22 },
   { id: 22, category: "hétvégi időpont", from: "Deak Ferenc ter, Budapest", to: "Astoria, Budapest", forceSaturday: true },
   { id: 23, category: "belváros → belváros", from: "Nyugati palyaudvar, Budapest", to: "Keleti palyaudvar, Budapest" },
@@ -132,9 +132,30 @@ for (const r of ROUTES) {
   const fewestTransfersHolder = journeys.find((j) => j.labels.includes("FEWEST_TRANSFERS"));
   const calmestHolder = journeys.find((j) => j.labels.includes("CALMEST"));
 
-  const actualFastest = journeys.reduce((a, b) => (a.journey.totalDurationMinutes <= b.journey.totalDurationMinutes ? a : b));
-  const actualFewestTransfers = journeys.reduce((a, b) => (a.journey.transfers <= b.journey.transfers ? a : b));
-  const actualCalmest = journeys.reduce((a, b) => ((a.journey.sensory?.score ?? Infinity) <= (b.journey.sensory?.score ?? Infinity) ? a : b));
+  // FONTOS: ez a fuggetlen ellenorzes a lib/vedett-route/ranking.ts-beli
+  // pickFastest/pickFewestTransfers/pickCalmest EGZAKT tie-break szabalyait
+  // kell hogy kovesse (masodlagos rendezes: rovidebb menetido dont dontetlen
+  // eseten), kulonben a rankJourneys altal (szandekosan) CALMEST-elsokent
+  // atrendezett tomb sorrendje hamis "ranking hibat" jelezhet, holott a
+  // cimkezes maga helyes — csak a tomb sorrendjetol fuggo, naiv "<=" reduce
+  // valasztott mas elemet dontetlen eseten. Ez a hiba a 2026-09-06-i
+  // route-matrix futason 9 "fewestTransfersCorrect: false" alhibat okozott,
+  // pedig a tenyleges FEWEST_TRANSFERS cimkezes helyes volt.
+  const actualFastest = journeys.reduce((best, j) =>
+    j.journey.totalDurationMinutes < best.journey.totalDurationMinutes ? j : best
+  );
+  const actualFewestTransfers = journeys.reduce((best, j) => {
+    if (j.journey.transfers < best.journey.transfers) return j;
+    if (j.journey.transfers === best.journey.transfers && j.journey.totalDurationMinutes < best.journey.totalDurationMinutes) return j;
+    return best;
+  });
+  const actualCalmest = journeys.reduce((best, j) => {
+    const jScore = j.journey.sensory?.score ?? Infinity;
+    const bestScore = best.journey.sensory?.score ?? Infinity;
+    if (jScore < bestScore) return j;
+    if (jScore === bestScore && j.journey.totalDurationMinutes < best.journey.totalDurationMinutes) return j;
+    return best;
+  });
 
   const rankingChecks = {
     fastestCorrect: fastestLabelHolder === actualFastest,
