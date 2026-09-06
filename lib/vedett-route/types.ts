@@ -83,10 +83,23 @@ export interface JourneyLeg {
   toName: string;
   departureTime?: string;
   arrivalTime?: string;
+  // Menetrend szerinti (statikus GTFS) idők, a MOTIS válasz from/to
+  // scheduledDeparture/scheduledArrival mezőiből. Csak akkor kerül
+  // kitöltésre, ha a MOTIS válasz ténylegesen tartalmazta ezt az adatot.
+  // Ez a mező NEM realtime — a statikus menetrendet tükrözi, akkor is,
+  // ha a departureTime/arrivalTime realtime-korrigált.
+  scheduledDepartureTime?: string;
+  scheduledArrivalTime?: string;
   durationMinutes: number;
   distanceMeters?: number; // csak ha a MOTIS válasz tartalmazta (jellemzően gyaloglásnál)
   realtime: boolean; // true = valós idejű adaton alapul, false = csak menetrendi
+  // Csak akkor kerül kitöltésre, ha realtime === true ÉS volt megbízható
+  // scheduled*/departureTime-arrivalTime pár, amiből ténylegesen számítható
+  // volt egy percre kerekített eltérés. Soha nem becslés vagy alapérték.
   delayMinutes?: number;
+  // true, ha a MOTIS ezt a lábat GTFS-RT alapján töröltként (cancelled)
+  // vagy kihagyott megállóként (skipped stop) jelezte.
+  cancelled?: boolean;
 }
 
 export interface Journey {
@@ -175,4 +188,14 @@ export interface OrchestratedSearchResult {
     missingFactorsUnion: SensoryFactorKey[];
     motisImportedAt: string | null;
   };
+  // BKK Realtime integráció (lásd docs/vedett-route/BKK_REALTIME_INTEGRATION_REPORT.md,
+  // 10. pont): a BKK Alerts.pb feedből ténylegesen lekért, valós riasztások.
+  // FONTOS: ezek SZÁNDÉKOSAN nincsenek egyes journey-khez/lábakhoz rendelve —
+  // a BKK riasztások "affectedRouteIds" mezője a BKK belső route_id-jait
+  // tartalmazza, amit a JourneyLeg jelenleg nem tárol (csak routeShortName-t),
+  // ezért a pontos leg-szintű párosítás jelenleg találgatás lenne. Amíg ez
+  // nincs megbízhatóan megoldva, a riasztásokat csak keresés-szinten, city-wide
+  // információként adjuk vissza — SOHA nem állítjuk, hogy egy adott útvonalat
+  // érintenek, ha ez nincs bizonyítva. Realtime feed hiba esetén üres tömb.
+  serviceAlerts: ServiceAlert[];
 }

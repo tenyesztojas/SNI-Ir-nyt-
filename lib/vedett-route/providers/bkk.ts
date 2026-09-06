@@ -27,6 +27,7 @@ import type {
   VehiclePosition,
 } from "../types.ts";
 import { isBkkApiKeyConfigured, VEDETT_ROUTE_CACHE } from "../config.ts";
+import { evaluateRealtimeFreshness } from "../realtimeFreshness.ts";
 import { vedettRouteLog } from "../logger.ts";
 
 const BKK_STATIC_GTFS_URL = "https://go.bkk.hu/api/static/v1/public-gtfs/budapest_gtfs.zip";
@@ -71,12 +72,39 @@ async function fetchGtfsRtFeed(feedName: "TripUpdates" | "VehiclePositions" | "A
     throw new Error(`BKK ${feedName} feed HTTP ${res.status}.`);
   }
   const buffer = Buffer.from(await res.arrayBuffer());
+  let feedMessage;
   try {
-    return GtfsRealtimeBindings.transit_realtime.FeedMessage.decode(buffer);
+    feedMessage = GtfsRealtimeBindings.transit_realtime.FeedMessage.decode(buffer);
   } catch (err) {
     vedettRouteLog("malformed_response", "error", { feed: feedName });
     throw new Error(`BKK ${feedName} feed nem dekódolható (malformed protobuf).`);
   }
+
+  // 15. pont (BKK Realtime integráció, "Realtime freshness"): SOHA nem
+  // adunk vissza elavult adatot frissként. Ha a feed FeedHeader.timestamp
+  // mezője a küszöbnél régebbi, a feedet úgy kezeljük, mintha nem lenne
+  // elérhető — a statikus routingot ez nem érinti (lásd 4./16. pont).
+  const rawTimestamp = feedMessage.header?.timestamp;
+  if (rawTimestamp) {
+    const tsNum =
+      typeof rawTimestamp === "object" && rawTimestamp !== null && "toNumber" in rawTimestamp
+        ? (rawTimestamp as { toNumber: () => number }).toNumber()
+        : Number(rawTimestamp);
+    const freshness = evaluateRealtimeFreshness(tsNum);
+    if (!freshness.fresh) {
+      vedettRouteLog("malformed_response", "warn", {
+        feed: feedName,
+        reason: "stale_feed",
+        ageSeconds: freshness.ageSeconds,
+        thresholdSeconds: freshness.thresholdSeconds,
+      });
+      throw new Error(
+        `BKK ${feedName} feed elavult (kora: ${freshness.ageSeconds}mp, küszöb: ${freshness.thresholdSeconds}mp) — nem jelenítjük meg frissként.`
+      );
+    }
+  }
+
+  return feedMessage;
 }
 
 export class BkkProvider implements TransitProvider {

@@ -18,13 +18,44 @@ import { deduplicateJourneys, computeJourneyFingerprint } from "./fingerprint.ts
 import { rankJourneys } from "./ranking.ts";
 import { normalizePersonalizationWeights } from "./personalization.ts";
 import { vedettRouteLog } from "./logger.ts";
+import { getTransitProvider } from "./providers/registry.ts";
 import type { MotisItinerary, MotisLeg } from "./motisTypes.ts";
-import type { Journey, JourneyLeg, JourneySearchRequest, OrchestratedSearchResult, PersonalizationWeights } from "./types.ts";
+import type {
+  Journey,
+  JourneyLeg,
+  JourneySearchRequest,
+  OrchestratedSearchResult,
+  PersonalizationWeights,
+  ServiceAlert,
+} from "./types.ts";
 
 function minutesBetween(a?: string, b?: string): number {
   if (!a || !b) return 0;
   const ms = new Date(b).getTime() - new Date(a).getTime();
   return ms > 0 ? ms / 60000 : 0;
+}
+
+// BKK Realtime integráció: a MOTIS egyetlen /api/v6/plan válaszán belül,
+// realtime feed betöltése esetén, a from/to place-eken egyszerre szerepel
+// a menetrend szerinti (scheduledDeparture/scheduledArrival) ÉS a
+// ténylegesen használt (startTime/endTime, realtime-korrigált, ha van
+// eltérés) időpont. A MOTIS API-nak NINCS külön "realtime be/ki" kapcsolója
+// — ezért a statikus vs. realtime összehasonlítás ebből a két mezőpárból,
+// EGY válaszon belül számolható, nem két külön (be/kikapcsolt) lekérdezésből.
+//
+// delayMinutes csak akkor kerül kiszámításra, ha:
+//  - a MOTIS jelezte, hogy ez a láb realtime-korrigált (leg.realTime === true), ÉS
+//  - ténylegesen volt scheduled* ÉS tényleges (startTime/endTime) időpont is,
+// különben undefined marad — SOHA nem becslés vagy 0 alapérték.
+function computeDelayMinutes(leg: MotisLeg): number | undefined {
+  if (!leg.realTime) return undefined;
+  const scheduled = leg.to?.scheduledArrival ?? leg.from?.scheduledDeparture;
+  const actual = leg.endTime ?? leg.startTime;
+  if (!scheduled || !actual) return undefined;
+  const scheduledMs = new Date(scheduled).getTime();
+  const actualMs = new Date(actual).getTime();
+  if (Number.isNaN(scheduledMs) || Number.isNaN(actualMs)) return undefined;
+  return Math.round((actualMs - scheduledMs) / 60000);
 }
 
 function mapLeg(leg: MotisLeg): JourneyLeg {
@@ -39,9 +70,13 @@ function mapLeg(leg: MotisLeg): JourneyLeg {
     toName: leg.to?.name ?? "Ismeretlen hely",
     departureTime: leg.startTime,
     arrivalTime: leg.endTime,
+    scheduledDepartureTime: leg.from?.scheduledDeparture,
+    scheduledArrivalTime: leg.to?.scheduledArrival,
     durationMinutes: Math.round(durationMinutes * 10) / 10,
     distanceMeters: leg.distance !== undefined ? Math.round(leg.distance) : undefined,
     realtime: Boolean(leg.realTime),
+    delayMinutes: computeDelayMinutes(leg),
+    cancelled: leg.cancelled === true ? true : undefined,
   };
 }
 
@@ -106,9 +141,14 @@ export async function searchVedettRoutes(
   // "próbáljuk kitalálni a legjobbat" hívás, hanem két, ténylegesen eltérő
   // MOTIS lekérdezés, hogy a metrómentes alternatíva is valódi legyen (nem
   // utólag kiszámolt becslés).
-  const [defaultResult, calmerResult] = await Promise.all([
+  // A BKK Alerts.pb realtime feed lekérése a routing hívásokkal PÁRHUZAMOSAN,
+  // de attól teljesen függetlenül: egy realtime feed-hiba SOHA nem akaszthatja
+  // meg vagy hiúsíthatja meg a statikus routingot (lásd 4. és 16. pont). Ezért
+  // itt sosem dobunk hibát tovább — sikertelenség esetén üres tömb.
+  const [defaultResult, calmerResult, serviceAlerts] = await Promise.all([
     fetchMotisPlan({ fromPlace, toPlace, time: request.departAt, numItineraries: 6 }),
     fetchMotisPlan({ fromPlace, toPlace, time: request.departAt, numItineraries: 4, transitModes: ["BUS", "TRAM", "RAIL", "COACH"] }),
+    fetchServiceAlertsSafely(),
   ]);
 
   if (!defaultResult.ok && !calmerResult.ok) {
@@ -162,5 +202,24 @@ export async function searchVedettRoutes(
       missingFactorsUnion,
       motisImportedAt: process.env.VEDETT_MOTIS_DATA_IMPORTED_AT ?? null,
     },
+    serviceAlerts,
   };
+}
+
+// Lásd OrchestratedSearchResult.serviceAlerts dokumentációja (types.ts): a BKK
+// riasztásokat SOHA nem hagyjuk elakasztani a statikus routingot. Bármilyen
+// hiba (hálózat, kulcs, protobuf) esetén üres tömböt adunk vissza, és a hibát
+// csak logoljuk (kulcs nélkül, lásd logger.ts redaktálása).
+async function fetchServiceAlertsSafely(): Promise<ServiceAlert[]> {
+  try {
+    const provider = getTransitProvider("BKK");
+    if (!provider) return [];
+    return await provider.getServiceAlerts();
+  } catch (err) {
+    vedettRouteLog("routing_error", "warn", {
+      reason: "service_alerts_fetch_failed",
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return [];
+  }
 }
