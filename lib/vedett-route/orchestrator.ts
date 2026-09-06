@@ -126,7 +126,21 @@ export async function searchVedettRoutes(
     return { ok: false, reason: "no_route_found", message: "Nem található útvonal a megadott helyek és időpont között." };
   }
 
-  const displayNames = { from: request.from.name, to: request.to.name };
+  // A geokódolt hely (Nominatim) "name" mezője a TELJES cím (pl. "Széll
+  // Kálmán tér, Margit-negyed, Országút, II. kerület, Budapest, ..."), a
+  // MOTIS viszont a valódi megálló RÖVID nevét adja (pl. "Széll Kálmán
+  // tér"). Ha a teljes hosszú címet írnánk az első láb kiindulópontjára, az
+  // vizuálisan megtévesztő: úgy tűnik, mintha "X → X" séta lenne, holott
+  // valójában egy valós, néhány száz méteres séta a megadott koordinátától
+  // a legközelebbi megállóig — csak épp mindkettő ugyanazt a köznyelvi
+  // helynevet viseli. A rövidítés a geokódolt cím ELSŐ (legspecifikusabb)
+  // tagját használja — ez nem kitalált adat, hanem a Nominatim válaszának
+  // első vesszővel elválasztott szegmense.
+  const shortPlaceName = (fullName: string): string => fullName.split(",")[0]?.trim() || fullName;
+  const displayNames = {
+    from: shortPlaceName(request.from.name),
+    to: shortPlaceName(request.to.name),
+  };
   const journeys = rawItineraries.map((it) => mapMotisItineraryToJourney(it, displayNames));
   const deduped = deduplicateJourneys(journeys);
 
