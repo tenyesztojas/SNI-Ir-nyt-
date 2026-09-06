@@ -107,6 +107,58 @@ const FACTOR_LABELS: Record<string, string> = {
   vehicleAccessibility: "Jármű-szintű akadálymentesség / érzékszervi terhelés",
 };
 
+// BKK Realtime integráció, 14. pont: pontosan azt jelenítjük meg, amit a
+// MOTIS ténylegesen visszaadott — SOHA nem címkézünk statikus-only adatot
+// realtime-ként. Három eset:
+//   1) leg.cancelled === true -> törölt/kihagyott járat jelzése.
+//   2) leg.realtime === true ÉS van ténylegesen kiszámított delayMinutes ->
+//      "Menetrend szerint: HH:mm / Várható indulás: HH:mm / Késés: +-N perc".
+//   3) minden más eset (nincs realtime, vagy realtime van de nem volt
+//      számítható eltérés) -> csak "Menetrend szerinti indulás: HH:mm".
+function TransitLegRealtimeNote({
+  leg,
+}: {
+  leg: {
+    realtime: boolean;
+    cancelled?: boolean;
+    departureTime?: string;
+    scheduledDepartureTime?: string;
+    delayMinutes?: number;
+  };
+}) {
+  if (leg.cancelled) {
+    return <span className="font-medium text-red-600">Ez a járat törölve / kihagyva (valós idejű BKK-adat alapján)</span>;
+  }
+
+  const scheduled = formatClockTime(leg.scheduledDepartureTime);
+  const actual = formatClockTime(leg.departureTime);
+  const hasGenuineRealtimeUpdate = leg.realtime && leg.delayMinutes !== undefined && scheduled;
+
+  if (hasGenuineRealtimeUpdate) {
+    const delay = leg.delayMinutes as number;
+    return (
+      <span className="text-xs">
+        <span className="text-gray-400">Menetrend szerint: {scheduled}</span>
+        {" · "}
+        <span className="font-medium text-gray-700">Várható indulás: {actual}</span>
+        {" · "}
+        {delay === 0 ? (
+          <span className="text-green-600">pontosan időben</span>
+        ) : delay > 0 ? (
+          <span className="text-amber-600">Késés: +{delay} perc</span>
+        ) : (
+          <span className="text-blue-600">Korábban indul: {delay} perc</span>
+        )}
+      </span>
+    );
+  }
+
+  // Nincs bizonyítottan valós idejű eltérés -> csak a menetrend szerinti
+  // időt mutatjuk, kifejezetten "menetrendi" jelöléssel, hogy sose tűnjön
+  // realtime adatnak.
+  return <span className="text-xs text-gray-400">Menetrend szerinti indulás: {scheduled ?? actual ?? "N/A"}</span>;
+}
+
 function RankedJourneyCard({ ranked }: { ranked: RankedJourney }) {
   const journey = ranked.journey;
   const sensory = journey.sensory;
@@ -155,15 +207,7 @@ function RankedJourneyCard({ ranked }: { ranked: RankedJourney }) {
               {leg.mode === "WALK" && leg.distanceMeters !== undefined ? `, ${leg.distanceMeters} m` : ""}
               {")"}
             </span>
-            {leg.realtime ? (
-              leg.delayMinutes ? (
-                <span className="text-amber-600">+{leg.delayMinutes} perc valós idejű késés</span>
-              ) : (
-                <span className="text-green-600">valós idejű, pontos</span>
-              )
-            ) : (
-              <span className="text-gray-400">menetrendi adat</span>
-            )}
+            {leg.mode === "TRANSIT" ? <TransitLegRealtimeNote leg={leg} /> : null}
           </div>
         ))}
       </div>
@@ -190,20 +234,12 @@ function RankedJourneyCard({ ranked }: { ranked: RankedJourney }) {
 
       <p className="mt-2 text-sm text-sni-text">{ranked.explanation}</p>
 
-      {!journey.realtimeAvailable && (
+      {journey.realtimeAvailable ? (
+        <p className="mt-1 text-xs font-medium text-green-700">Valós idejű BKK-adatok figyelembevételével</p>
+      ) : (
         <p className="mt-1 text-xs italic text-gray-400">Valós idejű adat nem áll rendelkezésre.</p>
       )}
 
-      {journey.alerts.length > 0 && (
-        <div className="mt-2 space-y-1">
-          {journey.alerts.map((a) => (
-            <p key={a.id} className="text-xs text-amber-700">
-              ⚠️ {a.header}
-              {a.description ? ` — ${a.description}` : ""}
-            </p>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
@@ -367,6 +403,23 @@ export default function VedettUtvonalSearchForm({ disabled }: { disabled: boolea
             Adatforrás: BKK · Átlagos adatlefedettség: {Math.round(result.dataCoverage.sensoryConfidenceAvg * 100)}%
             {result.dataCoverage.motisImportedAt && ` · MOTIS adat frissessége: ${new Date(result.dataCoverage.motisImportedAt).toLocaleString("hu-HU")}`}
           </p>
+
+          {/* BKK Realtime integráció, 10. pont: a riasztásokat SZÁNDÉKOSAN
+              nem egyes útvonalakhoz rendelve, hanem keresés-szinten, valós
+              BKK Alerts.pb adatból jelenítjük meg (lásd types.ts
+              OrchestratedSearchResult.serviceAlerts dokumentációja). */}
+          {result.serviceAlerts.length > 0 && (
+            <div className="space-y-1 rounded border border-amber-200 bg-amber-50 p-2">
+              <p className="text-xs font-semibold text-amber-800">Aktuális BKK riasztások (nem feltétlenül érintik a lenti útvonalakat):</p>
+              {result.serviceAlerts.map((a) => (
+                <p key={a.id} className="text-xs text-amber-700">
+                  ⚠️ {a.header}
+                  {a.description ? ` — ${a.description}` : ""}
+                </p>
+              ))}
+            </div>
+          )}
+
           {result.journeys.map((r, i) => (
             <RankedJourneyCard key={i} ranked={r} />
           ))}
