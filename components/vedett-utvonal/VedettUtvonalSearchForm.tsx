@@ -11,6 +11,7 @@ const LABEL_META: Record<RankingLabel, { text: string; className: string }> = {
   FASTEST: { text: "Leggyorsabb", className: "bg-blue-100 text-blue-800" },
   FEWEST_TRANSFERS: { text: "Legkevesebb átszállás", className: "bg-purple-100 text-purple-800" },
   CALMEST: { text: "Legnyugodtabb (becsült)", className: "bg-green-100 text-green-800" },
+  LEAST_WALKING: { text: "Legkevesebb gyaloglás", className: "bg-amber-100 text-amber-800" },
 };
 
 const TRANSIT_MODE_LABELS: Record<string, string> = {
@@ -185,7 +186,6 @@ export default function VedettUtvonalSearchForm({ disabled }: { disabled: boolea
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<SearchApiResponse | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
-  const [showPersonalization, setShowPersonalization] = useState(false);
   const [weights, setWeights] = useState<PersonalizationWeights>({
     transfers: 1,
     modeSwitches: 1,
@@ -276,37 +276,29 @@ export default function VedettUtvonalSearchForm({ disabled }: { disabled: boolea
           </div>
         </div>
 
-        <div>
-          <button
-            type="button"
-            onClick={() => setShowPersonalization((v) => !v)}
-            className="text-sm font-medium text-sni-primary underline"
-          >
-            {showPersonalization ? "Személyre szabás elrejtése" : "Személyre szabás (mennyire zavaró egy-egy tényező neked?)"}
-          </button>
-          {showPersonalization && (
-            <div className="mt-2 space-y-2 rounded bg-gray-50 p-3">
-              <p className="text-xs text-gray-500">
-                Ez nem diagnózis-alapú beállítás — csak a te személyes preferenciádat súlyozza. 0 = nem számít, 1 = alapértelmezett, 2 = kétszeresen fontos.
-              </p>
-              {WEIGHT_FIELDS.map(({ key, label }) => (
-                <div key={key} className="flex items-center gap-2">
-                  <label className="w-56 text-xs text-gray-700">{label}</label>
-                  <input
-                    type="range"
-                    min={0}
-                    max={2}
-                    step={0.25}
-                    value={weights[key]}
-                    disabled={disabled}
-                    onChange={(e) => setWeights((w) => ({ ...w, [key]: Number(e.target.value) }))}
-                    className="flex-1"
-                  />
-                  <span className="w-8 text-right text-xs text-gray-600">{weights[key]}</span>
-                </div>
-              ))}
-            </div>
-          )}
+        <div className="rounded border border-sni-primary/30 bg-sni-primary/5 p-3">
+          <h3 className="text-sm font-semibold text-sni-text">Szenzoros személyre szabás</h3>
+          <p className="mt-1 text-xs text-gray-500">
+            Ez nem diagnózis-alapú beállítás — csak a te személyes preferenciádat súlyozza, hogy a "Legnyugodtabb" ajánlás jobban illeszkedjen hozzád. 0 = nem számít, 1 = alapértelmezett, 2 = kétszeresen fontos.
+          </p>
+          <div className="mt-2 space-y-2">
+            {WEIGHT_FIELDS.map(({ key, label }) => (
+              <div key={key} className="flex items-center gap-2">
+                <label className="w-56 text-xs text-gray-700">{label}</label>
+                <input
+                  type="range"
+                  min={0}
+                  max={2}
+                  step={0.25}
+                  value={weights[key]}
+                  disabled={disabled}
+                  onChange={(e) => setWeights((w) => ({ ...w, [key]: Number(e.target.value) }))}
+                  className="flex-1"
+                />
+                <span className="w-8 text-right text-xs text-gray-600">{weights[key]}</span>
+              </div>
+            ))}
+          </div>
         </div>
 
         {formError && <p className="text-sm text-red-600">{formError}</p>}

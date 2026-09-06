@@ -30,11 +30,24 @@ function pickCalmest(journeys: Journey[]): Journey {
   });
 }
 
-function explain(journey: Journey, labels: RankingLabel[], fastest: Journey, calmest: Journey, fewestTransfers: Journey): string {
+function pickLeastWalking(journeys: Journey[]): Journey {
+  return journeys.reduce((best, j) => {
+    if (j.walkingMinutes < best.walkingMinutes) return j;
+    if (j.walkingMinutes === best.walkingMinutes && j.totalDurationMinutes < best.totalDurationMinutes) return j;
+    return best;
+  });
+}
+
+function explain(journey: Journey, labels: RankingLabel[], fastest: Journey, calmest: Journey, fewestTransfers: Journey, leastWalking: Journey): string {
   const parts: string[] = [];
 
-  if (labels.includes("FASTEST") && labels.includes("CALMEST") && labels.includes("FEWEST_TRANSFERS")) {
-    return "Ez az útvonal egyszerre a leggyorsabb, a legnyugodtabb és a legkevesebb átszállással jár a felkínált lehetőségek közül.";
+  if (
+    labels.includes("FASTEST") &&
+    labels.includes("CALMEST") &&
+    labels.includes("FEWEST_TRANSFERS") &&
+    labels.includes("LEAST_WALKING")
+  ) {
+    return "Ez az útvonal egyszerre a leggyorsabb, a legnyugodtabb, a legkevesebb átszállással és a legkevesebb gyaloglással jár a felkínált lehetőségek közül.";
   }
 
   if (labels.includes("FASTEST")) {
@@ -73,6 +86,15 @@ function explain(journey: Journey, labels: RankingLabel[], fastest: Journey, cal
     }
   }
 
+  if (labels.includes("LEAST_WALKING")) {
+    parts.push("Ez jár a legkevesebb gyaloglással a felkínált lehetőségek közül.");
+  } else {
+    const walkDelta = Math.round(journey.walkingMinutes - leastWalking.walkingMinutes);
+    if (walkDelta > 0) {
+      parts.push(`${walkDelta} perccel több gyaloglást tartalmaz, mint a legkevesebb gyaloglással járó lehetőség.`);
+    }
+  }
+
   const undergroundLegs = journey.legs.filter((l) => l.mode === "TRANSIT" && l.transitMode === "SUBWAY").length;
   if (undergroundLegs === 0 && journey.transfers > 0) {
     parts.push("Nincs benne földalatti (metró) szakasz.");
@@ -97,7 +119,8 @@ function labelSortPriority(labels: RankingLabel[]): number {
   if (labels.includes("CALMEST")) return 0;
   if (labels.includes("FASTEST")) return 1;
   if (labels.includes("FEWEST_TRANSFERS")) return 2;
-  return 3;
+  if (labels.includes("LEAST_WALKING")) return 3;
+  return 4;
 }
 
 export function rankJourneys(journeys: Journey[]): RankedJourney[] {
@@ -106,23 +129,33 @@ export function rankJourneys(journeys: Journey[]): RankedJourney[] {
   const fastest = pickFastest(journeys);
   const fewestTransfers = pickFewestTransfers(journeys);
   const calmest = pickCalmest(journeys);
+  const leastWalking = pickLeastWalking(journeys);
 
   const ranked = journeys.map((journey) => {
     const labels: RankingLabel[] = [];
     if (journey === fastest) labels.push("FASTEST");
     if (journey === fewestTransfers) labels.push("FEWEST_TRANSFERS");
     if (journey === calmest) labels.push("CALMEST");
+    if (journey === leastWalking) labels.push("LEAST_WALKING");
 
     return {
       journey,
       labels,
-      explanation: explain(journey, labels, fastest, calmest, fewestTransfers),
+      explanation: explain(journey, labels, fastest, calmest, fewestTransfers, leastWalking),
     };
   });
 
+  // A felhasználó kifejezett kérése alapján CSAK a 4 elnevezett kategória
+  // (Legnyugodtabb / Leggyorsabb / Legkevesebb átszállás / Legkevesebb
+  // gyaloglás) jelenik meg — a címkétlen ("egyéb") alternatívákat itt
+  // eldobjuk, így legfeljebb 4, ténylegesen megkülönböztethető kártya jut
+  // el a felhasználóig (egy journey több címkét is viselhet, ilyenkor
+  // kevesebb, mint 4 kártya jelenik meg).
+  const labeledOnly = ranked.filter((entry) => entry.labels.length > 0);
+
   // Array.prototype.sort a modern motorokon (V8 is) stabil, tehat az azonos
   // prioritasu elemek megtartjak eredeti (dedup utani) sorrendjuket.
-  return ranked
+  return labeledOnly
     .map((entry, index) => ({ entry, index }))
     .sort((a, b) => {
       const priorityDelta = labelSortPriority(a.entry.labels) - labelSortPriority(b.entry.labels);
