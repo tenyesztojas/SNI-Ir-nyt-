@@ -15,6 +15,9 @@ import { requireVedettRouteAccess } from "@/lib/vedett-route/access";
 import { journeySearchSchema } from "@/lib/vedett-route/schemas";
 import { geocodeAddress } from "@/lib/vedett-route/geocode";
 import { searchVedettRoutes } from "@/lib/vedett-route/orchestrator";
+import { buildRouteCacheKey, getCached, setCached } from "@/lib/vedett-route/routeCache";
+import type { OrchestratedSearchResult } from "@/lib/vedett-route/types";
+import type { OrchestratorErrorResult } from "@/lib/vedett-route/orchestrator";
 import { vedettRouteLog } from "@/lib/vedett-route/logger";
 
 export async function POST(request: Request) {
@@ -56,6 +59,23 @@ export async function POST(request: Request) {
 
   vedettRouteLog("routing_error", "info", { from: fromGeo.name, to: toGeo.name, phase: "search_requested" });
 
+  // Rövid TTL-ű, csak folyamaton belüli cache (lásd routeCache.ts fejléce a
+  // korlátairól) — a percre kerekített indulási idő + a súlyok is a kulcs
+  // része, hogy sosem adjon vissza más paraméterekkel kért választ.
+  const cacheKey = buildRouteCacheKey({
+    fromLat: fromGeo.lat,
+    fromLon: fromGeo.lon,
+    toLat: toGeo.lat,
+    toLon: toGeo.lon,
+    departAtMinute: departAt.slice(0, 16),
+    weights: weights ?? null,
+  });
+
+  const cached = getCached<OrchestratedSearchResult | OrchestratorErrorResult>(cacheKey);
+  if (cached) {
+    return NextResponse.json(cached);
+  }
+
   const result = await searchVedettRoutes(
     {
       from: { name: fromGeo.name, lat: fromGeo.lat, lon: fromGeo.lon },
@@ -64,6 +84,8 @@ export async function POST(request: Request) {
     },
     weights
   );
+
+  setCached(cacheKey, result);
 
   return NextResponse.json(result);
 }
