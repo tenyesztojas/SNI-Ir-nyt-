@@ -30,6 +30,35 @@ function transitModeLabel(mode?: string): string {
   return TRANSIT_MODE_LABELS[mode] ?? mode;
 }
 
+// Egy gyalogló láb végpontja gyakran egy valódi megálló/állomás (pl. "Széll
+// Kálmán tér" mint METRÓ-állomás, vagy "Budagyöngye" mint BUSZ-megálló) — de
+// önmagában a helynévből ez nem derül ki, és mivel az induló/érkező pont
+// köznyelvi neve gyakran megegyezik a megállóéval, összetéveszthetőnek tűnik
+// (pl. "Budagyöngye → Budagyöngye"). Az alábbi a SZOMSZÉDOS, valós MOTIS
+// legből (nem kitalálva) származó közlekedési módból képez egy magyar
+// megálló-típus utótagot, hogy egyértelmű legyen: ez egy valódi, néhány
+// száz méteres séta a megadott ponttól/pontig a legközelebbi megállóig.
+const STOP_TYPE_SUFFIX: Record<string, string> = {
+  SUBWAY: "metróállomás",
+  TRAM: "villamosmegálló",
+  BUS: "buszmegálló",
+  RAIL: "vasútállomás",
+  COACH: "távolsági buszmegálló",
+  FERRY: "kikötő",
+};
+
+function stopTypeSuffix(mode?: string): string {
+  if (!mode) return "";
+  return STOP_TYPE_SUFFIX[mode] ?? "megálló";
+}
+
+function walkEndpointLabel(name: string, adjacentLeg: { mode: string; transitMode?: string; routeShortName?: string; routeLongName?: string } | undefined): string {
+  if (!adjacentLeg || adjacentLeg.mode !== "TRANSIT") return name;
+  const suffix = stopTypeSuffix(adjacentLeg.transitMode);
+  const route = adjacentLeg.routeShortName ?? adjacentLeg.routeLongName;
+  return route ? `${name} ${suffix} ${route}` : `${name} ${suffix}`;
+}
+
 const FACTOR_LABELS: Record<string, string> = {
   transfers: "Átszállások száma",
   modeSwitches: "Közlekedési mód váltások",
@@ -71,8 +100,13 @@ function RankedJourneyCard({ ranked }: { ranked: RankedJourney }) {
               {leg.mode === "WALK" ? "Gyaloglás" : `${transitModeLabel(leg.transitMode)} ${leg.routeShortName ?? leg.routeLongName ?? "Járat"}`.trim()}
             </span>
             <span className="text-gray-500">
-              {leg.fromName} → {leg.toName} ({leg.durationMinutes} perc
-              {leg.mode === "WALK" && leg.distanceMeters !== undefined ? `, ${leg.distanceMeters} m` : ""})
+              {leg.mode === "WALK" ? walkEndpointLabel(leg.fromName, journey.legs[i - 1]) : leg.fromName}
+              {" → "}
+              {leg.mode === "WALK" ? walkEndpointLabel(leg.toName, journey.legs[i + 1]) : leg.toName}
+              {" ("}
+              {leg.durationMinutes} perc
+              {leg.mode === "WALK" && leg.distanceMeters !== undefined ? `, ${leg.distanceMeters} m` : ""}
+              {")"}
             </span>
             {leg.realtime ? (
               leg.delayMinutes ? (
