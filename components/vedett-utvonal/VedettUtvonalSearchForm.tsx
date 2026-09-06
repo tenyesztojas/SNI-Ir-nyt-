@@ -13,6 +13,23 @@ const LABEL_META: Record<RankingLabel, { text: string; className: string }> = {
   CALMEST: { text: "Legnyugodtabb (becsült)", className: "bg-green-100 text-green-800" },
 };
 
+const TRANSIT_MODE_LABELS: Record<string, string> = {
+  SUBWAY: "Metró",
+  TRAM: "Villamos",
+  BUS: "Busz",
+  RAIL: "Vasút",
+  COACH: "Távolsági busz",
+  FERRY: "Komp",
+  AIRPLANE: "Repülő",
+  ODM: "Igény szerinti közlekedés",
+  FLEX: "Rugalmas járat",
+};
+
+function transitModeLabel(mode?: string): string {
+  if (!mode) return "";
+  return TRANSIT_MODE_LABELS[mode] ?? mode;
+}
+
 const FACTOR_LABELS: Record<string, string> = {
   transfers: "Átszállások száma",
   modeSwitches: "Közlekedési mód váltások",
@@ -51,10 +68,11 @@ function RankedJourneyCard({ ranked }: { ranked: RankedJourney }) {
         {journey.legs.map((leg, i) => (
           <div key={i} className="flex flex-wrap items-center gap-2 text-sm">
             <span className="font-medium">
-              {leg.mode === "WALK" ? "Gyaloglás" : `${leg.transitMode ?? ""} ${leg.routeShortName ?? leg.routeLongName ?? "Járat"}`.trim()}
+              {leg.mode === "WALK" ? "Gyaloglás" : `${transitModeLabel(leg.transitMode)} ${leg.routeShortName ?? leg.routeLongName ?? "Járat"}`.trim()}
             </span>
             <span className="text-gray-500">
-              {leg.fromName} → {leg.toName} ({leg.durationMinutes} perc)
+              {leg.fromName} → {leg.toName} ({leg.durationMinutes} perc
+              {leg.mode === "WALK" && leg.distanceMeters !== undefined ? `, ${leg.distanceMeters} m` : ""})
             </span>
             {leg.realtime ? (
               leg.delayMinutes ? (
@@ -70,7 +88,8 @@ function RankedJourneyCard({ ranked }: { ranked: RankedJourney }) {
       </div>
 
       <p className="mt-2 text-xs text-gray-500">
-        {journey.transfers} átszállás · {journey.walkingMinutes} perc gyaloglás · {journey.waitingMinutes} perc várakozás
+        {journey.transfers} átszállás · {journey.walkingMinutes} perc gyaloglás
+        {journey.walkingDistanceMeters !== undefined ? ` (${journey.walkingDistanceMeters} m)` : ""} · {journey.waitingMinutes} perc várakozás
       </p>
 
       {sensory && (

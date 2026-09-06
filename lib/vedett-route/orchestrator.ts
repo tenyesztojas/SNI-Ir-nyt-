@@ -40,16 +40,37 @@ function mapLeg(leg: MotisLeg): JourneyLeg {
     departureTime: leg.startTime,
     arrivalTime: leg.endTime,
     durationMinutes: Math.round(durationMinutes * 10) / 10,
+    distanceMeters: leg.distance !== undefined ? Math.round(leg.distance) : undefined,
     realtime: Boolean(leg.realTime),
   };
 }
 
-export function mapMotisItineraryToJourney(itinerary: MotisItinerary): Journey {
+export function mapMotisItineraryToJourney(
+  itinerary: MotisItinerary,
+  displayNames?: { from: string; to: string }
+): Journey {
   const legs = (itinerary.legs ?? []).map(mapLeg);
+
+  // A MOTIS a nyers koordinátaként megadott indulási/érkezési pontokat
+  // gyakran "START"/"END" (vagy hasonló, nem felhasználóbarát) néven adja
+  // vissza, mivel azok nem névvel rendelkező megállók. A ténylegesen
+  // beírt/geokódolt hely nevét használjuk helyette az első és utolsó lábon
+  // — ez a felhasználó saját keresési kifejezéséből (geokódolt címéből)
+  // származik, nem kitalált adat.
+  if (displayNames && legs.length > 0) {
+    legs[0] = { ...legs[0], fromName: displayNames.from };
+    legs[legs.length - 1] = { ...legs[legs.length - 1], toName: displayNames.to };
+  }
   const walkingMinutes = legs.filter((l) => l.mode === "WALK").reduce((sum, l) => sum + l.durationMinutes, 0);
   const totalDurationMinutes = Math.round((itinerary.duration / 60) * 10) / 10;
   const legsDurationSum = legs.reduce((sum, l) => sum + l.durationMinutes, 0);
   const waitingMinutes = Math.max(0, Math.round((totalDurationMinutes - legsDurationSum) * 10) / 10);
+
+  const walkLegs = legs.filter((l) => l.mode === "WALK");
+  const allWalkLegsHaveDistance = walkLegs.length > 0 && walkLegs.every((l) => l.distanceMeters !== undefined);
+  const walkingDistanceMeters = allWalkLegsHaveDistance
+    ? walkLegs.reduce((sum, l) => sum + (l.distanceMeters ?? 0), 0)
+    : undefined;
 
   const journey: Journey = {
     totalDurationMinutes,
@@ -61,6 +82,7 @@ export function mapMotisItineraryToJourney(itinerary: MotisItinerary): Journey {
     legs,
     alerts: [], // Sprint 2: az élő riasztás<->itinerary összepárosítás még nincs bekötve (lásd GO_LIVE riport, ismert korlát)
     realtimeAvailable: legs.some((l) => l.realtime),
+    walkingDistanceMeters,
   };
   journey.fingerprint = computeJourneyFingerprint(journey);
   return journey;
@@ -104,7 +126,8 @@ export async function searchVedettRoutes(
     return { ok: false, reason: "no_route_found", message: "Nem található útvonal a megadott helyek és időpont között." };
   }
 
-  const journeys = rawItineraries.map(mapMotisItineraryToJourney);
+  const displayNames = { from: request.from.name, to: request.to.name };
+  const journeys = rawItineraries.map((it) => mapMotisItineraryToJourney(it, displayNames));
   const deduped = deduplicateJourneys(journeys);
 
   const withSensory = deduped.map((journey) => ({ ...journey, sensory: computeSensoryScore(journey, weights) }));
