@@ -84,6 +84,7 @@ export interface JourneyLeg {
   departureTime?: string;
   arrivalTime?: string;
   durationMinutes: number;
+  distanceMeters?: number; // csak ha a MOTIS válasz tartalmazta (jellemzően gyaloglásnál)
   realtime: boolean; // true = valós idejű adaton alapul, false = csak menetrendi
   delayMinutes?: number;
 }
@@ -100,6 +101,7 @@ export interface Journey {
   realtimeAvailable: boolean;
   fingerprint?: string; // Sprint 2: itinerary-dedup kulcs
   sensory?: SensoryScore; // Sprint 2: Sensory Engine V1 kimenet
+  walkingDistanceMeters?: number; // csak akkor, ha MINDEN gyaloglási lábhoz volt valós MOTIS távolság-adat
 }
 
 export interface JourneySearchRequest {

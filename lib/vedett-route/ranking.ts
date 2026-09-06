@@ -58,6 +58,21 @@ function explain(journey: Journey, labels: RankingLabel[], fastest: Journey, cal
     if (delta > 5) parts.push("A rendelkezésre álló adatok alapján valamivel megterhelőbb, mint a legnyugodtabb lehetőség.");
   }
 
+  if (
+    journey.walkingDistanceMeters !== undefined &&
+    fastest.walkingDistanceMeters !== undefined &&
+    journey !== fastest
+  ) {
+    const deltaMeters = Math.round(journey.walkingDistanceMeters - fastest.walkingDistanceMeters);
+    if (Math.abs(deltaMeters) >= 50) {
+      parts.push(
+        deltaMeters < 0
+          ? `${Math.abs(deltaMeters)} méterrel kevesebb gyaloglást tartalmaz, mint a leggyorsabb lehetőség.`
+          : `${deltaMeters} méterrel több gyaloglást tartalmaz, mint a leggyorsabb lehetőség.`
+      );
+    }
+  }
+
   const undergroundLegs = journey.legs.filter((l) => l.mode === "TRANSIT" && l.transitMode === "SUBWAY").length;
   if (undergroundLegs === 0 && journey.transfers > 0) {
     parts.push("Nincs benne földalatti (metró) szakasz.");
@@ -74,6 +89,17 @@ function explain(journey: Journey, labels: RankingLabel[], fastest: Journey, cal
   return parts.join(" ");
 }
 
+// Megjelenitesi sorrend a felhasznalo explicit dontese alapjan:
+// Legnyugodtabb (CALMEST) -> Leggyorsabb (FASTEST) -> Legkevesebb atszallas
+// (FEWEST_TRANSFERS) -> minden egyeb (cimkezetlen) alternativa a vegen,
+// az eredeti (dedup utani) sorrendjeben.
+function labelSortPriority(labels: RankingLabel[]): number {
+  if (labels.includes("CALMEST")) return 0;
+  if (labels.includes("FASTEST")) return 1;
+  if (labels.includes("FEWEST_TRANSFERS")) return 2;
+  return 3;
+}
+
 export function rankJourneys(journeys: Journey[]): RankedJourney[] {
   if (journeys.length === 0) return [];
 
@@ -81,7 +107,7 @@ export function rankJourneys(journeys: Journey[]): RankedJourney[] {
   const fewestTransfers = pickFewestTransfers(journeys);
   const calmest = pickCalmest(journeys);
 
-  return journeys.map((journey) => {
+  const ranked = journeys.map((journey) => {
     const labels: RankingLabel[] = [];
     if (journey === fastest) labels.push("FASTEST");
     if (journey === fewestTransfers) labels.push("FEWEST_TRANSFERS");
@@ -93,4 +119,15 @@ export function rankJourneys(journeys: Journey[]): RankedJourney[] {
       explanation: explain(journey, labels, fastest, calmest, fewestTransfers),
     };
   });
+
+  // Array.prototype.sort a modern motorokon (V8 is) stabil, tehat az azonos
+  // prioritasu elemek megtartjak eredeti (dedup utani) sorrendjuket.
+  return ranked
+    .map((entry, index) => ({ entry, index }))
+    .sort((a, b) => {
+      const priorityDelta = labelSortPriority(a.entry.labels) - labelSortPriority(b.entry.labels);
+      if (priorityDelta !== 0) return priorityDelta;
+      return a.index - b.index;
+    })
+    .map(({ entry }) => entry);
 }

@@ -66,3 +66,48 @@ test("ugyanaz a bemenet mindig ugyanazt a rangsort és magyarázatot adja (deter
 test("üres bemenetre üres tömböt ad, nem dob kivételt", () => {
   assert.deepEqual(rankJourneys([]), []);
 });
+
+test("a megjelenítési sorrend mindig CALMEST -> FASTEST -> FEWEST_TRANSFERS -> egyéb, még ha az input tömb más sorrendben érkezik is", () => {
+  // A négy journey négy KÜLÖNBÖZŐ, egymást nem átfedő tulajdonságot kap
+  // (leggyorsabb / legkevesebb átszállás / legalacsonyabb sensory score /
+  // egyik sem), hogy a teszt kizárólag a megjelenítési SORRENDET vizsgálja,
+  // ne a címkeodaítélés logikáját (azt már a fenti teszt fedi).
+  const fast = baseJourney({ totalDurationMinutes: 10, transfers: 3 });
+  const fewTransfers = baseJourney({ totalDurationMinutes: 45, transfers: 0 });
+  const calm = baseJourney({ totalDurationMinutes: 35, transfers: 2 });
+  calm.sensory = { ...calm.sensory!, score: 1 };
+  const other = baseJourney({ totalDurationMinutes: 40, transfers: 1 });
+  other.sensory = { ...other.sensory!, score: 500 };
+  fast.sensory = { ...fast.sensory!, score: 500 };
+  fewTransfers.sensory = { ...fewTransfers.sensory!, score: 500 };
+
+  // szándékosan "rossz" bemeneti sorrendben adjuk át (fast, other, fewTransfers, calm)
+  const ranked = rankJourneys([fast, other, fewTransfers, calm]);
+
+  assert.equal(ranked.length, 4);
+  assert.ok(ranked[0].labels.includes("CALMEST"), "az első kártyának CALMEST címkéjűnek kell lennie");
+  assert.ok(ranked[1].labels.includes("FASTEST"), "a másodiknak FASTEST címkéjűnek kell lennie");
+  assert.ok(ranked[2].labels.includes("FEWEST_TRANSFERS"), "a harmadiknak FEWEST_TRANSFERS címkéjűnek kell lennie");
+  assert.ok(
+    !ranked[3].labels.includes("CALMEST") &&
+      !ranked[3].labels.includes("FASTEST") &&
+      !ranked[3].labels.includes("FEWEST_TRANSFERS"),
+    "a negyediknek címkézetlen (egyéb) alternatívának kell lennie"
+  );
+  assert.equal(ranked[3].journey, other);
+});
+
+test("ha ugyanaz az útvonal egyszerre több címkét is visel (pl. CALMEST és FASTEST), a sorrendben csak egyszer szerepel, a legmagasabb prioritású pozícióban", () => {
+  const best = baseJourney({ totalDurationMinutes: 15, transfers: 0 });
+  const worse = baseJourney({ totalDurationMinutes: 45, transfers: 3 });
+
+  const ranked = rankJourneys([worse, best]);
+
+  assert.equal(ranked.length, 2);
+  assert.equal(ranked[0].journey, best);
+  assert.ok(
+    ranked[0].labels.includes("CALMEST") &&
+      ranked[0].labels.includes("FASTEST") &&
+      ranked[0].labels.includes("FEWEST_TRANSFERS")
+  );
+});
