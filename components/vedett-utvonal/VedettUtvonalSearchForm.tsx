@@ -354,7 +354,7 @@ export default function VedettUtvonalSearchForm({ disabled }: { disabled: boolea
         <div className="rounded border border-sni-primary/30 bg-sni-primary/5 p-3">
           <h3 className="text-sm font-semibold text-sni-text">Szenzoros személyre szabás</h3>
           <p className="mt-1 text-xs text-gray-500">
-            Ez nem diagnózis-alapú beállítás — csak a te személyes preferenciádat súlyozza, hogy a "Legnyugodtabb" ajánlás jobban illeszkedjen hozzád. 0 = nem számít, 1 = alapértelmezett, 2 = kétszeresen fontos.
+            Ez nem diagnózis-alapú beállítás — csak a te személyes preferenciádat súlyozza, hogy a &quot;Legnyugodtabb&quot; ajánlás jobban illeszkedjen hozzád. 0 = nem számít, 1 = alapértelmezett, 2 = kétszeresen fontos.
           </p>
           <div className="mt-2 space-y-2">
             {WEIGHT_FIELDS.map(({ key, label }) => (

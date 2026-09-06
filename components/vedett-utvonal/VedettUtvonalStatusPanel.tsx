@@ -81,7 +81,7 @@ export default function VedettUtvonalStatusPanel({ status }: { status: VedettRou
                 <p className="mt-1 text-xs text-gray-400">
                   Ez a jelző az alkalmazás saját GTFS-letöltési cache-ét mutatja, nem magát az
                   útvonaltervezést — a Routing Engine (MOTIS) fent zölden jelzi, hogy fut és
-                  elérhető, tehát a keresés ettől függetlenül működik. A "GTFS frissítés" gombbal
+                  elérhető, tehát a keresés ettől függetlenül működik. A &quot;GTFS frissítés&quot; gombbal
                   ez a jelző is zöldre vált.
                 </p>
               ) : null}
