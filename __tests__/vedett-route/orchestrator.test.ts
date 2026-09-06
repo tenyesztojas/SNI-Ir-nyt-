@@ -112,6 +112,19 @@ test("searchVedettRoutes: a két stratégia (alap + metrómentes) találatait ö
       const fastest = result.journeys.find((r) => r.labels.includes("FASTEST"))!;
       assert.equal(fastest.journey.legs[0].transitMode, "SUBWAY");
       assert.ok(result.dataCoverage.missingFactorsUnion.includes("crowding"));
+
+      // Sprint 2 böngészős E2E kapu, 8. pont: a metrómentes ("NO_SUBWAY")
+      // stratégiából származó itinerary-nek ténylegesen nem szabad SUBWAY
+      // leget tartalmaznia — ez a 25 útvonalas route-matrix teszt "metró
+      // nélküli alternatíva" esetét fedi le unit teszt szinten is.
+      const calmerJourney = result.journeys.find((r) =>
+        r.journey.legs.some((l) => l.transitMode === "BUS")
+      )!;
+      assert.ok(calmerJourney, "a metrómentes stratégia eredményének is meg kell jelennie a végső listában");
+      assert.ok(
+        calmerJourney.journey.legs.every((l) => l.transitMode !== "SUBWAY"),
+        "a metrómentes stratégiából származó útvonal nem tartalmazhat SUBWAY leget"
+      );
     }
   } finally {
     globalThis.fetch = originalFetch;
