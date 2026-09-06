@@ -31,6 +31,24 @@ function transitModeLabel(mode?: string): string {
   return TRANSIT_MODE_LABELS[mode] ?? mode;
 }
 
+// Vizuális megkülönböztetés a felhasználó kérése alapján: kék busz, sárga
+// villamos, zöld metró emoji + hozzáillő háttérszín. A többi (ritkább)
+// MOTIS módra semleges szürke jelölést és egy odaillő emojit használunk,
+// hogy azok se maradjanak jelölés nélkül.
+const TRANSIT_MODE_BADGE: Record<string, { emoji: string; className: string }> = {
+  BUS: { emoji: "🚌", className: "bg-blue-100 text-blue-800" },
+  TRAM: { emoji: "🚊", className: "bg-yellow-100 text-yellow-800" },
+  SUBWAY: { emoji: "🚇", className: "bg-green-100 text-green-800" },
+  RAIL: { emoji: "🚆", className: "bg-gray-100 text-gray-700" },
+  COACH: { emoji: "🚍", className: "bg-gray-100 text-gray-700" },
+  FERRY: { emoji: "⛴️", className: "bg-gray-100 text-gray-700" },
+  AIRPLANE: { emoji: "✈️", className: "bg-gray-100 text-gray-700" },
+};
+
+function transitModeBadge(mode?: string): { emoji: string; className: string } {
+  return (mode && TRANSIT_MODE_BADGE[mode]) || { emoji: "🚏", className: "bg-gray-100 text-gray-700" };
+}
+
 // Egy gyalogló láb végpontja gyakran egy valódi megálló/állomás (pl. "Széll
 // Kálmán tér" mint METRÓ-állomás, vagy "Budagyöngye" mint BUSZ-megálló) — de
 // önmagában a helynévből ez nem derül ki, és mivel az induló/érkező pont
@@ -115,9 +133,14 @@ function RankedJourneyCard({ ranked }: { ranked: RankedJourney }) {
       <div className="mt-2 space-y-1">
         {journey.legs.map((leg, i) => (
           <div key={i} className="flex flex-wrap items-center gap-2 text-sm">
-            <span className="font-medium">
-              {leg.mode === "WALK" ? "Gyaloglás" : `${transitModeLabel(leg.transitMode)} ${leg.routeShortName ?? leg.routeLongName ?? "Járat"}`.trim()}
-            </span>
+            {leg.mode === "WALK" ? (
+              <span className="font-medium">Gyaloglás</span>
+            ) : (
+              <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 font-medium ${transitModeBadge(leg.transitMode).className}`}>
+                <span aria-hidden>{transitModeBadge(leg.transitMode).emoji}</span>
+                {`${transitModeLabel(leg.transitMode)} ${leg.routeShortName ?? leg.routeLongName ?? "Járat"}`.trim()}
+              </span>
+            )}
             {leg.mode === "TRANSIT" && formatClockTime(leg.departureTime) ? (
               <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-700">
                 indul: {formatClockTime(leg.departureTime)}
