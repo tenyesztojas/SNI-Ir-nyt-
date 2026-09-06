@@ -53,6 +53,17 @@ function stopTypeSuffix(mode?: string): string {
   return STOP_TYPE_SUFFIX[mode] ?? "megálló";
 }
 
+// A jármű indulási idejét a megállóból — a MOTIS valós, ütemezett (vagy
+// valós idejű, ha van) startTime mezőjéből, órás:perces formában. Ez segíti
+// eldönteni, hogy pl. egy hosszabb várakozás után induló járatra érdemes-e
+// várni, vagy inkább a gyalogos/másik alternatívát választani.
+function formatClockTime(iso?: string): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleTimeString("hu-HU", { hour: "2-digit", minute: "2-digit" });
+}
+
 function walkEndpointLabel(name: string, adjacentLeg: { mode: string; transitMode?: string; routeShortName?: string; routeLongName?: string } | undefined): string {
   if (!adjacentLeg || adjacentLeg.mode !== "TRANSIT") return name;
   const suffix = stopTypeSuffix(adjacentLeg.transitMode);
@@ -107,6 +118,11 @@ function RankedJourneyCard({ ranked }: { ranked: RankedJourney }) {
             <span className="font-medium">
               {leg.mode === "WALK" ? "Gyaloglás" : `${transitModeLabel(leg.transitMode)} ${leg.routeShortName ?? leg.routeLongName ?? "Járat"}`.trim()}
             </span>
+            {leg.mode === "TRANSIT" && formatClockTime(leg.departureTime) ? (
+              <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-700">
+                indul: {formatClockTime(leg.departureTime)}
+              </span>
+            ) : null}
             <span className="text-gray-500">
               {leg.mode === "WALK" ? walkEndpointLabel(leg.fromName, journey.legs[i - 1]) : leg.fromName}
               {" → "}
