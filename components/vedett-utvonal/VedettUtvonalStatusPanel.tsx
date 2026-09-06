@@ -57,16 +57,34 @@ export default function VedettUtvonalStatusPanel({ status }: { status: VedettRou
       <dl className="mt-2 grid gap-x-6 gap-y-2 sm:grid-cols-2">
         {(Object.keys(PROVIDER_LABELS) as Array<keyof typeof PROVIDER_LABELS>).map((id) => {
           const p = status.providers[id];
+          // Ez a jelző az alkalmazás SAJÁT .vedett-cache/gtfs-static/<provider>/
+          // letöltés-állapotát mutatja. Ha a routing motor (MOTIS) ettől
+          // FÜGGETLENÜL, egy külön (pl. kézzel importált) GTFS-fájllal fut, a
+          // tényleges útvonaltervezés helyesen működhet még akkor is, ha ez a
+          // jelző itt pirosat mutat — ez nem routing-hiba, csak ennek a
+          // konkrét cache-nek a friss állapotát jelzi.
+          const showBkkCacheNote =
+            id === "BKK" && !p.staticData.available && status.routingEngine.reachable === true;
           return (
-            <div key={id} className="flex items-center justify-between border-b border-gray-100 py-1.5 text-sm">
-              <dt className="text-gray-600">{PROVIDER_LABELS[id]}</dt>
-              <dd className="font-medium text-sni-text">
-                {p.staticData.available ? (
-                  <span className="inline-flex items-center gap-1"><Light ok /> Aktív (statikus GTFS){p.staticData.feedVersion ? ` · ${p.staticData.feedVersion}` : ""}</span>
-                ) : (
-                  <span className="inline-flex items-center gap-1"><Light ok={false} /> {id === "BKK" ? "Nem aktív" : "Nincs feltöltve"}</span>
-                )}
-              </dd>
+            <div key={id} className="border-b border-gray-100 py-1.5 text-sm">
+              <div className="flex items-center justify-between">
+                <dt className="text-gray-600">{PROVIDER_LABELS[id]}</dt>
+                <dd className="font-medium text-sni-text">
+                  {p.staticData.available ? (
+                    <span className="inline-flex items-center gap-1"><Light ok /> Aktív (statikus GTFS){p.staticData.feedVersion ? ` · ${p.staticData.feedVersion}` : ""}</span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1"><Light ok={false} /> {id === "BKK" ? "Nem aktív" : "Nincs feltöltve"}</span>
+                  )}
+                </dd>
+              </div>
+              {showBkkCacheNote ? (
+                <p className="mt-1 text-xs text-gray-400">
+                  Ez a jelző az alkalmazás saját GTFS-letöltési cache-ét mutatja, nem magát az
+                  útvonaltervezést — a Routing Engine (MOTIS) fent zölden jelzi, hogy fut és
+                  elérhető, tehát a keresés ettől függetlenül működik. A "GTFS frissítés" gombbal
+                  ez a jelző is zöldre vált.
+                </p>
+              ) : null}
             </div>
           );
         })}

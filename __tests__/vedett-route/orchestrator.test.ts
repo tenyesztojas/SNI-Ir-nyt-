@@ -58,6 +58,31 @@ test("WALK láb 'WALK' módra képződik le, transitMode nélkül", () => {
   assert.equal(journey.walkingMinutes, 10);
 });
 
+test("searchVedettRoutes: a hosszú geokódolt cím helyett a rövid helynevet írja az első/utolsó láb végpontjára (nem a teljes 'X, kerület, Budapest, ...' címet)", async () => {
+  process.env.MOTIS_BASE_URL = "http://localhost:19999";
+  const originalFetch = globalThis.fetch;
+  // @ts-expect-error teszt mock
+  globalThis.fetch = async () => new Response(JSON.stringify({ itineraries: [REAL_SHAPE_ITINERARY] }), { status: 200, headers: { "content-type": "application/json" } });
+
+  try {
+    const result = await searchVedettRoutes({
+      from: { name: "Széll Kálmán tér, Margit-negyed, Országút, II. kerület, Budapest, Közép-Magyarország, Magyarország", lat: 47.507, lon: 19.024 },
+      to: { name: "Örs vezér tere, Kerepesi út, Ligettelek, X. kerület, Budapest, Közép-Magyarország, 1106, Magyarország", lat: 47.5, lon: 19.1 },
+      departAt: new Date().toISOString(),
+    });
+
+    assert.equal(result.ok, true);
+    if (result.ok) {
+      const journey = result.journeys[0].journey;
+      assert.equal(journey.legs[0].fromName, "Széll Kálmán tér");
+      assert.equal(journey.legs[journey.legs.length - 1].toName, "Örs vezér tere");
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+    delete process.env.MOTIS_BASE_URL;
+  }
+});
+
 test("searchVedettRoutes: MOTIS_BASE_URL nélkül routing_engine_unavailable-t ad, nem dob kivételt", async () => {
   delete process.env.MOTIS_BASE_URL;
   const result = await searchVedettRoutes({
