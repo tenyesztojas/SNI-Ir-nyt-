@@ -17,7 +17,23 @@ export default function VedettUtvonalStatusPanel({ status }: { status: VedettRou
     { label: "BKK API", value: <><Light ok={bkk.connection.reachable} /> {bkk.connection.configured ? (bkk.connection.reachable ? "Elérhető" : "Nem elérhető") : "Nincs konfigurálva"}</> },
     { label: "BKK GTFS", value: <><Light ok={bkk.staticData.available} /> {bkk.staticData.available ? "Letöltve" : "Még nincs letöltve"}</> },
     { label: "BKK Realtime", value: <><Light ok={bkk.connection.realtime} /> {bkk.connection.realtime ? "Aktív" : "Nem elérhető"}</> },
-    { label: "Routing Engine (MOTIS)", value: <><Light ok={status.routingEngine.configured} /> {status.routingEngine.configured ? "Konfigurálva" : "Nincs beüzemelve"}</> },
+    {
+      label: "Routing Engine (MOTIS)",
+      value: (
+        <>
+          <Light ok={status.routingEngine.reachable === true} />{" "}
+          {status.routingEngine.reachable === true
+            ? "Fut és elérhető"
+            : status.routingEngine.reachable === false
+              ? "Konfigurálva, de nem válaszol"
+              : "Nincs beüzemelve"}
+        </>
+      ),
+    },
+    {
+      label: "MOTIS adat frissessége",
+      value: status.routingEngine.dataImportedAt ? new Date(status.routingEngine.dataImportedAt).toLocaleString("hu-HU") : "—",
+    },
     {
       label: "Utolsó GTFS frissítés (BKK)",
       value: bkk.staticData.lastUpdated ? new Date(bkk.staticData.lastUpdated).toLocaleString("hu-HU") : "—",
@@ -56,8 +72,8 @@ export default function VedettUtvonalStatusPanel({ status }: { status: VedettRou
         })}
         <div className="flex items-center justify-between border-b border-gray-100 py-1.5 text-sm">
           <dt className="text-gray-600">Sensory Engine</dt>
-          <dd className="inline-flex items-center gap-1 text-gray-400">
-            <span aria-hidden>⚪</span> {status.upcoming.sensoryEngine}
+          <dd className="inline-flex items-center gap-1 text-sni-text">
+            <Light ok /> {status.sensoryEngine.version} aktív ({status.sensoryEngine.availableFactors}/{status.sensoryEngine.totalFactors} tényező valós adatból)
           </dd>
         </div>
       </dl>

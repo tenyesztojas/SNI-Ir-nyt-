@@ -269,3 +269,22 @@ előtt: BKK integráció stabil, MÁV vasút integrálva, MÁV/Volán busz
 integrálva, Sensory Score validálva, biztonsági audit, adatvédelmi
 ellenőrzés, tesztelő családok pilotja, külön explicit publikus release
 döntés. Eddig: **ADMIN ONLY**.
+
+## Sprint 2 — MOTIS Go-Live (2026-09-06)
+
+A MOTIS routing engine ténylegesen üzembe lett állítva (fejlesztői gépen,
+Docker Desktop + WSL2), valós magyarországi OSM adattal és valós BKK GTFS
+menetrenddel importálva, valós smoke tesztekkel és benchmarkkal ellenőrizve.
+Részletek:
+
+- [`docs/vedett-route/MOTIS_GO_LIVE_REPORT.md`](./vedett-route/MOTIS_GO_LIVE_REPORT.md) — a teljes telepítési napló, mért adatok, ismert korlátok.
+- [`docs/vedett-route/GTFS_OVERLAP_REPORT.md`](./vedett-route/GTFS_OVERLAP_REPORT.md) — miért csak BKK van a gráfban ma, és mi a terv a MÁV/Volán hozzáadására.
+- [`docs/vedett-route/PRODUCTION_DEPLOYMENT.md`](./vedett-route/PRODUCTION_DEPLOYMENT.md) — mit kell másképp csinálni éles VPS-en.
+
+A funkció ezután is admin-only és `VEDETT_ROUTE_ENABLED` feature flag mögött
+van — a MOTIS beüzemelése NEM jelent publikus release-t.
+
+Új réteg ezen a sprinten: Védett Route Orchestrator (`lib/vedett-route/orchestrator.ts`,
+`ranking.ts`, `fingerprint.ts`) és Sensory Engine V1 (`lib/vedett-route/sensoryEngine.ts`,
+`personalization.ts`) — lásd a fenti fájlok fejléc-kommentjeit a pontos szabályokért
+(különösen: hiányzó adat SOHA nem számít nullának).
