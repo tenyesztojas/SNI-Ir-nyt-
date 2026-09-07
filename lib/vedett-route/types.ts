@@ -100,6 +100,18 @@ export interface JourneyLeg {
   // true, ha a MOTIS ezt a lábat GTFS-RT alapján töröltként (cancelled)
   // vagy kihagyott megállóként (skipped stop) jelezte.
   cancelled?: boolean;
+  // Map/GPS/Rest Points sprint (2026-09-07): valós MOTIS koordináták és
+  // vonalgeometria a térképes megjelenítéshez. Mindegyik opcionális — csak
+  // akkor kerül kitöltésre, ha a MOTIS válasz ténylegesen tartalmazta.
+  fromLat?: number;
+  fromLon?: number;
+  toLat?: number;
+  toLon?: number;
+  // Encoded polyline (Google algoritmus), a MOTIS legGeometry.points mezőjéből.
+  geometryEncoded?: string;
+  geometryPrecision?: number;
+  intermediateStops?: { name: string; lat?: number; lon?: number }[];
+  routeColor?: string;
 }
 
 export interface Journey {

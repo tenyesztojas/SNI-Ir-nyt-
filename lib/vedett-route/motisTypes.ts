@@ -35,6 +35,17 @@ export type MotisLegMode =
   | "FLEX"
   | string;
 
+// Map/GPS/Rest Points sprint (2026-09-07): a legGeometry mezőt egy VALÓS,
+// futó MOTIS válaszban figyeltük meg (2026-09-06-i élő teszt, lásd
+// docs/vedett-route/MAP_GPS_RESTPOINT_SPRINT.md "MOTIS geometria audit"
+// szakasza) — Google encoded-polyline formátum, "precision" mezővel
+// (jelen esetben 6). Nem feltételezés, ellenőrzött nyers JSON alapján.
+export interface MotisLegGeometry {
+  points: string; // encoded polyline (Google polyline algorithm)
+  precision: number; // jellemzően 6 (10^-6 fok pontosság)
+  length?: number; // koordináta-pontok száma (csak informatív)
+}
+
 export interface MotisLeg {
   mode: MotisLegMode;
   from: MotisPlace;
@@ -51,6 +62,11 @@ export interface MotisLeg {
   cancelled?: boolean;
   distance?: number; // méter (jellemzően WALK lábakon)
   agencyName?: string;
+  // Valós MOTIS válaszban megfigyelt mezők (2026-09-06), térkép-megjelenítéshez:
+  legGeometry?: MotisLegGeometry;
+  intermediateStops?: MotisPlace[];
+  routeColor?: string;
+  routeTextColor?: string;
 }
 
 export interface MotisItinerary {
