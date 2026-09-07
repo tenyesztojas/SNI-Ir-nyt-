@@ -118,6 +118,20 @@ export interface Journey {
   totalDurationMinutes: number;
   departureTime: string;
   arrivalTime: string;
+  // VPS → Staging Integration Gate (2026-09-07): a MOTIS itinerary-szintű
+  // scheduledStartTime/scheduledEndTime/realTime/cancelled mezőinek
+  // átemelése — lásd motisTypes.ts MotisItinerary és
+  // docs/vedett-route/VPS_STAGING_INTEGRATION_GATE.md "E) Realtime mezők".
+  // Csak akkor kerülnek kitöltésre, ha a MOTIS válasz ténylegesen
+  // tartalmazta — soha nem feltételezés vagy departureTime/arrivalTime
+  // másolata.
+  scheduledDepartureTime?: string;
+  scheduledArrivalTime?: string;
+  // true, ha a MOTIS az itinerary-t ténylegesen realtime-korrigáltként
+  // jelezte. Ez KÜLÖNBÖZIK a realtimeAvailable mezőtől (ami leg-szintű
+  // aggregátum) — ez a MOTIS saját, itinerary-szintű jelzése.
+  realTime?: boolean;
+  cancelled?: boolean;
   walkingMinutes: number;
   waitingMinutes: number;
   transfers: number;

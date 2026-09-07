@@ -28,9 +28,72 @@ export function isBkkApiKeyConfigured(): boolean {
   return Boolean(process.env.BKK_API_KEY && process.env.BKK_API_KEY.trim().length > 0);
 }
 
-export function getMotisBaseUrl(): string | null {
+// LEGACY / FEJLESZTŐI KÖZVETLEN MOTIS ELÉRÉS.
+//
+// Ez a mechanizmus a Sprint 2/Map-GPS sprint idején volt az EGYETLEN út a
+// MOTIS-hoz, amikor a Next.js szerver és a MOTIS Docker konténer ugyanazon
+// a gépen/Docker hálózaton futott (lásd docs/vedett-route/PRODUCTION_DEPLOYMENT.md
+// korábbi állapota). Az "VPS → Staging Integration Gate" sprint (2026-09-07)
+// óta ez KIZÁRÓLAG fejlesztői gépen, NEM production környezetben használható —
+// lásd getRouteServiceConfig() lent az éles útvonalért.
+//
+// FAIL CLOSED SZABÁLY: production-ben (process.env.NODE_ENV === "production")
+// ez a függvény MINDIG null-t ad vissza, MÉG AKKOR IS, ha a MOTIS_BASE_URL env
+// változó véletlenül be van állítva — hogy egy elfelejtett/rosszul másolt
+// fejlesztői env változó soha ne nyithasson közvetlen (route service és auth
+// nélküli) utat a MOTIS-hoz production-ben.
+export function getLegacyDirectMotisBaseUrl(): string | null {
+  if (process.env.NODE_ENV === "production") return null;
   const url = process.env.MOTIS_BASE_URL;
   return url && url.trim().length > 0 ? url.trim() : null;
+}
+
+// Visszafelé kompatibilis alias — lásd docs/vedett-route/VPS_STAGING_INTEGRATION_GATE.md
+// "A) Audit" szakasza a régi getMotisBaseUrl() hívóhelyeinek listájáért.
+export function getMotisBaseUrl(): string | null {
+  return getLegacyDirectMotisBaseUrl();
+}
+
+// ÉLES ÚTVONAL (VPS → Staging Integration Gate, 2026-09-07): a Next.js
+// szerver (jellemzően Vercel-en fut, NEM a VPS-en) soha nem éri el
+// közvetlenül a MOTIS 127.0.0.1:8080/8081 portjait — azok szándékosan
+// nem publikusak (lásd docs/vedett-route/VPS_STAGING_INTEGRATION_GATE.md
+// architektúra szabályok). Helyette egy, a VPS-en futó, HTTPS-en publikált,
+// szerver-oldali auth tokennel védett "route service"-t hív, ami belül
+// reverse-proxyol a localhost:8081 MOTIS-ra.
+//
+// ROUTE_SERVICE_URL és ROUTE_SERVICE_AUTH_TOKEN EGYÜTT kötelezőek — ha
+// bármelyik hiányzik, a routing FAIL CLOSED: "nincs konfigurálva", SOHA
+// nem esik vissza csendben egy kevésbé biztonságos útvonalra.
+export interface RouteServiceConfig {
+  baseUrl: string;
+  authToken: string;
+  timeoutMs: number;
+}
+
+const DEFAULT_ROUTE_SERVICE_TIMEOUT_MS = 8_000;
+const MAX_ROUTE_SERVICE_TIMEOUT_MS = 25_000; // Vercel function timeout alatt kell maradnia
+
+export function getRouteServiceConfig(): RouteServiceConfig | null {
+  const baseUrl = process.env.ROUTE_SERVICE_URL?.trim();
+  const authToken = process.env.ROUTE_SERVICE_AUTH_TOKEN?.trim();
+  if (!baseUrl || !authToken) return null;
+
+  // Védelmi háló: a route service URL-nek HTTPS-nek kell lennie (kivéve
+  // explicit localhost fejlesztői teszt), hogy az auth token soha ne
+  // utazzon titkosítatlan csatornán.
+  const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i.test(baseUrl);
+  if (!baseUrl.startsWith("https://") && !isLocalhost) {
+    return null;
+  }
+
+  const rawTimeout = Number(process.env.ROUTE_SERVICE_TIMEOUT_MS ?? DEFAULT_ROUTE_SERVICE_TIMEOUT_MS);
+  const timeoutMs =
+    Number.isFinite(rawTimeout) && rawTimeout > 0
+      ? Math.min(rawTimeout, MAX_ROUTE_SERVICE_TIMEOUT_MS)
+      : DEFAULT_ROUTE_SERVICE_TIMEOUT_MS;
+
+  return { baseUrl, authToken, timeoutMs };
 }
 
 // Cache-időtartamok (másodpercben), konfigurálhatóan — 30. pont.
