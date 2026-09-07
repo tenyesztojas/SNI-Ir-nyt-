@@ -74,23 +74,23 @@ AUTOMATED TESTS:                PASS (115/115) — lásd "Automatizált
 TYPECHECK:                      PASS — `npx tsc --noEmit` hibamentesen
                                lefutott (a maplibre-gl telepítése
                                után).
-BUILD:                          PENDING — a `npm run build` ebben a
-                               munkamenetben nem futott le a
-                               futtatási időkorlát miatt (a build
-                               konzisztensen túllépte a rendelkezésre
-                               álló időkeretet); a felhasználónak
-                               PowerShellben kell lefuttatnia és
-                               visszaigazolnia.
+BUILD:                          PASS — a felhasználó PowerShellben
+                               lefuttatta a `npm run build`-et
+                               (2026-09-07): "Compiled successfully",
+                               89/89 statikus oldal generálva, típus-
+                               és lint-ellenőrzés hibamentes (csak
+                               meglévő, ehhez a sprinthez nem
+                               kapcsolódó <img>/useEffect figyelmeztetések
+                               jelentek meg, ezek NEM ehhez a sprinthez
+                               tartozó fájlokban).
 READY FOR VPS:                  YES (a Sprint E./VPS provisioning terv
                                dokumentálva van, a lokális MOTIS
                                környezet érintetlen; a tényleges VPS
                                végrehajtás egy külön munkamenet
                                feladata)
-READY FOR SPRINT E:             CONDITIONAL — a kód/RLS/architektúra
-                               kész, DE a `npm run build` PowerShell
-                               visszaigazolása még hiányzik (lásd
-                               BUILD sor) — ezt érdemes elvégezni,
-                               mielőtt a branch mergelésre kerül.
+READY FOR SPRINT E:             YES — kód, RLS, architektúra, tesztek,
+                               típusellenőrzés és a production build is
+                               visszaigazolva.
 ```
 
 ## Automatizált tesztek
@@ -221,11 +221,10 @@ háttérben futó GPS, hangalapú navigáció.
 
 ## Nyitott pontok a következő lépéshez
 
-1. A felhasználónak PowerShellben le kell futtatnia és visszaigazolnia
-   a `npm run build` production build-et (BUILD: PENDING fentebb).
-2. A branch (`feature/vedett-route-map-restpoints`) commitja még nem
-   történt meg ebben a munkamenetben — lásd a következő commit
-   lépést.
+1. `npm run build` visszaigazolva PASS-szal (lásd BUILD sor fent) —
+   ez a pont lezárva.
+2. A branch (`feature/vedett-route-map-restpoints`) commitja megtörtént
+   (26 fájl, lásd git log), a lokális MOTIS környezet változatlan.
 3. A VPS-en végzett tényleges realtime bizonyítás
    (`VPS_MOTIS_HANDOFF.md` D) szakasz release gate sablonja) egy külön,
    jövőbeli munkamenet feladata.
