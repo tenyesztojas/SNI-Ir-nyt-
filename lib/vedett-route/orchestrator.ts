@@ -119,6 +119,13 @@ export function mapMotisItineraryToJourney(
     totalDurationMinutes,
     departureTime: itinerary.startTime,
     arrivalTime: itinerary.endTime,
+    // VPS → Staging Integration Gate: csak akkor kerül be, ha a MOTIS
+    // válasz ténylegesen tartalmazta — soha nem másoljuk át startTime/
+    // endTime-ot, ha a mező hiányzik (lásd motisTypes.ts MotisItinerary).
+    scheduledDepartureTime: itinerary.scheduledStartTime,
+    scheduledArrivalTime: itinerary.scheduledEndTime,
+    realTime: itinerary.realTime,
+    cancelled: itinerary.cancelled === true ? true : undefined,
     walkingMinutes: Math.round(walkingMinutes * 10) / 10,
     waitingMinutes,
     transfers: itinerary.transfers,

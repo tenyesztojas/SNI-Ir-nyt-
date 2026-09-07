@@ -69,10 +69,25 @@ export interface MotisLeg {
   routeTextColor?: string;
 }
 
+// VPS → Staging Integration Gate (2026-09-07): a scheduledStartTime,
+// scheduledEndTime, realTime és cancelled mezőket a ténylegesen üzembe
+// állított VPS MOTIS (pinned v2.11.2, valós BKK realtime ingest-tel) élő
+// válaszában figyeltük meg — kontrollteszt ugyanarra a 70-es járatra,
+// realtimeMode=OFF vs REALTIME összehasonlítással (lásd
+// docs/vedett-route/VPS_STAGING_INTEGRATION_GATE.md "E) Realtime mezők"
+// szakasza). Nem feltételezés — valós, megfigyelt itinerary-szintű mezők.
 export interface MotisItinerary {
   duration: number; // másodperc
   startTime: string;
   endTime: string;
+  // Menetrend szerinti (statikus GTFS) indulás/érkezés — csak akkor van
+  // jelen, ha a MOTIS realtime feed-je ténylegesen be van töltve. Ha ez a
+  // mező hiányzik, NEM feltételezzük, hogy megegyezik startTime/endTime-mal.
+  scheduledStartTime?: string;
+  scheduledEndTime?: string;
+  // true, ha LEGALÁBB egy láb ténylegesen realtime-korrigált adaton alapul.
+  realTime?: boolean;
+  cancelled?: boolean;
   transfers: number;
   legs: MotisLeg[];
 }

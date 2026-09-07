@@ -167,6 +167,44 @@ function TransitLegRealtimeNote({
   return <span className="text-xs text-gray-400">Menetrend szerinti indulás: {scheduled ?? actual ?? "N/A"}</span>;
 }
 
+// VPS → Staging Integration Gate (2026-09-07), F) UI szabály — a teljes
+// útvonalra (nem csak egy-egy lábra) vonatkozó realtime jelzés:
+//   journey.realTime === false (vagy hiányzik)         -> "Menetrend szerinti indulás".
+//   journey.realTime === true ÉS eltér a menetrenditől -> egyértelműen jelenjen meg
+//     a valós idejű indulás/érkezés, a menetrend szerintivel együtt.
+//   journey.realTime === true, de nincs eltérés         -> "pontosan a menetrend szerint indul" jelzés.
+// SOHA nem címkéz statikus-only adatot realtime-ként — pontosan azt a
+// mezőt olvassa, amit a MOTIS ténylegesen visszaadott.
+function JourneyRealtimeSummary({ journey }: { journey: Journey }) {
+  if (journey.cancelled) {
+    return (
+      <p className="mt-1 text-xs font-semibold text-red-600">
+        Ez az útvonal törölt/kihagyott járatot tartalmaz (valós idejű BKK-adat alapján).
+      </p>
+    );
+  }
+
+  if (!journey.realTime) {
+    const scheduled = formatClockTime(journey.scheduledDepartureTime ?? journey.departureTime);
+    return <p className="mt-1 text-xs text-gray-400">Menetrend szerinti indulás: {scheduled ?? "N/A"}</p>;
+  }
+
+  const scheduledDep = formatClockTime(journey.scheduledDepartureTime);
+  const actualDep = formatClockTime(journey.departureTime);
+
+  if (scheduledDep && actualDep && scheduledDep !== actualDep) {
+    return (
+      <p className="mt-1 text-xs">
+        <span className="text-gray-400">Menetrend szerint: {scheduledDep}</span>
+        {" · "}
+        <span className="font-semibold text-gray-700">Valós idejű indulás: {actualDep}</span>
+      </p>
+    );
+  }
+
+  return <p className="mt-1 text-xs text-green-700">Valós idejű adat szerint pontosan a menetrend szerint indul.</p>;
+}
+
 function RankedJourneyCard({ ranked, onOpenMap }: { ranked: RankedJourney; onOpenMap?: (journey: Journey) => void }) {
   const journey = ranked.journey;
   const sensory = journey.sensory;
@@ -189,6 +227,8 @@ function RankedJourneyCard({ ranked, onOpenMap }: { ranked: RankedJourney; onOpe
           {new Date(journey.arrivalTime).toLocaleTimeString("hu-HU", { hour: "2-digit", minute: "2-digit" })}
         </p>
       </div>
+
+      <JourneyRealtimeSummary journey={journey} />
 
       {onOpenMap && (
         <button type="button" onClick={() => onOpenMap(journey)} className="btn-secondary mt-2 text-xs">

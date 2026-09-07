@@ -1,6 +1,28 @@
 # VPS MOTIS Handoff — Tiszta környezetben végzett realtime bizonyítás terve
 
-**Állapot: DOKUMENTÁCIÓ, NEM VÉGREHAJTVA.** A jelenlegi lokális MOTIS
+> ## STÁTUSZ FRISSÍTÉS (2026-09-07) — ELAVULTNAK JELÖLVE RÉSZBEN
+>
+> **A VPS provisioning és a BKK realtime MOTIS integráció időközben
+> ELKÉSZÜLT.** Az alábbi B) és C) szakaszok "jövőbeli terv"-ként íródtak —
+> ez a keret MÁR MEGTÖRTÉNT, ezért a lenti tartalom mostantól **történeti
+> feljegyzés**, nem élő terv. A tényleges, megvalósult állapotot lásd itt:
+>
+> - Infra tények (VPS méret, Docker image, portok, MOTIS verzió): lásd
+>   `VPS_STAGING_INTEGRATION_GATE.md` "Infra tények" szakasza.
+> - A realtime routing bizonyítása: **MEGTÖRTÉNT, BKK REALTIME ROUTING
+>   VERIFIED: YES** (kontrollteszt a 70-es járatra, realtimeMode=OFF vs
+>   REALTIME, ténylegesen eltérő indulási idővel) — a lenti D) szakasz
+>   release gate sablonja pontosan ezt a formátumot kapta meg kitöltve.
+> - A KÖVETKEZŐ feladat NEM a VPS provisioning (az kész), hanem a Next.js/
+>   Vercel alkalmazás biztonságos becsatlakoztatása a VPS-en futó
+>   realtime MOTIS-hoz — lásd `VPS_STAGING_INTEGRATION_GATE.md`.
+>
+> Az A) BKK kulcs-ellenőrzés és a D) release gate SABLON (a táblázat
+> szerkezete) továbbra is érvényes és követendő mintaként szolgál —
+> ezeket NEM kell újraírni.
+
+**Állapot (EREDETI, a fenti frissítés előtti szöveg): DOKUMENTÁCIÓ, NEM
+VÉGREHAJTVA.** A jelenlegi lokális MOTIS
 környezet ehhez a dokumentumhoz **NEM lett módosítva** — a B) pont
 adatait kizárólag a felhasználó saját, éles PowerShell/Docker
 munkamenetéből kapott, read-only `docker inspect`/`docker image

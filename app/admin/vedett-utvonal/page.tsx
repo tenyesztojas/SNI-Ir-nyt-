@@ -13,6 +13,25 @@ import VedettUtvonalStatusPanel from "@/components/vedett-utvonal/VedettUtvonalS
 import VedettUtvonalSearchForm from "@/components/vedett-utvonal/VedettUtvonalSearchForm";
 import VedettUtvonalGtfsUploadForm from "@/components/vedett-utvonal/VedettUtvonalGtfsUploadForm";
 
+// KRITIKUS, BUILD-TIME HÁLÓZATI HÍVÁS ELLENI VÉDELEM (2026-09-07,
+// VPS → Staging Integration Gate utólagos javítás): ez az oldal
+// getVedettRouteStatus()-t hív, ami VALÓS hálózati hívásokat indít (BKK
+// GTFS-RT Alerts feed connection_test, route service /api/v1/health) —
+// lásd lib/vedett-route/status.ts. Enélkül a Next.js "next build" a
+// "Collecting page data" fázisban statikusan előre kirenderelné ezt az
+// oldalt, ami ténylegesen lefuttatta ezeket a hálózati hívásokat BUILD
+// IDŐBEN (ezt bizonyította a 2026-09-07-i build log: "BKK Alerts feed
+// timeout" hiba a build kimenetében, holott a build maga PASS lett — a
+// hiba csendben el lett nyelve, csak logolva, de a hálózati hívás
+// ténylegesen megtörtént). A "force-dynamic" export garantálja, hogy ez
+// az oldal KIZÁRÓLAG tényleges, admin által indított HTTP kérés (runtime)
+// során renderelődik, sosem build időben. Lásd
+// docs/vedett-route/VPS_STAGING_INTEGRATION_GATE.md "Build-time network
+// side effect" utólagos javítás szakasza, és
+// __tests__/vedett-route/build-time-network-safety.test.ts a regressziós
+// védelemért.
+export const dynamic = "force-dynamic";
+
 export default async function VedettUtvonalAdminPage() {
   const status = await getVedettRouteStatus();
   const enabled = isVedettRouteFeatureEnabled();
