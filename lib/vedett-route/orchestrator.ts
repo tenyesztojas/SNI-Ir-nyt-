@@ -77,6 +77,14 @@ function mapLeg(leg: MotisLeg): JourneyLeg {
     realtime: Boolean(leg.realTime),
     delayMinutes: computeDelayMinutes(leg),
     cancelled: leg.cancelled === true ? true : undefined,
+    fromLat: leg.from?.lat,
+    fromLon: leg.from?.lon,
+    toLat: leg.to?.lat,
+    toLon: leg.to?.lon,
+    geometryEncoded: leg.legGeometry?.points,
+    geometryPrecision: leg.legGeometry?.precision,
+    intermediateStops: leg.intermediateStops?.map((s) => ({ name: s.name ?? "Megálló", lat: s.lat, lon: s.lon })),
+    routeColor: leg.routeColor,
   };
 }
 

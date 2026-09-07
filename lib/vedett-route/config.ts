@@ -5,11 +5,19 @@
 // A BKK_API_KEY-t emiatt sosem exportáljuk objektumként a kliens felé —
 // csak a providerek olvassák közvetlenül process.env-ből, szükség szerint.
 
-export type VedettRouteAccessLevel = "admin_only" | "beta_testers" | "public";
+export type VedettRouteAccessLevel = "admin_only" | "authenticated_users" | "beta_testers" | "public";
 
 // Jelenlegi hozzáférési szint — Fázis 1-ben mindig admin_only.
 // A későbbi fázisokban ez konfigurálhatóvá válhat (pl. env változóból),
 // de amíg nincs explicit publikus release döntés, kódból van lezárva.
+//
+// Map/GPS/Rest Points sprint (2026-09-07): az "authenticated_users" szint
+// előkészítve (lásd access.ts requireVedettRouteAccess()) — ez a jövőbeli
+// állapot, amikor a Védett Útvonal bármelyik BEJELENTKEZETT felhasználónak
+// elérhető lesz, admin-szerep nélkül. EZ A KAPCSOLÓ JELENLEG NEM AKTÍV —
+// a VEDETT_ROUTE_ACCESS_LEVEL értéke szándékosan "admin_only" marad, amíg
+// nincs explicit publikus release döntés. A váltás egyetlen sor
+// módosítása (ez a konstans), a route/API/RLS réteg már felkészült rá.
 export const VEDETT_ROUTE_ACCESS_LEVEL: VedettRouteAccessLevel = "admin_only";
 
 export function isVedettRouteFeatureEnabled(): boolean {

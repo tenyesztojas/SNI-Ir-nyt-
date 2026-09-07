@@ -14,7 +14,7 @@
 import { NextResponse } from "next/server";
 import { createClient as createServerSupabase } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { isVedettRouteFeatureEnabled } from "./config.ts";
+import { isVedettRouteFeatureEnabled, VEDETT_ROUTE_ACCESS_LEVEL } from "./config.ts";
 
 export type VedettRouteAuthResult =
   | { ok: true; userId: string }
@@ -57,13 +57,46 @@ export async function requireVedettRouteAdmin(): Promise<VedettRouteAuthResult> 
 }
 
 /**
+ * Csak azt ellenőrzi, hogy van-e bejelentkezett felhasználó — admin-szerep
+ * NÉLKÜL. Ez a jövőbeli "authenticated_users" hozzáférési szint alapja
+ * (Map/GPS/Rest Points sprint, 2026-09-07): amikor a Védett Útvonal
+ * bármelyik bejelentkezett felhasználónak elérhető lesz, ez a check fut
+ * requireVedettRouteAdmin() helyett. JELENLEG NEM AKTÍV (lásd config.ts
+ * VEDETT_ROUTE_ACCESS_LEVEL, ami még "admin_only").
+ */
+export async function requireVedettRouteAuthenticated(): Promise<VedettRouteAuthResult> {
+  const supabase = await createServerSupabase();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return {
+      ok: false,
+      response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+    };
+  }
+
+  return { ok: true, userId: user.id };
+}
+
+/**
  * Admin ÉS feature flag ellenőrzés együtt — ezt kell hívnia minden
  * funkcionális (nem diagnosztikai) Védett Útvonal végpontnak: keresés,
  * GTFS frissítés, stb.
+ *
+ * A tényleges jogosultsági szabály a config.ts VEDETT_ROUTE_ACCESS_LEVEL
+ * értékétől függ — ez a felkészítés arra, hogy később egyszerűen
+ * "admin_only" -> "authenticated_users"-re válthassunk (lásd config.ts),
+ * anélkül, hogy minden egyes API route-ot át kellene írni. JELENLEG ez a
+ * konstans "admin_only", tehát a viselkedés NEM változott.
  */
 export async function requireVedettRouteAccess(): Promise<VedettRouteAuthResult> {
-  const adminCheck = await requireVedettRouteAdmin();
-  if (!adminCheck.ok) return adminCheck;
+  const authCheck =
+    VEDETT_ROUTE_ACCESS_LEVEL === "authenticated_users"
+      ? await requireVedettRouteAuthenticated()
+      : await requireVedettRouteAdmin();
+  if (!authCheck.ok) return authCheck;
 
   if (!isVedettRouteFeatureEnabled()) {
     return {
@@ -75,5 +108,5 @@ export async function requireVedettRouteAccess(): Promise<VedettRouteAuthResult>
     };
   }
 
-  return adminCheck;
+  return authCheck;
 }

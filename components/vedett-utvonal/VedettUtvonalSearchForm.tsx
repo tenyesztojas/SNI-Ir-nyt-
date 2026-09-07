@@ -1,7 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import type { OrchestratedSearchResult, PersonalizationWeights, RankedJourney, RankingLabel } from "@/lib/vedett-route/types";
+import type { Journey, OrchestratedSearchResult, PersonalizationWeights, RankedJourney, RankingLabel } from "@/lib/vedett-route/types";
+import dynamic from "next/dynamic";
+import { useGeolocation } from "@/lib/hooks/useGeolocation";
+import RestPointQuickAdd, { type RestPointCreatedPayload } from "./RestPointQuickAdd";
+
+// MapLibre a böngésző window objektumára támaszkodik -> csak kliens
+// oldalon tölthető be (SSR alatt nincs window). dynamic({ ssr: false })
+// a Next.js hivatalos mintája erre.
+const VedettUtvonalMap = dynamic(() => import("./VedettUtvonalMap"), { ssr: false });
 
 type SearchApiResponse =
   | OrchestratedSearchResult
@@ -159,7 +167,7 @@ function TransitLegRealtimeNote({
   return <span className="text-xs text-gray-400">Menetrend szerinti indulás: {scheduled ?? actual ?? "N/A"}</span>;
 }
 
-function RankedJourneyCard({ ranked }: { ranked: RankedJourney }) {
+function RankedJourneyCard({ ranked, onOpenMap }: { ranked: RankedJourney; onOpenMap?: (journey: Journey) => void }) {
   const journey = ranked.journey;
   const sensory = journey.sensory;
 
@@ -181,6 +189,12 @@ function RankedJourneyCard({ ranked }: { ranked: RankedJourney }) {
           {new Date(journey.arrivalTime).toLocaleTimeString("hu-HU", { hour: "2-digit", minute: "2-digit" })}
         </p>
       </div>
+
+      {onOpenMap && (
+        <button type="button" onClick={() => onOpenMap(journey)} className="btn-secondary mt-2 text-xs">
+          Térkép megnyitása
+        </button>
+      )}
 
       <div className="mt-2 space-y-1">
         {journey.legs.map((leg, i) => (
@@ -269,6 +283,12 @@ export default function VedettUtvonalSearchForm({ disabled }: { disabled: boolea
     duration: 1,
     waiting: 1,
   });
+  // Aktív, térképen megnyitott útvonal + saját pihenőpontok (csak ennek a
+  // munkamenetnek a memóriájában — lásd RestPointQuickAdd.tsx és
+  // useGeolocation.ts fejlécei az adatvédelmi szabályokért).
+  const [activeJourney, setActiveJourney] = useState<Journey | null>(null);
+  const [sessionRestPoints, setSessionRestPoints] = useState<RestPointCreatedPayload[]>([]);
+  const activeRouteGeo = useGeolocation();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -421,8 +441,46 @@ export default function VedettUtvonalSearchForm({ disabled }: { disabled: boolea
           )}
 
           {result.journeys.map((r, i) => (
-            <RankedJourneyCard key={i} ranked={r} />
+            <RankedJourneyCard key={i} ranked={r} onOpenMap={setActiveJourney} />
           ))}
+        </div>
+      )}
+
+      {activeJourney && (
+        <div className="mt-4 space-y-3 rounded border border-sni-primary/30 p-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-sni-text">Aktív útvonal a térképen</h3>
+            <button type="button" onClick={() => setActiveJourney(null)} className="text-xs text-gray-500 underline">
+              Bezárás
+            </button>
+          </div>
+
+          <VedettUtvonalMap
+            legs={activeJourney.legs}
+            currentPosition={
+              activeRouteGeo.status === "granted" && activeRouteGeo.latitude !== null && activeRouteGeo.longitude !== null
+                ? { latitude: activeRouteGeo.latitude, longitude: activeRouteGeo.longitude }
+                : null
+            }
+            restPoints={sessionRestPoints.map((rp) => ({ id: rp.id, name: rp.name, latitude: rp.latitude, longitude: rp.longitude }))}
+          />
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={activeRouteGeo.startWatching} className="btn-secondary text-xs" disabled={activeRouteGeo.isWatching}>
+              {activeRouteGeo.isWatching ? "Aktuális hely követése be van kapcsolva" : "Aktuális hely megjelenítése"}
+            </button>
+            {activeRouteGeo.isWatching && (
+              <button type="button" onClick={activeRouteGeo.stopWatching} className="text-xs text-gray-500 underline">
+                Követés leállítása
+              </button>
+            )}
+            {activeRouteGeo.status === "denied" && <span className="text-xs text-amber-700">GPS engedély elutasítva.</span>}
+            {(activeRouteGeo.status === "unavailable" || activeRouteGeo.status === "timeout") && (
+              <span className="text-xs text-amber-700">A jelenlegi hely most nem elérhető — az útvonaltervezés ettől függetlenül működik.</span>
+            )}
+          </div>
+
+          <RestPointQuickAdd onCreated={(rp) => setSessionRestPoints((points) => [...points, rp])} />
         </div>
       )}
     </div>
