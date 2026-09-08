@@ -21,11 +21,18 @@ import { haversineDistanceMeters } from "../ranking.ts";
 import type { RestPoint } from "../../../rest-points/types.ts";
 import type { Place } from "../../../types.ts";
 
-export function placeToRestPointIfEligible(
-  place: Place,
-  origin: { lat: number; lon: number },
-  radiusMeters: number
-): RestPoint | null {
+// Sprint E.2 hotfix (2026-09-08) — a "hely -> eligible RestPoint" leképezés
+// KÉT lépésre bontva: (1) mapEligiblePlaceToRestPoint() — kizárólag az
+// EXPLICIT rest_point_eligible kaput és a koordináta-meglétet ellenőrzi,
+// TÁVOLSÁGFÜGGETLENÜL; (2) placeToRestPointIfEligible() — ugyanezt hívja,
+// majd RÁADÁSUL a discovery (nearby) sugár-szűrést is elvégzi. A
+// szétválasztás oka: a /route-to-rest-point végpont (lásd
+// ../resolveRestPoint.ts) egy MÁR KIVÁLASZTOTT pontot old fel az
+// eligibility alapján — ott NEM szabad újra a discovery-sugárral szűrni
+// (a felhasználó a discovery pillanatában lehetett a sugáron belül, a
+// route-to-rest-point hívás pillanatában már elmozdulhatott — ez NEM
+// jelenti azt, hogy a pont "megszűnt létezni").
+export function mapEligiblePlaceToRestPoint(place: Place): RestPoint | null {
   // Csak létező, koordinátával rendelkező rekord — koordináta nélküli
   // hely NEM jelenhet meg (nincs "kitalált" pozíció).
   if (place.latitude === undefined || place.longitude === undefined) return null;
@@ -34,9 +41,6 @@ export function placeToRestPointIfEligible(
   // következtetés, kizárólag ez a mező dönt. Amíg egy hely nincs
   // explicit megjelölve, kimarad (biztonságos alapállapot).
   if (place.restPointEligible !== true) return null;
-
-  const distanceMeters = haversineDistanceMeters(origin, { lat: place.latitude, lon: place.longitude });
-  if (distanceMeters > radiusMeters) return null;
 
   return {
     id: `vedett-sarok:${place.id}`,
@@ -63,4 +67,18 @@ export function placeToRestPointIfEligible(
     updatedAt: "",
     category: "VEDETT_SAROK",
   };
+}
+
+export function placeToRestPointIfEligible(
+  place: Place,
+  origin: { lat: number; lon: number },
+  radiusMeters: number
+): RestPoint | null {
+  const point = mapEligiblePlaceToRestPoint(place);
+  if (!point) return null;
+
+  const distanceMeters = haversineDistanceMeters(origin, { lat: point.latitude, lon: point.longitude });
+  if (distanceMeters > radiusMeters) return null;
+
+  return point;
 }

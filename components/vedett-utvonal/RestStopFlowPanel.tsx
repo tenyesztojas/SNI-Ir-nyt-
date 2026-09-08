@@ -53,6 +53,10 @@ const ERROR_COPY: Record<RestStopFlowErrorReason, string> = {
   NO_REST_POINTS_FOUND: "A közelben most nem találtunk megfelelő pihenőpontot.",
   REST_POINTS_PARTIALLY_UNAVAILABLE: "Néhány közeli hely most nem tölthető be — próbáld meg kicsit később újra.",
   REST_POINT_LOAD_FAILED: "A pihenőpontok betöltése sikertelen volt.",
+  // Sprint E.2 hotfix (2026-09-08) — külön szöveg a "a pont nem oldható
+  // fel" (NOT_FOUND) és a "van pont, de nincs hozzá útvonal" (NO_ROUTE)
+  // esetre, lásd lib/vedett-route/restStopFlow/types.ts.
+  REST_POINT_NOT_FOUND: "A kiválasztott pihenőpont már nem érhető el. Válassz egy másikat.",
   REST_POINT_NO_ROUTE: "Nem található útvonal a kiválasztott pihenőponthoz.",
   ROUTE_SERVICE_TIMEOUT: "Az útvonaltervezés túl sokáig tartott.",
   ROUTE_SERVICE_UNAVAILABLE: "Az útvonaltervezés jelenleg nem érhető el.",
@@ -249,11 +253,27 @@ export default function RestStopFlowPanel({ originalDestination, originalDepartA
       return;
     }
     let cancelled = false;
-    const restPointId = ctx.selectedRestPoint.id;
+    // Sprint E.2 hotfix (2026-09-08) — a szerver mostantól forrás-függő
+    // módon oldja fel a kiválasztott pontot (lásd resolveRestPoint.ts),
+    // ezért a puszta id helyett a normalizált RestPoint forrás-releváns
+    // mezőit küldjük el. USER/VEDETT_SAROK esetén a szerver a saját (RLS-
+    // scoped, illetve rest_point_eligible-szűrt) adatforrásából olvassa
+    // vissza a koordinátát/nevet — az itt küldött name/latitude/longitude
+    // ezekre a forrásokra a szerver oldalon EGYSZERŰEN eldobott extra
+    // mező (lásd schemas.ts restPointRefSchema — nem authoritative).
+    // Kizárólag OSM esetén authoritative ez a payload (lásd
+    // resolveRestPoint.ts "AUTHORITATIVE SOURCE" szakasza).
+    const selectedRestPointRef = {
+      source: ctx.selectedRestPoint.source,
+      id: ctx.selectedRestPoint.id,
+      name: ctx.selectedRestPoint.name,
+      latitude: ctx.selectedRestPoint.latitude,
+      longitude: ctx.selectedRestPoint.longitude,
+    };
     (async () => {
       const result = await postJson<{ journey: Journey }>("/api/vedett-route/rest-stops/route-to-rest-point", {
         currentPosition: { lat: geo.latitude, lon: geo.longitude },
-        restPointId,
+        restPoint: selectedRestPointRef,
       });
       if (cancelled) return;
       if (result.ok) {

@@ -52,6 +52,18 @@ export type RestStopFlowErrorReason =
   // jelezhesse.
   | "REST_POINTS_PARTIALLY_UNAVAILABLE"
   | "REST_POINT_LOAD_FAILED"
+  // Sprint E.2 hotfix (2026-09-08, valódi Vercel Preview 404 root cause
+  // audit): KÜLÖN kód arra az esetre, amikor a kiválasztott pihenőpont
+  // MAGA nem oldható fel (nem létezik / nem a hívóé / nem eligible) — ez
+  // MOTIS/routing előtti hiba, sosem jut el a routing motorig. Korábban
+  // ezt is REST_POINT_NO_ROUTE jelezte, amivel a "nincs feloldható pont"
+  // és a "van pont, de nincs hozzá útvonal" esetek admin-diagnosztikában
+  // megkülönböztethetetlenek voltak (lásd
+  // app/api/vedett-route/rest-stops/route-to-rest-point/route.ts és
+  // resolveRestPoint.ts).
+  | "REST_POINT_NOT_FOUND"
+  // A pont SIKERESEN feloldódott, a MOTIS hívás lezajlott, de nem
+  // érkezett használható itinerary (lásd pickBestItinerary.ts).
   | "REST_POINT_NO_ROUTE"
   | "ROUTE_SERVICE_TIMEOUT"
   | "ROUTE_SERVICE_UNAVAILABLE"
