@@ -147,6 +147,13 @@ describe('MemoryRateLimiter – window reset', () => {
 // 4. Factory invariant – production + Upstash hiányzik → fail-closed
 //    (a tényleges factory importját nem cache-busting-oljuk node:test-ben,
 //     de a belső logikát unit-teszteljük)
+//
+//    MEGJEGYZÉS (2026-09-08): ez a teszt szándékosan csak a NODE_ENV-alapú,
+//    NEM-Vercel hosting ágat fedi (lásd lib/rate-limit/index.ts
+//    isStrictProductionEnvironment() non-Vercel fallback branch-e). A teljes
+//    Vercel-specifikus (VERCEL_ENV alapú Preview/Production megkülönböztetés,
+//    beleértve a hiányzó VERCEL_ENV root-cause regresszióját) tesztjei itt
+//    találhatók: __tests__/vedett-karrier/rate-limit-vercel-env.test.ts
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('Rate limit factory – production fail-closed invariant', () => {
