@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { rateLimiter } from "./lib/rate-limit/index";
+import { MAP_STYLE_URL } from "./lib/vedett-route/mapStyle";
 
 const supabaseUrl     = process.env.NEXT_PUBLIC_SUPABASE_URL  ?? "";
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
@@ -68,7 +69,7 @@ function matchRule(path: string) {
 //             dokumentált residual risk (nem script-execution kockázat).
 // ─────────────────────────────────────────────────────────────────────────────
 
-function buildCsp(nonce: string, supabaseHost: string, isDev: boolean): string {
+function buildCsp(nonce: string, supabaseHost: string, mapStyleHost: string | null, isDev: boolean): string {
   // Development: 'unsafe-eval' szükséges a Next.js webpack HMR + React Refresh runtime-hoz.
   // Production:  'unsafe-eval' TILOS — kizárólag nonce + strict-dynamic.
   const scriptSrc = isDev
@@ -86,25 +87,31 @@ function buildCsp(nonce: string, supabaseHost: string, isDev: boolean): string {
     `style-src 'self' 'unsafe-inline' https://unpkg.com`,
     // Képek: adatok, blob és külső HTTPS (térképcsempék, CDN képek)
     `img-src 'self' data: blob: https:`,
-    // Fetch/XHR: Supabase + Google OAuth + Analytics + CDN + MapLibre demo tiles.
+    // Fetch/XHR: Supabase + Google OAuth + Analytics + CDN + MapLibre alaptérkép tiles.
     //
-    // https://demotiles.maplibre.org (Sprint E, Map/GPS/Rest Points sprint,
-    // 2026-09-08 CSP audit): a VedettUtvonalMap.tsx MapLibre GL JS
-    // komponens ezt a hostot használja style.json + tiles.json + vektor
-    // tile (.pbf) + glyph (.pbf) lekérésekre — MapLibre GL JS ezeket
-    // MIND fetch()/XHR-en keresztül tölti (nem <img> vagy CSS
-    // background-image), ezért kizárólag a connect-src direktívát érinti,
-    // az img-src/font-src/worker-src direktívákat NEM (ellenőrizve: a
-    // demo style.json nem tartalmaz "sprite" kulcsot és nem használ
-    // raster tile forrást, kizárólag vector/pbf-et — lásd
-    // docs/vedett-route/MAP_GPS_RESTPOINT_SPRINT.md "CSP audit" szakasza).
+    // A MapLibre alaptérkép hosztja (2026-09-08, "valódi utcai alaptérkép"
+    // feladat — lásd lib/vedett-route/mapStyle.ts fejléce) DINAMIKUSAN
+    // származik a MAP_STYLE_URL konstansból (new URL(...).hostname), NEM
+    // van itt hardcode-olva — ha a MAP_STYLE_URL env-vezérelten változik
+    // (NEXT_PUBLIC_VEDETT_MAP_STYLE_URL), ez a CSP bejegyzés automatikusan
+    // követi, amíg az új style ugyanarról az egy hosztról szolgálja ki a
+    // style/tile/glyph/sprite erőforrásokat (ellenőrizve: az OpenFreeMap
+    // Liberty style.json + TileJSON esetén ez így van — style, vector
+    // tile (.pbf), glyph (.pbf) és sprite (.json/.png) is
+    // tiles.openfreemap.org-ról jön). Ha egy jövőbeli provider ettől
+    // ELTÉRŐ, több hosztot használna, azt itt manuálisan bővíteni kell
+    // (lásd docs/vedett-route/MAP_GPS_RESTPOINT_SPRINT.md "OpenFreeMap
+    // audit" szakasza). MapLibre GL JS ezeket MIND fetch()/XHR-en
+    // keresztül tölti (nem <img> vagy CSS background-image), ezért
+    // kizárólag a connect-src direktívát érinti, az img-src/font-src/
+    // worker-src direktívákat NEM.
     //
-    // TECHNICAL DEBT: a demotiles.maplibre.org KIZÁRÓLAG staging/demo
-    // célra elfogadható (lásd VedettUtvonalMap.tsx MAP_STYLE fejléce) —
-    // NEM production tile-infrastruktúra. Budapest béta előtt egy
-    // production-suitable tile source/hosting szükséges, és ekkor ezt a
-    // CSP allowlist bejegyzést az akkori valós hostra kell cserélni.
-    `connect-src 'self' https://${supabaseHost} https://*.supabase.co wss://*.supabase.co https://oauth2.googleapis.com https://www.googleapis.com https://www.google-analytics.com https://region1.google-analytics.com https://www.googletagmanager.com https://unpkg.com https://demotiles.maplibre.org`,
+    // TECHNICAL DEBT: az OpenFreeMap egy publikus, harmadik fél által
+    // üzemeltetett instance — staging/béta célra elfogadható, de a
+    // Budapest éles bevezetés előtt egy saját/self-hosted tile-forrás
+    // kiválasztása szükséges (lásd mapStyle.ts "PRODUCTION ARCHITEKTÚRA"
+    // szakasza).
+    `connect-src 'self' https://${supabaseHost} https://*.supabase.co wss://*.supabase.co https://oauth2.googleapis.com https://www.googleapis.com https://www.google-analytics.com https://region1.google-analytics.com https://www.googletagmanager.com https://unpkg.com${mapStyleHost ? ` https://${mapStyleHost}` : ""}`,
     // Framek: reCAPTCHA + YouTube (beágyazott videók)
     `frame-src https://www.google.com https://www.youtube.com https://www.youtube-nocookie.com`,
     // Fontok: csak saját (fontsource npm csomagból)
@@ -176,8 +183,21 @@ export async function middleware(request: NextRequest) {
     ? new URL(supabaseUrl).hostname
     : "*.supabase.co";
 
+  // Védett Útvonal alaptérkép hosztja — dinamikusan a MAP_STYLE_URL-ből
+  // (lásd buildCsp() connect-src szakasza fent). Ha valamiért érvénytelen
+  // URL-t kapna (elméleti eset, mert a konstans/env alapból ellenőrzött),
+  // null-ra esik vissza — ez esetben egyszerűen nem bővül a connect-src
+  // (fail closed: inkább a térkép ne töltsön be, mint hogy a CSP
+  // szélesebbre nyíljon egy hibás értéknél).
+  let mapStyleHost: string | null = null;
+  try {
+    mapStyleHost = new URL(MAP_STYLE_URL).hostname;
+  } catch {
+    mapStyleHost = null;
+  }
+
   const isDev = process.env.NODE_ENV === "development";
-  const csp = buildCsp(nonce, supabaseHost, isDev);
+  const csp = buildCsp(nonce, supabaseHost, mapStyleHost, isDev);
 
   // x-nonce headerként átadjuk a Next.js App Routernek és a layout.tsx-nek
   const requestHeaders = new Headers(request.headers);

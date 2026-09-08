@@ -23,7 +23,7 @@ import { readFile } from 'node:fs/promises'
 // Ha a middleware buildCsp megváltozik, ezt is frissíteni kell.
 // ─────────────────────────────────────────────────────────────────────────────
 
-function buildCsp(nonce: string, supabaseHost: string, isDev: boolean): string {
+function buildCsp(nonce: string, supabaseHost: string, mapStyleHost: string | null, isDev: boolean): string {
   const scriptSrc = isDev
     ? `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' 'unsafe-eval' https://www.google.com https://www.gstatic.com https://www.googletagmanager.com https://unpkg.com`
     : `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' https://www.google.com https://www.gstatic.com https://www.googletagmanager.com https://unpkg.com`
@@ -33,7 +33,7 @@ function buildCsp(nonce: string, supabaseHost: string, isDev: boolean): string {
     scriptSrc,
     `style-src 'self' 'unsafe-inline' https://unpkg.com`,
     `img-src 'self' data: blob: https:`,
-    `connect-src 'self' https://${supabaseHost} https://*.supabase.co wss://*.supabase.co https://oauth2.googleapis.com https://www.googleapis.com https://www.google-analytics.com https://region1.google-analytics.com https://www.googletagmanager.com https://unpkg.com https://demotiles.maplibre.org`,
+    `connect-src 'self' https://${supabaseHost} https://*.supabase.co wss://*.supabase.co https://oauth2.googleapis.com https://www.googleapis.com https://www.google-analytics.com https://region1.google-analytics.com https://www.googletagmanager.com https://unpkg.com${mapStyleHost ? ` https://${mapStyleHost}` : ""}`,
     `frame-src https://www.google.com https://www.youtube.com https://www.youtube-nocookie.com`,
     `font-src 'self'`,
     `object-src 'none'`,
@@ -46,9 +46,10 @@ function buildCsp(nonce: string, supabaseHost: string, isDev: boolean): string {
 
 const NONCE = 'test-nonce-abc123'
 const SUPABASE_HOST = 'xyzabc.supabase.co'
+const MAP_STYLE_HOST = 'tiles.openfreemap.org'
 
-const devCsp  = buildCsp(NONCE, SUPABASE_HOST, true)
-const prodCsp = buildCsp(NONCE, SUPABASE_HOST, false)
+const devCsp  = buildCsp(NONCE, SUPABASE_HOST, MAP_STYLE_HOST, true)
+const prodCsp = buildCsp(NONCE, SUPABASE_HOST, MAP_STYLE_HOST, false)
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TEST 1: development CSP tartalmazza 'unsafe-eval'-t
@@ -224,7 +225,7 @@ describe("CSP Test #8: middleware.ts statikus audit", () => {
     // Az 'unsafe-eval' csak az isDev ágban szerepelhet (template literálban)
     // Ellenőrizzük, hogy nem szerepel a prod ágban (a false ágban)
     // Statikusan: a production ág (isDev=false) nem tartalmaz 'unsafe-eval'-t
-    const prodBuildCsp = buildCsp('x', 'host', false)
+    const prodBuildCsp = buildCsp('x', 'host', MAP_STYLE_HOST, false)
     assert.ok(!prodBuildCsp.includes("'unsafe-eval'"), "production buildCsp nem tartalmaz 'unsafe-eval'-t")
   })
 

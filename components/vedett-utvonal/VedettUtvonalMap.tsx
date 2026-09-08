@@ -13,27 +13,18 @@
 // Geometria forrás: KIZÁRÓLAG a MOTIS válaszból ténylegesen visszakapott
 // legGeometry (encoded polyline) és koordináták — lásd lib/vedett-route/geometry.ts
 // fejléce. NINCS második street-routing motor.
+//
+// ALAPTÉRKÉP (2026-09-08, valódi utcai alaptérkép feladat): a style URL
+// KIZÁRÓLAG a lib/vedett-route/mapStyle.ts-ben van definiálva — lásd ott a
+// teljes indoklást (miért nem demotiles.maplibre.org, miért OpenFreeMap
+// Liberty, hogyan cserélhető env-vezérelten). Ez a fájl NEM hardcode-ol
+// semmilyen style URL-t vagy tile-hosztot.
 
 import { useEffect, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { journeyLegsToGeoJson, type JourneyLegForGeometry } from "@/lib/vedett-route/geometry";
-
-// Ingyenes, kulcs nélküli demo stílus (MapLibre saját demo tiles-e) — VPS/
-// éles környezetben cserélhető saját/ingyenes tile-forrásra (lásd
-// docs/vedett-route/VPS_MOTIS_HANDOFF.md). Szándékosan nincs fizetős
-// provider (Mapbox/Google) API kulcs nélküli jóváhagyás nélkül.
-//
-// TECHNICAL DEBT (2026-09-08, CSP audit a Sprint E Preview staging teszt
-// során talált üres térkép hibából): a demotiles.maplibre.org KIZÁRÓLAG
-// staging/demo célra elfogadható — NEM production tile-infrastruktúra
-// (nincs SLA-ja, nincs rá szerződéses jogosultság, bármikor
-// megváltozhat/leállhat). A middleware.ts CSP connect-src direktívája
-// jelenleg explicit ezt a hostot engedélyezi — Budapest béta előtt egy
-// production-suitable tile source/hosting kiválasztása és a CSP
-// megfelelő frissítése szükséges (lásd
-// docs/vedett-route/MAP_GPS_RESTPOINT_SPRINT.md "CSP audit" szakasza).
-const MAP_STYLE = "https://demotiles.maplibre.org/style.json";
+import { MAP_STYLE_URL, MAP_ATTRIBUTION_FALLBACK } from "@/lib/vedett-route/mapStyle";
 
 const MODE_COLOR: Record<string, string> = {
   WALK: "#6b7280",
@@ -60,23 +51,85 @@ export interface VedettUtvonalMapProps {
   className?: string;
 }
 
+// Egyedi MapLibre control gomb — a NavigationControl (zoom +/-) mellé, a
+// meglévő "top-right" csoportba illeszkedve (saját maplibregl-ctrl* CSS
+// osztályokkal, hogy vizuálisan egységes maradjon a zoom-gombokkal, NEM új
+// Tailwind/redesign elem). Kattintásra az AKTUÁLIS GPS-pozícióra repít —
+// a pozíciót egy külső ref-ből olvassa (lásd currentPositionRef lent), hogy
+// mindig a legfrissebb értéket használja anélkül, hogy a control-t újra
+// kellene létrehozni minden pozícióváltáskor.
+class CurrentLocationControl implements maplibregl.IControl {
+  private map?: maplibregl.Map;
+  private container: HTMLDivElement;
+  private getPosition: () => { latitude: number; longitude: number } | null;
+
+  constructor(getPosition: () => { latitude: number; longitude: number } | null) {
+    this.getPosition = getPosition;
+    this.container = document.createElement("div");
+    this.container.className = "maplibregl-ctrl maplibregl-ctrl-group";
+  }
+
+  onAdd(map: maplibregl.Map): HTMLElement {
+    this.map = map;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "maplibregl-ctrl-icon";
+    button.setAttribute("aria-label", "Ugrás a jelenlegi helyhez");
+    button.title = "Ugrás a jelenlegi helyhez";
+    button.style.fontSize = "16px";
+    button.style.lineHeight = "29px";
+    button.textContent = "◎";
+    button.addEventListener("click", () => {
+      const position = this.getPosition();
+      if (!position || !this.map) return;
+      this.map.flyTo({ center: [position.longitude, position.latitude], zoom: 16 });
+    });
+    this.container.appendChild(button);
+    return this.container;
+  }
+
+  onRemove(): void {
+    this.container.parentNode?.removeChild(this.container);
+    this.map = undefined;
+  }
+}
+
 export default function VedettUtvonalMap({ legs, fromName, toName, currentPosition, restPoints = [], className }: VedettUtvonalMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const currentPosMarkerRef = useRef<maplibregl.Marker | null>(null);
   const restPointMarkersRef = useRef<maplibregl.Marker[]>([]);
+  const currentPositionRef = useRef<{ latitude: number; longitude: number } | null>(currentPosition ?? null);
   const [mapReady, setMapReady] = useState(false);
+
+  // A GPS-gomb mindig ezt a ref-et olvassa — nem hoz létre új GPS-watch-ot,
+  // nem perzisztálja/logolja a koordinátát (lásd useGeolocation.ts
+  // fejléce), csak a props-ból már amúgy is kapott pozíciót tükrözi.
+  useEffect(() => {
+    currentPositionRef.current = currentPosition ?? null;
+  }, [currentPosition]);
 
   // Térkép inicializálása egyszer.
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: MAP_STYLE,
+      style: MAP_STYLE_URL,
       center: [19.0402, 47.4979], // Budapest, csak alapértelmezett kezdőnézet
       zoom: 12,
+      // Saját, NEM összecsukható (compact: false) AttributionControl — a
+      // "ne rejtsd el" követelmény miatt explicit, nem a MapLibre alapértelmezett
+      // (esetenként ikonra összecsukott) attribution viselkedésére hagyatkozunk.
+      // A style.json forrásainak saját attribution mezője (OpenStreetMap +
+      // OpenFreeMap) emellé/ebbe automatikusan bekerül a MapLibre GL JS által;
+      // a customAttribution egy garantált, kódból ellenőrizhető minimum,
+      // hogy ez sose maradjon el akkor sem, ha egy jövőbeli alternatív style
+      // esetleg hiányos attribution-t adna.
+      attributionControl: false,
     });
+    map.addControl(new maplibregl.AttributionControl({ compact: false, customAttribution: MAP_ATTRIBUTION_FALLBACK }));
     map.addControl(new maplibregl.NavigationControl(), "top-right");
+    map.addControl(new CurrentLocationControl(() => currentPositionRef.current), "top-right");
     map.on("load", () => setMapReady(true));
     mapRef.current = map;
 
@@ -97,6 +150,13 @@ export default function VedettUtvonalMap({ legs, fromName, toName, currentPositi
     if (map.getSource(sourceId)) {
       (map.getSource(sourceId) as maplibregl.GeoJSONSource).setData(geojson);
     } else {
+      // MEGJEGYZÉS: nincs beforeId megadva az addLayer() hívásokban — a
+      // MapLibre GL JS ez esetben a réteget a stílus rétegsorának LEGTETEJÉRE
+      // teszi, tehát az OpenFreeMap Liberty alaptérkép ÖSSZES rétege
+      // (utak, épületek, feliratok stb.) fölé kerül. Ez szándékos és
+      // KÖTELEZŐ (lásd MAP_RENDERING_FIX task 4. pontja) — a saját
+      // útvonal-rétegeknek mindig jól láthatónak kell maradniuk az utcai
+      // alaptérképen is. Lásd a hozzá tartozó regresszió-tesztet is.
       map.addSource(sourceId, { type: "geojson", data: geojson });
 
       // MEGJEGYZÉS (2026-09-08, line-dasharray hiba javítás): a MapLibre
@@ -112,11 +172,24 @@ export default function VedettUtvonalMap({ legs, fromName, toName, currentPositi
       //
       // JAVÍTÁS: külön layer minden szaggatás-mintához, statikus
       // line-dasharray értékkel, filter-rel elválasztva mód szerint — ez a
-      // MapLibre style-spec szerint támogatott megoldás. A line-color és
-      // line-width továbbra is lehet adat-vezérelt (ezeknél a MapLibre
-      // spec explicit engedélyezi a data expression-t), ezért azok
-      // változatlanok.
-      // Gyalogos lábak — szaggatott vonal, statikus line-dasharray.
+      // MapLibre style-spec szerint támogatott megoldás.
+      //
+      // MEGJEGYZÉS (2026-09-08, "Could not parse color from value '#'"
+      // hiba javítása): a line-color korábban ["concat", "#", ["get",
+      // "routeColor"]]-t használt — ha a GTFS routeColor üres string volt,
+      // ez egy érvénytelen, csupasz "#" színt eredményezett. A GYÖKÉROK
+      // JAVÍTÁSA: a routeColor normalizálása MOST a geometry.ts
+      // journeyLegsToGeoJson()-jában történik (lásd
+      // normalizeRouteColor() ott) — a GeoJSON feature properties csak
+      // AKKOR kapja meg a "routeColor" kulcsot, ha az egy validált,
+      // teljes "#RRGGBB" hex szín. Emiatt itt már nincs szükség
+      // "concat"-ra: ha a kulcs jelen van, az érték már garantáltan
+      // érvényes CSS szín, közvetlenül használható ["get", "routeColor"]-lal.
+      // Ha nincs jelen (hiányzó/üres/érvénytelen GTFS routeColor), az
+      // explicit alkalmazás-default a mód szerinti MODE_COLOR — WALK
+      // lábaknál MODE_COLOR.WALK, tömegközlekedési lábaknál a
+      // transitMode szerinti szín (vagy MODE_COLOR.RAIL, ha a transitMode
+      // nem szerepel a listában).
       map.addLayer({
         id: `${sourceId}-lines-walk`,
         type: "line",
@@ -124,12 +197,7 @@ export default function VedettUtvonalMap({ legs, fromName, toName, currentPositi
         filter: ["all", ["==", ["geometry-type"], "LineString"], ["==", ["get", "mode"], "WALK"]],
         layout: { "line-join": "round", "line-cap": "round" },
         paint: {
-          "line-color": [
-            "case",
-            ["has", "routeColor"],
-            ["concat", "#", ["get", "routeColor"]],
-            ["match", ["get", "transitMode"], "SUBWAY", MODE_COLOR.SUBWAY, "TRAM", MODE_COLOR.TRAM, "BUS", MODE_COLOR.BUS, MODE_COLOR.RAIL],
-          ],
+          "line-color": ["case", ["has", "routeColor"], ["get", "routeColor"], MODE_COLOR.WALK],
           "line-width": 3,
           "line-dasharray": [2, 2],
         },
@@ -147,7 +215,7 @@ export default function VedettUtvonalMap({ legs, fromName, toName, currentPositi
           "line-color": [
             "case",
             ["has", "routeColor"],
-            ["concat", "#", ["get", "routeColor"]],
+            ["get", "routeColor"],
             ["match", ["get", "transitMode"], "SUBWAY", MODE_COLOR.SUBWAY, "TRAM", MODE_COLOR.TRAM, "BUS", MODE_COLOR.BUS, MODE_COLOR.RAIL],
           ],
           "line-width": 5,
