@@ -1,12 +1,21 @@
-// Sprint E Preparation Gate — determinisztikus, tiszta (side-effect
-// mentes) állapotgép a "Pihenőre van szükségem" folyamathoz.
+// Sprint E — determinisztikus, tiszta (side-effect mentes) állapotgép a
+// "Pihenőre van szükségem" folyamathoz.
+//
+// A Sprint E Preparation Gate hozta létre ezt a reducert; a Sprint E
+// teljes implementációja EVOLVÁLTA (nem hozott létre párhuzamos második
+// állapotgépet): bekerült a ROUTING_TO_REST_POINT köztes állapot (spec 2.
+// pont) és a hibaágak mostantól a types.ts-ben definiált, zárt
+// RestStopFlowErrorReason kódokat használják szabad szöveg helyett.
 //
 // SZÁNDÉKOS TERVEZÉSI DÖNTÉS: ez a reducer SOSEM hív hálózatot, SOSEM ír
 // adatbázist, SOSEM importál React-et vagy UI-t — tisztán a
 // (context, event) -> context leképezést végzi, pontosan úgy, mint a
 // projekt már meglévő ranking.ts/sensoryEngine.ts pure function-jei.
 // Ez teszi lehetővé, hogy élő route service vagy DB nélkül, unit
-// tesztekkel 100%-ban lefedhető legyen minden állapotátmenet.
+// tesztekkel 100%-ban lefedhető legyen minden állapotátmenet. A tényleges
+// hálózati hívásokat (pihenőpont-keresés, route-service) a
+// components/vedett-utvonal/RestStopFlowPanel.tsx orkesztrálja, és ennek a
+// reducernek adja át az eredményt EVENT formájában.
 //
 // ÉRVÉNYTELEN átmenet esetén SOSEM dobunk kivételt — { ok: false,
 // reason: "invalid_transition" }-t adunk vissza, a context VÁLTOZATLANUL
@@ -24,6 +33,19 @@ function invalid(context: RestStopFlowContext, event: RestStopFlowEvent): RestSt
   };
 }
 
+// Azok az állapotok, amelyekből a felhasználó még "meggondolhatja magát"
+// és egyszerűen visszatérhet a normál aktív útvonalhoz — azaz még NEM
+// indult el fizikailag a pihenőpont felé. A ROUTING_TO_REST_POINT
+// szándékosan idetartozik: ott még csak egy hálózati kérés fut, a
+// felhasználó fizikailag nem mozdult.
+const CANCELLABLE_STATES: RestStopFlowContext["state"][] = [
+  "REST_REQUESTED",
+  "REST_POINTS_LOADING",
+  "REST_POINTS_READY",
+  "REST_POINT_SELECTED",
+  "ROUTING_TO_REST_POINT",
+];
+
 // A originalDestination és originalDepartAt MINDEN ágban egyszerűen
 // átmásolódik (spread), SOHA nincs olyan ág, ami ezeket felülírná —
 // ez a "readonly" típusjelölés + ez a reducer-tervezés együtt garantálja
@@ -32,20 +54,8 @@ export function transitionRestStopFlow(
   context: RestStopFlowContext,
   event: RestStopFlowEvent
 ): RestStopFlowTransitionResult {
-  // CANCEL_REST_STOP bármelyik köztes állapotból visszavisz ROUTE_ACTIVE-ra,
-  // de SOHA a NAVIGATING_TO_REST_POINT / AT_REST_POINT / RESUME_REQUESTED /
-  // REROUTING_TO_ORIGINAL_DESTINATION / ROUTE_RESUMED állapotokból (ott már
-  // fizikailag útnak indult a felhasználó — ott a RESET_TO_ROUTE_ACTIVE
-  // (hiba utáni explicit reset) vagy a folyamat természetes befejezése a
-  // kilépési út, nem egy "meggondoltam magam" megszakítás).
   if (event.type === "CANCEL_REST_STOP") {
-    const cancellableStates: RestStopFlowContext["state"][] = [
-      "REST_REQUESTED",
-      "REST_POINTS_LOADING",
-      "REST_POINTS_READY",
-      "REST_POINT_SELECTED",
-    ];
-    if (!cancellableStates.includes(context.state)) return invalid(context, event);
+    if (!CANCELLABLE_STATES.includes(context.state)) return invalid(context, event);
     return {
       ok: true,
       context: {
@@ -99,7 +109,7 @@ export function transitionRestStopFlow(
       if (event.type === "REST_POINTS_LOAD_FAILED") {
         return {
           ok: true,
-          context: { ...context, state: "ERROR", errorReason: "rest_points_load_failed", errorMessage: event.reason },
+          context: { ...context, state: "ERROR", errorReason: event.reason, errorMessage: event.message },
         };
       }
       return invalid(context, event);
@@ -116,14 +126,27 @@ export function transitionRestStopFlow(
     }
 
     case "REST_POINT_SELECTED": {
-      if (event.type === "START_NAVIGATION_TO_REST_POINT") {
+      if (event.type === "START_ROUTE_TO_REST_POINT") {
         if (!context.selectedRestPoint) {
           // Védekező ág — elvileg nem fordulhat elő (SELECT_REST_POINT
-          // mindig kitölti), de SOHA nem engedünk navigációt kezdeni
-          // kiválasztott pont nélkül.
+          // mindig kitölti), de SOHA nem engedünk útvonaltervezést
+          // kezdeni kiválasztott pont nélkül.
           return invalid(context, event);
         }
+        return { ok: true, context: { ...context, state: "ROUTING_TO_REST_POINT" } };
+      }
+      return invalid(context, event);
+    }
+
+    case "ROUTING_TO_REST_POINT": {
+      if (event.type === "ROUTE_TO_REST_POINT_READY") {
         return { ok: true, context: { ...context, state: "NAVIGATING_TO_REST_POINT" } };
+      }
+      if (event.type === "ROUTE_TO_REST_POINT_FAILED") {
+        return {
+          ok: true,
+          context: { ...context, state: "ERROR", errorReason: event.reason, errorMessage: event.message },
+        };
       }
       return invalid(context, event);
     }
@@ -156,7 +179,7 @@ export function transitionRestStopFlow(
       if (event.type === "REROUTE_FAILED") {
         return {
           ok: true,
-          context: { ...context, state: "ERROR", errorReason: "reroute_failed", errorMessage: event.reason },
+          context: { ...context, state: "ERROR", errorReason: event.reason, errorMessage: event.message },
         };
       }
       return invalid(context, event);
@@ -165,7 +188,8 @@ export function transitionRestStopFlow(
     case "ROUTE_RESUMED": {
       // Végállapot ebben a folyamatban — nincs innen kimenő átmenet
       // (egy ÚJ "Pihenőre van szükségem" kérés egy ÚJ context-et hozna
-      // létre, nem ebből a végállapotból folytatná).
+      // létre, nem ebből a végállapotból folytatná — lásd
+      // createInitialRestStopFlowContext, amit a UI réteg hív újra).
       return invalid(context, event);
     }
 

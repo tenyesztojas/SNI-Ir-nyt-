@@ -1,11 +1,19 @@
-// Sprint E Preparation Gate — állapotgép tesztek.
+// Sprint E — állapotgép tesztek.
+//
+// A Sprint E Preparation Gate itt hozta létre az alap teszteket; a Sprint E
+// teljes implementációja EVOLVÁLTA ezt a fájlt (nem hozott létre
+// párhuzamos második teszt fájlt), mert az állapotgép maga is evolvált:
+// bekerült a ROUTING_TO_REST_POINT köztes állapot, és a hibaágak mostantól
+// típusos RestStopFlowErrorReason kódokat használnak szabad szöveg helyett
+// (lásd lib/vedett-route/restStopFlow/types.ts).
+//
 //   node --test __tests__/vedett-route/rest-stop-flow-state-machine.test.ts
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createInitialRestStopFlowContext, transitionRestStopFlow } from "../../lib/vedett-route/restStopFlow/stateMachine.ts";
 import type { RestPoint } from "../../lib/rest-points/types.ts";
-import type { RankedRestPoint } from "../../lib/vedett-route/restStopFlow/types.ts";
+import type { RankedRestPoint, RestStopFlowContext } from "../../lib/vedett-route/restStopFlow/types.ts";
 
 const ORIGINAL_DESTINATION = { name: "Astoria", lat: 47.4952, lon: 19.0616 };
 const ORIGINAL_DEPART_AT = "2026-09-07T10:00:00.000Z";
@@ -39,13 +47,19 @@ function makeRanked(restPoint: RestPoint): RankedRestPoint {
   };
 }
 
+function apply(ctx: RestStopFlowContext, event: Parameters<typeof transitionRestStopFlow>[1]): RestStopFlowContext {
+  const result = transitionRestStopFlow(ctx, event);
+  assert.equal(result.ok, true, `váratlan hiba a(z) "${event.type}" eseménynél`);
+  return result.ok ? result.context : ctx;
+}
+
 test("kezdeti context ROUTE_ACTIVE állapotban van, az eredeti célt tárolja", () => {
   const ctx = createInitialRestStopFlowContext(ORIGINAL_DESTINATION, ORIGINAL_DEPART_AT);
   assert.equal(ctx.state, "ROUTE_ACTIVE");
   assert.deepEqual(ctx.originalDestination, ORIGINAL_DESTINATION);
 });
 
-test("teljes boldog út: ROUTE_ACTIVE -> ... -> ROUTE_RESUMED, minden lépésben megőrzött originalDestination", () => {
+test("teljes boldog út: ROUTE_ACTIVE -> ... -> ROUTE_RESUMED (a spec 2. pontja szerinti MINDEN állapoton át), minden lépésben megőrzött originalDestination", () => {
   let ctx = createInitialRestStopFlowContext(ORIGINAL_DESTINATION, ORIGINAL_DEPART_AT);
   const restPoint = makeRestPoint();
   const ranked = [makeRanked(restPoint)];
@@ -55,7 +69,8 @@ test("teljes boldog út: ROUTE_ACTIVE -> ... -> ROUTE_RESUMED, minden lépésben
     { event: { type: "START_LOADING_REST_POINTS" }, expectedState: "REST_POINTS_LOADING" },
     { event: { type: "REST_POINTS_LOADED", restPoints: ranked }, expectedState: "REST_POINTS_READY" },
     { event: { type: "SELECT_REST_POINT", restPoint }, expectedState: "REST_POINT_SELECTED" },
-    { event: { type: "START_NAVIGATION_TO_REST_POINT" }, expectedState: "NAVIGATING_TO_REST_POINT" },
+    { event: { type: "START_ROUTE_TO_REST_POINT" }, expectedState: "ROUTING_TO_REST_POINT" },
+    { event: { type: "ROUTE_TO_REST_POINT_READY" }, expectedState: "NAVIGATING_TO_REST_POINT" },
     { event: { type: "ARRIVED_AT_REST_POINT" }, expectedState: "AT_REST_POINT" },
     { event: { type: "REQUEST_RESUME" }, expectedState: "RESUME_REQUESTED" },
     { event: { type: "START_REROUTE" }, expectedState: "REROUTING_TO_ORIGINAL_DESTINATION" },
@@ -68,7 +83,8 @@ test("teljes boldog út: ROUTE_ACTIVE -> ... -> ROUTE_RESUMED, minden lépésben
     if (result.ok) {
       assert.equal(result.context.state, step.expectedState);
       // KRITIKUS: az eredeti cél MINDEN lépésben, még a pihenőpont
-      // kiválasztása és a navigáció után is, VÁLTOZATLAN.
+      // kiválasztása, az útvonaltervezés és a navigáció után is,
+      // VÁLTOZATLAN.
       assert.deepEqual(result.context.originalDestination, ORIGINAL_DESTINATION);
       assert.equal(result.context.originalDepartAt, ORIGINAL_DEPART_AT);
       ctx = result.context;
@@ -81,9 +97,9 @@ test("teljes boldog út: ROUTE_ACTIVE -> ... -> ROUTE_RESUMED, minden lépésben
 test("a pihenőpont csak IDEIGLENES cél — a selectedRestPoint sosem írja felül az originalDestination mezőt", () => {
   let ctx = createInitialRestStopFlowContext(ORIGINAL_DESTINATION, ORIGINAL_DEPART_AT);
   const restPoint = makeRestPoint({ latitude: 10, longitude: 20 });
-  ctx = (transitionRestStopFlow(ctx, { type: "REQUEST_REST" }) as { ok: true; context: typeof ctx }).context;
-  ctx = (transitionRestStopFlow(ctx, { type: "START_LOADING_REST_POINTS" }) as { ok: true; context: typeof ctx }).context;
-  ctx = (transitionRestStopFlow(ctx, { type: "REST_POINTS_LOADED", restPoints: [makeRanked(restPoint)] }) as { ok: true; context: typeof ctx }).context;
+  ctx = apply(ctx, { type: "REQUEST_REST" });
+  ctx = apply(ctx, { type: "START_LOADING_REST_POINTS" });
+  ctx = apply(ctx, { type: "REST_POINTS_LOADED", restPoints: [makeRanked(restPoint)] });
   const selectResult = transitionRestStopFlow(ctx, { type: "SELECT_REST_POINT", restPoint });
   assert.equal(selectResult.ok, true);
   if (selectResult.ok) {
@@ -91,6 +107,27 @@ test("a pihenőpont csak IDEIGLENES cél — a selectedRestPoint sosem írja fel
     // originalDestination koordinátái NEM a pihenőpont koordinátái.
     assert.equal(selectResult.context.originalDestination.lat, ORIGINAL_DESTINATION.lat);
     assert.equal(selectResult.context.originalDestination.lon, ORIGINAL_DESTINATION.lon);
+  }
+});
+
+test("originalDestination MÉG a ROUTING_TO_REST_POINT hálózati hívás közbeni hiba után is megmarad", () => {
+  let ctx = createInitialRestStopFlowContext(ORIGINAL_DESTINATION, ORIGINAL_DEPART_AT);
+  const restPoint = makeRestPoint();
+  ctx = apply(ctx, { type: "REQUEST_REST" });
+  ctx = apply(ctx, { type: "START_LOADING_REST_POINTS" });
+  ctx = apply(ctx, { type: "REST_POINTS_LOADED", restPoints: [makeRanked(restPoint)] });
+  ctx = apply(ctx, { type: "SELECT_REST_POINT", restPoint });
+  ctx = apply(ctx, { type: "START_ROUTE_TO_REST_POINT" });
+  const result = transitionRestStopFlow(ctx, {
+    type: "ROUTE_TO_REST_POINT_FAILED",
+    reason: "ROUTE_SERVICE_TIMEOUT",
+    message: "timeout",
+  });
+  assert.equal(result.ok, true);
+  if (result.ok) {
+    assert.equal(result.context.state, "ERROR");
+    assert.equal(result.context.errorReason, "ROUTE_SERVICE_TIMEOUT");
+    assert.deepEqual(result.context.originalDestination, ORIGINAL_DESTINATION);
   }
 });
 
@@ -104,36 +141,49 @@ test("érvénytelen átmenet SOSEM dob kivételt, ok:false-t ad, a context vált
   }
 });
 
-test("REST_POINTS_LOAD_FAILED -> ERROR állapot, hibaüzenettel", () => {
+test("REST_POINTS_LOAD_FAILED -> ERROR állapot, típusos hibakóddal és üzenettel", () => {
   let ctx = createInitialRestStopFlowContext(ORIGINAL_DESTINATION, ORIGINAL_DEPART_AT);
-  ctx = (transitionRestStopFlow(ctx, { type: "REQUEST_REST" }) as { ok: true; context: typeof ctx }).context;
-  ctx = (transitionRestStopFlow(ctx, { type: "START_LOADING_REST_POINTS" }) as { ok: true; context: typeof ctx }).context;
-  const result = transitionRestStopFlow(ctx, { type: "REST_POINTS_LOAD_FAILED", reason: "network_error" });
+  ctx = apply(ctx, { type: "REQUEST_REST" });
+  ctx = apply(ctx, { type: "START_LOADING_REST_POINTS" });
+  const result = transitionRestStopFlow(ctx, { type: "REST_POINTS_LOAD_FAILED", reason: "NETWORK_LOST", message: "network_error" });
   assert.equal(result.ok, true);
   if (result.ok) {
     assert.equal(result.context.state, "ERROR");
-    assert.equal(result.context.errorReason, "rest_points_load_failed");
+    assert.equal(result.context.errorReason, "NETWORK_LOST");
     assert.equal(result.context.errorMessage, "network_error");
     // Hiba esetén is megőrzött eredeti cél.
     assert.deepEqual(result.context.originalDestination, ORIGINAL_DESTINATION);
   }
 });
 
+test("REST_POINTS_LOAD_FAILED: üres pihenőpont-lista esetén a NO_REST_POINTS_FOUND kód használandó", () => {
+  let ctx = createInitialRestStopFlowContext(ORIGINAL_DESTINATION, ORIGINAL_DEPART_AT);
+  ctx = apply(ctx, { type: "REQUEST_REST" });
+  ctx = apply(ctx, { type: "START_LOADING_REST_POINTS" });
+  const result = transitionRestStopFlow(ctx, {
+    type: "REST_POINTS_LOAD_FAILED",
+    reason: "NO_REST_POINTS_FOUND",
+    message: "Nincs elérhető pihenőpontod.",
+  });
+  assert.equal(result.ok, true);
+  if (result.ok) assert.equal(result.context.errorReason, "NO_REST_POINTS_FOUND");
+});
+
 test("REROUTE_FAILED -> ERROR állapot, az eredeti cél akkor is megmarad", () => {
   let ctx = createInitialRestStopFlowContext(ORIGINAL_DESTINATION, ORIGINAL_DEPART_AT);
   ctx = { ...ctx, state: "REROUTING_TO_ORIGINAL_DESTINATION" };
-  const result = transitionRestStopFlow(ctx, { type: "REROUTE_FAILED", reason: "route_service_unavailable" });
+  const result = transitionRestStopFlow(ctx, { type: "REROUTE_FAILED", reason: "ROUTE_SERVICE_UNAVAILABLE", message: "unavailable" });
   assert.equal(result.ok, true);
   if (result.ok) {
     assert.equal(result.context.state, "ERROR");
-    assert.equal(result.context.errorReason, "reroute_failed");
+    assert.equal(result.context.errorReason, "ROUTE_SERVICE_UNAVAILABLE");
     assert.deepEqual(result.context.originalDestination, ORIGINAL_DESTINATION);
   }
 });
 
 test("ERROR állapotból RESET_TO_ROUTE_ACTIVE visszaviszi ROUTE_ACTIVE-ra, törli a hiba/kiválasztás mezőket, de megőrzi az eredeti célt", () => {
   let ctx = createInitialRestStopFlowContext(ORIGINAL_DESTINATION, ORIGINAL_DEPART_AT);
-  ctx = { ...ctx, state: "ERROR", errorReason: "reroute_failed", errorMessage: "x", selectedRestPoint: makeRestPoint() };
+  ctx = { ...ctx, state: "ERROR", errorReason: "REROUTE_FAILED", errorMessage: "x", selectedRestPoint: makeRestPoint() };
   const result = transitionRestStopFlow(ctx, { type: "RESET_TO_ROUTE_ACTIVE" });
   assert.equal(result.ok, true);
   if (result.ok) {
@@ -151,9 +201,14 @@ test("ERROR állapotból BÁRMILYEN MÁS esemény érvénytelen (csak RESET_TO_R
   assert.equal(result.ok, false);
 });
 
-test("CANCEL_REST_STOP a köztes állapotokból (REST_REQUESTED, REST_POINTS_LOADING, REST_POINTS_READY, REST_POINT_SELECTED) mindig ROUTE_ACTIVE-ra visz vissza", () => {
-  const intermediateStates: Array<typeof ctxState> = ["REST_REQUESTED", "REST_POINTS_LOADING", "REST_POINTS_READY", "REST_POINT_SELECTED"] as const;
-  type ctxState = "REST_REQUESTED" | "REST_POINTS_LOADING" | "REST_POINTS_READY" | "REST_POINT_SELECTED";
+test("CANCEL_REST_STOP a köztes állapotokból (REST_REQUESTED, REST_POINTS_LOADING, REST_POINTS_READY, REST_POINT_SELECTED, ROUTING_TO_REST_POINT) mindig ROUTE_ACTIVE-ra visz vissza", () => {
+  const intermediateStates = [
+    "REST_REQUESTED",
+    "REST_POINTS_LOADING",
+    "REST_POINTS_READY",
+    "REST_POINT_SELECTED",
+    "ROUTING_TO_REST_POINT",
+  ] as const;
   for (const state of intermediateStates) {
     const ctx = { ...createInitialRestStopFlowContext(ORIGINAL_DESTINATION, ORIGINAL_DEPART_AT), state };
     const result = transitionRestStopFlow(ctx, { type: "CANCEL_REST_STOP" });
@@ -180,10 +235,16 @@ test("CANCEL_REST_STOP NEM engedélyezett, miután a felhasználó már fizikail
   }
 });
 
-test("START_NAVIGATION_TO_REST_POINT kiválasztott pihenőpont nélkül érvénytelen (védekező ág)", () => {
+test("START_ROUTE_TO_REST_POINT kiválasztott pihenőpont nélkül érvénytelen (védekező ág)", () => {
   const ctx = { ...createInitialRestStopFlowContext(ORIGINAL_DESTINATION, ORIGINAL_DEPART_AT), state: "REST_POINT_SELECTED" as const };
-  const result = transitionRestStopFlow(ctx, { type: "START_NAVIGATION_TO_REST_POINT" });
+  const result = transitionRestStopFlow(ctx, { type: "START_ROUTE_TO_REST_POINT" });
   assert.equal(result.ok, false);
+});
+
+test("ROUTING_TO_REST_POINT: csak ROUTE_TO_REST_POINT_READY vagy ROUTE_TO_REST_POINT_FAILED érvényes, minden más nem", () => {
+  const ctx = { ...createInitialRestStopFlowContext(ORIGINAL_DESTINATION, ORIGINAL_DEPART_AT), state: "ROUTING_TO_REST_POINT" as const };
+  assert.equal(transitionRestStopFlow(ctx, { type: "ARRIVED_AT_REST_POINT" }).ok, false);
+  assert.equal(transitionRestStopFlow(ctx, { type: "ROUTE_TO_REST_POINT_READY" }).ok, true);
 });
 
 test("ROUTE_RESUMED végállapot — nincs innen kimenő átmenet", () => {
