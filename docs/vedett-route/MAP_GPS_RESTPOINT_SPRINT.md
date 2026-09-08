@@ -285,3 +285,90 @@ engedélyezve, minden más direktíva bit-pontosan változatlan, nincs
 wildcard, a route-service secret továbbra sem kerül kliensbe) és a
 meglévő `__tests__/vedett-karrier/csp-273-3.test.ts` (frissítve, hogy a
 `connect-src` mostani teljes tartalmát tükrözze).
+
+---
+
+## Valódi utcai OSM-alaptérkép — OpenFreeMap Liberty (2026-09-08)
+
+**Probléma:** a `demotiles.maplibre.org` (fent) technikailag működött
+(style/tile betöltés OK), de tartalmilag alkalmatlan a Védett Útvonalhoz —
+ország-szintű, pasztell-színezésű demonstrációs stílus, NINCS benne
+utcahálózat, utcanév, épület. A felhasználónak valódi utcai környezetet
+kell látnia a pihenőpont-kereséshez és a navigációhoz.
+
+**Döntés:** áttérés az [OpenFreeMap](https://openfreemap.org) Liberty
+style-jára (`https://tiles.openfreemap.org/styles/liberty`) — publikus,
+ingyenes, kulcs nélküli, OSM-alapú (OpenMapTiles sémájú) MapLibre vector
+tile stílus, valódi utcahálózattal és utcanevekkel. NEM Google Maps, NEM
+közvetlen `tile.openstreetmap.org` raster tile — a MapLibre vector
+renderer maradt.
+
+**Konfiguráció:** a style URL egyetlen helyen, a
+`lib/vedett-route/mapStyle.ts`-ben van definiálva
+(`MAP_STYLE_URL`, env-vezérelt: `NEXT_PUBLIC_VEDETT_MAP_STYLE_URL`, alapérték
+`https://tiles.openfreemap.org/styles/liberty`) — sem
+`VedettUtvonalMap.tsx`, sem `middleware.ts` nem hardcode-ol style URL-t
+vagy tile-hosztot közvetlenül; mindkettő ugyanabból a konstansból olvas.
+
+**OpenFreeMap audit** (a valós `style.json` és a rá hivatkozó TileJSON
+tartalmának ellenőrzésével, nem találgatással):
+
+| Endpoint | Host | CSP direktíva |
+|---|---|---|
+| `style.json` | `tiles.openfreemap.org` | `connect-src` |
+| vector tile TileJSON (`/planet`) | `tiles.openfreemap.org` | `connect-src` |
+| vector tile `.pbf` (`/planet/{release}/{z}/{x}/{y}.pbf`) | `tiles.openfreemap.org` | `connect-src` |
+| glyph `.pbf` (`/fonts/{fontstack}/{range}.pbf`) | `tiles.openfreemap.org` | `connect-src` |
+| sprite (`/sprites/.../ofm.json` + `.png`) | `tiles.openfreemap.org` | `connect-src` |
+| raster tile (Natural Earth háttér, kis zoomon) | `tiles.openfreemap.org` | `connect-src` |
+
+Minden erőforrás **egyetlen** hosztról (`tiles.openfreemap.org`) érkezik.
+`middleware.ts` a `connect-src` bejegyzést ezért DINAMIKUSAN, a
+`MAP_STYLE_URL`-ből (`new URL(...).hostname`) számolja ki — nincs kézzel
+szinkronban tartandó duplikált host string. A korábbi
+`demotiles.maplibre.org` bejegyzés eltávolításra került (már nincs
+runtime használatban). Nincs wildcard, nincs általános `https:` engedély.
+
+**Attribution:** a térkép saját `AttributionControl`-t kap
+(`compact: false`, tehát nem összecsukott ikon) — az OpenStreetMap +
+OpenFreeMap attribution mindig láthatóan meg van jelenítve, nincs
+elrejtve (lásd `VedettUtvonalMap.tsx` + `lib/vedett-route/mapStyle.ts`
+`MAP_ATTRIBUTION_FALLBACK`).
+
+**Route overlay / layer order:** a saját rétegek (gyalogos/tömegközlekedési
+szakasz, megálló-pontok) `map.addLayer()`-rel, `beforeId` nélkül kerülnek
+be — a MapLibre GL JS ez esetben a stílus rétegsorának LEGTETEJÉRE teszi
+őket, tehát az OpenFreeMap Liberty ÖSSZES rétege (utak, épületek,
+feliratok) fölé kerülnek. Ez változatlan a demotiles-ről való áttérés
+után is.
+
+**Route color javítás ("Could not parse color from value '#'"):** a
+gyökérok az volt, hogy a GTFS `route_color` (MOTIS-ból, `leg.routeColor`)
+lehet üres string, ami a korábbi `["concat", "#", ["get", "routeColor"]]`
+kifejezéssel egy érvénytelen, csupasz `"#"` MapLibre színt eredményezett.
+Javítás: `lib/vedett-route/geometry.ts` `normalizeRouteColor()` függvénye
+determinisztikusan normalizál (opcionális `#` levágása, pontosan 6 hex
+karakter validálása, minden más esetben `undefined`) — a GeoJSON feature
+properties csak akkor kapja meg a `routeColor` kulcsot, ha van érvényes,
+normalizált `"#RRGGBB"` szín. `VedettUtvonalMap.tsx` a paint kifejezésben
+már csak `["get", "routeColor"]`-t használ (nincs többé `concat`), hiányzó
+esetben explicit alkalmazás-default (`MODE_COLOR`, mód szerint).
+
+**PRODUCTION ARCHITEKTÚRA:** az OpenFreeMap egy publikus, harmadik fél
+által üzemeltetett instance — staging/béta célra elfogadható, de nincs rá
+SLA-nk vagy szerződéses jogosultságunk. A Védett Útvonal NEM függ
+visszafordíthatatlanul ettől az egy providertől: a `MAP_STYLE_URL`
+env-vezérelt és cserélhető (`NEXT_PUBLIC_VEDETT_MAP_STYLE_URL`) — a
+`middleware.ts` CSP-je is ebből számolja ki a hosztot, tehát egyetlen
+hoszton szolgáltató jövőbeli provider (pl. saját/self-hosted
+OpenFreeMap/OpenMapTiles) esetén a váltás egyetlen env változó
+módosítása, NEM a `VedettUtvonalMap.tsx` komponens vagy a CSP-építő
+logika újraírása. Több hosztot használó jövőbeli provider esetén a
+`connect-src` bejegyzést kézzel kell bővíteni (lásd `middleware.ts`
+`buildCsp()` megjegyzése). Budapest éles bevezetés előtt ez a döntés
+(saját/self-hosted tile-forrás) mindenképp szükséges.
+
+Regressziós tesztek: `__tests__/vedett-route/map-rendering-fix.test.ts`
+(kibővítve — style URL, demotiles eltávolítás, CSP, layer order,
+route-color normalization) és `__tests__/vedett-karrier/csp-273-3.test.ts`
+(frissítve a `connect-src` jelenlegi tartalmára).

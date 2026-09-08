@@ -72,6 +72,36 @@ export function decodePolyline(encoded: string | undefined | null, precision = 6
   return coordinates;
 }
 
+// GTFS route_color normalizálása (2026-09-08, MapLibre "Could not parse
+// color from value '#'" hiba javítása).
+//
+// GYÖKÉROK: a MOTIS GTFS route_color mezője (leg.routeColor) NEM
+// garantáltan tiszta 6 karakteres hex string — lehet üres string (""),
+// hiányzó/undefined, vagy akár már "#"-fel kezdődő. A korábbi kód
+// (VedettUtvonalMap.tsx) feltétlenül "#"-et fűzött elé
+// (["concat", "#", ["get", "routeColor"]]), ami üres string esetén egy
+// érvénytelen, csupasz "#" MapLibre színt eredményezett ("Could not parse
+// color from value '#'").
+//
+// JAVÍTÁS: a normalizálás egyetlen, determinisztikus helyen történik —
+// itt, a GeoJSON építésekor — SOHA nem a rétegdefiníciós (paint)
+// kifejezésekben. Csak PONTOSAN 6 hexadecimális karaktert tartalmazó,
+// (opcionálisan "#" előtaggal ellátott) bemenetet fogad el érvényesnek;
+// minden más (üres string, csak "#", hiányzó, rossz hosszúságú, nem-hex
+// karakter) esetén undefined-ot ad vissza — ez esetben a hívó oldal
+// (VedettUtvonalMap.tsx) explicit, mód szerinti alkalmazás-defaultot
+// (MODE_COLOR) használ, SOHA nem kitalált vagy hiányos színt.
+const HEX_COLOR_RE = /^[0-9a-fA-F]{6}$/;
+
+export function normalizeRouteColor(raw: string | undefined | null): string | undefined {
+  if (!raw) return undefined;
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) return undefined;
+  const withoutHash = trimmed.startsWith("#") ? trimmed.slice(1) : trimmed;
+  if (!HEX_COLOR_RE.test(withoutHash)) return undefined;
+  return `#${withoutHash.toUpperCase()}`;
+}
+
 export interface JourneyLegForGeometry {
   mode: "WALK" | "TRANSIT";
   transitMode?: string;
@@ -106,13 +136,18 @@ export function journeyLegsToGeoJson(legs: JourneyLegForGeometry[]): GeoJSON.Fea
           : [];
 
     if (coords.length >= 2) {
+      const normalizedColor = normalizeRouteColor(leg.routeColor);
       features.push({
         type: "Feature",
         properties: {
           legIndex: i,
           mode: leg.mode,
           transitMode: leg.transitMode ?? null,
-          routeColor: leg.routeColor ?? null,
+          // A "routeColor" kulcs CSAK akkor kerül be, ha van érvényes,
+          // normalizált "#RRGGBB" szín — így a MapLibre paint kifejezés
+          // ["has", "routeColor"] ellenőrzése SOHA nem talál üres/érvénytelen
+          // értéket (lásd normalizeRouteColor() fejléce fent).
+          ...(normalizedColor ? { routeColor: normalizedColor } : {}),
           hasRealGeometry: decoded.length > 0,
         },
         geometry: { type: "LineString", coordinates: coords },
