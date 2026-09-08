@@ -5,6 +5,7 @@ import type { Journey, OrchestratedSearchResult, PersonalizationWeights, RankedJ
 import dynamic from "next/dynamic";
 import { useGeolocation } from "@/lib/hooks/useGeolocation";
 import RestPointQuickAdd, { type RestPointCreatedPayload } from "./RestPointQuickAdd";
+import RestStopFlowPanel from "./RestStopFlowPanel";
 
 // MapLibre a böngésző window objektumára támaszkodik -> csak kliens
 // oldalon tölthető be (SSR alatt nincs window). dynamic({ ssr: false })
@@ -521,6 +522,30 @@ export default function VedettUtvonalSearchForm({ disabled }: { disabled: boolea
           </div>
 
           <RestPointQuickAdd onCreated={(rp) => setSessionRestPoints((points) => [...points, rp])} />
+
+          {/* Sprint E — "Pihenőre van szükségem": az eredeti célt az aktív
+              útvonal UTOLSÓ lábának valós MOTIS koordinátáiból származtatjuk
+              (journey.legs[last].toLat/toLon) — ez a ténylegesen geokódolt/
+              MOTIS által feloldott célpont, nem kitalált adat. Ha ez a
+              koordináta valamiért hiányzik a MOTIS válaszból, a panel nem
+              jelenik meg (nincs biztonságosan megőrizhető eredeti cél —
+              lásd ORIGINAL_DESTINATION_MISSING a Sprint E spec 9. pontjában). */}
+          <RestStopFlowPanel
+            originalDestination={
+              activeJourney.legs.length > 0 &&
+              activeJourney.legs[activeJourney.legs.length - 1].toLat !== undefined &&
+              activeJourney.legs[activeJourney.legs.length - 1].toLon !== undefined
+                ? {
+                    name: activeJourney.legs[activeJourney.legs.length - 1].toName,
+                    lat: activeJourney.legs[activeJourney.legs.length - 1].toLat as number,
+                    lon: activeJourney.legs[activeJourney.legs.length - 1].toLon as number,
+                  }
+                : null
+            }
+            originalDepartAt={activeJourney.departureTime}
+            geo={activeRouteGeo}
+            onRouteResumed={(journey) => setActiveJourney(journey)}
+          />
         </div>
       )}
     </div>

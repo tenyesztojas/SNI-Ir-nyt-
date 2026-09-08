@@ -1,29 +1,58 @@
-// Sprint E Preparation Gate (2026-09-07) — "Pihenőre van szükségem" folyamat.
+// Sprint E — "Pihenőre van szükségem" folyamat típusai.
 //
-// FONTOS: ez a modul KIZÁRÓLAG a folyamat ELŐKÉSZÍTÉSE — a típusok, az
-// állapotgép és a determinisztikus rangsorolás itt készül el, de a
-// tényleges UI-bekötés (gomb, navigáció, élő route service hívás) NEM
-// része ennek a gate-nek (lásd docs/vedett-route/SPRINT_E_PREPARATION_GATE.md
-// "Mi maradt szándékosan blokkolva" szakasza). A VEDETT_ROUTE_ENABLED
-// feature flag és a route-service security architektúra változatlan.
+// A Sprint E Preparation Gate (2026-09-07) itt hozta létre az állapotgép,
+// a rangsorolás és a láthatóság ALAP típusait. A Sprint E teljes
+// implementációja (2026-09-08) ezt a modult EVOLVÁLTA (nem duplikálta):
+//  - bekerült a spec 2. pontja által megkövetelt ROUTING_TO_REST_POINT
+//    köztes állapot (a REST_POINT_SELECTED és a NAVIGATING_TO_REST_POINT
+//    között — amíg a route-service hívás fut, a felhasználó még nem
+//    "navigál", csak vár az útvonaltervre),
+//  - az eddigi szabad szöveges errorReason helyett egy zárt,
+//    a spec 9. pontjában felsorolt kódokból álló RestStopFlowErrorReason
+//    típus (lásd lent) — ez teszi lehetővé, hogy minden hibaágat
+//    EXPLICIT módon, végigkövethetően kezeljünk, ne csak egy általános
+//    "hiba történt" szöveggel.
 
 import type { RestPoint } from "../../rest-points/types.ts";
 
 // --- Állapotgép ---
 
-// A spec által megkövetelt MINIMUM állapotok, szó szerint.
+// A spec (Sprint E Preparation Gate + Sprint E teljes implementáció, 2.
+// pont) által megkövetelt állapotok, szó szerint — a ROUTING_TO_REST_POINT
+// hozzáadva a Sprint E implementáció során (lásd fenti fejléc).
 export type RestStopFlowState =
   | "ROUTE_ACTIVE"
   | "REST_REQUESTED"
   | "REST_POINTS_LOADING"
   | "REST_POINTS_READY"
   | "REST_POINT_SELECTED"
+  | "ROUTING_TO_REST_POINT"
   | "NAVIGATING_TO_REST_POINT"
   | "AT_REST_POINT"
   | "RESUME_REQUESTED"
   | "REROUTING_TO_ORIGINAL_DESTINATION"
   | "ROUTE_RESUMED"
   | "ERROR";
+
+// A Sprint E spec 9. pontjában felsorolt, explicit kezelendő hibakódok —
+// szó szerint. Az állapotgép ERROR állapotában az errorReason MINDIG ezek
+// egyike, SOHA nem szabad szöveg — a szabad szöveges részletek az
+// errorMessage mezőben élnek (lásd lent).
+export type RestStopFlowErrorReason =
+  | "GPS_PERMISSION_DENIED"
+  | "GPS_UNAVAILABLE"
+  | "GPS_TIMEOUT"
+  | "NO_REST_POINTS_FOUND"
+  | "REST_POINT_LOAD_FAILED"
+  | "REST_POINT_NO_ROUTE"
+  | "ROUTE_SERVICE_TIMEOUT"
+  | "ROUTE_SERVICE_UNAVAILABLE"
+  | "ROUTE_SERVICE_AUTH_FAILURE"
+  | "MALFORMED_ROUTE_RESPONSE"
+  | "NETWORK_LOST"
+  | "REROUTE_FAILED"
+  | "ORIGINAL_DESTINATION_MISSING"
+  | "INVALID_STATE_TRANSITION";
 
 // Az EREDETI úti cél — ez a mező a teljes folyamat alatt VÁLTOZATLAN
 // marad. A pihenőpont csak egy IDEIGLENES köztes cél, sosem írja felül
@@ -47,7 +76,7 @@ export interface RestStopFlowContext {
   readonly originalDepartAt: string;
   rankedRestPoints?: RankedRestPoint[];
   selectedRestPoint?: RestPoint;
-  errorReason?: string;
+  errorReason?: RestStopFlowErrorReason;
   errorMessage?: string;
 }
 
@@ -55,17 +84,25 @@ export type RestStopFlowEvent =
   | { type: "REQUEST_REST" }
   | { type: "START_LOADING_REST_POINTS" }
   | { type: "REST_POINTS_LOADED"; restPoints: RankedRestPoint[] }
-  | { type: "REST_POINTS_LOAD_FAILED"; reason: string }
+  | { type: "REST_POINTS_LOAD_FAILED"; reason: RestStopFlowErrorReason; message?: string }
   | { type: "SELECT_REST_POINT"; restPoint: RestPoint }
-  | { type: "START_NAVIGATION_TO_REST_POINT" }
+  // A pihenőponthoz vezető útvonal megtervezésének indítása — a
+  // route-service/MOTIS hívás EZUTÁN indul (lásd
+  // app/api/vedett-route/rest-stops/route-to-rest-point/route.ts), amíg
+  // fut, az állapot ROUTING_TO_REST_POINT (a felhasználó még nem navigál,
+  // csak vár az eredményre).
+  | { type: "START_ROUTE_TO_REST_POINT" }
+  | { type: "ROUTE_TO_REST_POINT_READY" }
+  | { type: "ROUTE_TO_REST_POINT_FAILED"; reason: RestStopFlowErrorReason; message?: string }
   | { type: "ARRIVED_AT_REST_POINT" }
   | { type: "REQUEST_RESUME" }
   | { type: "START_REROUTE" }
   | { type: "REROUTE_SUCCEEDED" }
-  | { type: "REROUTE_FAILED"; reason: string }
-  // Bármikor, amíg a folyamat nem érte el ROUTE_RESUMED-et, a felhasználó
-  // megszakíthatja és visszatérhet a normál aktív útvonalhoz — az eredeti
-  // cél soha nem veszik el, mert sosem volt felülírva.
+  | { type: "REROUTE_FAILED"; reason: RestStopFlowErrorReason; message?: string }
+  // Bármikor, amíg a felhasználó fizikailag még nem indult el a pihenőpont
+  // felé (lásd stateMachine.ts CANCELLABLE_STATES), megszakíthatja és
+  // visszatérhet a normál aktív útvonalhoz — az eredeti cél soha nem
+  // veszik el, mert sosem volt felülírva.
   | { type: "CANCEL_REST_STOP" }
   // ERROR állapotból explicit, felhasználó által kezdeményezett újrapróbálás
   // — mindig egy konkrét, biztonságos állapotra tér vissza (sosem
