@@ -5,6 +5,24 @@
 export type RestPointSource = "USER" | "VEDETT_SAROK" | "OSM";
 export type RestPointVisibility = "PRIVATE" | "CONNECTIONS" | "PUBLIC";
 
+// Normalizált kategória — Sprint E.1 (Real Rest Point Discovery,
+// 2026-09-08). CSAK UI megjelenítéshez/gyorsszűréshez, a ranking.ts
+// pontszámítást NEM befolyásolja. USER és VEDETT_SAROK forrásnál a
+// kategória maga a forrás (nincs finomabb altípus); OSM forrásnál a
+// tényleges OSM tag alapján (lásd
+// lib/vedett-route/restStopFlow/discovery/osmTagMapping.ts).
+export type RestPointCategory =
+  | "TOILET"
+  | "BENCH"
+  | "PICNIC"
+  | "PARK"
+  | "GARDEN"
+  | "SHELTER"
+  | "LIBRARY"
+  | "COMMUNITY"
+  | "USER"
+  | "VEDETT_SAROK";
+
 export interface RestPoint {
   id: string;
   createdBy: string;
@@ -22,6 +40,11 @@ export interface RestPoint {
   notes: string | null;
   createdAt: string;
   updatedAt: string;
+  // Opcionális — CSAK a discovery aggregátor tölti ki (USER/VEDETT_SAROK/
+  // OSM providerek), a DB-ből olvasott sima USER sorokon (mapRestPointRow)
+  // NINCS beállítva (a UI ilyenkor a source alapján esik vissza "USER"
+  // címkére). Additív mező, nem érinti a DB sémát vagy a ranking.ts-t.
+  category?: RestPointCategory;
 }
 
 export interface RestPointRow {

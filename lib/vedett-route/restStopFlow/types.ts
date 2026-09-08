@@ -43,6 +43,14 @@ export type RestStopFlowErrorReason =
   | "GPS_UNAVAILABLE"
   | "GPS_TIMEOUT"
   | "NO_REST_POINTS_FOUND"
+  // Sprint E.1 — nulla találat, DE legalább egy felfedezési forrás
+  // (USER/VEDETT_SAROK/OSM) nem volt elérhető, tehát nem tudjuk
+  // biztosan, hogy tényleg nincs a közelben semmi (lásd
+  // app/api/vedett-route/rest-stops/nearby/route.ts fejléce, PARTIAL
+  // FAILURE / ZERO RESULTS szakasz, 3. eset). Szándékosan külön kód a
+  // NO_REST_POINTS_FOUND-tól, hogy a UI ezt is külön, őszinte szöveggel
+  // jelezhesse.
+  | "REST_POINTS_PARTIALLY_UNAVAILABLE"
   | "REST_POINT_LOAD_FAILED"
   | "REST_POINT_NO_ROUTE"
   | "ROUTE_SERVICE_TIMEOUT"
@@ -75,6 +83,15 @@ export interface RestStopFlowContext {
   // számítjuk, lásd rerouteRequest.ts).
   readonly originalDepartAt: string;
   rankedRestPoints?: RankedRestPoint[];
+  // Sprint E.1 (Real Rest Point Discovery) — az aggregator.ts diszkusszió-
+  // metaadata, KIZÁRÓLAG a UI szöveges visszajelzéséhez (spec 10./11. pont):
+  // expandedSearch = a sugár 800m->1500m bővült (nulla első-körös találat
+  // miatt); discoveryPartial = legalább egy forrás (USER/VEDETT_SAROK/OSM)
+  // nem volt elérhető ennél a keresésnél. Egyik sem befolyásolja az
+  // állapotgép ÁTMENETEIT, csak a REST_POINTS_READY állapot melletti
+  // opcionális magyarázó szöveget (lásd RestStopFlowPanel.tsx).
+  expandedSearch?: boolean;
+  discoveryPartial?: boolean;
   selectedRestPoint?: RestPoint;
   errorReason?: RestStopFlowErrorReason;
   errorMessage?: string;
@@ -83,7 +100,7 @@ export interface RestStopFlowContext {
 export type RestStopFlowEvent =
   | { type: "REQUEST_REST" }
   | { type: "START_LOADING_REST_POINTS" }
-  | { type: "REST_POINTS_LOADED"; restPoints: RankedRestPoint[] }
+  | { type: "REST_POINTS_LOADED"; restPoints: RankedRestPoint[]; expandedSearch?: boolean; discoveryPartial?: boolean }
   | { type: "REST_POINTS_LOAD_FAILED"; reason: RestStopFlowErrorReason; message?: string }
   | { type: "SELECT_REST_POINT"; restPoint: RestPoint }
   // A pihenőponthoz vezető útvonal megtervezésének indítása — a

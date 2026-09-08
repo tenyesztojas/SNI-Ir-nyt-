@@ -25,6 +25,8 @@ import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { journeyLegsToGeoJson, type JourneyLegForGeometry } from "@/lib/vedett-route/geometry";
 import { MAP_STYLE_URL, MAP_ATTRIBUTION_FALLBACK } from "@/lib/vedett-route/mapStyle";
+import type { RestPointCategory } from "@/lib/rest-points/types";
+import { categoryLabelFor } from "@/lib/vedett-route/restStopFlow/categoryLabels";
 
 const MODE_COLOR: Record<string, string> = {
   WALK: "#6b7280",
@@ -40,6 +42,11 @@ export interface RestPointMarker {
   name: string;
   latitude: number;
   longitude: number;
+  // Sprint E.1 — opcionális, CSAK a discovery aggregátor tölti ki (lásd
+  // rest-points/types.ts RestPoint.category kommentje). Hiányában a
+  // marker a régi, egységes zöld színt kapja (visszafelé kompatibilis a
+  // Sprint E "saját pihenőpont" markerekkel).
+  category?: RestPointCategory;
 }
 
 export interface VedettUtvonalMapProps {
@@ -48,6 +55,11 @@ export interface VedettUtvonalMapProps {
   toName?: string;
   currentPosition?: { latitude: number; longitude: number } | null;
   restPoints?: RestPointMarker[];
+  // Sprint E.1 — marker <-> kártya kattintás-szinkron (spec 9. pont): ha
+  // adott, a kijelölt pihenőpont markere vizuálisan kiemelve jelenik meg,
+  // és egy marker kattintás meghívja onSelectRestPoint(id)-t.
+  selectedRestPointId?: string | null;
+  onSelectRestPoint?: (id: string) => void;
   className?: string;
 }
 
@@ -94,7 +106,7 @@ class CurrentLocationControl implements maplibregl.IControl {
   }
 }
 
-export default function VedettUtvonalMap({ legs, fromName, toName, currentPosition, restPoints = [], className }: VedettUtvonalMapProps) {
+export default function VedettUtvonalMap({ legs, fromName, toName, currentPosition, restPoints = [], selectedRestPointId = null, onSelectRestPoint, className }: VedettUtvonalMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const currentPosMarkerRef = useRef<maplibregl.Marker | null>(null);
@@ -279,19 +291,35 @@ export default function VedettUtvonalMap({ legs, fromName, toName, currentPositi
     }
   }, [currentPosition, mapReady]);
 
-  // Saját pihenőpontok.
+  // Pihenőpontok — Sprint E.1: kategóriánként vizuálisan megkülönböztetve
+  // (spec 9. pont, "markerek kategóriánként megkülönböztethetőek legyenek"),
+  // saját DOM elemmel (emoji-címke, lásd categoryLabels.ts — SZÁNDÉKOSAN
+  // illusztratív, nem véglegesített dizájn), kattintásra
+  // onSelectRestPoint(id) hívással a marker<->kártya szinkronhoz.
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady) return;
 
     for (const marker of restPointMarkersRef.current) marker.remove();
-    restPointMarkersRef.current = restPoints.map((rp) =>
-      new maplibregl.Marker({ color: "#16a34a" })
+    restPointMarkersRef.current = restPoints.map((rp) => {
+      const label = categoryLabelFor({ ...rp, source: "USER", visibility: "PUBLIC", toilet: null, seating: null, quietSpace: null, indoors: null, outdoors: null, purchaseRequired: null, notes: null, createdBy: "", createdAt: "", updatedAt: "" });
+      const isSelected = selectedRestPointId === rp.id;
+      const el = document.createElement("div");
+      el.setAttribute("aria-label", `${label.label}: ${rp.name}`);
+      el.style.fontSize = isSelected ? "22px" : "18px";
+      el.style.lineHeight = "1";
+      el.style.cursor = onSelectRestPoint ? "pointer" : "default";
+      el.style.filter = isSelected ? "drop-shadow(0 0 3px rgba(37,99,235,0.9))" : "none";
+      el.textContent = label.emoji;
+      if (onSelectRestPoint) {
+        el.addEventListener("click", () => onSelectRestPoint(rp.id));
+      }
+      return new maplibregl.Marker({ element: el })
         .setLngLat([rp.longitude, rp.latitude])
-        .setPopup(new maplibregl.Popup({ offset: 12 }).setText(rp.name))
-        .addTo(map)
-    );
-  }, [restPoints, mapReady]);
+        .setPopup(new maplibregl.Popup({ offset: 12 }).setText(`${label.label}: ${rp.name}`))
+        .addTo(map);
+    });
+  }, [restPoints, mapReady, selectedRestPointId, onSelectRestPoint]);
 
   return (
     <div

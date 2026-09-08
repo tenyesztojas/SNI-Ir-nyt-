@@ -37,6 +37,12 @@ import type {
   RestStopFlowEvent,
 } from "@/lib/vedett-route/restStopFlow/types";
 import type { RestPoint } from "@/lib/rest-points/types";
+import {
+  categoryLabelFor,
+  REST_POINT_QUICK_FILTERS,
+  applyRestPointQuickFilter,
+  type RestPointQuickFilterKey,
+} from "@/lib/vedett-route/restStopFlow/categoryLabels";
 
 const VedettUtvonalMap = dynamic(() => import("./VedettUtvonalMap"), { ssr: false });
 
@@ -44,7 +50,8 @@ const ERROR_COPY: Record<RestStopFlowErrorReason, string> = {
   GPS_PERMISSION_DENIED: "A helymeghatározás engedélye el lett utasítva. Engedélyezd a böngésződben, majd próbáld újra.",
   GPS_UNAVAILABLE: "A jelenlegi helyed most nem határozható meg.",
   GPS_TIMEOUT: "A helymeghatározás túl sokáig tartott.",
-  NO_REST_POINTS_FOUND: "Nincs elérhető pihenőpontod a közelben. Adj hozzá egyet a térképről indulva.",
+  NO_REST_POINTS_FOUND: "A közelben most nem találtunk megfelelő pihenőpontot.",
+  REST_POINTS_PARTIALLY_UNAVAILABLE: "Néhány közeli hely most nem tölthető be — próbáld meg kicsit később újra.",
   REST_POINT_LOAD_FAILED: "A pihenőpontok betöltése sikertelen volt.",
   REST_POINT_NO_ROUTE: "Nem található útvonal a kiválasztott pihenőponthoz.",
   ROUTE_SERVICE_TIMEOUT: "Az útvonaltervezés túl sokáig tartott.",
@@ -101,6 +108,12 @@ export default function RestStopFlowPanel({ originalDestination, originalDepartA
   const [restPointJourney, setRestPointJourney] = useState<Journey | null>(null);
   const [resumeJourney, setResumeJourney] = useState<Journey | null>(null);
   const resumeGpsRequestedRef = useRef(false);
+  // Sprint E.1 — csak UI-állapot: a gyorsszűrő és a marker<->kártya
+  // szinkronhoz kijelölt (de még NEM "Ide megyek"-kel véglegesített)
+  // pihenőpont. Egyik sem érinti az állapotgépet (stateMachine.ts) — ezek
+  // tisztán megjelenítési döntések.
+  const [quickFilter, setQuickFilter] = useState<RestPointQuickFilterKey>("ALL");
+  const [highlightedRestPointId, setHighlightedRestPointId] = useState<string | null>(null);
 
   // Context (újra)inicializálása, amikor van ismert eredeti cél — de csak
   // ha még nincs aktív folyamat (a "prev ?? ..." védi meg attól, hogy egy
@@ -156,12 +169,18 @@ export default function RestStopFlowPanel({ originalDestination, originalDepartA
     if (geo.latitude === null || geo.longitude === null) return;
     let cancelled = false;
     (async () => {
-      const result = await postJson<{ restPoints: RankedRestPoint[] }>("/api/vedett-route/rest-stops/nearby", {
-        currentPosition: { lat: geo.latitude, lon: geo.longitude },
-      });
+      const result = await postJson<{ restPoints: RankedRestPoint[]; expandedSearch?: boolean; partial?: boolean }>(
+        "/api/vedett-route/rest-stops/nearby",
+        { currentPosition: { lat: geo.latitude, lon: geo.longitude } }
+      );
       if (cancelled) return;
       if (result.ok) {
-        dispatch({ type: "REST_POINTS_LOADED", restPoints: result.data.restPoints });
+        dispatch({
+          type: "REST_POINTS_LOADED",
+          restPoints: result.data.restPoints,
+          expandedSearch: result.data.expandedSearch,
+          discoveryPartial: result.data.partial,
+        });
       } else {
         dispatch({
           type: "REST_POINTS_LOAD_FAILED",
@@ -292,21 +311,94 @@ export default function RestStopFlowPanel({ originalDestination, originalDepartA
       {ctx.state === "REST_POINTS_READY" && ctx.rankedRestPoints && (
         <div className="space-y-2">
           <h3 className="text-sm font-semibold text-sni-text">Válassz pihenőpontot</h3>
-          {ctx.rankedRestPoints.map((ranked) => (
-            <div key={ranked.restPoint.id} className="flex items-center justify-between rounded border border-gray-200 bg-white p-2">
-              <div>
-                <p className="text-sm font-medium text-sni-text">{ranked.restPoint.name}</p>
-                <p className="text-xs text-gray-500">{explainRestPoint(ranked)}</p>
-              </div>
+
+          {/* Sprint E.1 — a jelölt pihenőpontok markerként is
+              megjelennek, kategóriánként megkülönböztetve, hover/klikk
+              szinkronban a lenti listával (spec 9. pont). Szándékosan
+              üres legs-szel hívjuk — itt még nincs kiválasztott/aktív
+              útvonal a pihenőponthoz, csak a jelöltek áttekintése. */}
+          <VedettUtvonalMap
+            legs={[]}
+            currentPosition={currentPosition}
+            restPoints={ctx.rankedRestPoints.map((r) => ({
+              id: r.restPoint.id,
+              name: r.restPoint.name,
+              latitude: r.restPoint.latitude,
+              longitude: r.restPoint.longitude,
+              category: r.restPoint.category,
+            }))}
+            selectedRestPointId={highlightedRestPointId}
+            onSelectRestPoint={setHighlightedRestPointId}
+            className="h-48 w-full rounded border border-gray-200"
+          />
+
+          {ctx.expandedSearch && (
+            <p className="text-xs text-gray-500">Kicsit távolabb is kerestünk.</p>
+          )}
+          {ctx.discoveryPartial && (
+            <p className="text-xs text-amber-700">Néhány közeli hely most nem tölthető be.</p>
+          )}
+
+          <div className="flex flex-wrap gap-1">
+            {REST_POINT_QUICK_FILTERS.map((filter) => (
               <button
+                key={filter.key}
                 type="button"
-                onClick={() => dispatch({ type: "SELECT_REST_POINT", restPoint: ranked.restPoint })}
-                className="btn-primary text-xs"
+                onClick={() => setQuickFilter(filter.key)}
+                className={`rounded-full border px-2 py-0.5 text-xs ${
+                  quickFilter === filter.key
+                    ? "border-sni-primary bg-sni-primary/10 text-sni-primary"
+                    : "border-gray-300 text-gray-600"
+                }`}
               >
-                Ide megyek
+                {filter.label}
               </button>
-            </div>
-          ))}
+            ))}
+          </div>
+
+          {(() => {
+            const filteredRestPoints = applyRestPointQuickFilter(
+              ctx.rankedRestPoints.map((r) => r.restPoint),
+              quickFilter
+            );
+            const filteredIds = new Set(filteredRestPoints.map((rp) => rp.id));
+            const visibleRanked = ctx.rankedRestPoints.filter((r) => filteredIds.has(r.restPoint.id));
+
+            if (visibleRanked.length === 0) {
+              return <p className="text-xs text-gray-500">Ezzel a szűrővel nincs találat a közelben.</p>;
+            }
+
+            return visibleRanked.map((ranked) => {
+              const label = categoryLabelFor(ranked.restPoint);
+              return (
+                <div
+                  key={ranked.restPoint.id}
+                  onMouseEnter={() => setHighlightedRestPointId(ranked.restPoint.id)}
+                  onMouseLeave={() => setHighlightedRestPointId((prev) => (prev === ranked.restPoint.id ? null : prev))}
+                  className={`flex items-center justify-between rounded border p-2 ${
+                    highlightedRestPointId === ranked.restPoint.id
+                      ? "border-sni-primary bg-sni-primary/5"
+                      : "border-gray-200 bg-white"
+                  }`}
+                >
+                  <div>
+                    <p className="text-sm font-medium text-sni-text">
+                      <span aria-hidden="true">{label.emoji}</span> {ranked.restPoint.name}
+                    </p>
+                    <p className="text-xs text-gray-500">{explainRestPoint(ranked)}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => dispatch({ type: "SELECT_REST_POINT", restPoint: ranked.restPoint })}
+                    className="btn-primary text-xs"
+                  >
+                    Ide megyek
+                  </button>
+                </div>
+              );
+            });
+          })()}
+
           <button type="button" onClick={() => dispatch({ type: "CANCEL_REST_STOP" })} className="text-xs text-gray-500 underline">
             Mégsem
           </button>
