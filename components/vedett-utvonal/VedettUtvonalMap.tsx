@@ -98,11 +98,30 @@ export default function VedettUtvonalMap({ legs, fromName, toName, currentPositi
       (map.getSource(sourceId) as maplibregl.GeoJSONSource).setData(geojson);
     } else {
       map.addSource(sourceId, { type: "geojson", data: geojson });
+
+      // MEGJEGYZÉS (2026-09-08, line-dasharray hiba javítás): a MapLibre
+      // GL JS a "line-dasharray" paint tulajdonságnál NEM támogat
+      // adat-vezérelt ("data expression", pl. ["match", ["get", ...], ...])
+      // kifejezést — csak kamera-kifejezést (zoom-alapú interpolate/step)
+      // vagy statikus konstans értéket. Az eredeti kód egyetlen layerben,
+      // egy ["match", ["get","mode"], ...] kifejezéssel próbálta módonként
+      // eltérő szaggatást beállítani -> ez futásidejű hibát dobott
+      // (map.addLayer() szinkron validációja: "data expressions not
+      // supported"), ami megakasztotta a teljes útvonal-layer felépítését
+      // (a "-stops" layer és a fitBounds() SEM futott le utána).
+      //
+      // JAVÍTÁS: külön layer minden szaggatás-mintához, statikus
+      // line-dasharray értékkel, filter-rel elválasztva mód szerint — ez a
+      // MapLibre style-spec szerint támogatott megoldás. A line-color és
+      // line-width továbbra is lehet adat-vezérelt (ezeknél a MapLibre
+      // spec explicit engedélyezi a data expression-t), ezért azok
+      // változatlanok.
+      // Gyalogos lábak — szaggatott vonal, statikus line-dasharray.
       map.addLayer({
-        id: `${sourceId}-lines`,
+        id: `${sourceId}-lines-walk`,
         type: "line",
         source: sourceId,
-        filter: ["==", ["geometry-type"], "LineString"],
+        filter: ["all", ["==", ["geometry-type"], "LineString"], ["==", ["get", "mode"], "WALK"]],
         layout: { "line-join": "round", "line-cap": "round" },
         paint: {
           "line-color": [
@@ -111,10 +130,30 @@ export default function VedettUtvonalMap({ legs, fromName, toName, currentPositi
             ["concat", "#", ["get", "routeColor"]],
             ["match", ["get", "transitMode"], "SUBWAY", MODE_COLOR.SUBWAY, "TRAM", MODE_COLOR.TRAM, "BUS", MODE_COLOR.BUS, MODE_COLOR.RAIL],
           ],
-          "line-width": ["match", ["get", "mode"], "WALK", 3, 5],
-          "line-dasharray": ["match", ["get", "mode"], "WALK", ["literal", [2, 2]], ["literal", [1, 0]]],
+          "line-width": 3,
+          "line-dasharray": [2, 2],
         },
       });
+
+      // Tömegközlekedési lábak — folytonos vonal (nincs line-dasharray
+      // tulajdonság megadva, ami a MapLibre alapértelmezése: folytonos).
+      map.addLayer({
+        id: `${sourceId}-lines-transit`,
+        type: "line",
+        source: sourceId,
+        filter: ["all", ["==", ["geometry-type"], "LineString"], ["!=", ["get", "mode"], "WALK"]],
+        layout: { "line-join": "round", "line-cap": "round" },
+        paint: {
+          "line-color": [
+            "case",
+            ["has", "routeColor"],
+            ["concat", "#", ["get", "routeColor"]],
+            ["match", ["get", "transitMode"], "SUBWAY", MODE_COLOR.SUBWAY, "TRAM", MODE_COLOR.TRAM, "BUS", MODE_COLOR.BUS, MODE_COLOR.RAIL],
+          ],
+          "line-width": 5,
+        },
+      });
+
       map.addLayer({
         id: `${sourceId}-stops`,
         type: "circle",
