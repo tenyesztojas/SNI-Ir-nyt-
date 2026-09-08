@@ -107,3 +107,36 @@ A végpont (`app/api/vedett-route/rest-stops/nearby/route.ts`) továbbra is `req
 ## Amit ez a sprint NEM módosított
 
 MOTIS/VPS/Caddy, route-service secret token kezelése, a production `VEDETT_ROUTE_ENABLED` flag (változatlanul `false`), a BKK GTFS-Realtime integráció, az OpenFreeMap alaptérkép/CSP beállítások, a Sprint E állapotgép átmenetei, az `originalDestination` megőrzési logika.
+
+
+## Staging hotfix (2026-09-08)
+
+A Preview/staging E.1 teszt három problémát mutatott ki: (1) az OSM pihenőpontok teljesen hiányoztak a találatokból, csak 1 VédettSarok eredmény jelent meg; (2) egy VédettSarok rekord szakember/szolgáltató profilja ("Novák Léna neuroaffirmatív tinicoach, ADHD-mentor") jelent meg pihenőpontként; (3) a pihenőpont-jelölt térkép Budapest-városszintű nézeten ragadt zoom-kicsinyítve. Az alábbi három javítás mindegyike külön, egymást nem érintő scope-ban készült.
+
+### 1) OSM provider — pontos hibaosztályozás (diagnosztika, nem találgatás)
+
+**Amit NEM tudtunk megállapítani ebből a környezetből**: ennek a sandboxnak a saját kimenő hálózata blokkolva van az `overpass-api.de` felé (proxy allowlist, `403 Forbidden`) — ez **kizárólag erről a sandboxról** ad bizonyítékot, **NEM** a tényleges Vercel Preview deployment egressz-viselkedéséről. Vercel Preview server logokhoz, Preview URL-hez vagy Vercel CLI-hez ebből a munkamenetből nincs hozzáférés, ezért a staging tünet (0 OSM találat) **konkrét gyökérokát találgatás nélkül itt nem lehetett véglegesen megállapítani** — ehelyett pontos, admin/preview-felületen közvetlenül megfigyelhető diagnosztikai eszköz készült, hogy a KÖVETKEZŐ staging reprodukció alkalmával a tényleges ok (timeout / rate limit / HTTP hiba / malformed response / query hiba / endpoint elérhetetlen / parse hiba) egyértelműen, log-szinten látható legyen.
+
+Bevezetve:
+
+- `lib/vedett-route/restStopFlow/discovery/osmProvider.ts`: `OsmProviderErrorCode` zárt típus (`timeout` / `rate_limited` / `http_error` / `malformed_response` / `query_error` / `endpoint_unavailable` / `parse_error` / `unknown_error`) és `OverpassError` osztály — minden Overpass-hívási hibaút pontosan egy kódra van osztályozva, `httpStatus` mezővel HTTP-hiba esetén. A retry logika (max 1 retry) mostantól KIZÁRÓLAG `timeout`/`endpoint_unavailable` esetén fut — a többi hibaosztály determinisztikus, retry-ra nem múlik el.
+- `lib/vedett-route/restStopFlow/aggregator.ts`: a `DiscoverySourceStatus` interfész `errorCode?: string` mezővel bővült, minden provider (`user`/`vedettSarok`/`osm`) eredményéből átvezetve.
+- `app/api/vedett-route/rest-stops/nearby/route.ts`: a `discovery.sources` (per-provider `ok`/`reason`/`errorCode`) MINDHÁROM válaszágban (siker, `NO_REST_POINTS_FOUND`, `REST_POINTS_PARTIALLY_UNAVAILABLE`) szerepel — a végpont admin_only (`requireVedettRouteAccess()`), ezért ez admin/preview debug adatnak számít, nem sérti a "a user UI ne mutasson technikai provider nevet" elvet.
+- `components/vedett-utvonal/RestStopFlowPanel.tsx`: új, összecsukott `<details>` "Diagnosztika (admin)" blokk (`DiscoverySourcesDebug`) a READY és ERROR állapotokban — a polírozott végfelhasználói banner-szövegek (`ERROR_COPY`, `expandedSearch`/`discoveryPartial` üzenetek) VÁLTOZATLANOK, technikai néven mentesek maradtak.
+- Adatvédelem: egyetlen új log-hívás sem tartalmaz koordinátát vagy nyers Overpass query-t — csak a zárt `errorCode`-ot, egy rövid osztályozási szöveget, és (HTTP-hiba esetén) a `httpStatus`-t.
+
+### 2) VédettSarok pihenőpont-alkalmasság — explicit gate
+
+A gyökérok: a VédettSarok provider korábban MINDEN `published`, koordinátával rendelkező `places` sort automatikusan pihenőpontnak tekintett — kategórianévtől függetlenül. Ez a `docs/vedett-route/MAP_GPS_RESTPOINT_SPRINT.md` "O) VédettSarok pihenőpont integrációs terv" szakaszában már dokumentált elvet ("egy VédettSarok hely soha nem válik automatikusan pihenőponttá") sértette meg.
+
+Bevezetve: `places.rest_point_eligible BOOLEAN NOT NULL DEFAULT false` (`supabase/migrations/20260908_places_rest_point_eligibility.sql` — **a migráció a repóban létezik, de ebből a munkamenetből nem lett élesben alkalmazva**, DB-hozzáférés hiányában), `Place.restPointEligible: boolean` (`lib/types.ts`, `lib/data.ts` `mapPlace()` — hiányzó/NULL oszlop explicit `false`-ra normalizálva, UNKNOWN != ELIGIBLE elv szerint), és egy új, tesztelhető tiszta modul (`vedettSarokMapping.ts`) amely a `vedettSarokProvider.ts`-ben KIZÁRÓLAG `restPointEligible === true` esetén ad vissza pontot. A migráció alkalmazásáig (amíg egyetlen hely sincs explicit megjelölve) a provider **0 eredményt ad** — ez a szándékolt, biztonságos alapállapot. 7 új regressziós teszt fedi a pontos staging bug-scenáriót ("Novák Léna" eset) és a kategória-függetlenséget.
+
+### 3) Pihenőpont-térkép — fitBounds/zoom javítás
+
+A gyökérok (kódvizsgálattal igazolva, nem feltételezve): a pihenőpont-jelölt nézet a `<VedettUtvonalMap legs={[]} .../>` hívással a route-geometriára fitBounds-oló effektet SOSEM futtatta le (`hasCoords` mindig `false` üres `legs` mellett), így a térkép a hardcode-olt alapértelmezett Budapest/zoom:12 nézeten ragadt.
+
+Javítás (`components/vedett-utvonal/VedettUtvonalMap.tsx`): új, `legs.length === 0`-ra korlátozott effekt, amely `currentPosition` + `restPoints` alapján `fitBounds`-ol (`padding: 56`, `maxZoom: 16`, `duration: 300`) — 0 találat esetén (GPS-szel) a felhasználó közvetlen környezetére, 1 találat esetén a pontra (fitBounds egyetlen koordinátával természetesen `maxZoom`-ra zoomol, nem szükséges külön eset), több találat esetén az összesre, korlátozva. Ha se GPS, se találat nincs, a nézethez szándékosan nem nyúl. A függőséglista stabil, levezetett primitívekre iratkozik fel (`restPointIdsKey`, `currentLat`, `currentLon`) — NEM a `restPoints`/`currentPosition` referenciákra közvetlenül —, hogy irreleváns rerenderek (pl. lista-hover) ne váltsanak ki újra-pásztázást. A meglévő route-map `fitBounds` effekt (`padding: 48`, `maxZoom: 17`, `deps: [legs, mapReady]`) VÁLTOZATLAN, regressziós teszttel védve (`__tests__/vedett-route/rest-point-map-fitbounds.test.ts`).
+
+### Ellenőrzés
+
+`npx tsc --noEmit`: tiszta. Teljes teszt-suite (`node --test --experimental-strip-types`): 669/669 zöld (655 korábbi + 7 VédettSarok-eligibility + 7 fitBounds/zoom). Nincs merge, nincs push, a production `VEDETT_ROUTE_ENABLED` flag változatlanul `false`.

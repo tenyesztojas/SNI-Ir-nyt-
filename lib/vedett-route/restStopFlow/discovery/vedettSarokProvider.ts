@@ -23,10 +23,30 @@
 // meglévő getApprovedPlaces() PONTOSAN ezt adja — status = "published" —
 // ugyanaz a lekérdezés, amit a nyilvános VédettSarok helylista is használ,
 // nincs párhuzamos/duplikált szűrési logika.
+//
+// PIHENŐPONT-ALKALMASSÁG (Sprint E.1 hotfix, 2026-09-08, staging audit):
+// "published" + van koordináta ÖNMAGÁBAN NEM elég ahhoz, hogy egy
+// VédettSarok hely pihenőpontként ajánlható legyen — egy staging teszten
+// egy coach/mentor szakember rekordja ("Novák Léna neuroaffirmatív
+// tinicoach, ADHD-mentor") jelent meg pihenőpontként, ami szemantikailag
+// hibás (egy szolgáltató/szakember profilja NEM ugyanaz, mint egy
+// fizikailag meglátogatható, leülésre/pihenésre alkalmas hely).
+//
+// SZABÁLY: ez a provider KIZÁRÓLAG olyan helyet ad vissza, amelynél
+// place.restPointEligible === true — egy EXPLICIT admin/moderációs
+// döntés (lásd lib/types.ts Place.restPointEligible és a
+// supabase/migrations/20260908_places_rest_point_eligibility.sql
+// migráció fejléce). SOHA nem következtetünk a category mezőből (pl.
+// "kávézó" vs "coach" szöveges egyezés) — a category egy szabadon
+// bővíthető, adminok által karbantartott tábla, nem egy zárt, kódban
+// biztonságosan kategorizálható enum, és a UNKNOWN != ELIGIBLE elv itt
+// is érvényes: amíg egyetlen hely sincs explicit megjelölve, ez a
+// provider 0 eredményt ad — ez a SZÁNDÉKOS, biztonságos alapállapot,
+// NEM egy hiányzó implementáció.
 
 import type { FindNearbyParams, ProviderResult, RestPointProvider } from "./types.ts";
 import { getApprovedPlaces } from "../../../data.ts";
-import { haversineDistanceMeters } from "../ranking.ts";
+import { placeToRestPointIfEligible } from "./vedettSarokMapping.ts";
 import type { RestPoint } from "../../../rest-points/types.ts";
 
 export const vedettSarokRestPointProvider: RestPointProvider = {
@@ -36,43 +56,19 @@ export const vedettSarokRestPointProvider: RestPointProvider = {
       const places = await getApprovedPlaces();
       const points: RestPoint[] = [];
 
+      // A tényleges szűrési/leképezési logika (koordináta-ellenőrzés,
+      // EXPLICIT pihenőpont-alkalmasság, távolság) egy külön, alias-
+      // mentes modulban él (vedettSarokMapping.ts) — lásd ott a
+      // fejlécet, miért: ez teszi lehetővé, hogy node --test alól
+      // közvetlenül, Supabase/getApprovedPlaces mock nélkül tesztelhető
+      // legyen a szűrési szabály.
       for (const place of places) {
-        // Csak létező, koordinátával rendelkező rekord — lásd spec 5.
-        // pont minimumkövetelménye. Koordináta nélküli hely NEM jelenhet
-        // meg (nincs "kitalált" pozíció).
-        if (place.latitude === undefined || place.longitude === undefined) continue;
-
-        const distanceMeters = haversineDistanceMeters(
+        const point = placeToRestPointIfEligible(
+          place,
           { lat: params.latitude, lon: params.longitude },
-          { lat: place.latitude, lon: place.longitude }
+          params.radiusMeters
         );
-        if (distanceMeters > params.radiusMeters) continue;
-
-        points.push({
-          id: `vedett-sarok:${place.id}`,
-          // Nincs valódi "létrehozó felhasználó" ennél a forrásnál — a
-          // rest_points DB séma createdBy mezője itt SOHA nem kerül
-          // beírásra (ez egy in-memory DTO), a sentinel csak a RestPoint
-          // interfész kitöltéséhez kell.
-          createdBy: "vedett-sarok",
-          name: place.name,
-          latitude: place.latitude,
-          longitude: place.longitude,
-          source: "VEDETT_SAROK",
-          visibility: "PUBLIC",
-          // UNKNOWN != FALSE — lásd fenti fejléc. A "places" séma jelenleg
-          // nem tartalmaz ilyen mezőket.
-          toilet: null,
-          seating: null,
-          quietSpace: null,
-          indoors: null,
-          outdoors: null,
-          purchaseRequired: null,
-          notes: null,
-          createdAt: "",
-          updatedAt: "",
-          category: "VEDETT_SAROK",
-        });
+        if (point) points.push(point);
       }
 
       return { status: "ok", points };

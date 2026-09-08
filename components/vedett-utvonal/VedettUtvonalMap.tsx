@@ -267,6 +267,67 @@ export default function VedettUtvonalMap({ legs, fromName, toName, currentPositi
     }
   }, [legs, mapReady]);
 
+  // Sprint E.1 hotfix (2026-09-08) — pihenőpont-jelölt nézet fitBounds/
+  // zoom javítás (staging UX hiba: "a pihenőpont-térkép túl messze
+  // zoomol ki, gyakorlatilag Budapest-szintű nézetet mutat"). Amikor
+  // legs=[] (a pihenőpont-jelöltek áttekintő nézete, lásd
+  // RestStopFlowPanel.tsx — a <VedettUtvonalMap legs={[]} .../> hívás), a
+  // FENTI (útvonal-geometriára fitBounds-oló) effekt SOHA nem fut le
+  // ("hasCoords" mindig false, hiszen nincs útvonal-geometria) — a térkép
+  // emiatt a hardcode-olt alapértelmezett nézeten (Budapest, zoom 12)
+  // ragadt. Ez az effekt KIZÁRÓLAG ezt az esetet kezeli (legs.length ===
+  // 0-ra korlátozva), a fenti effektet NEM módosítja és NEM regresszálja
+  // (route-map fitBounds viselkedése változatlan marad).
+  //
+  // STABIL, PRIMITÍV FÜGGŐSÉGEK: a restPoints/currentPosition props a
+  // szülőben (RestStopFlowPanel.tsx) minden renderkor ÚJ tömb-/objektum-
+  // referenciaként jön létre (inline .map()/objektum-literál, nem
+  // memoizált) — ha ez az effekt közvetlenül ezekre a referenciákra
+  // hallgatna, MINDEN, akár teljesen független rerenderre (pl. lista-
+  // hover -> highlightedRestPointId váltás a szülőben) újra lefutna, és
+  // látványosan újra pásztázná/zoomolná a térképet a felhasználó alatt.
+  // Emiatt szándékosan levezetett, primitív kulcsokra (id-k
+  // összefűzve, lat/lon) iratkozunk fel, NEM a restPoints/currentPosition
+  // referenciákra közvetlenül.
+  const restPointIdsKey = legs.length === 0 ? restPoints.map((rp) => rp.id).join(",") : "";
+  const currentLat = currentPosition?.latitude;
+  const currentLon = currentPosition?.longitude;
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+    // Van aktív útvonal-geometria -> a FENTI effekt felelős a nézetért,
+    // ez az effekt itt szándékosan nem csinál semmit (nem regresszál).
+    if (legs.length !== 0) return;
+
+    const hasCurrentPosition = typeof currentLat === "number" && typeof currentLon === "number";
+    if (!hasCurrentPosition && restPoints.length === 0) {
+      // Se GPS-pozíció, se találat — nincs értelmes középpont, a nézethez
+      // szándékosan nem nyúlunk (marad, ami korábban volt).
+      return;
+    }
+
+    // A cél mindig a felhasználó SAJÁT KÖZVETLEN KÖRNYEZETE, SOHA nem a
+    // teljes városnézet: a bounds a currentPosition-t (ha van) ÉS az
+    // összes pihenőpont-jelöltet tartalmazza, maxZoom: 16 korlátozza,
+    // hogy egyetlen/nagyon közeli pont esetén se zoomoljon túl közelre,
+    // és padding: 56px hagy szegélyt a markerek/popupok köré. Ha csak egy
+    // koordináta van a bounds-ban (pl. 0 találat + GPS, vagy 1 találat
+    // GPS nélkül), a MapLibre fitBounds ezt is helyesen kezeli: a
+    // maxZoom-ra zoomol a ponthoz — ez PONTOSAN a "ne váltson városnézetre,
+    // hanem közeli, értelmes zoomot használjon" követelmény, nem kell
+    // hozzá külön eset.
+    const bounds = new maplibregl.LngLatBounds();
+    if (hasCurrentPosition) {
+      bounds.extend([currentLon as number, currentLat as number]);
+    }
+    for (const rp of restPoints) {
+      bounds.extend([rp.longitude, rp.latitude]);
+    }
+    map.fitBounds(bounds, { padding: 56, maxZoom: 16, duration: 300 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [legs.length, mapReady, restPointIdsKey, currentLat, currentLon]);
+
   // Aktuális GPS-pozíció marker — csak a jelenlegi renderben él, nincs
   // perzisztálás (lásd lib/hooks/useGeolocation.ts fejléce).
   useEffect(() => {

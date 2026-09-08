@@ -92,6 +92,19 @@ export interface RestStopFlowContext {
   // opcionális magyarázó szöveget (lásd RestStopFlowPanel.tsx).
   expandedSearch?: boolean;
   discoveryPartial?: boolean;
+  // Sprint E.1 hotfix (2026-09-08) — per-provider (USER/VEDETT_SAROK/OSM)
+  // diagnosztikai pillanatkép az UTOLSÓ /nearby hívásból, KIZÁRÓLAG
+  // admin/preview debug célra (lásd RestStopFlowPanel.tsx "Diagnosztika
+  // (admin)" blokkja). SOHA nem befolyásolja az állapotgép átmeneteit, és
+  // SOHA nem jelenik meg a polírozott, végfelhasználói banner-szövegben —
+  // az továbbra is technikai provider-név nélküli marad. Koordinátát vagy
+  // nyers Overpass query-t SOSEM tartalmaz (lásd aggregator.ts
+  // DiscoverySourceStatus / osmProvider.ts OsmProviderErrorCode).
+  discoverySources?: {
+    user: { ok: boolean; reason?: string; errorCode?: string };
+    vedettSarok: { ok: boolean; reason?: string; errorCode?: string };
+    osm: { ok: boolean; reason?: string; errorCode?: string };
+  };
   selectedRestPoint?: RestPoint;
   errorReason?: RestStopFlowErrorReason;
   errorMessage?: string;
@@ -100,8 +113,22 @@ export interface RestStopFlowContext {
 export type RestStopFlowEvent =
   | { type: "REQUEST_REST" }
   | { type: "START_LOADING_REST_POINTS" }
-  | { type: "REST_POINTS_LOADED"; restPoints: RankedRestPoint[]; expandedSearch?: boolean; discoveryPartial?: boolean }
-  | { type: "REST_POINTS_LOAD_FAILED"; reason: RestStopFlowErrorReason; message?: string }
+  | {
+      type: "REST_POINTS_LOADED";
+      restPoints: RankedRestPoint[];
+      expandedSearch?: boolean;
+      discoveryPartial?: boolean;
+      // Sprint E.1 hotfix (2026-09-08) — lásd RestStopFlowContext.discoverySources kommentje.
+      sources?: RestStopFlowContext["discoverySources"];
+    }
+  | {
+      type: "REST_POINTS_LOAD_FAILED";
+      reason: RestStopFlowErrorReason;
+      message?: string;
+      // Sprint E.1 hotfix (2026-09-08) — a nulla-találatos hibaágakban (NO_REST_POINTS_FOUND /
+      // REST_POINTS_PARTIALLY_UNAVAILABLE) is elérhető, admin/preview debug célra.
+      sources?: RestStopFlowContext["discoverySources"];
+    }
   | { type: "SELECT_REST_POINT"; restPoint: RestPoint }
   // A pihenőponthoz vezető útvonal megtervezésének indítása — a
   // route-service/MOTIS hívás EZUTÁN indul (lásd
