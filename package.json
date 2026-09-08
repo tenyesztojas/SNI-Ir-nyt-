@@ -15,7 +15,8 @@
     "vedett-route:gtfs-rt-match-rate-test": "node scripts/vedett-route/gtfs-rt-match-rate-test.mjs",
     "vedett-route:realtime-routing-test": "node scripts/vedett-route/realtime-routing-test.mjs",
     "vedett-route:generate-motis-rt-config": "node scripts/vedett-route/generate-motis-rt-config.mjs",
-    "vedett-route:gtfs-rt-failure-simulation-test": "node scripts/vedett-route/gtfs-rt-failure-simulation-test.mjs"
+    "vedett-route:gtfs-rt-failure-simulation-test": "node scripts/vedett-route/gtfs-rt-failure-simulation-test.mjs",
+    "vedett-route:route-service-smoke-test": "node scripts/vedett-route/route-service-smoke-test.mjs"
   },
   "dependencies": {
     "@fontsource/nunito": "^5.2.7",
