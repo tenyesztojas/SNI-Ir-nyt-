@@ -86,8 +86,25 @@ function buildCsp(nonce: string, supabaseHost: string, isDev: boolean): string {
     `style-src 'self' 'unsafe-inline' https://unpkg.com`,
     // Képek: adatok, blob és külső HTTPS (térképcsempék, CDN képek)
     `img-src 'self' data: blob: https:`,
-    // Fetch/XHR: Supabase + Google OAuth + Analytics + CDN
-    `connect-src 'self' https://${supabaseHost} https://*.supabase.co wss://*.supabase.co https://oauth2.googleapis.com https://www.googleapis.com https://www.google-analytics.com https://region1.google-analytics.com https://www.googletagmanager.com https://unpkg.com`,
+    // Fetch/XHR: Supabase + Google OAuth + Analytics + CDN + MapLibre demo tiles.
+    //
+    // https://demotiles.maplibre.org (Sprint E, Map/GPS/Rest Points sprint,
+    // 2026-09-08 CSP audit): a VedettUtvonalMap.tsx MapLibre GL JS
+    // komponens ezt a hostot használja style.json + tiles.json + vektor
+    // tile (.pbf) + glyph (.pbf) lekérésekre — MapLibre GL JS ezeket
+    // MIND fetch()/XHR-en keresztül tölti (nem <img> vagy CSS
+    // background-image), ezért kizárólag a connect-src direktívát érinti,
+    // az img-src/font-src/worker-src direktívákat NEM (ellenőrizve: a
+    // demo style.json nem tartalmaz "sprite" kulcsot és nem használ
+    // raster tile forrást, kizárólag vector/pbf-et — lásd
+    // docs/vedett-route/MAP_GPS_RESTPOINT_SPRINT.md "CSP audit" szakasza).
+    //
+    // TECHNICAL DEBT: a demotiles.maplibre.org KIZÁRÓLAG staging/demo
+    // célra elfogadható (lásd VedettUtvonalMap.tsx MAP_STYLE fejléce) —
+    // NEM production tile-infrastruktúra. Budapest béta előtt egy
+    // production-suitable tile source/hosting szükséges, és ekkor ezt a
+    // CSP allowlist bejegyzést az akkori valós hostra kell cserélni.
+    `connect-src 'self' https://${supabaseHost} https://*.supabase.co wss://*.supabase.co https://oauth2.googleapis.com https://www.googleapis.com https://www.google-analytics.com https://region1.google-analytics.com https://www.googletagmanager.com https://unpkg.com https://demotiles.maplibre.org`,
     // Framek: reCAPTCHA + YouTube (beágyazott videók)
     `frame-src https://www.google.com https://www.youtube.com https://www.youtube-nocookie.com`,
     // Fontok: csak saját (fontsource npm csomagból)

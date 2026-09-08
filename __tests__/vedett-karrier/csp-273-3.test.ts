@@ -33,7 +33,7 @@ function buildCsp(nonce: string, supabaseHost: string, isDev: boolean): string {
     scriptSrc,
     `style-src 'self' 'unsafe-inline' https://unpkg.com`,
     `img-src 'self' data: blob: https:`,
-    `connect-src 'self' https://${supabaseHost} https://*.supabase.co wss://*.supabase.co https://oauth2.googleapis.com https://www.googleapis.com https://www.google-analytics.com https://region1.google-analytics.com https://www.googletagmanager.com https://unpkg.com`,
+    `connect-src 'self' https://${supabaseHost} https://*.supabase.co wss://*.supabase.co https://oauth2.googleapis.com https://www.googleapis.com https://www.google-analytics.com https://region1.google-analytics.com https://www.googletagmanager.com https://unpkg.com https://demotiles.maplibre.org`,
     `frame-src https://www.google.com https://www.youtube.com https://www.youtube-nocookie.com`,
     `font-src 'self'`,
     `object-src 'none'`,
