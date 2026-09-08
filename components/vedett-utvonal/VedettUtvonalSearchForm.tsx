@@ -112,7 +112,7 @@ const FACTOR_LABELS: Record<string, string> = {
   walking: "Gyaloglás",
   duration: "Teljes utazási idő",
   waiting: "Várakozás",
-  crowding: "Jármű-foglaltság (valós idejű)",
+  crowding: "Jármű-foglaltság (valós idejő)",
   vehicleAccessibility: "Jármű-szintű akadálymentesség / érzékszervi terhelés",
 };
 
@@ -121,7 +121,7 @@ const FACTOR_LABELS: Record<string, string> = {
 // realtime-ként. Három eset:
 //   1) leg.cancelled === true -> törölt/kihagyott járat jelzése.
 //   2) leg.realtime === true ÉS van ténylegesen kiszámított delayMinutes ->
-//      "Menetrend szerint: HH:mm / Várható indulás: HH:mm / Késés: +-N perc".
+//     "Menetrend szerint: HH:mm / Várható indulás: HH:mm / Késés: +-N perc".
 //   3) minden más eset (nincs realtime, vagy realtime van de nem volt
 //      számítható eltérés) -> csak "Menetrend szerinti indulás: HH:mm".
 function TransitLegRealtimeNote({
@@ -206,9 +206,55 @@ function JourneyRealtimeSummary({ journey }: { journey: Journey }) {
   return <p className="mt-1 text-xs text-green-700">Valós idejű adat szerint pontosan a menetrend szerint indul.</p>;
 }
 
-function RankedJourneyCard({ ranked, onOpenMap }: { ranked: RankedJourney; onOpenMap?: (journey: Journey) => void }) {
+// Part B (2026-09-08) — inline per-kártya térkép-átalakítás. A korábbi
+// mintázat (kártya -> "Térkép megnyitása" -> az ÖSSZES kártya alatt egy
+// KÖYÖS globális térkép-blokk) helyett minden kártyának SAJÁT, a kártyán
+// belül nyíló térkép-slotja van (lásd a komponens vége felé, az `isOpen`
+// blokk). Ennek okai (spec, szó szerint):
+//  - a felhasználó sose ugorjon az oldal aljára egy térképért,
+//  - a MapLibre GL WebGL-kontextus (memória/mobil-teljesítmény miatt)
+//    LEGFELJEBB EGYSZERRE fusson — ezt a szülő (VedettUtvonalSearchForm)
+//    `openIndex` state-je garantálja: másik kártya nyitása automatikusan
+//    zárja az előzőt, és mivel a <VedettUtvonalMap> csak `isOpen` esetén
+//    kerül a JSX-be, bezáráskor ténylegesen UNMOUNT-olódik (nem csak
+//    elrejtődik CSS-sel).
+function RankedJourneyCard({
+  ranked,
+  isOpen,
+  onToggleMap,
+}: {
+  ranked: RankedJourney;
+  isOpen: boolean;
+  onToggleMap: () => void;
+}) {
   const journey = ranked.journey;
   const sensory = journey.sensory;
+
+  // Ez a state KIZÁRÓLAG ebben a kártyában él (nem a szülő formban):
+  // amíg a kártya zárva van, ezek a hookok/state-ek passzívak (a
+  // useGeolocation() csak explicit requestOnce()/startWatching() hívásra
+  // kezd tényleges GPS-lekérdezést, lásd useGeolocation.ts fejléce), nem
+  // indítanak semmilyen hálózati vagy szenzor-hívást pusztán a mounttól.
+  //
+  // displayedJourney: alapból a kártya SAJÁT itineraryje (ranked.journey)
+  // — SOSEM az első/egy másik kártya útvonala. Sprint E "Pihenőre van
+  // szükségem" resume folyamata felülírhatja egy ÚJ, frissen tervezett
+  // itineraryre (lásd onRouteResumed lent) — ez is csak EBBEN a
+  // kártyában él, nem szivárog át másik kártyára.
+  const [displayedJourney, setDisplayedJourney] = useState<Journey>(journey);
+  const [sessionRestPoints, setSessionRestPoints] = useState<RestPointCreatedPayload[]>([]);
+  const geo = useGeolocation();
+
+  const currentPosition =
+    geo.status === "granted" && geo.latitude !== null && geo.longitude !== null
+      ? { latitude: geo.latitude, longitude: geo.longitude }
+      : null;
+
+  const lastLeg = displayedJourney.legs.length > 0 ? displayedJourney.legs[displayedJourney.legs.length - 1] : undefined;
+  const originalDestination =
+    lastLeg && lastLeg.toLat !== undefined && lastLeg.toLon !== undefined
+      ? { name: lastLeg.toName, lat: lastLeg.toLat as number, lon: lastLeg.toLon as number }
+      : null;
 
   return (
     <div className="card border-2" style={{ borderColor: ranked.labels.length > 0 ? "#93c5fd" : "#e5e7eb" }}>
@@ -231,11 +277,9 @@ function RankedJourneyCard({ ranked, onOpenMap }: { ranked: RankedJourney; onOpe
 
       <JourneyRealtimeSummary journey={journey} />
 
-      {onOpenMap && (
-        <button type="button" onClick={() => onOpenMap(journey)} className="btn-secondary mt-2 text-xs">
-          Térkép megnyitása
-        </button>
-      )}
+      <button type="button" onClick={onToggleMap} className="btn-secondary mt-2 text-xs">
+        {isOpen ? "Térkép bezárása" : "Térkép megnyitása"}
+      </button>
 
       <div className="mt-2 space-y-1">
         {journey.legs.map((leg, i) => (
@@ -295,6 +339,60 @@ function RankedJourneyCard({ ranked, onOpenMap }: { ranked: RankedJourney; onOpe
         <p className="mt-1 text-xs italic text-gray-400">Valós idejű adat nem áll rendelkezésre.</p>
       )}
 
+      {/* Part B (2026-09-08) — a térkép és a hozzá tartozó GPS/pihenőpont
+          vezérlők KIZÁRÓLAG akkor mountolódnak, amikor EZ a kártya van
+          nyitva (isOpen) — a szülő form gondoskodik arról, hogy
+          egyszerre csak egy kártya lehessen nyitva (lásd
+          VedettUtvonalSearchForm openIndex state-je), így WebGL-kontextus
+          és GPS-figyelés is legfeljebb egyszerre egy fut. Bezáráskor ez a
+          blokk teljesen eltűnik a DOM-ból (unmount), az itt élő állapot
+          (displayedJourney/sessionRestPoints/geo) a kártyával együtt él
+          tovább — újranyitáskor ugyanide (a kártya saját, valós
+          itineraryjéhez) tér vissza, sosem egy másik kártya vagy egy
+          elavult globális állapot. */}
+      {isOpen && (
+        <div className="mt-3 space-y-3 border-t border-gray-200 pt-3">
+          <VedettUtvonalMap
+            legs={displayedJourney.legs}
+            currentPosition={currentPosition}
+            restPoints={sessionRestPoints.map((rp) => ({ id: rp.id, name: rp.name, latitude: rp.latitude, longitude: rp.longitude }))}
+            className="h-[300px] w-full rounded border border-gray-200 sm:h-[360px] md:h-[450px]"
+          />
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={geo.startWatching} className="btn-secondary text-xs" disabled={geo.isWatching}>
+              {geo.isWatching ? "Aktuális hely követése be van kapcsolva" : "Aktuális hely megjelenítése"}
+            </button>
+            {geo.isWatching && (
+              <button type="button" onClick={geo.stopWatching} className="text-xs text-gray-500 underline">
+                Követés leállítása
+              </button>
+            )}
+            {geo.status === "denied" && <span className="text-xs text-amber-700">GPS engedély elutasítva.</span>}
+            {(geo.status === "unavailable" || geo.status === "timeout") && (
+              <span className="text-xs text-amber-700">A jelenlegi hely most nem elérhető — az útvonaltervezés ettől függetlenül működik.</span>
+            )}
+          </div>
+
+          <RestPointQuickAdd onCreated={(rp) => setSessionRestPoints((points) => [...points, rp])} />
+
+          {/* Sprint E — "Pihenőre van szükségem": az eredeti célt a
+              MEGJELENÍTETT (nem feltétlenül az eredeti) itinerary utolsó
+              lábának valós MOTIS koordinátáiból származtatjuk — ha a
+              felhasználó már folytatta az utat egy pihenő után, a
+              displayedJourney már a friss, resume utáni itinerary, és
+              ÍGY egy újabb "Pihenőre van szükségem" is a helyes,
+              aktuális célra vonatkozik. Ha ez a koordináta hiányzik, a
+              panel nem jelenik meg (lásd ORIGINAL_DESTINATION_MISSING,
+              Sprint E spec 9. pont). */}
+          <RestStopFlowPanel
+            originalDestination={originalDestination}
+            originalDepartAt={displayedJourney.departureTime}
+            geo={geo}
+            onRouteResumed={(nextJourney) => setDisplayedJourney(nextJourney)}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -324,17 +422,20 @@ export default function VedettUtvonalSearchForm({ disabled }: { disabled: boolea
     duration: 1,
     waiting: 1,
   });
-  // Aktív, térképen megnyitott útvonal + saját pihenőpontok (csak ennek a
-  // munkamenetnek a memóriájában — lásd RestPointQuickAdd.tsx és
-  // useGeolocation.ts fejlécei az adatvédelmi szabályokért).
-  const [activeJourney, setActiveJourney] = useState<Journey | null>(null);
-  const [sessionRestPoints, setSessionRestPoints] = useState<RestPointCreatedPayload[]>([]);
-  const activeRouteGeo = useGeolocation();
+  // Part B (2026-09-08) — melyik kártya térképe van éppen nyitva (index a
+  // result.journeys tömben, vagy null, ha egyik sincs nyitva). Ez az
+  // EGYETLEN helye annak, hogy "melyik kártya aktív" — nincs másik,
+  // globális "activeJourney"/"aktív útvonal" állapot többé (lásd a régi,
+  // most eltávolított "Aktív útvonal a térképen" blokkot). Új kártya
+  // nyitása automatikusan zárja az előzőt, mert csak EGY index lehet
+  // "nyitva" egyszerre.
+  const [openIndex, setOpenIndex] = useState<number | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setFormError(null);
     setResult(null);
+    setOpenIndex(null);
 
     if (!from.trim() || !to.trim()) {
       setFormError("Add meg az indulási helyet és a célhelyet.");
@@ -364,7 +465,7 @@ export default function VedettUtvonalSearchForm({ disabled }: { disabled: boolea
 
   return (
     <div className="card">
-      <h2 className="text-lg font-semibold text-sni-text">Útvonalkereső</h2>
+      <h2 className="text-lg font-semibold text-sni-text">Útvonalkeresés</h2>
 
       <form onSubmit={handleSubmit} className="mt-3 space-y-3">
         <div>
@@ -482,70 +583,13 @@ export default function VedettUtvonalSearchForm({ disabled }: { disabled: boolea
           )}
 
           {result.journeys.map((r, i) => (
-            <RankedJourneyCard key={i} ranked={r} onOpenMap={setActiveJourney} />
+            <RankedJourneyCard
+              key={i}
+              ranked={r}
+              isOpen={openIndex === i}
+              onToggleMap={() => setOpenIndex((prev) => (prev === i ? null : i))}
+            />
           ))}
-        </div>
-      )}
-
-      {activeJourney && (
-        <div className="mt-4 space-y-3 rounded border border-sni-primary/30 p-3">
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-sni-text">Aktív útvonal a térképen</h3>
-            <button type="button" onClick={() => setActiveJourney(null)} className="text-xs text-gray-500 underline">
-              Bezárás
-            </button>
-          </div>
-
-          <VedettUtvonalMap
-            legs={activeJourney.legs}
-            currentPosition={
-              activeRouteGeo.status === "granted" && activeRouteGeo.latitude !== null && activeRouteGeo.longitude !== null
-                ? { latitude: activeRouteGeo.latitude, longitude: activeRouteGeo.longitude }
-                : null
-            }
-            restPoints={sessionRestPoints.map((rp) => ({ id: rp.id, name: rp.name, latitude: rp.latitude, longitude: rp.longitude }))}
-          />
-
-          <div className="flex flex-wrap items-center gap-2">
-            <button type="button" onClick={activeRouteGeo.startWatching} className="btn-secondary text-xs" disabled={activeRouteGeo.isWatching}>
-              {activeRouteGeo.isWatching ? "Aktuális hely követése be van kapcsolva" : "Aktuális hely megjelenítése"}
-            </button>
-            {activeRouteGeo.isWatching && (
-              <button type="button" onClick={activeRouteGeo.stopWatching} className="text-xs text-gray-500 underline">
-                Követés leállítása
-              </button>
-            )}
-            {activeRouteGeo.status === "denied" && <span className="text-xs text-amber-700">GPS engedély elutasítva.</span>}
-            {(activeRouteGeo.status === "unavailable" || activeRouteGeo.status === "timeout") && (
-              <span className="text-xs text-amber-700">A jelenlegi hely most nem elérhető — az útvonaltervezés ettől függetlenül működik.</span>
-            )}
-          </div>
-
-          <RestPointQuickAdd onCreated={(rp) => setSessionRestPoints((points) => [...points, rp])} />
-
-          {/* Sprint E — "Pihenőre van szükségem": az eredeti célt az aktív
-              útvonal UTOLSÓ lábának valós MOTIS koordinátáiból származtatjuk
-              (journey.legs[last].toLat/toLon) — ez a ténylegesen geokódolt/
-              MOTIS által feloldott célpont, nem kitalált adat. Ha ez a
-              koordináta valamiért hiányzik a MOTIS válaszból, a panel nem
-              jelenik meg (nincs biztonságosan megőrizhető eredeti cél —
-              lásd ORIGINAL_DESTINATION_MISSING a Sprint E spec 9. pontjában). */}
-          <RestStopFlowPanel
-            originalDestination={
-              activeJourney.legs.length > 0 &&
-              activeJourney.legs[activeJourney.legs.length - 1].toLat !== undefined &&
-              activeJourney.legs[activeJourney.legs.length - 1].toLon !== undefined
-                ? {
-                    name: activeJourney.legs[activeJourney.legs.length - 1].toName,
-                    lat: activeJourney.legs[activeJourney.legs.length - 1].toLat as number,
-                    lon: activeJourney.legs[activeJourney.legs.length - 1].toLon as number,
-                  }
-                : null
-            }
-            originalDepartAt={activeJourney.departureTime}
-            geo={activeRouteGeo}
-            onRouteResumed={(journey) => setActiveJourney(journey)}
-          />
         </div>
       )}
     </div>
