@@ -20,6 +20,26 @@
 // találat van, EGYETLEN alkalommal újra próbálkozunk 1500m-rel — SOSEM
 // végtelen/ismételt bővítés.
 //
+// STAGING HOTFIX (2026-09-09, root cause audit): a sugár-bővítés
+// EREDETILEG feltétel nélkül újrahívta MINDHÁROM providert, akkor is, ha
+// egy provider (pl. OSM) az ELSŐ körben egy DETERMINISZTIKUS, nem-
+// tranziens hibával bukott (pl. HTTP 406/429/400 — lásd a valós Vercel
+// Preview incidenst: `errorCode: http_error, reason: overpass_http_406`).
+// Mivel egy 406/429/malformed/parse hiba a keresési sugártól függetlenül
+// szinte biztosan MEGISMÉTLŐDNE, ez egyetlen felhasználói művelet ("Pihenőre
+// van szükségem") alatt akár 2 egymást követő, ugyanazon okból hibázó
+// Overpass-hívást is generálhatott — ez a KRITIKUS elvárás ("406 után
+// ugyanazon user action alatt ne küldj még egy Overpass requestet") ellen
+// hatott. A javítás: a bővített (1500m) kör KIZÁRÓLAG azokat a
+// providereket hívja újra, amelyek az ELSŐ körben VAGY sikeresek voltak
+// (hogy a nagyobb sugár tényleg találhasson többet), VAGY egy explicit
+// TRANZIENS hibaosztállyal buktak (`timeout`/`endpoint_unavailable`) — lásd
+// isWorthRetryingOnExpansion() lent. Minden más hibaosztály (`http_error`,
+// `rate_limited`, `query_error`, `malformed_response`, `parse_error`, és
+// minden osztályozatlan/`unknown_error` eset) KIMARAD a bővített körből —
+// a diagnosztikai `sources` bejegyzésük az ELSŐ kör állapotát őrzi meg
+// (nem íródik felül egy "nem is futtattuk" default értékkel).
+//
 // MAX EREDMÉNYSZÁM (spec 10. pont, "~10-15"): itt korlátozzuk a
 // dedupe-olt listát a hívó előtt, hogy a ranking.ts modul se kapjon
 // indokolatlanul sok pontot, és a UI se kelljen kezeljen több száz POI-t.
@@ -88,6 +108,20 @@ export interface DiscoverRestPointsResult {
   };
 }
 
+// STAGING HOTFIX (2026-09-09) — lásd a fenti "SUGÁR-BŐVÍTÉS" fejléc-
+// kiegészítést. Csak ez a két hibaosztály számít elég tranziensnek ahhoz,
+// hogy egy MÁSODIK (bővített sugarú) Overpass/DB-hívást érdemes legyen
+// kockáztatni ugyanazon felhasználói művelet alatt — minden más
+// hibaosztályon (és minden osztályozatlan hibán) a fallback kör
+// SZÁNDÉKOSAN kihagyja az adott providert (konzervatív alapállás: "egy
+// user action lehetőleg ne generáljon request stormot").
+const RADIUS_EXPANSION_RETRYABLE_ERROR_CODES = new Set<string>(["timeout", "endpoint_unavailable"]);
+
+function isWorthRetryingOnExpansion(status: DiscoverySourceStatus): boolean {
+  if (status.ok) return true;
+  return status.errorCode !== undefined && RADIUS_EXPANSION_RETRYABLE_ERROR_CODES.has(status.errorCode);
+}
+
 async function runProviders(
   providers: RestPointProvider[],
   params: FindNearbyParams
@@ -149,16 +183,34 @@ export async function discoverRestPoints(params: DiscoverRestPointsParams): Prom
   let sources = firstPass.sources;
 
   // Egyszeri, dokumentált sugár-bővítés — csak akkor, ha az ELSŐ kör
-  // (dedupe utáni) nulla eredményt adott (spec 10. pont).
+  // (dedupe utáni) nulla eredményt adott (spec 10. pont). STAGING HOTFIX
+  // (2026-09-09): csak azokat a providereket hívjuk újra, amelyek
+  // "érdemesek" rá (lásd isWorthRetryingOnExpansion fent) — ha egyik
+  // provider sem érdemes rá (pl. mindegyik determinisztikus hibával
+  // bukott), a bővített kör TELJES EGÉSZÉBEN kimarad: nincs második
+  // hálózati hívás, és expandedSearch=false marad (őszintén jelezve, hogy
+  // ténylegesen NEM történt bővített keresés).
   if (dedupedPoints.length === 0) {
-    const secondPass = await runProviders(providers, {
-      ...baseParams,
-      radiusMeters: EXPANDED_SEARCH_RADIUS_METERS,
-    });
-    dedupedPoints = dedupeRestPoints(secondPass.points);
-    searchRadiusMeters = EXPANDED_SEARCH_RADIUS_METERS;
-    expandedSearch = true;
-    sources = secondPass.sources;
+    const providersToRetry = providers.filter((provider) => isWorthRetryingOnExpansion(firstPass.sources[provider.name]));
+    if (providersToRetry.length > 0) {
+      const secondPass = await runProviders(providersToRetry, {
+        ...baseParams,
+        radiusMeters: EXPANDED_SEARCH_RADIUS_METERS,
+      });
+      dedupedPoints = dedupeRestPoints(secondPass.points);
+      searchRadiusMeters = EXPANDED_SEARCH_RADIUS_METERS;
+      expandedSearch = true;
+      // Csak az ÚJRA futtatott providerek státuszát cseréljük a második
+      // kör eredményére — a kihagyott providerek diagnosztikai adata
+      // (reason/errorCode) az ELSŐ körből marad, NEM íródik felül egy
+      // "nem is próbáltuk" default értékkel.
+      const retriedNames = new Set(providersToRetry.map((provider) => provider.name));
+      sources = {
+        user: retriedNames.has("user") ? secondPass.sources.user : firstPass.sources.user,
+        vedettSarok: retriedNames.has("vedettSarok") ? secondPass.sources.vedettSarok : firstPass.sources.vedettSarok,
+        osm: retriedNames.has("osm") ? secondPass.sources.osm : firstPass.sources.osm,
+      };
+    }
   }
 
   const partial = !sources.user.ok || !sources.vedettSarok.ok || !sources.osm.ok;

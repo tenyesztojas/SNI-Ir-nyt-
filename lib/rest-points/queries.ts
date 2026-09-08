@@ -17,7 +17,17 @@ export async function listOwnRestPoints(): Promise<RestPoint[]> {
     .select("*")
     .order("created_at", { ascending: false });
 
-  if (error) throw new Error(`Pihenőpontok lekérdezése sikertelen: ${error.message}`);
+  if (error) {
+    // Sprint E.1 hotfix (2026-09-09) — a Postgrest/Postgres hibakódot
+    // (error.code, pl. "42P01" = undefined_table, "42501" =
+    // insufficient_privilege) a dobott Error-on is megőrizzük, hogy a
+    // hívó (userProvider.ts) admin/preview debug célra pontosan
+    // osztályozni tudja a hiba okát — koordinátát/userId-t/secretet ez a
+    // mező SOSEM tartalmaz, csak egy zárt, gépi kódot.
+    const wrapped = new Error(`Pihenőpontok lekérdezése sikertelen: ${error.message}`);
+    (wrapped as Error & { code?: string }).code = error.code;
+    throw wrapped;
+  }
   return ((data ?? []) as RestPointRow[]).map(mapRestPointRow);
 }
 
