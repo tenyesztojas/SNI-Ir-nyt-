@@ -228,3 +228,60 @@ háttérben futó GPS, hangalapú navigáció.
 3. A VPS-en végzett tényleges realtime bizonyítás
    (`VPS_MOTIS_HANDOFF.md` D) szakasz release gate sablonja) egy külön,
    jövőbeli munkamenet feladata.
+
+## CSP audit — MapLibre demotiles.maplibre.org (2026-09-08)
+
+**Symptom (Sprint E Preview staging test):** a MapLibre renderer
+inicializálódott, de a térkép üres maradt. Böngésző konzol hiba:
+
+```
+Refused to connect because it violates the document's Content Security Policy.
+connect-src ... (blocked https://demotiles.maplibre.org/style.json)
+```
+
+**Root cause:** a `VedettUtvonalMap.tsx` a `https://demotiles.maplibre.org/style.json`
+demo stílust tölti be. MapLibre GL JS ezt, a belőle hivatkozott
+`tiles.json`-t, a vector tile (`.pbf`) és a glyph (`.pbf`) lekéréseket is
+`fetch()`/XHR-en keresztül tölti — ezt a `middleware.ts` CSP `connect-src`
+direktívája korábban nem engedélyezte a `demotiles.maplibre.org` hosztra.
+
+**Audit — mely endpointokat használja ténylegesen a demo style** (a valós
+`style.json` és `tiles.json` tartalmának ellenőrzésével, nem
+találgatással):
+
+| Endpoint | Host | CSP direktíva |
+|---|---|---|
+| `style.json` | `demotiles.maplibre.org` | `connect-src` |
+| `tiles.json` (vector source) | `demotiles.maplibre.org` | `connect-src` |
+| tile `.pbf` (`/tiles/{z}/{x}/{y}.pbf`) | `demotiles.maplibre.org` | `connect-src` |
+| glyph `.pbf` (`/font/{fontstack}/{range}.pbf`) | `demotiles.maplibre.org` | `connect-src` |
+| sprite | — nincs `"sprite"` kulcs a style-ban | — |
+| raster tile / kép | — a style kizárólag vector (`"type": "vector"`) forrást használ, nincs raster | — |
+
+Mivel MapLibre GL JS minden fenti lekérést `fetch()`/XHR-rel indít (nem
+`<img>` vagy CSS `background-image`), **kizárólag** a `connect-src`
+direktívát kellett bővíteni. Az `img-src`/`font-src`/`worker-src`
+direktívák bizonyítottan NEM érintettek — nincs sprite, nincs raster tile,
+és a MapLibre worker a már betöltött same-origin bundle-ból jön létre
+(nem külön hálózati hívásból), tehát nem igényel `worker-src` bejegyzést.
+
+**Javítás:** `middleware.ts` `buildCsp()` `connect-src` direktívája
+bővült egyetlen host bejegyzéssel: `https://demotiles.maplibre.org`.
+Semmilyen más direktíva nem változott, nincs wildcard (`*`/`https:`/
+`data:`/`blob:`) bevezetve.
+
+**TECHNICAL DEBT:** a `demotiles.maplibre.org` MapLibre saját, ingyenes
+demo-szolgáltatása — **kizárólag staging/demo célra elfogadható**, NEM
+production tile-infrastruktúra (nincs SLA, nincs szerződéses jogosultság
+a használatára, bármikor változhat/leállhat). **Budapest béta előtt
+production-suitable tile source/hosting kiválasztása és bekötése
+szükséges**, és ekkor a CSP `connect-src` bejegyzést az akkori valós
+hostra kell cserélni (lásd `components/vedett-utvonal/VedettUtvonalMap.tsx`
+`MAP_STYLE` konstans fejléce).
+
+Regressziós tesztek:
+`__tests__/vedett-route/csp-maplibre-demotiles.test.ts` (a demotiles host
+engedélyezve, minden más direktíva bit-pontosan változatlan, nincs
+wildcard, a route-service secret továbbra sem kerül kliensbe) és a
+meglévő `__tests__/vedett-karrier/csp-273-3.test.ts` (frissítve, hogy a
+`connect-src` mostani teljes tartalmát tükrözze).

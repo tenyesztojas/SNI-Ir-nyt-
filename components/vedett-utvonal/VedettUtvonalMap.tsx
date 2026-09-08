@@ -23,6 +23,16 @@ import { journeyLegsToGeoJson, type JourneyLegForGeometry } from "@/lib/vedett-r
 // éles környezetben cserélhető saját/ingyenes tile-forrásra (lásd
 // docs/vedett-route/VPS_MOTIS_HANDOFF.md). Szándékosan nincs fizetős
 // provider (Mapbox/Google) API kulcs nélküli jóváhagyás nélkül.
+//
+// TECHNICAL DEBT (2026-09-08, CSP audit a Sprint E Preview staging teszt
+// során talált üres térkép hibából): a demotiles.maplibre.org KIZÁRÓLAG
+// staging/demo célra elfogadható — NEM production tile-infrastruktúra
+// (nincs SLA-ja, nincs rá szerződéses jogosultság, bármikor
+// megváltozhat/leállhat). A middleware.ts CSP connect-src direktívája
+// jelenleg explicit ezt a hostot engedélyezi — Budapest béta előtt egy
+// production-suitable tile source/hosting kiválasztása és a CSP
+// megfelelő frissítése szükséges (lásd
+// docs/vedett-route/MAP_GPS_RESTPOINT_SPRINT.md "CSP audit" szakasza).
 const MAP_STYLE = "https://demotiles.maplibre.org/style.json";
 
 const MODE_COLOR: Record<string, string> = {
