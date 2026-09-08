@@ -47,6 +47,20 @@ import { vedettRouteLog } from "../../logger.ts";
 
 const OVERPASS_ENDPOINT = "https://overpass-api.de/api/interpreter";
 
+// STAGING HOTFIX (2026-09-09) — root cause audit: a valódi Vercel Preview
+// logban megerősített hiba `errorCode: http_error, reason:
+// overpass_http_406, httpStatus: 406` volt. A kérés eddig NEM küldött
+// semmilyen alkalmazás-azonosítót (sem User-Agent-et, sem Referer-t) —
+// csak Content-Type-ot. Ez a két header KIZÁRÓLAG STATIKUS,
+// alkalmazás-szintű azonosító — SOHA nem tartalmazhat GPS-koordinátát,
+// userId-t, auth tokent, Supabase-adatot vagy secretet, és ez így is
+// marad, mert konstans string, nem paraméterezett.
+//
+// A kontakt URL egy jelenlegi legjobb becslés — a projekt tulajdonosának
+// kell véglegesítenie egy valós, élesben elérhető URL-re, ha ez eltérne.
+const OVERPASS_APP_USER_AGENT = "VedettSarok-VedettUtvonal/1.0 (+https://vedettsarok.hu)";
+const OVERPASS_APP_REFERER = "https://vedettsarok.hu/";
+
 // Explicit timeout (spec 12. pont) — az Overpass szerver-oldali
 // "[timeout:N]" direktíváján felül a kliens oldali AbortController is
 // garantálja, hogy sose várjunk a végtelenségig egy elakadt kérésre.
@@ -126,10 +140,22 @@ async function fetchOverpassOnce(query: string): Promise<OverpassResponse> {
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   let response: Response;
   try {
+    // A body-t URLSearchParams-szal építjük (nem manuális
+    // encodeURIComponent()-tel) — ez a hivatalosan dokumentált
+    // application/x-www-form-urlencoded kódolás (szóköz "+"-ként, nem
+    // "%20"-ként), az Overpass QL query SZEMANTIKÁJÁT nem érinti, csak a
+    // kódolás módját. A Content-Type explicit charset=UTF-8-cal van
+    // kiegészítve. A User-Agent/Referer KIZÁRÓLAG statikus, alkalmazás-
+    // szintű azonosító (lásd fenti konstansok fejléce) — soha semmilyen
+    // futásidejű/felhasználói adat nem kerül bele.
     response = await fetch(OVERPASS_ENDPOINT, {
       method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: `data=${encodeURIComponent(query)}`,
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+        "User-Agent": OVERPASS_APP_USER_AGENT,
+        "Referer": OVERPASS_APP_REFERER,
+      },
+      body: new URLSearchParams({ data: query }).toString(),
       signal: controller.signal,
     });
   } catch (err) {
