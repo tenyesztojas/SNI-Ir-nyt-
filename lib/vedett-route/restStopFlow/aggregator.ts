@@ -65,6 +65,12 @@ export interface DiscoverRestPointsParams {
 export interface DiscoverySourceStatus {
   ok: boolean;
   reason?: string;
+  // Sprint E.1 hotfix (2026-09-08) — ZÁRT, gépileg összehasonlítható
+  // hibaosztály-kód (jelenleg csak az OSM provider tölti ki, lásd
+  // discovery/osmProvider.ts OsmProviderErrorCode típusa), admin/preview
+  // debug célra (route.ts "sources" mezője). Koordinátát vagy nyers
+  // query-t SOSEM tartalmaz.
+  errorCode?: string;
 }
 
 export interface DiscoverRestPointsResult {
@@ -106,7 +112,11 @@ async function runProviders(
         // provider eredményét.
         return {
           name: provider.name,
-          result: { status: "unavailable" as const, reason: err instanceof Error ? err.message : "unknown_error" },
+          result: {
+            status: "unavailable" as const,
+            reason: err instanceof Error ? err.message : "unknown_error",
+            errorCode: "unknown_error" as const,
+          },
         };
       }
     })
@@ -117,8 +127,8 @@ async function runProviders(
       sources[name] = { ok: true };
       points.push(...result.points);
     } else {
-      sources[name] = { ok: false, reason: result.reason };
-      vedettRouteLog("provider_error", "warn", { provider: name, reason: result.reason });
+      sources[name] = { ok: false, reason: result.reason, errorCode: result.errorCode };
+      vedettRouteLog("provider_error", "warn", { provider: name, reason: result.reason, errorCode: result.errorCode });
     }
   }
 

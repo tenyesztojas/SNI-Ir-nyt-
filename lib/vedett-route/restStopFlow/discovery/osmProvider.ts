@@ -13,14 +13,26 @@
 //
 // Adatvédelem (spec 15. pont): a szerver továbbítja a koordinátákat az
 // Overpass felé (ez elkerülhetetlen egy "közelben" kereséshez), de a
-// nyers lat/lon SOSEM kerül logolásba (lásd lent — minden vedettRouteLog
-// hívás explicit kerüli a koordináták átadását).
+// nyers lat/lon SOSEM kerül logolásba, és a teljes Overpass query szöveg
+// SEM (az koordinátát tartalmaz) — lásd lent, minden vedettRouteLog hívás
+// explicit csak az osztályozott errorCode-ot és a HTTP státuszkódot adja
+// át, sosem a query-t vagy a nyers választ.
 //
 // Hibatűrés (spec 11. pont, "PARTIAL FAILURE"): ez a provider SOSEM dob
-// tovább nyers hibát — timeout, hálózati hiba, HTTP hibaválasz, vagy
-// hibásan formázott (malformed) Overpass válasz esetén is egy típusos
-// {status:"unavailable", reason} objektumot ad vissza, hogy egy OSM-oldali
-// probléma NE dönthesse romba a USER/VEDETT_SAROK találatokat.
+// tovább nyers hibát — timeout, hálózati hiba, HTTP hibaválasz, rate
+// limit, Overpass query hiba, vagy hibásan formázott (malformed) válasz
+// esetén is egy típusos {status:"unavailable", reason, errorCode}
+// objektumot ad vissza, hogy egy OSM-oldali probléma NE dönthesse romba a
+// USER/VEDETT_SAROK találatokat.
+//
+// STAGING DIAGNOSZTIKA (Sprint E.1 hotfix, 2026-09-08): korábban minden
+// hibaosztály egyetlen, szabad szöveges "reason" mezőbe lett összemosva
+// (pl. egy HTTP 4xx és egy hálózati timeout ugyanúgy nézett ki kívülről),
+// emiatt egy staging jelentésből ("nincs OSM pihenőpont") nem lehetett
+// találgatás nélkül megállapítani a tényleges root cause-t. Ez a fájl
+// mostantól egy ZÁRT, gépileg összehasonlítható OsmProviderErrorCode
+// halmazra osztályozza a hibát (lásd lent) — ez jelenik meg az admin/
+// preview debug felületen (route.ts "sources" mezője).
 
 import type { FindNearbyParams, ProviderResult, RestPointProvider } from "./types.ts";
 import type { RestPoint } from "../../../rest-points/types.ts";
@@ -46,6 +58,35 @@ const OVERPASS_SERVER_TIMEOUT_SECONDS = 6;
 // HTTP 4xx-en NEM (az nem múlik el retry-ra).
 const MAX_RETRIES = 1;
 
+// ZÁRT hibaosztály-halmaz — az admin/preview debug felület (route.ts
+// "sources" mezője) ezt jeleníti meg gépileg összehasonlítható kódként,
+// SOHA nem a nyers hibaüzenetet/query-t.
+export type OsmProviderErrorCode =
+  | "timeout"
+  | "rate_limited"
+  | "http_error"
+  | "malformed_response"
+  | "query_error"
+  | "endpoint_unavailable"
+  | "parse_error"
+  | "unknown_error";
+
+// Típusos hiba, amely mindig pontosan egy OsmProviderErrorCode-hoz
+// tartozik. A "message" mező is SOSEM tartalmazhat koordinátát vagy
+// nyers Overpass query szöveget — csak rövid, ember-olvasható
+// osztályozási leírást (pl. "overpass_http_503").
+export class OverpassError extends Error {
+  readonly code: OsmProviderErrorCode;
+  readonly httpStatus?: number;
+
+  constructor(code: OsmProviderErrorCode, message: string, httpStatus?: number) {
+    super(message);
+    this.name = "OverpassError";
+    this.code = code;
+    this.httpStatus = httpStatus;
+  }
+}
+
 interface OverpassElement {
   type: string;
   id: number;
@@ -57,6 +98,12 @@ interface OverpassElement {
 
 interface OverpassResponse {
   elements?: OverpassElement[];
+  // Az Overpass néhány hibaesetben (pl. lekérdezési/futásidejű hiba) 200
+  // OK-kal, de "remark" mezővel válaszol, elements nélkül. A remark
+  // SZÖVEGÉT sosem logoljuk (akár koordinátát is tartalmazhat egy
+  // visszaküldött query-részletben) — csak azt észleljük, hogy jelen
+  // van, és query_error-ként osztályozzuk.
+  remark?: string;
 }
 
 function buildOverpassQuery(latitude: number, longitude: number, radiusMeters: number): string {
@@ -77,24 +124,60 @@ out center tags;`;
 async function fetchOverpassOnce(query: string): Promise<OverpassResponse> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  let response: Response;
   try {
-    const response = await fetch(OVERPASS_ENDPOINT, {
+    response = await fetch(OVERPASS_ENDPOINT, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: `data=${encodeURIComponent(query)}`,
       signal: controller.signal,
     });
-    if (!response.ok) {
-      throw new Error(`overpass_http_${response.status}`);
+  } catch (err) {
+    // A fetch() maga dob, ha a kérés SOHA nem kapott HTTP választ —
+    // vagy azért, mert a kliens oldali AbortController megszakította
+    // (timeout), vagy mert az endpoint hálózati szinten elérhetetlen
+    // (DNS/TCP/TLS hiba, connection refused, stb.).
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new OverpassError("timeout", "overpass_timeout");
     }
-    const json = (await response.json()) as unknown;
-    if (!json || typeof json !== "object" || !Array.isArray((json as OverpassResponse).elements)) {
-      throw new Error("overpass_malformed_response");
-    }
-    return json as OverpassResponse;
+    throw new OverpassError("endpoint_unavailable", "overpass_endpoint_unavailable");
   } finally {
     clearTimeout(timeoutId);
   }
+
+  if (!response.ok) {
+    if (response.status === 429) {
+      throw new OverpassError("rate_limited", `overpass_http_${response.status}`, response.status);
+    }
+    if (response.status === 400) {
+      // Overpass 400-at ad vissza szintaktikailag/szemantikailag hibás
+      // QL query esetén — ez a mi query-építésünk hibája, nem a
+      // szolgáltatás elérhetetlensége, ezért külön osztály.
+      throw new OverpassError("query_error", `overpass_http_${response.status}`, response.status);
+    }
+    throw new OverpassError("http_error", `overpass_http_${response.status}`, response.status);
+  }
+
+  let json: unknown;
+  try {
+    json = await response.json();
+  } catch {
+    // A válasz 2xx volt, de a body nem parse-olható JSON-ként.
+    throw new OverpassError("parse_error", "overpass_parse_error");
+  }
+
+  if (json && typeof json === "object" && typeof (json as OverpassResponse).remark === "string" && !Array.isArray((json as OverpassResponse).elements)) {
+    // 200 OK, de az Overpass "remark" mezőben jelzett hibát/figyelmeztetést
+    // (pl. lekérdezési/futásidejű hiba) — a remark SZÖVEGÉT szándékosan
+    // nem adjuk tovább semerre (lehet benne query-részlet/koordináta).
+    throw new OverpassError("query_error", "overpass_remark_error");
+  }
+
+  if (!json || typeof json !== "object" || !Array.isArray((json as OverpassResponse).elements)) {
+    throw new OverpassError("malformed_response", "overpass_malformed_response");
+  }
+
+  return json as OverpassResponse;
 }
 
 async function fetchOverpassWithRetry(query: string): Promise<OverpassResponse> {
@@ -104,13 +187,13 @@ async function fetchOverpassWithRetry(query: string): Promise<OverpassResponse> 
       return await fetchOverpassOnce(query);
     } catch (err) {
       lastError = err;
-      const isTimeout = err instanceof Error && err.name === "AbortError";
-      const isMalformed = err instanceof Error && err.message === "overpass_malformed_response";
-      // Malformed válaszon nincs retry (nem múlik el újrapróbálásra,
-      // determinisztikusan ugyanaz jönne vissza); csak timeout/hálózati
-      // hibán próbálunk újra, legfeljebb MAX_RETRIES alkalommal.
-      if (isMalformed || attempt === MAX_RETRIES) break;
-      if (!isTimeout && !(err instanceof TypeError)) break;
+      // Csak a ténylegesen átmeneti, hálózati szintű hibaosztályokon
+      // (timeout / endpoint_unavailable) próbálunk újra — rate limit,
+      // HTTP 4xx, query hiba, malformed és parse hiba determinisztikusan
+      // ugyanazt adná vissza újrapróbálásra, ezért azokon NINCS retry
+      // (spec 12. pont: "nincs végtelen retry").
+      const isRetryable = err instanceof OverpassError && (err.code === "timeout" || err.code === "endpoint_unavailable");
+      if (!isRetryable || attempt === MAX_RETRIES) break;
     }
   }
   throw lastError;
@@ -166,6 +249,17 @@ function toRestPoint(element: OverpassElement): RestPoint | null {
   };
 }
 
+// A vedettRouteLog "event" mezője a hibaosztály-családot jelöli
+// (timeout/malformed_response külön eseményként már létezett; a többi
+// osztályt "provider_error"-ként logoljuk, az errorCode mezőben pontos
+// osztályozással — így a meglévő logger event-enumot nem kellett
+// szükségtelenül bővíteni minden egyes új kóddal).
+function logEventForCode(code: OsmProviderErrorCode): "timeout" | "malformed_response" | "provider_error" {
+  if (code === "timeout") return "timeout";
+  if (code === "malformed_response") return "malformed_response";
+  return "provider_error";
+}
+
 export const osmRestPointProvider: RestPointProvider = {
   name: "osm",
   async findNearby(params: FindNearbyParams): Promise<ProviderResult> {
@@ -179,19 +273,23 @@ export const osmRestPointProvider: RestPointProvider = {
       }
       return { status: "ok", points };
     } catch (err) {
-      const isTimeout = err instanceof Error && err.name === "AbortError";
-      const reason = isTimeout
-        ? "timeout"
-        : err instanceof Error
-          ? err.message
-          : "unknown_error";
-      // SOSEM logolunk koordinátát (lat/lon) — csak a hiba okát/típusát
-      // (spec 12. pont, "Ne logolj koordinátát").
-      vedettRouteLog(isTimeout ? "timeout" : "provider_error", "warn", {
+      const classified =
+        err instanceof OverpassError
+          ? err
+          : new OverpassError("unknown_error", err instanceof Error ? err.message : "unknown_error");
+
+      // SOSEM logolunk koordinátát (lat/lon) és SOSEM logoljuk a teljes
+      // Overpass query szöveget (az koordinátát tartalmaz) — csak a
+      // zárt errorCode-ot, a rövid osztályozási üzenetet, és — ha van —
+      // a HTTP státuszkódot (spec 12. pont).
+      vedettRouteLog(logEventForCode(classified.code), "warn", {
         provider: "osm",
-        reason,
+        errorCode: classified.code,
+        reason: classified.message,
+        ...(classified.httpStatus !== undefined ? { httpStatus: classified.httpStatus } : {}),
       });
-      return { status: "unavailable", reason };
+
+      return { status: "unavailable", reason: classified.message, errorCode: classified.code };
     }
   },
 };

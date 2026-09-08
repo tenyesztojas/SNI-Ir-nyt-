@@ -67,6 +67,7 @@ export function transitionRestStopFlow(
         errorMessage: undefined,
         expandedSearch: undefined,
         discoveryPartial: undefined,
+        discoverySources: undefined,
       },
     };
   }
@@ -84,6 +85,7 @@ export function transitionRestStopFlow(
         errorMessage: undefined,
         expandedSearch: undefined,
         discoveryPartial: undefined,
+        discoverySources: undefined,
       },
     };
   }
@@ -113,13 +115,20 @@ export function transitionRestStopFlow(
             rankedRestPoints: event.restPoints,
             expandedSearch: event.expandedSearch,
             discoveryPartial: event.discoveryPartial,
+            discoverySources: event.sources,
           },
         };
       }
       if (event.type === "REST_POINTS_LOAD_FAILED") {
         return {
           ok: true,
-          context: { ...context, state: "ERROR", errorReason: event.reason, errorMessage: event.message },
+          context: {
+            ...context,
+            state: "ERROR",
+            errorReason: event.reason,
+            errorMessage: event.message,
+            discoverySources: event.sources,
+          },
         };
       }
       return invalid(context, event);

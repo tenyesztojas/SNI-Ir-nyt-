@@ -34,6 +34,17 @@
 //     reason: REST_POINTS_PARTIALLY_UNAVAILABLE — EZ a szöveg SOSEM
 //     egyezik a régi generikus "A pihenőpontok betöltése sikertelen
 //     volt." szöveggel (lásd RestStopFlowPanel.tsx ERROR_COPY).
+//
+// ADMIN/PREVIEW DIAGNOSZTIKA (Sprint E.1 hotfix, 2026-09-08): ez a
+// végpont requireVedettRouteAccess() mögött van (admin_only) — emiatt a
+// discovery.sources (per-provider ok/reason/errorCode) MINDEN válaszágban
+// (siker, NO_REST_POINTS_FOUND, REST_POINTS_PARTIALLY_UNAVAILABLE)
+// szerepel a JSON válaszban. Ez NEM a végfelhasználói UI szövege — a
+// polírozott banner-szövegek (RestStopFlowPanel.tsx) továbbra sem
+// mutatnak technikai provider-nevet; a "sources" mező kizárólag admin/
+// preview debug célra, hogy pontosan (találgatás nélkül) megállapítható
+// legyen, MELYIK forrás (user/vedettSarok/osm) és MILYEN hibaosztály
+// (errorCode) okozott egy hiányzó/csökkent találatlistát.
 
 import { NextResponse } from "next/server";
 import { requireVedettRouteAccess } from "@/lib/vedett-route/access";
@@ -83,6 +94,7 @@ export async function POST(request: Request) {
             message: "Néhány közeli hely most nem tölthető be — próbáld meg kicsit később újra.",
             searchRadiusMeters: discovery.searchRadiusMeters,
             expandedSearch: discovery.expandedSearch,
+            sources: discovery.sources,
           },
           { status: 200 }
         );
@@ -96,6 +108,7 @@ export async function POST(request: Request) {
           message: "A közelben most nem találtunk megfelelő pihenőpontot.",
           searchRadiusMeters: discovery.searchRadiusMeters,
           expandedSearch: discovery.expandedSearch,
+          sources: discovery.sources,
         },
         { status: 200 }
       );
@@ -107,6 +120,7 @@ export async function POST(request: Request) {
       searchRadiusMeters: discovery.searchRadiusMeters,
       expandedSearch: discovery.expandedSearch,
       partial: discovery.partial,
+      sources: discovery.sources,
     });
   } catch (err) {
     // Sosem adjuk tovább a nyers hibaüzenetet a kliensnek (lásd

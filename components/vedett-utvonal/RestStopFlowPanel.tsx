@@ -77,7 +77,48 @@ function explainRestPoint(ranked: RankedRestPoint): string {
   return parts.length > 0 ? parts.join(" • ") : "Nincs megadva további részlet.";
 }
 
-async function postJson<T>(url: string, body: unknown): Promise<{ ok: true; data: T } | { ok: false; reason?: string; message?: string }> {
+// Sprint E.1 hotfix (2026-09-08) — admin/preview-only diagnosztikai
+// blokk: pontosan megmutatja, MELYIK forrás (user/vedettSarok/osm) volt
+// elérhető és MILYEN hibaosztály (errorCode) okozta az elérhetetlenséget,
+// hogy staging bugreportnál ne kelljen találgatni (spec: "NE találgass").
+// Ez a végpont eleve requireVedettRouteAccess() (admin_only) mögött van
+// (lásd app/api/vedett-route/rest-stops/nearby/route.ts), ezért ez a
+// blokk NEM sérti a "a user UI ne mutasson technikai provider nevet"
+// elvet — a polírozott banner-szövegek (ERROR_COPY, "expandedSearch"/
+// "discoveryPartial" fenti üzenetei) továbbra is technikai néven
+// mentesek maradnak, ez a <details> csak egy összecsukott, opcionális
+// admin-panel.
+function DiscoverySourcesDebug({ sources }: { sources?: RestStopFlowContext["discoverySources"] }) {
+  if (!sources) return null;
+  const rows: Array<{ key: string; status: { ok: boolean; reason?: string; errorCode?: string } }> = [
+    { key: "user", status: sources.user },
+    { key: "vedettSarok", status: sources.vedettSarok },
+    { key: "osm", status: sources.osm },
+  ];
+  return (
+    <details className="mt-2 rounded border border-gray-200 bg-gray-50 p-2 text-xs text-gray-600">
+      <summary className="cursor-pointer select-none font-medium">Diagnosztika (admin)</summary>
+      <ul className="mt-1 space-y-0.5">
+        {rows.map((row) => (
+          <li key={row.key} className="font-mono">
+            {row.key}: {row.status.ok ? "ok" : "unavailable"}
+            {!row.status.ok && row.status.errorCode ? ` (errorCode: ${row.status.errorCode})` : ""}
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
+type DiscoverySourcesSnapshot = RestStopFlowContext["discoverySources"];
+
+async function postJson<T>(
+  url: string,
+  body: unknown
+): Promise<
+  | { ok: true; data: T; sources?: DiscoverySourcesSnapshot }
+  | { ok: false; reason?: string; message?: string; sources?: DiscoverySourcesSnapshot }
+> {
   try {
     const res = await fetch(url, {
       method: "POST",
@@ -85,8 +126,11 @@ async function postJson<T>(url: string, body: unknown): Promise<{ ok: true; data
       body: JSON.stringify(body),
     });
     const data = await res.json();
-    if (data.ok) return { ok: true, data };
-    return { ok: false, reason: data.reason, message: data.message };
+    // Sprint E.1 hotfix (2026-09-08) — a "sources" mező (ha jelen van a
+    // válaszban) admin/preview debug célra mindkét ágon (siker és hiba)
+    // továbbadásra kerül, lásd RestStopFlowContext.discoverySources.
+    if (data.ok) return { ok: true, data, sources: data.sources };
+    return { ok: false, reason: data.reason, message: data.message, sources: data.sources };
   } catch {
     return { ok: false, reason: "NETWORK_LOST", message: "A hálózati kapcsolat megszakadt." };
   }
@@ -180,12 +224,14 @@ export default function RestStopFlowPanel({ originalDestination, originalDepartA
           restPoints: result.data.restPoints,
           expandedSearch: result.data.expandedSearch,
           discoveryPartial: result.data.partial,
+          sources: result.sources,
         });
       } else {
         dispatch({
           type: "REST_POINTS_LOAD_FAILED",
           reason: isKnownReason(result.reason) ? result.reason : "REST_POINT_LOAD_FAILED",
           message: result.message,
+          sources: result.sources,
         });
       }
     })();
@@ -338,6 +384,7 @@ export default function RestStopFlowPanel({ originalDestination, originalDepartA
           {ctx.discoveryPartial && (
             <p className="text-xs text-amber-700">Néhány közeli hely most nem tölthető be.</p>
           )}
+          <DiscoverySourcesDebug sources={ctx.discoverySources} />
 
           <div className="flex flex-wrap gap-1">
             {REST_POINT_QUICK_FILTERS.map((filter) => (
@@ -484,6 +531,7 @@ export default function RestStopFlowPanel({ originalDestination, originalDepartA
       {ctx.state === "ERROR" && (
         <div className="space-y-2">
           <p className="text-sm text-red-700">{ctx.errorReason ? ERROR_COPY[ctx.errorReason] : "Váratlan hiba történt."}</p>
+          <DiscoverySourcesDebug sources={ctx.discoverySources} />
           <button type="button" onClick={() => dispatch({ type: "RESET_TO_ROUTE_ACTIVE" })} className="btn-secondary text-xs">
             Vissza az aktív útvonalhoz
           </button>

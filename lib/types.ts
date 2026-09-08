@@ -33,6 +33,14 @@ export interface Place {
   source?: string | null;
   flaggedForReview?: boolean | null;
   booking_enabled?: boolean | null;
+  // Sprint E.1 hotfix (2026-09-08) — explicit admin/moderációs döntés
+  // arról, hogy ez a hely fizikailag alkalmas és ajánlható
+  // pihenőpontként a Védett Útvonal "Pihenőre van szükségem"
+  // funkciójában (lásd supabase/migrations/20260908_places_rest_point_eligibility.sql
+  // és lib/vedett-route/restStopFlow/discovery/vedettSarokProvider.ts).
+  // Alapértelmezetten false — SOHA nem szabad a category mezőből
+  // levezetni (UNKNOWN != ELIGIBLE).
+  restPointEligible: boolean;
 }
 
 export interface Review {

@@ -29,9 +29,20 @@ export interface FindNearbyParams {
 // explicit, típusos eredményt ad vissza, hogy egyetlen forrás hibája
 // (pl. OSM timeout) NE dönthesse romba a többi forrás eredményét (spec
 // 11. pont, "PARTIAL FAILURE").
+//
+// STAGING DIAGNOSZTIKA (Sprint E.1 hotfix, 2026-09-08): a "reason"
+// szabad szöveg (ember-olvasható, hibakeresési célra), az OPCIONÁLIS
+// "errorCode" pedig egy ZÁRT, gépileg összehasonlítható kód (lásd
+// osmProvider.ts OsmProviderErrorCode típusa a konkrét értékekért) —
+// ez teszi lehetővé, hogy admin/preview debug felületen (route.ts
+// válasz "sources" mezője) pontosan, találgatás nélkül megállapítható
+// legyen, MELYIK hibaosztály okozta egy forrás elérhetetlenségét
+// (timeout / HTTP hibakód / malformed response / query error / rate
+// limit / endpoint unavailable / parse error), koordináta vagy nyers
+// query szöveg SOHA nem kerül bele egyik mezőbe sem.
 export type ProviderResult =
   | { status: "ok"; points: RestPoint[] }
-  | { status: "unavailable"; reason: string };
+  | { status: "unavailable"; reason: string; errorCode?: string };
 
 export interface RestPointProvider {
   readonly name: "user" | "vedettSarok" | "osm";

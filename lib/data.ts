@@ -32,6 +32,12 @@ type PlaceRow = {
   images: string[] | null;
   status: Place["status"];
   created_by: string | null;
+  // Sprint E.1 hotfix (2026-09-08) — lásd lib/types.ts Place.restPointEligible
+  // kommentje. Opcionális itt (a Supabase select("*") a migráció
+  // alkalmazása ELŐTT egyszerűen nem adja vissza ezt a kulcsot), a
+  // mapPlace() alább explicit false-ra normalizálja, ha hiányzik/null —
+  // SOSEM undefined-ként továbbadva.
+  rest_point_eligible?: boolean | null;
 };
 
 type ReviewRow = {
@@ -99,6 +105,10 @@ function mapPlace(row: PlaceRow): Place {
     images: row.images ?? null,
     status: row.status,
     createdBy: row.created_by,
+    // UNKNOWN != ELIGIBLE — hiányzó/NULL oszlop (pl. a migráció
+    // alkalmazása előtti környezetben) explicit false-ra normalizálva,
+    // SOHA nem "true"-ra alapértelmezve.
+    restPointEligible: row.rest_point_eligible === true,
   };
 }
 
