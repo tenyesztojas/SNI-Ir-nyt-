@@ -14,11 +14,31 @@
 import { NextResponse } from "next/server";
 import { createClient as createServerSupabase } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { isVedettRouteFeatureEnabled, VEDETT_ROUTE_ACCESS_LEVEL } from "./config.ts";
+import { isVedettRouteFeatureEnabled, VEDETT_ROUTE_ACCESS_LEVEL, VEDETT_ROUTE_BETA_FEATURE_KEY } from "./config.ts";
 
 export type VedettRouteAuthResult =
   | { ok: true; userId: string }
   | { ok: false; response: NextResponse };
+
+/**
+ * ZÁRT BÉTA HOZZÁFÉRÉS (2026-09-09) — tiszta, side-effect mentes döntési
+ * függvény: admin VAGY a `pilot_access` tömbben szereplő explicit
+ * `vedett_route_beta` grant. Szándékosan KÜLÖN van választva a hálózati/DB
+ * hívástól (lásd requireVedettRouteBetaAccess() lent), hogy unit tesztekkel
+ * DB/HTTP nélkül, determinisztikusan lefedhető legyen — pontosan úgy, mint
+ * a projekt már meglévő pure reducerei (pl. restStopFlow/stateMachine.ts).
+ *
+ * Admin BYPASSOLJA a grant szükségességét (nincs külön tesztjog kell neki),
+ * de ez a függvény MAGA NEM dönt a globális VEDETT_ROUTE_ENABLED kill
+ * switch-ről — azt a hívó (requireVedettRouteAccess()) ellenőrzi külön,
+ * ELŐBB, hogy admin se juthasson át rajta, ha a funkció ki van kapcsolva.
+ */
+export function hasVedettRouteBetaAccess(profile: { role?: string | null; pilotAccess?: string[] | null } | null | undefined): boolean {
+  if (!profile) return false;
+  if (profile.role === "admin") return true;
+  const pilotAccess = profile.pilotAccess ?? [];
+  return pilotAccess.includes(VEDETT_ROUTE_BETA_FEATURE_KEY);
+}
 
 /**
  * Csak azt ellenőrzi, hogy a hívó bejelentkezett admin-e. Nem nézi a feature
@@ -81,21 +101,84 @@ export async function requireVedettRouteAuthenticated(): Promise<VedettRouteAuth
 }
 
 /**
- * Admin ÉS feature flag ellenőrzés együtt — ezt kell hívnia minden
- * funkcionális (nem diagnosztikai) Védett Útvonal végpontnak: keresés,
- * GTFS frissítés, stb.
+ * ZÁRT BÉTA HOZZÁFÉRÉS (2026-09-09) — bejelentkezett felhasználó ÉS
+ * (admin VAGY explicit `vedett_route_beta` pilot_access grant). Ezt hívja
+ * requireVedettRouteAccess(), amikor VEDETT_ROUTE_ACCESS_LEVEL ===
+ * "beta_testers" (jelenleg ez az aktív érték, lásd config.ts).
+ *
+ * A profilt (role + pilot_access) a service-role kliensen keresztül
+ * olvassuk (createAdminClient()), UGYANÚGY, mint requireVedettRouteAdmin()
+ * — így az RLS nem torzíthatja el az eredményt, és ez a check a Postgres
+ * felé egyetlen, kis lekérdezés (nem duplikálja a role-t egy külön
+ * hívásban).
+ */
+export async function requireVedettRouteBetaAccess(): Promise<VedettRouteAuthResult> {
+  const supabase = await createServerSupabase();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return {
+      ok: false,
+      response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }),
+    };
+  }
+
+  const admin = createAdminClient();
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("role, pilot_access")
+    .eq("id", user.id)
+    .single();
+
+  const allowed = hasVedettRouteBetaAccess(
+    profile ? { role: profile.role, pilotAccess: (profile.pilot_access as string[] | null) ?? [] } : null
+  );
+
+  if (!allowed) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { error: "Forbidden", message: "Nincs hozzáférésed ehhez a béta funkcióhoz." },
+        { status: 403 }
+      ),
+    };
+  }
+
+  return { ok: true, userId: user.id };
+}
+
+/**
+ * Admin/béta-tesztelő ÉS feature flag ellenőrzés együtt — ezt kell hívnia
+ * minden funkcionális (nem diagnosztikai) Védett Útvonal végpontnak:
+ * keresés, pihenőpont-discovery, route-to-rest-point, resume, saját
+ * pihenőpont CRUD, GTFS frissítés, stb. EGYETLEN közös guard — a route-ok
+ * NEM duplikálják ezt a logikát (lásd docs/vedett-route.md és az egyes
+ * route.ts fájlok fejlécét).
  *
  * A tényleges jogosultsági szabály a config.ts VEDETT_ROUTE_ACCESS_LEVEL
- * értékétől függ — ez a felkészítés arra, hogy később egyszerűen
- * "admin_only" -> "authenticated_users"-re válthassunk (lásd config.ts),
- * anélkül, hogy minden egyes API route-ot át kellene írni. JELENLEG ez a
- * konstans "admin_only", tehát a viselkedés NEM változott.
+ * értékétől függ (jelenleg "beta_testers") — ez a felkészítés arra, hogy
+ * később egyetlen konstans váltásával "authenticated_users"-re (vagy akár
+ * "public"-ra) válthassunk, anélkül, hogy minden egyes API route-ot át
+ * kellene írni.
+ *
+ * FONTOS SORREND: a globális VEDETT_ROUTE_ENABLED kill switch-et LENTEBB,
+ * az auth/permission check UTÁN ellenőrizzük — ez szándékos: így a
+ * "Forbidden" (nincs jogosultságod) válasz mindig ugyanaz marad attól
+ * függetlenül, hogy a flag be van-e kapcsolva, ami NEM szivárogtatja ki
+ * jogosultság nélküli hívó felé, hogy a funkció egyébként élesítve
+ * van-e. Admin a kill switch-et NEM bypassolja — ha VEDETT_ROUTE_ENABLED
+ * hamis, MÉG az admin/tesztelő check sikere esetén is "Feature disabled"
+ * választ kap.
  */
 export async function requireVedettRouteAccess(): Promise<VedettRouteAuthResult> {
   const authCheck =
     VEDETT_ROUTE_ACCESS_LEVEL === "authenticated_users"
       ? await requireVedettRouteAuthenticated()
-      : await requireVedettRouteAdmin();
+      : VEDETT_ROUTE_ACCESS_LEVEL === "beta_testers"
+        ? await requireVedettRouteBetaAccess()
+        : await requireVedettRouteAdmin();
   if (!authCheck.ok) return authCheck;
 
   if (!isVedettRouteFeatureEnabled()) {

@@ -1,6 +1,7 @@
 import { unstable_noStore as noStore } from "next/cache";
 import { getCurrentUserAndProfile } from "@/lib/data";
 import { getUnreadNotificationCount } from "@/lib/community/data";
+import { isVedettRouteFeatureEnabled } from "@/lib/vedett-route/config";
 import HeaderClient from "./HeaderClient";
 
 export default async function Header() {
@@ -15,6 +16,7 @@ export default async function Header() {
       isAdmin={profile?.role === "admin"}
       communityUnread={unreadCount}
       pilotAccess={profile?.pilotAccess ?? []}
+      vedettRouteEnabled={isVedettRouteFeatureEnabled()}
     />
   );
 }

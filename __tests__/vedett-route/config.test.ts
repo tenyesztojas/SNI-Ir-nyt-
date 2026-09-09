@@ -58,7 +58,14 @@ test("MOTIS_BASE_URL nélkül getMotisBaseUrl() null-t ad vissza", async () => {
   assert.equal(getMotisBaseUrl(), null);
 });
 
-test("VEDETT_ROUTE_ACCESS_LEVEL Fázis 1-ben mindig admin_only, függetlenül az env-től", async () => {
+test("A) VEDETT_ROUTE_ACCESS_LEVEL a ZÁRT BÉTA HOZZÁFÉRÉS sprint óta 'beta_testers' (nem admin_only), függetlenül az env-től", async () => {
+  // FRISSÍTVE (2026-09-09): a korábbi "Fázis 1" állapotban ez a konstans
+  // mindig "admin_only" volt. A "ZÁRT BÉTA HOZZÁFÉRÉS + MENÜRENDSZER"
+  // sprint SZÁNDÉKOSAN aktiválta a korábban csak előkészített
+  // "beta_testers" szintet (lásd lib/vedett-route/config.ts és
+  // access-architecture.test.ts a háromágú útvonalválasztás tesztjéért).
+  // Ez a teszt nem regresszió-e, hanem a ténylegesen megvalósított,
+  // szándékos architektúrát igazolja.
   const { VEDETT_ROUTE_ACCESS_LEVEL } = await freshConfigModule();
-  assert.equal(VEDETT_ROUTE_ACCESS_LEVEL, "admin_only");
+  assert.equal(VEDETT_ROUTE_ACCESS_LEVEL, "beta_testers");
 });

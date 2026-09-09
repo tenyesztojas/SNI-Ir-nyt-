@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { searchUserByEmail, setPilotAccess } from "./actions";
+import { searchUserByEmail, setPilotAccess, listPilotTesters, type PilotTester } from "./actions";
 import { PILOT_MODULES } from "./config";
 
 type UserResult = {
@@ -16,6 +16,42 @@ export default function TeszteloClient() {
   const [user, setUser] = useState<UserResult | null>(null);
   const [notFound, setNotFound] = useState(false);
   const [isPending, startTransition] = useTransition();
+
+  // ZÁRT BÉTA HOZZÁFÉRÉS (2026-09-09) — "Aktív tesztelők" lista, modulonként
+  // kinyitható/becsukható (spec: "látni az aktív tesztelőket"). Ugyanaz a
+  // setPilotAccess() akció adja a "Visszavonás"-t is, mint az email-keresős
+  // toggle-t fent — nincs duplikált grant/revoke logika.
+  const [openModule, setOpenModule] = useState<string | null>(null);
+  const [testersByModule, setTestersByModule] = useState<Record<string, PilotTester[]>>({});
+  const [listPending, startListTransition] = useTransition();
+
+  function toggleTesterList(moduleKey: string) {
+    if (openModule === moduleKey) {
+      setOpenModule(null);
+      return;
+    }
+    setOpenModule(moduleKey);
+    startListTransition(async () => {
+      const testers = await listPilotTesters(moduleKey);
+      setTestersByModule((prev) => ({ ...prev, [moduleKey]: testers }));
+    });
+  }
+
+  function handleRevoke(moduleKey: string, testerId: string) {
+    startTransition(async () => {
+      await setPilotAccess(testerId, moduleKey, false);
+      setTestersByModule((prev) => ({
+        ...prev,
+        [moduleKey]: (prev[moduleKey] ?? []).filter((t) => t.id !== testerId),
+      }));
+      // Ha épp ez a felhasználó volt a keresés találata is, ott is tükrözzük.
+      setUser((prev) =>
+        prev && prev.id === testerId
+          ? { ...prev, pilotAccess: prev.pilotAccess.filter((m) => m !== moduleKey) }
+          : prev
+      );
+    });
+  }
 
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
@@ -72,6 +108,65 @@ export default function TeszteloClient() {
       {notFound && (
         <p className="text-sm text-red-500">Nem található felhasználó ezzel az e-mail címmel.</p>
       )}
+
+      {/* Aktív tesztelők modulonként (ZÁRT BÉTA HOZZÁFÉRÉS, 2026-09-09) */}
+      <div className="rounded-2xl border border-gray-100 bg-white p-5">
+        <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-400">
+          Aktív tesztelők
+        </p>
+        <div className="space-y-3">
+          {PILOT_MODULES.map(({ key, label }) => {
+            const isOpen = openModule === key;
+            const testers = testersByModule[key] ?? [];
+            return (
+              <div key={key} className="rounded-xl border border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => toggleTesterList(key)}
+                  className="flex w-full items-center justify-between px-4 py-3 text-left"
+                >
+                  <span className="text-sm font-semibold text-gray-700">{label}</span>
+                  <span className="text-xs text-gray-400">
+                    {isOpen ? "Aktív tesztelők ▴" : "Aktív tesztelők ▾"}
+                  </span>
+                </button>
+
+                {isOpen && (
+                  <div className="border-t border-gray-50 px-4 py-3">
+                    {listPending && testers.length === 0 ? (
+                      <p className="text-sm text-gray-400">Betöltés...</p>
+                    ) : testers.length === 0 ? (
+                      <p className="text-sm text-gray-400">Nincs aktív tesztelő ehhez a modulhoz.</p>
+                    ) : (
+                      <ul className="space-y-2">
+                        {testers.map((tester) => (
+                          <li
+                            key={tester.id}
+                            className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2"
+                          >
+                            <div>
+                              <p className="text-sm font-medium text-gray-700">{tester.email}</p>
+                              <p className="text-xs text-gray-400">hozzáférés: aktív</p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleRevoke(key, tester.id)}
+                              disabled={isPending}
+                              className="rounded-full border border-red-200 px-3 py-1 text-xs font-bold text-red-500 transition-colors hover:bg-red-50 disabled:opacity-50"
+                            >
+                              Visszavonás
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
       {/* Találat */}
       {user && (

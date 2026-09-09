@@ -7,18 +7,30 @@
 
 export type VedettRouteAccessLevel = "admin_only" | "authenticated_users" | "beta_testers" | "public";
 
-// Jelenlegi hozzáférési szint — Fázis 1-ben mindig admin_only.
-// A későbbi fázisokban ez konfigurálhatóvá válhat (pl. env változóból),
-// de amíg nincs explicit publikus release döntés, kódból van lezárva.
+// ZÁRT BÉTA HOZZÁFÉRÉS (2026-09-09) — a Védett Útvonal mostantól nem
+// KIZÁRÓLAG admin, hanem admin VAGY explicit béta-tesztjoggal rendelkező
+// felhasználó számára érhető el (lásd access.ts requireVedettRouteAccess()
+// -> requireVedettRouteBetaAccess()). Ez a korábban előkészített
+// "beta_testers" szint most VÁLIK AKTÍVVÁ — a "public"/"authenticated_users"
+// szintek továbbra sem aktívak, azok egy jövőbeli, még szélesebb release
+// döntés esetén kapcsolhatók be (egyetlen sor módosítása, a route/API/RLS
+// réteg már felkészült rá, lásd access.ts switch ága).
 //
-// Map/GPS/Rest Points sprint (2026-09-07): az "authenticated_users" szint
-// előkészítve (lásd access.ts requireVedettRouteAccess()) — ez a jövőbeli
-// állapot, amikor a Védett Útvonal bármelyik BEJELENTKEZETT felhasználónak
-// elérhető lesz, admin-szerep nélkül. EZ A KAPCSOLÓ JELENLEG NEM AKTÍV —
-// a VEDETT_ROUTE_ACCESS_LEVEL értéke szándékosan "admin_only" marad, amíg
-// nincs explicit publikus release döntés. A váltás egyetlen sor
-// módosítása (ez a konstans), a route/API/RLS réteg már felkészült rá.
-export const VEDETT_ROUTE_ACCESS_LEVEL: VedettRouteAccessLevel = "admin_only";
+// FONTOS: ez a konstans A JOGOSULTSÁGI MODELLT írja le — TELJESEN FÜGGETLEN
+// a VEDETT_ROUTE_ENABLED globális kill switch-től (lásd
+// isVedettRouteFeatureEnabled() lent). A kettő EGYÜTT dönt: a feature flag
+// nélkül SENKI (admin sem) nem fér hozzá; a feature flaggel EGYÜTT ez a
+// konstans dönti el, hogy a bekapcsolt funkción belül KIK.
+export const VEDETT_ROUTE_ACCESS_LEVEL: VedettRouteAccessLevel = "beta_testers";
+
+// A "profiles.pilot_access" tömbben tárolt kulcs, amivel egy admin egy
+// felhasználót Védett Útvonal béta-tesztelővé tehet (lásd
+// app/admin/tesztelok — ez a KORÁBBAN MÁR LÉTEZŐ, más pilot modulokhoz
+// (vedett-jelzes, vedett-partner, vedettmunka) is használt generikus
+// feature-access mechanizmus, amit ITT ÚJRAHASZNÁLUNK, NEM egy új,
+// párhuzamos permission-rendszert építünk — lásd a végső audit riportban
+// az "EXISTING PERMISSION SYSTEM REUSED" sort).
+export const VEDETT_ROUTE_BETA_FEATURE_KEY = "vedett_route_beta";
 
 export function isVedettRouteFeatureEnabled(): boolean {
   return process.env.VEDETT_ROUTE_ENABLED === "true";

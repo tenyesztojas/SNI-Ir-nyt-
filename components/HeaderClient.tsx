@@ -7,9 +7,6 @@ import { signOutAction } from "@/lib/actions/auth";
 import AccessibilityButton from "@/components/accessibility/AccessibilityButton";
 
 // ── Védett Helyek dropdown ──────────────────────────────────────────────────
-// FEJLESZTŐI MEGJEGYZÉS: A "Védett Útvonal" szándékosan NEM szerepel itt.
-// A Védett Útvonal külön release gate-en esik át, csak annak teljes elkészülte
-// és külön döntés után kerülhet negyedik elemként ide.
 const VEDETT_HELYEK = [
   { href: "/helyek",    label: "Helyek keresése" },
   { href: "/uj-hely",  label: "Hely beküldése" },
@@ -33,11 +30,21 @@ const TOP_LINKS = [
 ];
 
 // Pilot/pre-launch linkek — adminnak mindig látható, teszternek ha hozzáférése van
-// key értékek: 'vedett-jelzes' | 'vedett-partner' | 'vedettmunka'
+// key értékek: 'vedett-jelzes' | 'vedett-partner' | 'vedettmunka' | 'vedett_route_beta'
+//
+// ZÁRT BÉTA HOZZÁFÉRÉS (2026-09-09): a "Védett Útvonal" bejegyzés
+// `requiresFeatureFlag: true` -vel van megjelölve, mert ezt EGY TOVÁBBI
+// globális kill switch is védi (VEDETT_ROUTE_ENABLED, lásd
+// lib/vedett-route/config.ts isVedettRouteFeatureEnabled()) — a másik három
+// pilot modulnak nincs ilyen globális flagje. A menüpont emiatt CSAK akkor
+// jelenik meg, ha a flag be van kapcsolva ÉS (admin VAGY a felhasználó
+// pilot_access tömbje tartalmazza a "vedett_route_beta" kulcsot) — sosem
+// csak CSS-sel rejtjük el, a link elemek maguk nem is renderelődnek le.
 const PILOT_LINKS = [
-  { key: "vedett-jelzes",   href: "/vedett-jelzes",            label: "Védett Jelzés"  },
-  { key: "vedett-partner",  href: "/szolgaltato/regisztracio", label: "Védett Partner" },
-  { key: "vedettmunka",     href: "/vedett-karrier",           label: "VédettKarrier"   },
+  { key: "vedett-jelzes",     href: "/vedett-jelzes",            label: "Védett Jelzés",  requiresFeatureFlag: false },
+  { key: "vedett-partner",    href: "/szolgaltato/regisztracio", label: "Védett Partner", requiresFeatureFlag: false },
+  { key: "vedettmunka",       href: "/vedett-karrier",           label: "VédettKarrier",  requiresFeatureFlag: false },
+  { key: "vedett_route_beta", href: "/vedett-utvonal",           label: "Védett Útvonal", requiresFeatureFlag: true },
 ];
 
 export default function HeaderClient({
@@ -46,13 +53,19 @@ export default function HeaderClient({
   isAdmin,
   communityUnread = 0,
   pilotAccess = [],
+  vedettRouteEnabled = false,
 }: {
   isLoggedIn: boolean;
   displayName?: string | null;
   isAdmin: boolean;
   communityUnread?: number;
   pilotAccess?: string[];
+  vedettRouteEnabled?: boolean;
 }) {
+  const visiblePilotLinks = PILOT_LINKS.filter((l) => {
+    if (l.requiresFeatureFlag && !vedettRouteEnabled) return false;
+    return isAdmin || pilotAccess.includes(l.key);
+  });
   const [mobileOpen,    setMobileOpen]    = useState(false);
   const [vhDesktopOpen, setVhDesktopOpen] = useState(false);
   const [vhMobileOpen,  setVhMobileOpen]  = useState(false);
@@ -132,7 +145,7 @@ export default function HeaderClient({
           </div>
 
           {/* 2. Pilot linkek — adminnak mindig, teszternek ha van hozzáférése */}
-          {PILOT_LINKS.filter((l) => isAdmin || pilotAccess.includes(l.key)).map((link) => (
+          {visiblePilotLinks.map((link) => (
             <Link
               key={link.href}
               href={link.href}
@@ -316,7 +329,7 @@ export default function HeaderClient({
             ))}
 
             {/* Pilot linkek — adminnak mindig, teszternek ha van hozzáférése */}
-            {PILOT_LINKS.filter((l) => isAdmin || pilotAccess.includes(l.key)).map((link) => (
+            {visiblePilotLinks.map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
