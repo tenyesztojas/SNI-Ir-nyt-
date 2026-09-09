@@ -51,3 +51,43 @@ export async function setPilotAccess(
 
   revalidatePath("/admin/tesztelok");
 }
+
+export type PilotTester = {
+  id: string;
+  email: string;
+  displayName: string;
+};
+
+/**
+ * ZÁRT BÉTA HOZZÁFÉRÉS (2026-09-09) — "Aktív tesztelők" lista egy adott
+ * pilot modulhoz (pl. "vedett_route_beta"). Ugyanazt a mintát követi, mint
+ * lib/data.ts fetchSubmitterInfo()/getPendingPlacesWithSubmitter(): a
+ * profiles tábla NEM tartalmaz e-mailt (az az auth.users-ben van), ezért a
+ * találatokhoz a service-role admin.auth.admin.getUserById()-vel párhuzamosan
+ * kérjük le az e-mail címeket. Csak admin hívhatja.
+ */
+export async function listPilotTesters(module: string): Promise<PilotTester[]> {
+  if (!(await isCurrentUserAdmin())) throw new Error("Unauthorized");
+  const admin = createAdminClient();
+
+  const { data: profiles, error } = await admin
+    .from("profiles")
+    .select("id, display_name")
+    .contains("pilot_access", [module]);
+
+  if (error) throw new Error(error.message);
+  if (!profiles || profiles.length === 0) return [];
+
+  const testers = await Promise.all(
+    profiles.map(async (p) => {
+      const { data } = await admin.auth.admin.getUserById(p.id);
+      return {
+        id: p.id,
+        email: data.user?.email ?? "Ismeretlen e-mail",
+        displayName: p.display_name ?? "–",
+      };
+    })
+  );
+
+  return testers.sort((a, b) => a.email.localeCompare(b.email));
+}
