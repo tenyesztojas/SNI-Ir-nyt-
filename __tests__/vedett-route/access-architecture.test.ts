@@ -30,7 +30,20 @@
 // forráskód-szintű ellenőrzésekkel igazoljuk: létezik-e az export, és a
 // forráskód ténylegesen a VEDETT_ROUTE_ACCESS_LEVEL alapján ágazik-e.
 //
-//   node --test --experimental-strip-types __tests__/vedett-route/access-architecture.test.ts
+// ROBUSZTUSSÁG (2026-09-09, integrate/vedett-utvonal-beta cherry-pick
+// audit): a korábbi verzió a függvénytest kivágásához egy sor elejére
+// (nem beljebb húzva) várt záró kapcsos zárójelre épülő, LF-specifikus
+// regexet használt. Ez törékeny: CRLF sorvégek, Prettier-formázás, vagy egy
+// szintaktikailag irreleváns beljebb-húzási eltérés is hamis negatívot
+// okozhatott, ANÉLKÜL, hogy a mögötte lévő biztonsági logika ténylegesen
+// megváltozott volna. Ezért a függvénytest kivágása mostantól egy
+// DETERMINISZTIKUS, kapcsos-zárójel-mélység alapú extractFunctionSource()
+// helperen keresztül történik, ami sortörés-formátumtól (LF/CRLF),
+// whitespace-től és a formázási stílustól függetlenül, kizárólag a
+// tényleges nyitó/záró kapcsos zárójelek egyensúlya alapján találja meg a
+// függvény végét (string- és kommentliterálokat kihagyva).
+//
+//   node --test __tests__/vedett-route/access-architecture.test.ts
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -40,6 +53,89 @@ import { VEDETT_ROUTE_ACCESS_LEVEL, VEDETT_ROUTE_BETA_FEATURE_KEY } from "../../
 
 function readAccessSource(): string {
   return fs.readFileSync(path.join(process.cwd(), "lib", "vedett-route", "access.ts"), "utf-8");
+}
+
+/**
+ * Determinisztikus, kapcsos-zárójel-mélység alapú függvénytest-kivágó.
+ *
+ * Megkeresi a "function <name>(" szignatúrát (opcionális export/async
+ * előtaggal), majd a paraméterlistát ZÁRÓJEL-MÉLYSÉG SZERINT átugorja
+ * (fontos, mert egy paraméter TÍPUSA, pl. "profile: { role?: string | null }",
+ * saját nyitó/záró kapcsos zárójel-párt tartalmazhat, amit a függvénytest
+ * keresésekor félre kell tudni tenni), majd a paraméterlista lezárása utáni
+ * ELSŐ nyitó kapcsos zárójeltől indulva, karakterenkénti mélységszámlálással
+ * megkeresi a függvénytestet lezáró kapcsos zárójelet — string-literálokat
+ * és kommenteket kihagyva, hogy egy string/komment tartalmában szereplő
+ * zárójel-karakter ne torzítsa a számlálást.
+ *
+ * Sortörés-formátumtól (LF/CRLF), whitespace-től és a konkrét Prettier-
+ * formázástól TELJESEN FÜGGETLEN — csak a tényleges kód-struktúrán alapul.
+ *
+ * Visszaadja a teljes függvényforrást (a szignatúra elejétől a lezáró
+ * kapcsos zárójelig), vagy null-t, ha a függvény nem található.
+ */
+function extractFunctionSource(src: string, name: string): string | null {
+  const sigRe = new RegExp("(export\\s+)?(async\\s+)?function\\s+" + name + "\\s*\\(");
+  const sigMatch = sigRe.exec(src);
+  if (!sigMatch) return null;
+
+  const start = sigMatch.index;
+
+  // A paraméterlista nyitó '('-je közvetlenül a signature-egyezés végén
+  // van — innen, zárójel-mélység számlálással kell megtalálni a
+  // paraméterlistát lezáró ')'-t.
+  let parenDepth = 1; // a nyitó '(' már elfogyott a signature match-ben
+  let i = sigMatch.index + sigMatch[0].length;
+  for (; i < src.length && parenDepth > 0; i++) {
+    const c = src[i];
+    if (c === "(") parenDepth++;
+    else if (c === ")") parenDepth--;
+  }
+  if (parenDepth !== 0) return null; // nem egyensúlyban lévő paraméterlista
+
+  // Innentől (a paraméterlista lezárása után, egy esetleges visszatérési
+  // típus-annotáción átugorva) az ELSŐ '{' már a függvénytest nyitó
+  // kapcsos zárójele.
+  const braceStart = src.indexOf("{", i);
+  if (braceStart === -1) return null;
+
+  let depth = 0;
+  let inString: string | null = null;
+  let inLineComment = false;
+  let inBlockComment = false;
+
+  for (let j = braceStart; j < src.length; j++) {
+    const c = src[j];
+    const prev = src[j - 1];
+
+    if (inLineComment) {
+      if (c === "\n") inLineComment = false;
+      continue;
+    }
+    if (inBlockComment) {
+      if (prev === "*" && c === "/") inBlockComment = false;
+      continue;
+    }
+    if (inString) {
+      if (c === "\\") { j++; continue; } // escapelt karakter — átugorjuk
+      if (c === inString) inString = null;
+      continue;
+    }
+
+    if (c === "/" && src[j + 1] === "/") { inLineComment = true; continue; }
+    if (c === "/" && src[j + 1] === "*") { inBlockComment = true; continue; }
+    if (c === "\"" || c === "'" || c === "`") { inString = c; continue; }
+
+    if (c === "{") {
+      depth++;
+    } else if (c === "}") {
+      depth--;
+      if (depth === 0) {
+        return src.slice(start, j + 1);
+      }
+    }
+  }
+  return null; // nem talált egyensúlyban lévő záró '}'-t (hibás forrás)
 }
 
 // ── A) ────────────────────────────────────────────────────────────────────
@@ -70,9 +166,9 @@ test("access.ts exportálja a requireVedettRouteAccess függvényt", () => {
 
 test("requireVedettRouteAuthenticated NEM végez admin/role ellenőrzést — csak bejelentkezést", () => {
   const src = readAccessSource();
-  const match = src.match(/export\s+async\s+function\s+requireVedettRouteAuthenticated[\s\S]*?\n}/);
-  assert.ok(match, "nem található requireVedettRouteAuthenticated függvénytest");
-  assert.doesNotMatch(match![0], /profiles|role\s*!==\s*"admin"|createAdminClient/);
+  const fnSrc = extractFunctionSource(src, "requireVedettRouteAuthenticated");
+  assert.ok(fnSrc, "nem található requireVedettRouteAuthenticated függvénytest");
+  assert.doesNotMatch(fnSrc!, /profiles|role\s*!==\s*"admin"|createAdminClient/);
 });
 
 // ── B/C/D) HÁROMÁGÚ útvonalválasztás ────────────────────────────────────────
@@ -92,10 +188,10 @@ test("C) az 'authenticated_users' ág VÁLTOZATLANUL megmaradt — a háromágú
 
 test("D) az 'admin_only' (és minden más, nem authenticated_users/beta_testers) eset a requireVedettRouteAdmin() FALLBACK ágra esik — nincs elveszett admin-only védelem", () => {
   const src = readAccessSource();
-  const fnMatch = src.match(/export\s+async\s+function\s+requireVedettRouteAccess[\s\S]*?\n}\n/);
-  assert.ok(fnMatch, "requireVedettRouteAccess() függvénynek léteznie kell");
+  const fnSrc = extractFunctionSource(src, "requireVedettRouteAccess");
+  assert.ok(fnSrc, "requireVedettRouteAccess() függvénynek léteznie kell");
   assert.match(
-    fnMatch![0],
+    fnSrc!,
     /:\s*await requireVedettRouteAdmin\(\);/,
     "a ternary utolsó ágának requireVedettRouteAdmin()-nek kell lennie — ez az admin_only fallback"
   );
@@ -118,9 +214,9 @@ test("G) normál, bejelentkezett (nem admin, nincs grant) felhasználó TILTOTT 
   assert.match(src, /if \(!profile\) return false;/);
   // A nem-admin ág visszatérési értéke maga a pilotAccess.includes(...)
   // logikai kifejezés eredménye — nincs utána feltétlen `return true`.
-  const fnMatch = src.match(/export function hasVedettRouteBetaAccess[\s\S]*?\n}\n/);
-  assert.ok(fnMatch);
-  assert.match(fnMatch![0], /return pilotAccess\.includes\(VEDETT_ROUTE_BETA_FEATURE_KEY\);\s*\n}/);
+  const fnSrc = extractFunctionSource(src, "hasVedettRouteBetaAccess");
+  assert.ok(fnSrc, "hasVedettRouteBetaAccess() függvénynek léteznie kell");
+  assert.match(fnSrc!, /return pilotAccess\.includes\(VEDETT_ROUTE_BETA_FEATURE_KEY\);\s*\}$/);
 });
 
 test("H) egy MÁSIK pilot_access modul grantje (pl. 'vedettmunka') nem ad Védett Útvonal jogot — a kulcs-összehasonlítás EXAKT, nem 'bármilyen grant elég'", () => {
@@ -139,13 +235,12 @@ test("H) egy MÁSIK pilot_access modul grantje (pl. 'vedettmunka') nem ad Védet
 // ── I) globális kill switch — admin/tester sem bypassolja ──────────────────
 test("I) VEDETT_ROUTE_ENABLED=false esetén MÉG admin/tester hozzáférés-check sikere UTÁN is Forbidden a válasz — nincs admin/tester-specifikus bypass a kill switch körül", () => {
   const src = readAccessSource();
-  const fnMatch = src.match(/export\s+async\s+function\s+requireVedettRouteAccess[\s\S]*?\n}\n/);
-  assert.ok(fnMatch);
-  const fnBody = fnMatch![0];
-  assert.match(fnBody, /if \(!authCheck\.ok\) return authCheck;/, "az auth/permission check-nek a kill switch check ELŐTT kell lefutnia");
-  assert.match(fnBody, /if \(!isVedettRouteFeatureEnabled\(\)\)/);
-  const killSwitchIdx = fnBody.indexOf("if (!isVedettRouteFeatureEnabled())");
-  const surrounding = fnBody.slice(killSwitchIdx, killSwitchIdx + 300);
+  const fnSrc = extractFunctionSource(src, "requireVedettRouteAccess");
+  assert.ok(fnSrc, "requireVedettRouteAccess() függvénynek léteznie kell");
+  assert.match(fnSrc!, /if \(!authCheck\.ok\) return authCheck;/, "az auth/permission check-nek a kill switch check ELŐTT kell lefutnia");
+  assert.match(fnSrc!, /if \(!isVedettRouteFeatureEnabled\(\)\)/);
+  const killSwitchIdx = fnSrc!.indexOf("if (!isVedettRouteFeatureEnabled())");
+  const surrounding = fnSrc!.slice(killSwitchIdx, killSwitchIdx + 300);
   assert.ok(
     !/role === "admin"/.test(surrounding) && !/isAdmin/.test(surrounding),
     "a kill switch ellenőrzés közelében nem szabad admin/tester-bypass feltételnek lennie — a flag mindenkit kizár, ha ki van kapcsolva"

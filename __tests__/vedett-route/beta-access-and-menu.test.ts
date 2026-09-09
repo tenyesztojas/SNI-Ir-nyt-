@@ -50,6 +50,72 @@ const ADMIN_CONFIG_PATH = join(ROOT, "app", "admin", "tesztelok", "config.ts");
 const TESZTELO_CLIENT_PATH = join(ROOT, "app", "admin", "tesztelok", "TeszteloClient.tsx");
 const MIGRATION_PATH = join(ROOT, "supabase", "migrations", "20260909_vedett_route_beta_access.sql");
 
+/**
+ * ROBUSZTUSSÁG (2026-09-09, integrate/vedett-utvonal-beta cherry-pick
+ * audit): determinisztikus, kapcsos-zárójel-mélység alapú függvénytest-
+ * kivágó — lásd __tests__/vedett-route/access-architecture.test.ts azonos
+ * nevű helperének fejlécét a teljes indoklásért (LF/CRLF, whitespace és
+ * Prettier-formázás független; egy paraméter-típus saját zárójel-párját is
+ * helyesen átugorja, mielőtt a függvénytest nyitó zárójelét keresné).
+ */
+function extractFunctionSource(src: string, name: string): string | null {
+  const sigRe = new RegExp("(export\\s+)?(async\\s+)?function\\s+" + name + "\\s*\\(");
+  const sigMatch = sigRe.exec(src);
+  if (!sigMatch) return null;
+
+  const start = sigMatch.index;
+
+  let parenDepth = 1;
+  let i = sigMatch.index + sigMatch[0].length;
+  for (; i < src.length && parenDepth > 0; i++) {
+    const c = src[i];
+    if (c === "(") parenDepth++;
+    else if (c === ")") parenDepth--;
+  }
+  if (parenDepth !== 0) return null;
+
+  const braceStart = src.indexOf("{", i);
+  if (braceStart === -1) return null;
+
+  let depth = 0;
+  let inString: string | null = null;
+  let inLineComment = false;
+  let inBlockComment = false;
+
+  for (let j = braceStart; j < src.length; j++) {
+    const c = src[j];
+    const prev = src[j - 1];
+
+    if (inLineComment) {
+      if (c === "\n") inLineComment = false;
+      continue;
+    }
+    if (inBlockComment) {
+      if (prev === "*" && c === "/") inBlockComment = false;
+      continue;
+    }
+    if (inString) {
+      if (c === "\\") { j++; continue; }
+      if (c === inString) inString = null;
+      continue;
+    }
+
+    if (c === "/" && src[j + 1] === "/") { inLineComment = true; continue; }
+    if (c === "/" && src[j + 1] === "*") { inBlockComment = true; continue; }
+    if (c === "\"" || c === "'" || c === "`") { inString = c; continue; }
+
+    if (c === "{") {
+      depth++;
+    } else if (c === "}") {
+      depth--;
+      if (depth === 0) {
+        return src.slice(start, j + 1);
+      }
+    }
+  }
+  return null;
+}
+
 const accessSrc = readFileSync(ACCESS_PATH, "utf-8");
 const configSrc = readFileSync(CONFIG_PATH, "utf-8");
 const headerClientSrc = readFileSync(HEADER_CLIENT_PATH, "utf-8");
@@ -101,13 +167,10 @@ describe("A/B/C/Q) hasVedettRouteBetaAccess() döntési logika", () => {
 
 describe("D) logged-out -> 401, a profil-lekérdezés ELŐTT", () => {
   test("requireVedettRouteBetaAccess() a user hiányát 401-gyel zárja rövidre, mielőtt bármilyen profil/pilot_access adatot lekérne", () => {
-    const fnMatch = accessSrc.match(
-      /export async function requireVedettRouteBetaAccess[\s\S]*?\n}\n/
-    );
-    assert.ok(fnMatch, "requireVedettRouteBetaAccess() függvénynek léteznie kell");
-    const fnBody = fnMatch[0];
-    const userCheckIdx = fnBody.indexOf('status: 401');
-    const profileQueryIdx = fnBody.indexOf('.from("profiles")');
+    const fnBody = extractFunctionSource(accessSrc, "requireVedettRouteBetaAccess");
+    assert.ok(fnBody, "requireVedettRouteBetaAccess() függvénynek léteznie kell");
+    const userCheckIdx = fnBody!.indexOf('status: 401');
+    const profileQueryIdx = fnBody!.indexOf('.from("profiles")');
     assert.ok(userCheckIdx !== -1 && profileQueryIdx !== -1);
     assert.ok(
       userCheckIdx < profileQueryIdx,
@@ -132,9 +195,9 @@ describe("E) lejárt grant — N/A, dokumentált korlátozás (a projekt tudatos
 
 describe("F/P) grant/revoke — setPilotAccess() (admin-only, meglévő akció, újrahasznosítva)", () => {
   test("setPilotAccess() admin-ellenőrzéssel kezdődik, mielőtt bármilyen írást végezne", () => {
-    const fnMatch = adminActionsSrc.match(/export async function setPilotAccess[\s\S]*?\n}\n/);
-    assert.ok(fnMatch);
-    assert.match(fnMatch[0], /if \(!\(await isCurrentUserAdmin\(\)\)\) throw new Error\("Unauthorized"\);/);
+    const fnBody = extractFunctionSource(adminActionsSrc, "setPilotAccess");
+    assert.ok(fnBody, "setPilotAccess() függvénynek léteznie kell");
+    assert.match(fnBody!, /if \(!\(await isCurrentUserAdmin\(\)\)\) throw new Error\("Unauthorized"\);/);
   });
 
   test("F) revoke (enabled=false) a modul kulcsát KISZŰRI a tömbből (nem csak enabled=false flaget állít) — így hasVedettRouteBetaAccess().includes() azonnal false lesz", () => {
@@ -153,14 +216,13 @@ describe("F/P) grant/revoke — setPilotAccess() (admin-only, meglévő akció, 
 
 describe("G) globális kill switch — admin SEM bypassolja", () => {
   test("requireVedettRouteAccess() a VEDETT_ROUTE_ENABLED ellenőrzést az authCheck UTÁN, feltétel nélkül végzi — nincs admin-specifikus bypass ág", () => {
-    const fnMatch = accessSrc.match(/export async function requireVedettRouteAccess[\s\S]*?\n}\n/);
-    assert.ok(fnMatch);
-    const fnBody = fnMatch[0];
-    assert.match(fnBody, /if \(!authCheck\.ok\) return authCheck;/);
-    assert.match(fnBody, /if \(!isVedettRouteFeatureEnabled\(\)\)/);
+    const fnBody = extractFunctionSource(accessSrc, "requireVedettRouteAccess");
+    assert.ok(fnBody, "requireVedettRouteAccess() függvénynek léteznie kell");
+    assert.match(fnBody!, /if \(!authCheck\.ok\) return authCheck;/);
+    assert.match(fnBody!, /if \(!isVedettRouteFeatureEnabled\(\)\)/);
     // Nincs "isAdmin" vagy hasonló bypass feltétel a flag-ellenőrzés körül.
-    const killSwitchBlockIdx = fnBody.indexOf("if (!isVedettRouteFeatureEnabled())");
-    const surrounding = fnBody.slice(killSwitchBlockIdx, killSwitchBlockIdx + 300);
+    const killSwitchBlockIdx = fnBody!.indexOf("if (!isVedettRouteFeatureEnabled())");
+    const surrounding = fnBody!.slice(killSwitchBlockIdx, killSwitchBlockIdx + 300);
     assert.ok(
       !/role === "admin"/.test(surrounding) && !/isAdmin/.test(surrounding),
       "a kill switch ellenőrzés közelében nem szabad admin-bypass feltételnek lennie"
@@ -231,7 +293,23 @@ describe("K/L/M/N) szerver oldali oldal- és API-védelem", () => {
   });
 
   test("L/M/N) requireVedettRouteBetaAccess(): DENY -> 403 Forbidden JSON, PASS (tesztelő VAGY admin) -> { ok: true }", () => {
-    assert.match(accessSrc, /status: 403 \}\s*\)\s*,?\s*\};?\s*\}\s*\n\n\s*return \{ ok: true, userId: user\.id \};/s);
+    // ROBUSZTUSSÁG: a korábbi verzió egy pontos whitespace-re/üres sorra
+    // támaszkodó regexet használt annak bizonyítására, hogy a 403 blokk után
+    // közvetlenül a sikeres return jön — ez CRLF vagy eltérő sorköz-
+    // formázás esetén hamis negatívot adhat. A determinisztikusan kivágott
+    // függvénytesten dolgozva ugyanazt az invariánst (DENY jelen van, ÉS a
+    // sikeres return UTÁNA következik a forrásban) sorrend-alapú indexOf-fal
+    // ellenőrizzük, formázástól függetlenül.
+    const fnBody = extractFunctionSource(accessSrc, "requireVedettRouteBetaAccess");
+    assert.ok(fnBody, "requireVedettRouteBetaAccess() függvénynek léteznie kell");
+    assert.match(fnBody!, /status: 403/, "DENY esetén 403-at kell visszaadnia");
+    assert.match(fnBody!, /return \{ ok: true, userId: user\.id \};/, "PASS esetén { ok: true, userId } -t kell visszaadnia");
+    const denyIdx = fnBody!.indexOf("status: 403");
+    const passIdx = fnBody!.indexOf("return { ok: true, userId: user.id };");
+    assert.ok(
+      denyIdx < passIdx,
+      "a 403 DENY ágnak a forrásban a sikeres { ok: true } return ELŐTT kell állnia"
+    );
   });
 
   test("L/M/N) mind a 6 meglévő Védett Útvonal API route a KÖZÖS requireVedettRouteAccess()-en keresztül fut — a beta_testers szint bevezetése egyetlen access.ts módosítással minden route-ra érvényes, route-fájlokat nem kellett módosítani", () => {
