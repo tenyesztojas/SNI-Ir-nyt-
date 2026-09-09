@@ -223,7 +223,11 @@ describe("AF/AG) CURRENT_LOCATION kedvenc betöltése NEM indít automatikus GPS
   });
 
   test("a pendingFavoriteOriginLabel jelzés mellett explicit 'Aktuális helyzetem' kattintásra utaló szöveg jelenik meg, nem automatikus kérés", () => {
-    assert.match(formSrc, /kattints az "Aktuális helyzetem" gombra/);
+    // JSX szöveg-tartalomban a nyers `"` karaktert a react/no-unescaped-
+    // entities ESLint szabály tiltja (Vercel production build blocking
+    // error volt ez miatt, 2026-09-09 hotfix) — a JSX ezért &quot;-t
+    // használ ugyanazon szöveg körül, a jelentés nem változott.
+    assert.match(formSrc, /kattints az &quot;Aktuális helyzetem&quot; gombra/);
   });
 });
 

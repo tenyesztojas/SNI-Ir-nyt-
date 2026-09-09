@@ -932,7 +932,7 @@ export default function VedettUtvonalSearchForm({
               kattint az "Aktuális helyzetem" gombra. */}
           {pendingFavoriteOriginLabel && origin.type !== "CURRENT_LOCATION" && (
             <p className="mt-1 text-xs text-sni-primary">
-              Ez egy kedvenc: {pendingFavoriteOriginLabel} → kattints az "Aktuális helyzetem" gombra a legfrissebb helyzeted lekéréséhez.
+              Ez egy kedvenc: {pendingFavoriteOriginLabel} → kattints az &quot;Aktuális helyzetem&quot; gombra a legfrissebb helyzeted lekéréséhez.
             </p>
           )}
           {originError && <p className="mt-1 text-xs text-amber-700">{originError}</p>}
