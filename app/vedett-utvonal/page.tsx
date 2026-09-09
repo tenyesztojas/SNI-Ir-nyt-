@@ -27,12 +27,23 @@
 // válasz formája más (redirect/JSX itt, JSON válasz ott). A "beta_testers"
 // és "admin_only" ágak a switch-ben megmaradnak (a grant/admin infrastruktúra
 // nem törlődik), de jelenleg az "authenticated_users" ág aktív.
+//
+// DEEP LINK (Védett Hely "Navigálj oda" integráció, 2026-09-09): az oldal
+// mostantól ?name=...&lat=...&lon=... query paraméterekből előre kitöltött
+// úti célt fogadhat el (lásd components/NavigateButton.tsx és
+// app/helyek/[slug]/page.tsx, ahol a link összeáll). A query paramétereket
+// a lib/vedett-route/schemas.ts routeDestinationDeepLinkSchema-jával
+// (a MEGLÉVŐ latitude/longitude séma alapján) validáljuk — érvénytelen
+// vagy hiányzó adat esetén csendben null-ra esik vissza (normál, üres
+// kereső, SOSEM crash). A `searchParams` prop szinkron objektum, ugyanúgy,
+// mint app/helyek/page.tsx-ben — nem hozunk létre eltérő konvenciót.
 
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentUserAndProfile } from "@/lib/data";
 import { isVedettRouteFeatureEnabled, VEDETT_ROUTE_ACCESS_LEVEL } from "@/lib/vedett-route/config";
 import { hasVedettRouteBetaAccess } from "@/lib/vedett-route/access";
+import { routeDestinationDeepLinkSchema } from "@/lib/vedett-route/schemas";
 import VedettUtvonalSearchForm from "@/components/vedett-utvonal/VedettUtvonalSearchForm";
 
 // Lásd app/admin/vedett-utvonal/page.tsx fejlécét — ugyanaz a build-time
@@ -42,7 +53,28 @@ import VedettUtvonalSearchForm from "@/components/vedett-utvonal/VedettUtvonalSe
 // hogy elvégezze (a felhasználó session-je csak runtime-ban ismert).
 export const dynamic = "force-dynamic";
 
-export default async function VedettUtvonalPage() {
+function parseDeepLinkDestination(
+  searchParams: Record<string, string | string[] | undefined>
+): { name: string; latitude: number; longitude: number } | null {
+  const name = searchParams.name;
+  const lat = searchParams.lat;
+  const lon = searchParams.lon;
+  // Csak sima string paramétereket fogadunk el (nem tömböt, pl.
+  // ?name=a&name=b esetén) — ez már önmagában kizárja a legtöbb hibás
+  // bemenetet, mielőtt egyáltalán a zod séma futna.
+  if (typeof name !== "string" || typeof lat !== "string" || typeof lon !== "string") {
+    return null;
+  }
+  const parsed = routeDestinationDeepLinkSchema.safeParse({ name, lat, lon });
+  if (!parsed.success) return null;
+  return { name: parsed.data.name, latitude: parsed.data.lat, longitude: parsed.data.lon };
+}
+
+export default async function VedettUtvonalPage({
+  searchParams,
+}: {
+  searchParams: Record<string, string | string[] | undefined>;
+}) {
   const { user, profile } = await getCurrentUserAndProfile();
 
   if (!user) {
@@ -67,6 +99,13 @@ export default async function VedettUtvonalPage() {
         : profile?.role === "admin";
 
   const allowed = enabled && hasLevelAccess;
+
+  // A deep-link feldolgozás SZÁNDÉKOSAN az `allowed` check UTÁN történik —
+  // egy jogosultság nélküli/kikapcsolt-flag állapotban amúgy sem
+  // renderelődik a kereső form, tehát a destinationnak sincs hova
+  // kerülnie; nincs szükség rá, hogy egy DENY ágon is validáljunk egy
+  // query paramétert.
+  const initialDestination = allowed ? parseDeepLinkDestination(searchParams) : null;
 
   if (!allowed) {
     return (
@@ -96,7 +135,7 @@ export default async function VedettUtvonalPage() {
       </p>
 
       <div className="mt-6">
-        <VedettUtvonalSearchForm disabled={!enabled} />
+        <VedettUtvonalSearchForm disabled={!enabled} initialDestination={initialDestination} />
       </div>
     </div>
   );

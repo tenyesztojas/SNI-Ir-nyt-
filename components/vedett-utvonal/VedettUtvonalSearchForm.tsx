@@ -24,6 +24,23 @@ type RouteOrigin =
   | { type: "MANUAL"; address: string }
   | { type: "CURRENT_LOCATION"; latitude: number; longitude: number };
 
+// Védett Hely "Navigálj oda" -> Védett Útvonal integráció (2026-09-09).
+//
+// UGYANAZT a mintát követi, mint a fenti RouteOrigin: két, egymást KIZÁRÓ
+// mód. MANUAL: a felhasználó szabadszöveges célt gépel be (a meglévő,
+// regresszió-mentesen megőrzött viselkedés — a szerver továbbra is
+// geokódolja a `to` mezőt). KNOWN_PLACE: a /vedett-utvonal oldal egy
+// deep linkből (Védett Hely "Navigálj oda" -> Védett Útvonal) érkező, MÁR
+// ISMERT VédettSarok hely nevét és koordinátáját kapta — ezt a szerver
+// oldali routing SOSEM próbálja geocodolni (lásd app/api/admin/
+// vedett-utvonal/search/route.ts toCoordinates ága), mert a koordináta
+// már megbízhatóan ismert. Amint a felhasználó kézzel írni kezd a "Hová?"
+// mezőbe, KNOWN_PLACE azonnal megszűnik (lásd handleDestinationChange) —
+// pontosan úgy, mint az induló mezőnél.
+type RouteDestination =
+  | { type: "MANUAL"; address: string }
+  | { type: "KNOWN_PLACE"; name: string; latitude: number; longitude: number };
+
 // MapLibre a böngésző window objektumára támaszkodik -> csak kliens
 // oldalon tölthető be (SSR alatt nincs window). dynamic({ ssr: false })
 // a Next.js hivatalos mintája erre.
@@ -489,16 +506,38 @@ const WEIGHT_FIELDS: { key: keyof PersonalizationWeights; label: string }[] = [
   { key: "waiting", label: "Várakozás zavar" },
 ];
 
-export default function VedettUtvonalSearchForm({ disabled }: { disabled: boolean }) {
+export default function VedettUtvonalSearchForm({
+  disabled,
+  initialDestination = null,
+}: {
+  disabled: boolean;
+  // Védett Hely "Navigálj oda" -> Védett Útvonal integráció (2026-09-09).
+  // Az /vedett-utvonal oldal (app/vedett-utvonal/page.tsx) adja át, MÁR
+  // validáltan (lásd routeDestinationDeepLinkSchema) — ez a komponens
+  // nem végez saját validációt a bemeneten, csak megbízik a hívóban
+  // (ugyanaz a minta, mint a `disabled` prop esetén).
+  initialDestination?: { name: string; latitude: number; longitude: number } | null;
+}) {
   // „Aktuális helyzetem" mint indulási pont (UX módosítás, 2026-09-09) —
   // TASK B. A `from` szabadszöveges mező helyett/mellett egy explicit,
   // két módot (MANUAL / CURRENT_LOCATION) megkülönböztető RouteOrigin
-  // state — lásd a fájl elején lévő típusdefiníciót és indoklást. A
-  // `to` mező VÁLTOZATLAN marad (Task B kizárólag az indulási pontot
-  // érinti, lásd M. regressziós teszt: "existing manual origin search
-  // továbbra is működik").
+  // state — lásd a fájl elején lévő típusdefiníciót és indoklást.
   const [origin, setOrigin] = useState<RouteOrigin>({ type: "MANUAL", address: "" });
-  const [to, setTo] = useState("");
+  // Védett Hely "Navigálj oda" integráció — ha van előre validált
+  // initialDestination, a "Hová?" mező KNOWN_PLACE módban indul (a hely
+  // neve már ki van töltve); egyébként a régi, VÁLTOZATLAN MANUAL/""
+  // kezdőállapot (lásd M. regressziós teszt: "existing manual destination
+  // search továbbra is működik").
+  const [destination, setDestination] = useState<RouteDestination>(
+    initialDestination
+      ? {
+          type: "KNOWN_PLACE",
+          name: initialDestination.name,
+          latitude: initialDestination.latitude,
+          longitude: initialDestination.longitude,
+        }
+      : { type: "MANUAL", address: "" }
+  );
   const [when, setWhen] = useState<"now" | "scheduled">("now");
   const [datetime, setDatetime] = useState("");
   const [loading, setLoading] = useState(false);
@@ -573,6 +612,15 @@ export default function VedettUtvonalSearchForm({ disabled }: { disabled: boolea
     setOrigin({ type: "MANUAL", address: value });
   }
 
+  function handleDestinationChange(value: string) {
+    // Védett Hely "Navigálj oda" integráció — ugyanaz a szabály, mint az
+    // induló mezőnél (B4): bármilyen kézi gépelés a "Hová?" mezőbe
+    // AZONNAL visszaállítja MANUAL módra, SOHA nem használ elavult/rossz
+    // koordinátát a routing kéréshez, ha a felhasználó a deep linkből
+    // előre kitöltött célt módosítja.
+    setDestination({ type: "MANUAL", address: value });
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setFormError(null);
@@ -583,7 +631,7 @@ export default function VedettUtvonalSearchForm({ disabled }: { disabled: boolea
       setFormError("Add meg az indulási helyet és a célhelyet.");
       return;
     }
-    if (!to.trim()) {
+    if (destination.type === "MANUAL" && !destination.address.trim()) {
       setFormError("Add meg az indulási helyet és a célhelyet.");
       return;
     }
@@ -594,21 +642,27 @@ export default function VedettUtvonalSearchForm({ disabled }: { disabled: boolea
       // lat/lon megy (fromCoordinates), SOHA nem az "Aktuális helyzetem"
       // felirat mint geokódolandó cím-string (lásd
       // app/api/admin/vedett-utvonal/search/route.ts — ez a mező
-      // KIHAGYJA a geocodeAddress() hívást).
-      const body =
+      // KIHAGYJA a geocodeAddress() hívást). A célhelyre (to/toCoordinates)
+      // ugyanez a szimmetrikus szabály vonatkozik a Védett Hely "Navigálj
+      // oda" integráció óta (2026-09-09): KNOWN_PLACE esetén a MÁR ISMERT
+      // koordináta megy, nincs felesleges újra-geokódolás.
+      const originFields =
         origin.type === "CURRENT_LOCATION"
+          ? { fromCoordinates: { latitude: origin.latitude, longitude: origin.longitude } }
+          : { from: origin.address };
+      const destinationFields =
+        destination.type === "KNOWN_PLACE"
           ? {
-              fromCoordinates: { latitude: origin.latitude, longitude: origin.longitude },
-              to,
-              departAt: when === "now" ? new Date().toISOString() : new Date(datetime).toISOString(),
-              weights,
+              toCoordinates: { latitude: destination.latitude, longitude: destination.longitude },
+              toName: destination.name,
             }
-          : {
-              from: origin.address,
-              to,
-              departAt: when === "now" ? new Date().toISOString() : new Date(datetime).toISOString(),
-              weights,
-            };
+          : { to: destination.address };
+      const body = {
+        ...originFields,
+        ...destinationFields,
+        departAt: when === "now" ? new Date().toISOString() : new Date(datetime).toISOString(),
+        weights,
+      };
       const res = await fetch("/api/admin/vedett-utvonal/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -662,12 +716,17 @@ export default function VedettUtvonalSearchForm({ disabled }: { disabled: boolea
           <label className="block text-sm font-medium text-gray-700">Hová?</label>
           <input
             type="text"
-            value={to}
-            onChange={(e) => setTo(e.target.value)}
+            value={destination.type === "KNOWN_PLACE" ? destination.name : destination.address}
+            onChange={(e) => handleDestinationChange(e.target.value)}
             placeholder="Cím vagy VédettSarok hely"
             disabled={disabled}
             className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm disabled:bg-gray-100"
           />
+          {destination.type === "KNOWN_PLACE" && (
+            <p className="mt-1 text-xs text-green-700">
+              Úti cél: {destination.name} (a VédettSarok adatbázisából, koordináta alapján — nincs szükség újbóli keresésre).
+            </p>
+          )}
         </div>
 
         <div>

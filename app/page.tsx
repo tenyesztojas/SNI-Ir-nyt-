@@ -1,10 +1,11 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
-import { MapPin, HeartHandshake, ArrowRight, CalendarDays, ExternalLink } from "lucide-react";
+import { MapPin, HeartHandshake, ArrowRight, CalendarDays, ExternalLink, Compass } from "lucide-react";
 import { getCategories, getApprovedPlaces, citiesFromPlaces, countriesFromPlaces, getCurrentUserAndProfile } from "@/lib/data";
 import { getUnreadNotificationCount } from "@/lib/community/data";
 import { createClient } from "@/lib/supabase/server";
+import { isVedettRouteFeatureEnabled } from "@/lib/vedett-route/config";
 import HeroSearchForm from "@/components/HeroSearchForm";
 import NearbyPlacesPanel from "@/components/NearbyPlacesPanel";
 
@@ -25,6 +26,10 @@ export default async function HomePage() {
   const programs = programsResult.data ?? [];
   const cities = citiesFromPlaces(places);
   const countries = countriesFromPlaces(places);
+  // A főoldali Védett Útvonal hero UGYANAZT a globális VEDETT_ROUTE_ENABLED
+  // kill switch-et veszi figyelembe, mint a menüpont és az API route-ok
+  // (lásd lib/vedett-route/config.ts) — nincs új, párhuzamos feature flag.
+  const vedettRouteEnabled = isVedettRouteFeatureEnabled();
 
   return (
     <div>
@@ -88,6 +93,58 @@ export default async function HomePage() {
           ))}
         </div>
       </section>
+
+      {/* VÉDETT ÚTVONAL HERO (2026-09-09) — közvetlenül a kategóriaválasztó
+          alatt, a globális VEDETT_ROUTE_ENABLED flag mögött (lásd fentebb),
+          hogy a funkció kikapcsolt állapotában ne hirdessünk el nem érhető
+          dolgot. A badge/leírás szándékosan NEM sugall kész, garantált vagy
+          hivatalos közlekedési szolgáltatást (nyilvános BÉTA). */}
+      {vedettRouteEnabled && (
+        <section className="mx-auto max-w-5xl px-4 pb-4 sm:px-6">
+          <div className="relative overflow-hidden rounded-3xl border border-sni-brand-teal/20 bg-gradient-to-br from-sni-brand-teal/5 via-white to-sni-brand-navy/5 p-6 sm:p-8">
+            <div className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-sni-brand-teal/15 px-3 py-1 text-xs font-bold uppercase tracking-wide text-sni-brand-teal">
+              ÚJ · BÉTA
+            </div>
+
+            <h2 className="text-xl font-bold text-gray-900 sm:text-2xl">
+              Ne csak azt nézd, merre gyorsabb.
+              <br className="hidden sm:block" /> Nézd azt is, merre könnyebb.
+            </h2>
+
+            <p className="mt-3 max-w-2xl text-sm leading-relaxed text-gray-600 sm:text-base">
+              A Védett Útvonal autista és ADHD-s embereknek, valamint érintett családoknak
+              segít olyan budapesti útvonalat választani, amelynél nem csak az érkezési idő számít.
+            </p>
+
+            <div className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-xs font-medium text-gray-500 sm:text-sm">
+              <span>Szenzoros terhelés</span>
+              <span aria-hidden="true">·</span>
+              <span>kevesebb átszállás</span>
+              <span aria-hidden="true">·</span>
+              <span>kevesebb gyaloglás</span>
+              <span aria-hidden="true">·</span>
+              <span>valós idejű BKK-adatok</span>
+              <span aria-hidden="true">·</span>
+              <span>pihenőpontok</span>
+            </div>
+
+            <Link
+              href="/vedett-utvonal"
+              className="mt-5 inline-flex items-center gap-2 rounded-full bg-sni-brand-teal px-5 py-2.5 text-sm font-bold text-white shadow-md transition-all hover:bg-sni-brand-blue hover:shadow-lg"
+            >
+              <Compass size={16} />
+              Megtervezem az útvonalam
+              <ArrowRight size={16} />
+            </Link>
+
+            <p className="mt-4 text-xs text-gray-400">
+              Budapest · BKK · nyilvános béta
+              <br className="sm:hidden" />
+              <span className="sm:before:content-['_—_']">Próbáld ki, és segíts a visszajelzéseddel még jobbá tenni.</span>
+            </p>
+          </div>
+        </section>
+      )}
 
       {/* PROGRAMAJÁNLÓ */}
       {programs && programs.length > 0 && (

@@ -352,6 +352,19 @@ export function citiesFromPlaces(places: Place[]): string[] {
   return Array.from(new Set(normalized)).sort((a, b) => huSort(a, b));
 }
 
+// Védett Hely "Navigálj oda" -> Védett Útvonal integráció (2026-09-09).
+//
+// UGYANAZT a strukturált `city` mezőt és UGYANAZT a normalizálást
+// használja, mint a fentebbi citiesFromPlaces() ("Budapest, XI. kerület"
+// stílusú értékek is Budapestnek számítanak) — NEM egy második, párhuzamos
+// Budapest-detektáló logika. Szándékosan NEM koordináta-alapú (bounding
+// box) ellenőrzés: a `city` mező a projekt meglévő, legmegbízhatóbb
+// strukturált helyadata, ezt kell előnyben részesíteni a koordináta-alapú
+// heurisztikával szemben, amíg rendelkezésre áll.
+export function isBudapestPlace(place: Pick<Place, "city">): boolean {
+  return place.city.startsWith("Budapest");
+}
+
 export function countriesFromPlaces(places: Place[]): string[] {
   const all = [...new Set(places.map((p) => p.country ?? "Magyarország"))];
   return all.sort((a, b) => a === "Magyarország" ? -1 : b === "Magyarország" ? 1 : a.localeCompare(b, "hu"));

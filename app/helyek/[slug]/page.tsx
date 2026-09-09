@@ -14,8 +14,10 @@ import {
   isBookingLive,
   getProviderForPlace,
   getBookingDataForPlace,
+  isBudapestPlace,
 } from "@/lib/data";
 import { Review } from "@/lib/types";
+import { isVedettRouteFeatureEnabled } from "@/lib/vedett-route/config";
 import CategoryBadge from "@/components/CategoryBadge";
 import Disclaimer from "@/components/Disclaimer";
 import FavoriteButton from "@/components/FavoriteButton";
@@ -116,6 +118,32 @@ export default async function PlaceDetailPage({ params }: { params: { slug: stri
   const avg = avgRating(reviews);
   const gradient = pickGradient(place.slug ?? place.name);
   const images = place.images ?? [];
+
+  // Védett Hely "Navigálj oda" -> Védett Útvonal integráció (2026-09-09).
+  //
+  // A döntés (Budapest-e a hely, be van-e kapcsolva a globális
+  // VEDETT_ROUTE_ENABLED flag, van-e egyáltalán ismert koordináta) itt,
+  // a szerver komponensben történik — NEM a NavigateButton kliens
+  // komponensben (lásd annak Props kommentjét). Auth-ot SZÁNDÉKOSAN nem
+  // ellenőrzünk itt: a link kijelentkezett felhasználónak is megjelenhet
+  // (7. pont) — a /vedett-utvonal oldal maga dönt a bejelentkezés
+  // szükségességéről (requireVedettRouteAuthenticated(), lásd access.ts),
+  // nincs duplikált/párhuzamos auth-logika. A célhely NEVÉT és
+  // koordinátáját STRUKTURÁLTAN, query paraméterként adjuk át, hogy a
+  // /vedett-utvonal oldal automatikusan kitölthesse az úti célt anélkül,
+  // hogy a felhasználónak újra be kellene gépelnie vagy a szervernek újra
+  // geokódolnia kellene egy már ismert helyet.
+  const vedettUtvonalHref =
+    isVedettRouteFeatureEnabled() &&
+    isBudapestPlace(place) &&
+    typeof place.latitude === "number" &&
+    typeof place.longitude === "number"
+      ? `/vedett-utvonal?${new URLSearchParams({
+          name: place.name,
+          lat: String(place.latitude),
+          lon: String(place.longitude),
+        }).toString()}`
+      : null;
 
   return (
     <div>
@@ -224,7 +252,12 @@ export default async function PlaceDetailPage({ params }: { params: { slug: stri
             </div>
             {typeof place.latitude === "number" && typeof place.longitude === "number" && (
               <div className="pt-1">
-                <NavigateButton lat={place.latitude} lng={place.longitude} placeName={place.name} />
+                <NavigateButton
+                  lat={place.latitude}
+                  lng={place.longitude}
+                  placeName={place.name}
+                  vedettUtvonalHref={vedettUtvonalHref}
+                />
               </div>
             )}
             {place.phone && (

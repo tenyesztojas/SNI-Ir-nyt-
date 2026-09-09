@@ -352,10 +352,23 @@ describe("O) sima felhasználó nem adhat magának hozzáférést (backwards-com
 });
 
 describe("L) GPS PRIVACY REGRESSION — a hozzáférési modell váltása nem érinti a GPS-t", () => {
-  test("sem access.ts, sem a beta-grant admin akciók, sem a page.tsx nem kezel GPS/koordináta adatot", () => {
-    for (const src of [accessSrc, adminActionsSrc, migrationSrc, pageSrc]) {
+  test("sem access.ts, sem a beta-grant admin akciók, sem a migráció nem kezel GPS/koordináta adatot", () => {
+    for (const src of [accessSrc, adminActionsSrc, migrationSrc]) {
       assert.ok(!/latitude|longitude|navigator\.geolocation/i.test(src));
     }
+  });
+
+  // FRISSÍTVE (Védett Hely "Navigálj oda" integráció, 2026-09-09): a
+  // page.tsx mostantól LEGITIM MÓDON kezel latitude/longitude értéket — a
+  // deep linkből érkező, MÁR ISMERT Védett Hely koordinátáját (nem a
+  // felhasználó GPS-ét). Ez NEM GPS-privacy regresszió: a valódi
+  // invariáns az, hogy a page.tsx SOHA nem hívja a böngésző
+  // navigator.geolocation API-ját (az kizárólag a kliens oldali
+  // VedettUtvonalSearchForm useGeolocation() hookjában, explicit user
+  // action mögött történhet) — lásd a navigate-button-integration.test.ts
+  // J/K teszteit a teljes lefedettségért.
+  test("app/vedett-utvonal/page.tsx SOHA nem hívja a navigator.geolocation API-t — a deep linkből érkező koordináta a Védett Helyé, nem GPS-adat", () => {
+    assert.doesNotMatch(pageSrc, /navigator\.geolocation/i);
   });
 });
 

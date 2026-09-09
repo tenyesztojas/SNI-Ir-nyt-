@@ -115,9 +115,36 @@ describe("TASK B — „Aktuális helyzetem” mint indulási pont", () => {
   });
 
   test("I) a form SOHA nem küldi az 'Aktuális helyzetem' feliratot geokódolandó 'from' mezőként — a CURRENT_LOCATION ág nem tartalmaz 'from:' kulcsot", () => {
-    const bodyBlockMatch = formSrc.match(/const body =\s*\n\s*origin\.type === "CURRENT_LOCATION"\s*\n\s*\?\s*\{([\s\S]*?)\}\s*\n\s*:/);
-    assert.ok(bodyBlockMatch, "meg kell találni a CURRENT_LOCATION ágú request body-t");
-    assert.ok(!/\bfrom:/.test(bodyBlockMatch![1]), "a CURRENT_LOCATION ág nem tartalmazhat 'from' mezőt — a kliens sosem küldi geokódolandó stringként az 'Aktuális helyzetem' feliratot");
+    // A destination/deep-link integráció (2026-09-09) miatt a régi
+    // "const body = origin.type === ... ? { ... } : { ... }" szerkezet
+    // helyét egy szétbontott originFields/destinationFields architektúra
+    // vette át (lásd VedettUtvonalSearchForm.tsx). Az invariáns pontosan
+    // ugyanaz marad — CURRENT_LOCATION esetén fromCoordinates VAN, 'from:'
+    // NINCS —, csak az új szerkezethez illesztve ellenőrizzük.
+    const currentLocationIdx = formSrc.indexOf('origin.type === "CURRENT_LOCATION"');
+    assert.ok(currentLocationIdx !== -1, "meg kell találni az origin.type === \"CURRENT_LOCATION\" elágazást");
+
+    const manualBranchIdx = formSrc.indexOf(": { from: origin.address };", currentLocationIdx);
+    assert.ok(manualBranchIdx !== -1, "meg kell találni a MANUAL ág { from: origin.address } visszatérését");
+
+    const currentLocationBranch = formSrc.slice(currentLocationIdx, manualBranchIdx);
+
+    assert.match(
+      currentLocationBranch,
+      /fromCoordinates:\s*\{\s*latitude:\s*origin\.latitude,\s*longitude:\s*origin\.longitude\s*\}/,
+      "a CURRENT_LOCATION ágnak fromCoordinates-t kell tartalmaznia"
+    );
+
+    assert.ok(
+      !/\bfrom\s*:/.test(currentLocationBranch),
+      "a CURRENT_LOCATION ág nem tartalmazhat 'from' mezőt — a kliens sosem küldi geokódolandó stringként az 'Aktuális helyzetem' feliratot"
+    );
+
+    assert.match(
+      formSrc,
+      /const body\s*=\s*\{\s*\.\.\.originFields,\s*\.\.\.destinationFields,/,
+      "a request body-nak az originFields és destinationFields szétbontott szerkezetét kell használnia"
+    );
   });
 
   test("I) app/api/admin/vedett-utvonal/search/route.ts fromCoordinates jelenlétekor NEM hívja meg a geocodeAddress()-t az induló pontra", () => {

@@ -33,7 +33,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const { from, fromCoordinates, to, weights } = parsed.data;
+  const { from, fromCoordinates, to, toCoordinates, toName, weights } = parsed.data;
   const departAt = parsed.data.departAt ?? new Date().toISOString();
 
   // Múltbeli időpont ellenőrzése (31. pont: routing tesztek).
@@ -53,11 +53,22 @@ export async function POST(request: Request) {
   // latitudeSchema/longitudeSchema, lásd schemas.ts). A "Jelenlegi hely"
   // egy statikus, nem geokódolt megjelenítési név — SOSEM kerül vissza
   // Nominatim-lekérdezésbe.
+  // Védett Hely „Navigálj oda" integráció (2026-09-09) — a `from`/
+  // fromCoordinates mintájával teljesen szimmetrikusan: ha a kliens
+  // STRUKTURÁLT toCoordinates-t küldött (a felhasználó egy már ismert
+  // VédettSarok Védett Helyet választott úti célnak), a geocodeAddress()-t
+  // ez a mező is TELJESEN KIHAGYJA — a hely koordinátája már ismert és
+  // megbízható, nincs szükség (és nem is volna helyes) egy pontatlanabb
+  // eredményt is adó Nominatim-lekérdezésre. `toName` egy tisztán
+  // megjelenítési célú label (a Védett Hely neve); hiányában egy semleges
+  // alapértelmezés jelenik meg.
   const [fromGeo, toGeo] = await Promise.all([
     fromCoordinates
       ? Promise.resolve({ name: "Jelenlegi hely", lat: fromCoordinates.latitude, lon: fromCoordinates.longitude })
       : geocodeAddress(from as string),
-    geocodeAddress(to),
+    toCoordinates
+      ? Promise.resolve({ name: toName ?? "Kiválasztott cél", lat: toCoordinates.latitude, lon: toCoordinates.longitude })
+      : geocodeAddress(to as string),
   ]);
 
   if (!fromGeo || !toGeo) {
