@@ -60,6 +60,18 @@ export interface VedettUtvonalMapProps {
   // és egy marker kattintás meghívja onSelectRestPoint(id)-t.
   selectedRestPointId?: string | null;
   onSelectRestPoint?: (id: string) => void;
+  // Egyetlen megosztott térkép (UX módosítás, 2026-09-09): korábban a
+  // "pihenőpont-jelölt" nézet fitBounds-viselkedését a legs.length===0
+  // implicit jelként kezelte ez a komponens (lásd lent a régi kommentet) —
+  // ez egy KÜLÖN, saját térképet feltételezett a hívó oldalon
+  // (RestStopFlowPanel.tsx), ami legs=[]-t adott át, hogy elnyomja a
+  // route-rajzolást. Mostantól EGYETLEN VedettUtvonalMap instance mutatja
+  // egyszerre az eredeti útvonalat ÉS a pihenőpont-jelölteket, ezért a
+  // "melyik fitBounds fusson" döntést explicit propként kell átadni,
+  // FÜGGETLENÜL attól, hogy legs éppen üres-e vagy sem (az eredeti route
+  // geometriának akkor is látszania kell, amikor a pihenőpont-fókusz
+  // aktív). Alapértelmezett false = a régi, route-fitBounds viselkedés.
+  restPointFocusMode?: boolean;
   className?: string;
 }
 
@@ -106,7 +118,7 @@ class CurrentLocationControl implements maplibregl.IControl {
   }
 }
 
-export default function VedettUtvonalMap({ legs, fromName, toName, currentPosition, restPoints = [], selectedRestPointId = null, onSelectRestPoint, className }: VedettUtvonalMapProps) {
+export default function VedettUtvonalMap({ legs, fromName, toName, currentPosition, restPoints = [], selectedRestPointId = null, onSelectRestPoint, restPointFocusMode = false, className }: VedettUtvonalMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const currentPosMarkerRef = useRef<maplibregl.Marker | null>(null);
@@ -262,22 +274,33 @@ export default function VedettUtvonalMap({ legs, fromName, toName, currentPositi
         hasCoords = true;
       }
     }
-    if (hasCoords) {
+    // Egyetlen megosztott térkép (UX módosítás, 2026-09-09): amikor a
+    // pihenőpont-fókusz aktív (restPointFocusMode), a nézetért a LENTI
+    // effekt felel (currentPosition + pihenőpont-jelöltek köré illesztett,
+    // szűkebb bounds) — ez az effekt ilyenkor szándékosan NEM hívja a
+    // fitBounds-ot, még akkor sem, ha időközben route-geometria érkezett/
+    // frissült, nehogy a két effekt versengjen a nézetért és a térkép
+    // láthatóan "ugráljon" a felhasználó alatt. Az útvonal-rétegek
+    // (vonalak/megállók) rajzolása ettől függetlenül MINDIG megtörténik
+    // fent — a route SOHA nem tűnik el pihenőpont-fókuszban, csak a
+    // kamera nem igazodik hozzá addig.
+    if (hasCoords && !restPointFocusMode) {
       map.fitBounds(bounds, { padding: 48, maxZoom: 17, duration: 300 });
     }
-  }, [legs, mapReady]);
+  }, [legs, mapReady, restPointFocusMode]);
 
-  // Sprint E.1 hotfix (2026-09-08) — pihenőpont-jelölt nézet fitBounds/
-  // zoom javítás (staging UX hiba: "a pihenőpont-térkép túl messze
-  // zoomol ki, gyakorlatilag Budapest-szintű nézetet mutat"). Amikor
-  // legs=[] (a pihenőpont-jelöltek áttekintő nézete, lásd
-  // RestStopFlowPanel.tsx — a <VedettUtvonalMap legs={[]} .../> hívás), a
-  // FENTI (útvonal-geometriára fitBounds-oló) effekt SOHA nem fut le
-  // ("hasCoords" mindig false, hiszen nincs útvonal-geometria) — a térkép
-  // emiatt a hardcode-olt alapértelmezett nézeten (Budapest, zoom 12)
-  // ragadt. Ez az effekt KIZÁRÓLAG ezt az esetet kezeli (legs.length ===
-  // 0-ra korlátozva), a fenti effektet NEM módosítja és NEM regresszálja
-  // (route-map fitBounds viselkedése változatlan marad).
+  // Sprint E.1 hotfix (2026-09-08), frissítve az Egyetlen Megosztott Térkép
+  // UX módosításnál (2026-09-09) — pihenőpont-jelölt nézet fitBounds/zoom
+  // javítás (staging UX hiba: "a pihenőpont-térkép túl messze zoomol ki,
+  // gyakorlatilag Budapest-szintű nézetet mutat"). Amikor a hívó
+  // restPointFocusMode=true-t ad át (a "Pihenőre van szükségem" folyamat
+  // aktív, lásd VedettUtvonalSearchForm.tsx RankedJourneyCard), ez az
+  // effekt illeszti a nézetet a currentPosition + pihenőpont-jelöltek köré
+  // — FÜGGETLENÜL attól, hogy legs éppen tartalmaz-e route-geometriát
+  // (az eredeti útvonal ilyenkor is látszik, csak a kamera nem hozzá
+  // igazodik). A fenti effektet NEM módosítja és NEM regresszálja
+  // (route-map fitBounds viselkedése restPointFocusMode=false esetén
+  // változatlan marad).
   //
   // STABIL, PRIMITÍV FÜGGŐSÉGEK: a restPoints/currentPosition props a
   // szülőben (RestStopFlowPanel.tsx) minden renderkor ÚJ tömb-/objektum-
@@ -289,16 +312,21 @@ export default function VedettUtvonalMap({ legs, fromName, toName, currentPositi
   // Emiatt szándékosan levezetett, primitív kulcsokra (id-k
   // összefűzve, lat/lon) iratkozunk fel, NEM a restPoints/currentPosition
   // referenciákra közvetlenül.
-  const restPointIdsKey = legs.length === 0 ? restPoints.map((rp) => rp.id).join(",") : "";
+  // Egyetlen megosztott térkép (UX módosítás, 2026-09-09): a kulcs mostantól
+  // restPointFocusMode-tól függ, NEM legs.length-től — a régi feltétel azt
+  // feltételezte, hogy pihenőpont-jelöltek CSAK üres legs mellett létezhetnek
+  // (külön térkép-instance-onként), ami már nem igaz: az EGYETLEN közös
+  // térkép egyszerre kapja a valós route legs-et ÉS a pihenőpont-jelölteket.
+  const restPointIdsKey = restPointFocusMode ? restPoints.map((rp) => rp.id).join(",") : "";
   const currentLat = currentPosition?.latitude;
   const currentLon = currentPosition?.longitude;
 
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapReady) return;
-    // Van aktív útvonal-geometria -> a FENTI effekt felelős a nézetért,
-    // ez az effekt itt szándékosan nem csinál semmit (nem regresszál).
-    if (legs.length !== 0) return;
+    // Nincs aktív pihenőpont-fókusz -> a FENTI effekt felelős a nézetért
+    // (route-fitBounds), ez az effekt itt szándékosan nem csinál semmit.
+    if (!restPointFocusMode) return;
 
     const hasCurrentPosition = typeof currentLat === "number" && typeof currentLon === "number";
     if (!hasCurrentPosition && restPoints.length === 0) {
@@ -326,7 +354,7 @@ export default function VedettUtvonalMap({ legs, fromName, toName, currentPositi
     }
     map.fitBounds(bounds, { padding: 56, maxZoom: 16, duration: 300 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [legs.length, mapReady, restPointIdsKey, currentLat, currentLon]);
+  }, [restPointFocusMode, mapReady, restPointIdsKey, currentLat, currentLon]);
 
   // Aktuális GPS-pozíció marker — csak a jelenlegi renderben él, nincs
   // perzisztálás (lásd lib/hooks/useGeolocation.ts fejléce).

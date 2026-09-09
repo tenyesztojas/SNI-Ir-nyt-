@@ -33,7 +33,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const { from, to, weights } = parsed.data;
+  const { from, fromCoordinates, to, weights } = parsed.data;
   const departAt = parsed.data.departAt ?? new Date().toISOString();
 
   // Múltbeli időpont ellenőrzése (31. pont: routing tesztek).
@@ -44,7 +44,21 @@ export async function POST(request: Request) {
     );
   }
 
-  const [fromGeo, toGeo] = await Promise.all([geocodeAddress(from), geocodeAddress(to)]);
+  // „Aktuális helyzetem" mint indulási pont (UX módosítás, 2026-09-09),
+  // TASK B — ha a kliens STRUKTURÁLT fromCoordinates-t küldött (a
+  // felhasználó a böngésző GPS-ét választotta indulási pontnak), a
+  // geocodeAddress()-t EZ A MEZŐ TELJESEN KIHAGYJA — nincs Nominatim-hívás
+  // egy "Aktuális helyzetem"-féle string miatt, és nincs "hely nem
+  // található" hiba sem, hiszen a koordináta már eleve validált (zod
+  // latitudeSchema/longitudeSchema, lásd schemas.ts). A "Jelenlegi hely"
+  // egy statikus, nem geokódolt megjelenítési név — SOSEM kerül vissza
+  // Nominatim-lekérdezésbe.
+  const [fromGeo, toGeo] = await Promise.all([
+    fromCoordinates
+      ? Promise.resolve({ name: "Jelenlegi hely", lat: fromCoordinates.latitude, lon: fromCoordinates.longitude })
+      : geocodeAddress(from as string),
+    geocodeAddress(to),
+  ]);
 
   if (!fromGeo || !toGeo) {
     return NextResponse.json(

@@ -22,9 +22,9 @@
 // a koordinátákat semmilyen hívásban.
 
 import { useEffect, useRef, useState } from "react";
-import dynamic from "next/dynamic";
 import type { UseGeolocationResult } from "@/lib/hooks/useGeolocation";
 import type { Journey } from "@/lib/vedett-route/types";
+import type { JourneyLegForGeometry } from "@/lib/vedett-route/geometry";
 import {
   createInitialRestStopFlowContext,
   transitionRestStopFlow,
@@ -37,6 +37,7 @@ import type {
   RestStopFlowEvent,
 } from "@/lib/vedett-route/restStopFlow/types";
 import type { RestPoint } from "@/lib/rest-points/types";
+import type { RestPointMarker } from "./VedettUtvonalMap";
 import {
   categoryLabelFor,
   REST_POINT_QUICK_FILTERS,
@@ -44,7 +45,44 @@ import {
   type RestPointQuickFilterKey,
 } from "@/lib/vedett-route/restStopFlow/categoryLabels";
 
-const VedettUtvonalMap = dynamic(() => import("./VedettUtvonalMap"), { ssr: false });
+// Egyetlen megosztott térkép (UX módosítás, 2026-09-09): ez a komponens a
+// korábbi verzióban SAJÁT dynamic(() => import("./VedettUtvonalMap"))
+// importtal rendelkezett, és két helyen (REST_POINTS_READY,
+// NAVIGATING_TO_REST_POINT) MAGA hozott létre egy második, FÜGGETLEN
+// MapLibre instance-ot — ez okozta a nem kívánt "külön pihenőpont-térkép"
+// UX-et. A javítás szerint EBBEN a fájlban TILOS MapLibre térképet
+// létrehozni: ez a panel KIZÁRÓLAG állapotot (state), gyorsszűrőt, listát
+// és CTA-kat kezel (lásd az architektúra-elvárást), a térkép-releváns
+// DERIVED állapotot pedig az onMapStateChange callback propon keresztül
+// jelenti a szülőnek (VedettUtvonalSearchForm.tsx RankedJourneyCard), ami
+// az EGYETLEN <VedettUtvonalMap> instance-ot birtokolja.
+export interface RestStopMapState {
+  // false = a Pihenőre van szükségem folyamat nem fed rá a térképre — a
+  // szülő a saját (eredeti célhoz tartozó) alap-nézetét mutatja
+  // változatlanul, ez a típus többi mezője figyelmen kívül hagyható.
+  active: boolean;
+  // Ha megadva, a szülő EZEKET a lábakat rajzolja ki a saját (eredeti)
+  // legs helyett — pl. a kiválasztott pihenőponthoz vezető útvonal.
+  // undefined esetén a szülő a saját legs-jét mutatja (az eredeti
+  // útvonal/journey SOSEM tűnik el csak azért, mert a folyamat aktív).
+  legsOverride?: JourneyLegForGeometry[];
+  restPoints: RestPointMarker[];
+  selectedRestPointId: string | null;
+  onSelectRestPoint?: (id: string) => void;
+  // true = a currentPosition + restPoints köré illesztett, szűk nézet
+  // (VedettUtvonalMap restPointFocusMode props) legyen aktív, ahelyett,
+  // hogy a route geometriájára fitBounds-olna.
+  focusOnRestPoints: boolean;
+}
+
+const INACTIVE_MAP_STATE: RestStopMapState = {
+  active: false,
+  legsOverride: undefined,
+  restPoints: [],
+  selectedRestPointId: null,
+  onSelectRestPoint: undefined,
+  focusOnRestPoints: false,
+};
 
 const ERROR_COPY: Record<RestStopFlowErrorReason, string> = {
   GPS_PERMISSION_DENIED: "A helymeghatározás engedélye el lett utasítva. Engedélyezd a böngésződben, majd próbáld újra.",
@@ -149,9 +187,13 @@ export interface RestStopFlowPanelProps {
   originalDepartAt: string;
   geo: UseGeolocationResult;
   onRouteResumed?: (journey: Journey) => void;
+  // Egyetlen megosztott térkép (UX módosítás, 2026-09-09) — lásd a fenti
+  // RestStopMapState kommentjét. Opcionális, hogy a régi (map nélküli)
+  // használat is triviálisan kompatibilis maradjon egy jövőbeli tesztben.
+  onMapStateChange?: (state: RestStopMapState) => void;
 }
 
-export default function RestStopFlowPanel({ originalDestination, originalDepartAt, geo, onRouteResumed }: RestStopFlowPanelProps) {
+export default function RestStopFlowPanel({ originalDestination, originalDepartAt, geo, onRouteResumed, onMapStateChange }: RestStopFlowPanelProps) {
   const [ctx, setCtx] = useState<RestStopFlowContext | null>(null);
   const [restPointJourney, setRestPointJourney] = useState<Journey | null>(null);
   const [resumeJourney, setResumeJourney] = useState<Journey | null>(null);
@@ -355,12 +397,117 @@ export default function RestStopFlowPanel({ originalDestination, originalDepartA
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ctx?.state]);
 
-  if (!ctx) return null;
+  // Egyetlen megosztott térkép (UX módosítás, 2026-09-09) — a fenti
+  // állapotgép-vezérelt effektek MELLETT (nem helyett) ez az effekt
+  // KIZÁRÓLAG a térkép szempontjából releváns, levezetett állapotot
+  // jelenti a szülőnek, minden állapotátmenet után. Szándékosan primitív/
+  // stabil forrásokból épül (ctx.state, a rankedRestPoints/selectedRestPoint
+  // referenciák — ezek a state machine-ben immutable módon cserélődnek,
+  // nem mutálódnak renderenként, lásd stateMachine.ts), hogy ne generáljon
+  // felesleges re-fitBounds-ot a szülő VedettUtvonalMap-jában.
+  useEffect(() => {
+    if (!onMapStateChange) return;
+    if (!ctx) {
+      onMapStateChange(INACTIVE_MAP_STATE);
+      return;
+    }
 
-  const currentPosition =
-    geo.status === "granted" && geo.latitude !== null && geo.longitude !== null
-      ? { latitude: geo.latitude, longitude: geo.longitude }
-      : null;
+    switch (ctx.state) {
+      case "ROUTE_ACTIVE":
+      case "REST_REQUESTED":
+      case "REST_POINTS_LOADING": {
+        // Még nincs megjeleníthető pihenőpont-jelölt (GPS/keresés
+        // folyamatban) — a térkép marad a normál (bázis) nézeten.
+        onMapStateChange(INACTIVE_MAP_STATE);
+        break;
+      }
+
+      case "REST_POINTS_READY":
+      case "REST_POINT_SELECTED":
+      case "ROUTING_TO_REST_POINT": {
+        // A2/A4: az eredeti route változatlanul látszik (legsOverride
+        // nincs megadva -> a szülő a saját legs-jét mutatja), MELLETTE a
+        // discovery-jelöltek markerei, currentPosition + jelöltek köré
+        // illesztett szűk nézettel (focusOnRestPoints).
+        onMapStateChange({
+          active: true,
+          legsOverride: undefined,
+          restPoints: (ctx.rankedRestPoints ?? []).map((r) => ({
+            id: r.restPoint.id,
+            name: r.restPoint.name,
+            latitude: r.restPoint.latitude,
+            longitude: r.restPoint.longitude,
+            category: r.restPoint.category,
+          })),
+          selectedRestPointId: ctx.selectedRestPoint?.id ?? highlightedRestPointId,
+          onSelectRestPoint: setHighlightedRestPointId,
+          focusOnRestPoints: true,
+        });
+        break;
+      }
+
+      case "NAVIGATING_TO_REST_POINT":
+      case "AT_REST_POINT":
+      case "RESUME_REQUESTED":
+      case "REROUTING_TO_ORIGINAL_DESTINATION": {
+        // A5: "Ide megyek" után a SAME map a pihenőponthoz vezető
+        // route-ot mutatja (legsOverride) — az eredeti cél (originalDestination)
+        // a ctx-ben megmarad, csak a KIRAJZOLT geometria vált ideiglenesen.
+        // A RESUME/REROUTING közben (a "Folytatom az utat" -> friss GPS ->
+        // /resume hívás alatt) még ugyanezt a (pihenőponthoz vezető) útvonalat
+        // mutatjuk tovább, hogy ne villanjon vissza/tűnjön el semmi, amíg az
+        // új route meg nem érkezik.
+        onMapStateChange({
+          active: true,
+          legsOverride: restPointJourney?.legs,
+          restPoints: ctx.selectedRestPoint
+            ? [
+                {
+                  id: ctx.selectedRestPoint.id,
+                  name: ctx.selectedRestPoint.name,
+                  latitude: ctx.selectedRestPoint.latitude,
+                  longitude: ctx.selectedRestPoint.longitude,
+                  category: ctx.selectedRestPoint.category,
+                },
+              ]
+            : [],
+          selectedRestPointId: ctx.selectedRestPoint?.id ?? null,
+          onSelectRestPoint: undefined,
+          focusOnRestPoints: false,
+        });
+        break;
+      }
+
+      case "ROUTE_RESUMED": {
+        // G: "Folytatom az utat" -> a SAME map visszaáll az eredeti cél
+        // route-jára. A friss journey-t az onRouteResumed callback már
+        // átadta a szülőnek (lásd a REROUTING_TO_ORIGINAL_DESTINATION
+        // effektet feljebb) -> a szülő saját legs-je már az ÚJ,
+        // újratervezett útvonal, ezért itt legsOverride nélkül, markerek
+        // nélkül jelentünk vissza normál (nem pihenőpont-fókusz) nézetet.
+        onMapStateChange(INACTIVE_MAP_STATE);
+        break;
+      }
+
+      case "ERROR": {
+        onMapStateChange(INACTIVE_MAP_STATE);
+        break;
+      }
+
+      default:
+        onMapStateChange(INACTIVE_MAP_STATE);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    ctx?.state,
+    ctx?.rankedRestPoints,
+    ctx?.selectedRestPoint,
+    restPointJourney,
+    highlightedRestPointId,
+    onMapStateChange,
+  ]);
+
+  if (!ctx) return null;
 
   return (
     <div className="mt-4 rounded border border-sni-primary/30 bg-sni-primary/5 p-3">
@@ -378,25 +525,14 @@ export default function RestStopFlowPanel({ originalDestination, originalDepartA
         <div className="space-y-2">
           <h3 className="text-sm font-semibold text-sni-text">Válassz pihenőpontot</h3>
 
-          {/* Sprint E.1 — a jelölt pihenőpontok markerként is
-              megjelennek, kategóriánként megkülönböztetve, hover/klikk
-              szinkronban a lenti listával (spec 9. pont). Szándékosan
-              üres legs-szel hívjuk — itt még nincs kiválasztott/aktív
-              útvonal a pihenőponthoz, csak a jelöltek áttekintése. */}
-          <VedettUtvonalMap
-            legs={[]}
-            currentPosition={currentPosition}
-            restPoints={ctx.rankedRestPoints.map((r) => ({
-              id: r.restPoint.id,
-              name: r.restPoint.name,
-              latitude: r.restPoint.latitude,
-              longitude: r.restPoint.longitude,
-              category: r.restPoint.category,
-            }))}
-            selectedRestPointId={highlightedRestPointId}
-            onSelectRestPoint={setHighlightedRestPointId}
-            className="h-48 w-full rounded border border-gray-200"
-          />
+          {/* Egyetlen megosztott térkép (UX módosítás, 2026-09-09): a
+              jelölt pihenőpontok markerei mostantól a szülő
+              (VedettUtvonalSearchForm.tsx RankedJourneyCard) EGYETLEN
+              <VedettUtvonalMap>-jén jelennek meg, az onMapStateChange
+              callbacken keresztül jelentett RestStopMapState alapján — ez
+              a panel maga nem hoz létre/rajzol térképet, lásd a fájl tetején
+              lévő magyarázatot. A lista/gyorsszűrők a térkép ALATT
+              maradnak. */}
 
           {ctx.expandedSearch && (
             <p className="text-xs text-gray-500">Kicsit távolabb is kerestünk.</p>
@@ -496,19 +632,11 @@ export default function RestStopFlowPanel({ originalDestination, originalDepartA
             Úton a(z) <span className="font-semibold">{ctx.selectedRestPoint.name}</span> pihenőpont felé — kb.{" "}
             {restPointJourney.totalDurationMinutes} perc.
           </p>
-          <VedettUtvonalMap
-            legs={restPointJourney.legs}
-            currentPosition={currentPosition}
-            restPoints={[
-              {
-                id: ctx.selectedRestPoint.id,
-                name: ctx.selectedRestPoint.name,
-                latitude: ctx.selectedRestPoint.latitude,
-                longitude: ctx.selectedRestPoint.longitude,
-              },
-            ]}
-            className="h-64 w-full rounded border border-gray-200"
-          />
+          {/* Egyetlen megosztott térkép (UX módosítás, 2026-09-09): a
+              pihenőponthoz vezető route-ot a szülő EGYETLEN térképe
+              rajzolja ki, a fenti onMapStateChange effekt által jelentett
+              legsOverride/restPoints alapján — lásd a fájl tetején lévő
+              magyarázatot. */}
           <button type="button" onClick={() => dispatch({ type: "ARRIVED_AT_REST_POINT" })} className="btn-primary text-xs">
             Megérkeztem
           </button>

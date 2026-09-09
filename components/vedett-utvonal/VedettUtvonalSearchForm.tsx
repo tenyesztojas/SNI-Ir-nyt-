@@ -1,11 +1,28 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Journey, OrchestratedSearchResult, PersonalizationWeights, RankedJourney, RankingLabel } from "@/lib/vedett-route/types";
 import dynamic from "next/dynamic";
 import { useGeolocation } from "@/lib/hooks/useGeolocation";
 import RestPointQuickAdd, { type RestPointCreatedPayload } from "./RestPointQuickAdd";
-import RestStopFlowPanel from "./RestStopFlowPanel";
+import RestStopFlowPanel, { type RestStopMapState } from "./RestStopFlowPanel";
+import type { RestPointMarker } from "./VedettUtvonalMap";
+
+// „Aktuális helyzetem" mint indulási pont (UX módosítás, 2026-09-09) — a
+// keresési form induló-mezője mostantól két, egymást KIZÁRÓ móddal
+// rendelkezik. MANUAL: a felhasználó szabadszöveges címet gépel be (a
+// meglévő, regresszió-mentesen megőrzött viselkedés — a szerver továbbra
+// is geokódolja a `from` mezőt). CURRENT_LOCATION: a böngésző GPS-ből
+// származó, STRUKTURÁLT lat/lon-t küldjük — ezt a szerver oldalon a
+// routing SOSEM próbálja geocodolni (lásd app/api/admin/vedett-utvonal/
+// search/route.ts fromCoordinates ága). A két mód SZÁNDÉKOSAN nem
+// keveredik: amint a felhasználó gépelni kezd az induló mezőbe,
+// CURRENT_LOCATION azonnal megszűnik (lásd handleFromInputChange), hogy
+// SOSE maradjon érvényben egy elavult GPS-koordináta egy időközben már
+// kézzel átírt cím mellett.
+type RouteOrigin =
+  | { type: "MANUAL"; address: string }
+  | { type: "CURRENT_LOCATION"; latitude: number; longitude: number };
 
 // MapLibre a böngésző window objektumára támaszkodik -> csak kliens
 // oldalon tölthető be (SSR alatt nincs window). dynamic({ ssr: false })
@@ -78,6 +95,23 @@ const STOP_TYPE_SUFFIX: Record<string, string> = {
 function stopTypeSuffix(mode?: string): string {
   if (!mode) return "";
   return STOP_TYPE_SUFFIX[mode] ?? "megálló";
+}
+
+// Egyetlen megosztott térkép (UX módosítás, 2026-09-09) — a kártya saját,
+// a session alatt (+ Pihenőpont gombbal) hozzáadott markereit ÉS a
+// RestStopFlowPanel által jelentett discovery-markereket egyetlen listába
+// egyesíti a közös <VedettUtvonalMap> számára, id szerint deduplikálva
+// (ha ugyanaz a pont véletlenül mindkét forrásban szerepelne).
+function mergeRestPointMarkers(base: RestPointMarker[], extra: RestPointMarker[]): RestPointMarker[] {
+  if (extra.length === 0) return base;
+  const seen = new Set(base.map((rp) => rp.id));
+  const merged = [...base];
+  for (const rp of extra) {
+    if (seen.has(rp.id)) continue;
+    seen.add(rp.id);
+    merged.push(rp);
+  }
+  return merged;
 }
 
 // A jármű indulási idejét a megállóból — a MOTIS valós, ütemezett (vagy
@@ -245,6 +279,23 @@ function RankedJourneyCard({
   const [sessionRestPoints, setSessionRestPoints] = useState<RestPointCreatedPayload[]>([]);
   const geo = useGeolocation();
 
+  // Egyetlen megosztott térkép (UX módosítás, 2026-09-09) — a
+  // RestStopFlowPanel NEM hoz létre saját térképet, hanem ezen a callback-en
+  // keresztül jelenti, hogy a "Pihenőre van szükségem" folyamat éppen milyen
+  // (derived, primitív-barát) állapotban van; ez a kártya EZT egyesíti a
+  // saját (displayedJourney/sessionRestPoints) állapotával az EGYETLEN
+  // <VedettUtvonalMap> hívásban lent. Alapállapotban (nincs aktív
+  // pihenőpont-folyamat) a térkép változatlanul a normál navigációs nézetet
+  // mutatja — pontosan úgy, mint a Task A előtt.
+  const [restStopMapState, setRestStopMapState] = useState<RestStopMapState>({
+    active: false,
+    legsOverride: undefined,
+    restPoints: [],
+    selectedRestPointId: null,
+    onSelectRestPoint: undefined,
+    focusOnRestPoints: false,
+  });
+
   const currentPosition =
     geo.status === "granted" && geo.latitude !== null && geo.longitude !== null
       ? { latitude: geo.latitude, longitude: geo.longitude }
@@ -352,10 +403,28 @@ function RankedJourneyCard({
           elavult globális állapot. */}
       {isOpen && (
         <div className="mt-3 space-y-3 border-t border-gray-200 pt-3">
+          {/* Egyetlen megosztott térkép (UX módosítás, 2026-09-09): EZ az
+              EGYETLEN <VedettUtvonalMap> instance a kártyához — normál
+              navigáció ÉS a "Pihenőre van szükségem" folyamat egyaránt EZT
+              a térképet használja, sosem nyílik meg második MapLibre
+              instance. A `legs`/`restPoints`/`selectedRestPointId`/
+              `onSelectRestPoint`/`restPointFocusMode` props-okat a
+              restStopMapState (a RestStopFlowPanel onMapStateChange
+              jelentése) és a kártya saját alap-állapota (displayedJourney,
+              sessionRestPoints) EGYESÍTVE adja — amikor a pihenőpont-
+              folyamat nem aktív (restStopMapState.active === false), ez
+              pontosan a Task A előtti, normál navigációs nézetet
+              eredményezi (A1). */}
           <VedettUtvonalMap
-            legs={displayedJourney.legs}
+            legs={restStopMapState.active && restStopMapState.legsOverride ? restStopMapState.legsOverride : displayedJourney.legs}
             currentPosition={currentPosition}
-            restPoints={sessionRestPoints.map((rp) => ({ id: rp.id, name: rp.name, latitude: rp.latitude, longitude: rp.longitude }))}
+            restPoints={mergeRestPointMarkers(
+              sessionRestPoints.map((rp) => ({ id: rp.id, name: rp.name, latitude: rp.latitude, longitude: rp.longitude })),
+              restStopMapState.active ? restStopMapState.restPoints : []
+            )}
+            selectedRestPointId={restStopMapState.active ? restStopMapState.selectedRestPointId : null}
+            onSelectRestPoint={restStopMapState.active ? restStopMapState.onSelectRestPoint : undefined}
+            restPointFocusMode={restStopMapState.active && restStopMapState.focusOnRestPoints}
             className="h-[300px] w-full rounded border border-gray-200 sm:h-[360px] md:h-[450px]"
           />
 
@@ -390,12 +459,26 @@ function RankedJourneyCard({
             originalDepartAt={displayedJourney.departureTime}
             geo={geo}
             onRouteResumed={(nextJourney) => setDisplayedJourney(nextJourney)}
+            onMapStateChange={setRestStopMapState}
           />
         </div>
       )}
     </div>
   );
 }
+
+// „Aktuális helyzetem" mint indulási pont (UX módosítás, 2026-09-09), B5.
+// pont — a hiba-szövegek a felhasználó által megadott PONTOS magyar
+// szöveggel (nem a useGeolocation.ts saját, általánosabb hibaüzeneteivel,
+// amik más helyeken — pl. RestStopFlowPanel ERROR_COPY — más
+// megfogalmazást használnak; itt a specifikáció szó szerinti szövegét
+// használjuk). SOSEM jelenít meg nyers technikai kivételt.
+const ORIGIN_GEOLOCATION_ERROR_COPY: Record<string, string> = {
+  denied: "A helyzeted használatához engedélyezd a helymeghatározást.",
+  unavailable: "Az aktuális helyzeted most nem érhető el.",
+  timeout: "Nem sikerült időben meghatározni a helyzeted. Próbáld újra.",
+  error: "Az aktuális helyzeted most nem érhető el.",
+};
 
 const WEIGHT_FIELDS: { key: keyof PersonalizationWeights; label: string }[] = [
   { key: "transfers", label: "Átszállások zavarnak" },
@@ -407,7 +490,14 @@ const WEIGHT_FIELDS: { key: keyof PersonalizationWeights; label: string }[] = [
 ];
 
 export default function VedettUtvonalSearchForm({ disabled }: { disabled: boolean }) {
-  const [from, setFrom] = useState("");
+  // „Aktuális helyzetem" mint indulási pont (UX módosítás, 2026-09-09) —
+  // TASK B. A `from` szabadszöveges mező helyett/mellett egy explicit,
+  // két módot (MANUAL / CURRENT_LOCATION) megkülönböztető RouteOrigin
+  // state — lásd a fájl elején lévő típusdefiníciót és indoklást. A
+  // `to` mező VÁLTOZATLAN marad (Task B kizárólag az indulási pontot
+  // érinti, lásd M. regressziós teszt: "existing manual origin search
+  // továbbra is működik").
+  const [origin, setOrigin] = useState<RouteOrigin>({ type: "MANUAL", address: "" });
   const [to, setTo] = useState("");
   const [when, setWhen] = useState<"now" | "scheduled">("now");
   const [datetime, setDatetime] = useState("");
@@ -431,28 +521,98 @@ export default function VedettUtvonalSearchForm({ disabled }: { disabled: boolea
   // "nyitva" egyszerre.
   const [openIndex, setOpenIndex] = useState<number | null>(null);
 
+  // „Aktuális helyzetem" mint indulási pont (UX módosítás, 2026-09-09) —
+  // ez a useGeolocation()-instance KIZÁRÓLAG a form induló-mezőjéhez
+  // tartozik (nem osztozik semelyik kártya saját, per-kártya geo
+  // hookjával) — a koordináta ugyanúgy csak React state-ben, memóriában
+  // él (lásd useGeolocation.ts fejléce), NEM perzisztálódik/logolódik.
+  const originGeo = useGeolocation();
+  const [originError, setOriginError] = useState<string | null>(null);
+  // B5 — "nem indítható el ugyanaz a kérés párhuzamosan": ez a ref jelzi,
+  // hogy EZ a form ténylegesen kezdeményezett-e egy "Aktuális helyzetem"
+  // kérést (megkülönböztetve attól, ha originGeo valamiért más okból
+  // "requesting" állapotba kerülne) — csak akkor reagálunk a
+  // granted/hiba átmenetre, ha mi kértük.
+  const originRequestedRef = useRef(false);
+
+  useEffect(() => {
+    if (!originRequestedRef.current) return;
+    if (originGeo.status === "granted" && originGeo.latitude !== null && originGeo.longitude !== null) {
+      setOrigin({ type: "CURRENT_LOCATION", latitude: originGeo.latitude, longitude: originGeo.longitude });
+      setOriginError(null);
+      originRequestedRef.current = false;
+    } else if (originGeo.status === "denied" || originGeo.status === "timeout" || originGeo.status === "unavailable" || originGeo.status === "error") {
+      setOriginError(ORIGIN_GEOLOCATION_ERROR_COPY[originGeo.status] ?? ORIGIN_GEOLOCATION_ERROR_COPY.error);
+      originRequestedRef.current = false;
+    }
+    // "requesting" közben nincs teendő — a gomb loading state-et mutat.
+  }, [originGeo.status, originGeo.latitude, originGeo.longitude]);
+
+  function handleUseCurrentLocation() {
+    // B5 — ha már fut egy kérés, egy újabb kattintás nem indít párhuzamos
+    // másikat (a böngésző Geolocation API-ja amúgy sem szereti a
+    // párhuzamos getCurrentPosition hívásokat, de itt explicit védjük).
+    if (originGeo.status === "requesting") return;
+    setOriginError(null);
+    // B2 — ha a hook-nak MÁR van friss ("granted") pozíciója (pl. a
+    // felhasználó korábban ugyanebben a formban már engedélyezte), azt
+    // azonnal újrahasználjuk geokódolás/új engedélykérés nélkül; egyébként
+    // egy friss lekérdezést indítunk.
+    if (originGeo.status === "granted" && originGeo.latitude !== null && originGeo.longitude !== null) {
+      setOrigin({ type: "CURRENT_LOCATION", latitude: originGeo.latitude, longitude: originGeo.longitude });
+      return;
+    }
+    originRequestedRef.current = true;
+    originGeo.requestOnce();
+  }
+
+  function handleOriginAddressChange(value: string) {
+    // B4 — bármilyen kézi gépelés az induló mezőbe AZONNAL visszaállítja
+    // MANUAL módra, SOSEM használ elavult GPS-koordinátát a routing
+    // kéréshez ezután.
+    setOrigin({ type: "MANUAL", address: value });
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setFormError(null);
     setResult(null);
     setOpenIndex(null);
 
-    if (!from.trim() || !to.trim()) {
+    if (origin.type === "MANUAL" && !origin.address.trim()) {
+      setFormError("Add meg az indulási helyet és a célhelyet.");
+      return;
+    }
+    if (!to.trim()) {
       setFormError("Add meg az indulási helyet és a célhelyet.");
       return;
     }
 
     setLoading(true);
     try {
+      // B2/B3 — CURRENT_LOCATION esetén a szerver felé a STRUKTURÁLT
+      // lat/lon megy (fromCoordinates), SOHA nem az "Aktuális helyzetem"
+      // felirat mint geokódolandó cím-string (lásd
+      // app/api/admin/vedett-utvonal/search/route.ts — ez a mező
+      // KIHAGYJA a geocodeAddress() hívást).
+      const body =
+        origin.type === "CURRENT_LOCATION"
+          ? {
+              fromCoordinates: { latitude: origin.latitude, longitude: origin.longitude },
+              to,
+              departAt: when === "now" ? new Date().toISOString() : new Date(datetime).toISOString(),
+              weights,
+            }
+          : {
+              from: origin.address,
+              to,
+              departAt: when === "now" ? new Date().toISOString() : new Date(datetime).toISOString(),
+              weights,
+            };
       const res = await fetch("/api/admin/vedett-utvonal/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          from,
-          to,
-          departAt: when === "now" ? new Date().toISOString() : new Date(datetime).toISOString(),
-          weights,
-        }),
+        body: JSON.stringify(body),
       });
       const data = (await res.json()) as SearchApiResponse;
       setResult(data);
@@ -469,15 +629,33 @@ export default function VedettUtvonalSearchForm({ disabled }: { disabled: boolea
 
       <form onSubmit={handleSubmit} className="mt-3 space-y-3">
         <div>
-          <label className="block text-sm font-medium text-gray-700">Honnan?</label>
+          <label className="block text-sm font-medium text-gray-700">Indulási hely</label>
           <input
             type="text"
-            value={from}
-            onChange={(e) => setFrom(e.target.value)}
+            value={origin.type === "CURRENT_LOCATION" ? "Aktuális helyzetem" : origin.address}
+            onChange={(e) => handleOriginAddressChange(e.target.value)}
             placeholder="Cím vagy hely"
             disabled={disabled}
             className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm disabled:bg-gray-100"
           />
+          {/* Task B — „Aktuális helyzetem" mint indulási pont: jól látható,
+              mobilon is könnyen érinthető opció az induló mező alatt. A
+              gomb loading state-et mutat kérés közben (B5), és a
+              feliratban SOHA nem jelenik meg nyers technikai kivétel —
+              csak a specifikáció szerinti, magyar hibaszövegek. */}
+          <button
+            type="button"
+            onClick={handleUseCurrentLocation}
+            disabled={disabled || originGeo.status === "requesting"}
+            className="mt-1 flex items-center gap-1 rounded border border-sni-primary/30 bg-sni-primary/5 px-2 py-1 text-xs font-medium text-sni-primary disabled:opacity-50"
+          >
+            <span aria-hidden="true">📍</span>
+            {originGeo.status === "requesting" ? "Helyzet meghatározása…" : "Aktuális helyzetem"}
+          </button>
+          {origin.type === "CURRENT_LOCATION" && (
+            <p className="mt-1 text-xs text-green-700">Az induló pont: aktuális helyzeted.</p>
+          )}
+          {originError && <p className="mt-1 text-xs text-amber-700">{originError}</p>}
         </div>
 
         <div>
