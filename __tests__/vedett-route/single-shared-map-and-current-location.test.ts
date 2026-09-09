@@ -124,8 +124,8 @@ describe("TASK B — „Aktuális helyzetem” mint indulási pont", () => {
     const currentLocationIdx = formSrc.indexOf('origin.type === "CURRENT_LOCATION"');
     assert.ok(currentLocationIdx !== -1, "meg kell találni az origin.type === \"CURRENT_LOCATION\" elágazást");
 
-    const manualBranchIdx = formSrc.indexOf(": { from: origin.address };", currentLocationIdx);
-    assert.ok(manualBranchIdx !== -1, "meg kell találni a MANUAL ág { from: origin.address } visszatérését");
+    const manualBranchIdx = formSrc.indexOf(": { from: buildStructuredAddress(origin) };", currentLocationIdx);
+    assert.ok(manualBranchIdx !== -1, "meg kell találni a MANUAL ág { from: buildStructuredAddress(origin) } visszatérését (strukturált címbevitel, 2026-09-XX)");
 
     const currentLocationBranch = formSrc.slice(currentLocationIdx, manualBranchIdx);
 
@@ -157,8 +157,15 @@ describe("TASK B — „Aktuális helyzetem” mint indulási pont", () => {
     );
   });
 
-  test("J) kézi gépelés az induló mezőbe MANUAL módra állítja vissza az origin-t", () => {
-    assert.match(formSrc, /function handleOriginAddressChange\(value: string\) \{\s*\n[\s\S]{0,200}?setOrigin\(\{ type: "MANUAL", address: value \}\);/);
+  test("J) kézi gépelés BÁRMELYIK induló címmezőbe MANUAL módra állítja vissza az origin-t", () => {
+    // Strukturált címbevitel (2026-09-XX) óta a régi, egyetlen
+    // handleOriginAddressChange helyett updateOriginManualField kezeli
+    // mindhárom (Város/Irányítószám vagy kerület/Utca, házszám) mezőt —
+    // ugyanaz az invariáns (bármelyik mezőbe gépelés MANUAL-ra vált).
+    assert.match(
+      formSrc,
+      /function updateOriginManualField\(field: "city" \| "districtOrPostalCode" \| "street", value: string\) \{\s*\n[\s\S]{0,400}?setOrigin\(\(prev\) => \{\s*\n[\s\S]{0,300}?return \{ \.\.\.base, type: "MANUAL", \[field\]: value \};/
+    );
   });
 
   test("K) a permission denied / timeout / unavailable hibaszövegek szó szerint megegyeznek a specifikációval", () => {
@@ -185,7 +192,12 @@ describe("TASK B — „Aktuális helyzetem” mint indulási pont", () => {
     assert.ok(!/supabase/i.test(panelSrc), "a panel nem érhet közvetlenül Supabase-hez — a GPS-koordináta kizárólag React state-ben élhet");
   });
 
-  test("REGRESSZIÓ (M): a meglévő MANUAL induló-mező onChange-e továbbra is a beírt szöveget állítja be — nincs elveszett funkcionalitás", () => {
-    assert.match(formSrc, /value=\{origin\.type === "CURRENT_LOCATION" \? "Aktuális helyzetem" : origin\.address\}/);
+  test("REGRESSZIÓ (M): a MANUAL induló címmezők onChange-e továbbra is a beírt szöveget állítja be — nincs elveszett funkcionalitás (a strukturált címbevitel után is)", () => {
+    assert.match(formSrc, /value=\{origin\.type === "MANUAL" \? origin\.city : ""\}/);
+    assert.match(formSrc, /value=\{origin\.type === "MANUAL" \? origin\.districtOrPostalCode : ""\}/);
+    assert.match(formSrc, /value=\{origin\.type === "MANUAL" \? origin\.street : ""\}/);
+    assert.match(formSrc, /onChange=\{\(e\) => updateOriginManualField\("city", e\.target\.value\)\}/);
+    assert.match(formSrc, /onChange=\{\(e\) => updateOriginManualField\("districtOrPostalCode", e\.target\.value\)\}/);
+    assert.match(formSrc, /onChange=\{\(e\) => updateOriginManualField\("street", e\.target\.value\)\}/);
   });
 });

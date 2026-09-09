@@ -294,10 +294,37 @@ describe("K) szerver oldali oldal- és API-védelem — közös access guard", (
     assert.match(pageSrc, /VEDETT_ROUTE_ACCESS_LEVEL === "authenticated_users"\s*\n\s*\? true/);
   });
 
-  test("app/vedett-utvonal/page.tsx: a form csak az enabled+access ellenőrzés UTÁN (az `allowed` ágon kívül) renderelődik", () => {
-    const allowedIdx = pageSrc.indexOf("if (!allowed)");
-    const formRenderIdx = pageSrc.indexOf("<VedettUtvonalSearchForm");
-    assert.ok(allowedIdx !== -1 && formRenderIdx !== -1 && allowedIdx < formRenderIdx);
+  test("app/vedett-utvonal/page.tsx: a teljes interaktív workspace (form + Kedvenc útvonalaim) csak az enabled+access ellenőrzés UTÁN (az `allowed` ágon kívül) renderelődik", () => {
+    // FRISSÍTVE (2026-09-09, Kedvenc útvonalak feladat UTÁN) — a page.tsx
+    // már NEM közvetlenül <VedettUtvonalSearchForm>-ot rendereli, hanem
+    // <VedettUtvonalWorkspace>-et (ami a formot ÉS a
+    // FavoriteRoutesPanel-t is tartalmazza, lásd
+    // components/vedett-utvonal/VedettUtvonalWorkspace.tsx). A VALÓDI
+    // security invariáns nem a konkrét komponensnév, hanem hogy a teljes
+    // interaktív felület (bármi is a top-level komponens neve) csakis az
+    // access/feature-flag döntés UTÁN érhető el. Ezt a négy lépést
+    // ellenőrizzük SORRENDBEN a forráskódban:
+    //   1) `enabled` (a globális kill switch) kiszámítása,
+    //   2) `allowed` (enabled ÉS a hozzáférési szint) kiszámítása,
+    //   3) az `if (!allowed)` korai return (a "funkció ki van kapcsolva"
+    //      / "nincs hozzáférésed" ágon a workspace SOSEM renderelődik),
+    //   4) <VedettUtvonalWorkspace> renderelése — ez csak ezután jöhet.
+    const enabledIdx = pageSrc.indexOf("const enabled");
+    const allowedIdx = pageSrc.indexOf("const allowed");
+    const notAllowedGuardIdx = pageSrc.indexOf("if (!allowed)");
+    const workspaceIdx = pageSrc.indexOf("<VedettUtvonalWorkspace");
+
+    assert.ok(enabledIdx !== -1, "az `enabled` (feature flag) state-nek léteznie kell");
+    assert.ok(allowedIdx !== -1, "az `allowed` (hozzáférési döntés) state-nek léteznie kell");
+    assert.ok(notAllowedGuardIdx !== -1, "az `if (!allowed)` korai return guard-nak léteznie kell");
+    assert.ok(
+      workspaceIdx !== -1,
+      "a page.tsx-nek a <VedettUtvonalWorkspace> komponenst kell renderelnie (a Kedvenc útvonalak integráció óta ez a top-level interaktív komponens, nem közvetlenül a form)"
+    );
+    assert.ok(
+      enabledIdx < allowedIdx && allowedIdx < notAllowedGuardIdx && notAllowedGuardIdx < workspaceIdx,
+      "a sorrendnek MINDIG enabled -> allowed -> (!allowed) korai return -> workspace kell lennie — a teljes interaktív felület csak sikeres access-döntés után érhető el"
+    );
   });
 
   test("A/B) flag=false esetén a bejelentkezett (akár admin) felhasználó is a 'funkció ki van kapcsolva' üzenetet kapja, NEM a régi 'zárt béta, csak meghívott tesztelőknek' szöveget", () => {

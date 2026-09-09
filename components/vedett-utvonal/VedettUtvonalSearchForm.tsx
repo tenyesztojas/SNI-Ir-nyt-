@@ -10,36 +10,71 @@ import type { RestPointMarker } from "./VedettUtvonalMap";
 
 // „Aktuális helyzetem" mint indulási pont (UX módosítás, 2026-09-09) — a
 // keresési form induló-mezője mostantól két, egymást KIZÁRÓ móddal
-// rendelkezik. MANUAL: a felhasználó szabadszöveges címet gépel be (a
-// meglévő, regresszió-mentesen megőrzött viselkedés — a szerver továbbra
-// is geokódolja a `from` mezőt). CURRENT_LOCATION: a böngésző GPS-ből
-// származó, STRUKTURÁLT lat/lon-t küldjük — ezt a szerver oldalon a
-// routing SOSEM próbálja geocodolni (lásd app/api/admin/vedett-utvonal/
-// search/route.ts fromCoordinates ága). A két mód SZÁNDÉKOSAN nem
-// keveredik: amint a felhasználó gépelni kezd az induló mezőbe,
-// CURRENT_LOCATION azonnal megszűnik (lásd handleFromInputChange), hogy
-// SOSE maradjon érvényben egy elavult GPS-koordináta egy időközben már
-// kézzel átírt cím mellett.
+// rendelkezik. MANUAL: a felhasználó strukturált címet gépel be (Város /
+// Irányítószám vagy kerület / Utca, házszám — lásd buildStructuredAddress
+// lent), a szerver továbbra is a belőle összeállított `from` szöveges
+// mezőt geokódolja. CURRENT_LOCATION: a böngésző GPS-ből származó,
+// STRUKTURÁLT lat/lon-t küldjük — ezt a szerver oldalon a routing SOSEM
+// próbálja geocodolni (lásd app/api/admin/vedett-utvonal/search/route.ts
+// fromCoordinates ága). A két mód SZÁNDÉKOSAN nem keveredik: amint a
+// felhasználó gépelni kezd BÁRMELYIK induló címmezőbe, CURRENT_LOCATION
+// azonnal megszűnik (lásd updateOriginManualField), hogy SOSE maradjon
+// érvényben egy elavult GPS-koordináta egy időközben már kézzel átírt cím
+// mellett.
 type RouteOrigin =
-  | { type: "MANUAL"; address: string }
+  | { type: "MANUAL"; city: string; districtOrPostalCode: string; street: string }
   | { type: "CURRENT_LOCATION"; latitude: number; longitude: number };
 
 // Védett Hely "Navigálj oda" -> Védett Útvonal integráció (2026-09-09).
 //
 // UGYANAZT a mintát követi, mint a fenti RouteOrigin: két, egymást KIZÁRÓ
-// mód. MANUAL: a felhasználó szabadszöveges célt gépel be (a meglévő,
-// regresszió-mentesen megőrzött viselkedés — a szerver továbbra is
-// geokódolja a `to` mezőt). KNOWN_PLACE: a /vedett-utvonal oldal egy
-// deep linkből (Védett Hely "Navigálj oda" -> Védett Útvonal) érkező, MÁR
-// ISMERT VédettSarok hely nevét és koordinátáját kapta — ezt a szerver
-// oldali routing SOSEM próbálja geocodolni (lásd app/api/admin/
-// vedett-utvonal/search/route.ts toCoordinates ága), mert a koordináta
-// már megbízhatóan ismert. Amint a felhasználó kézzel írni kezd a "Hová?"
-// mezőbe, KNOWN_PLACE azonnal megszűnik (lásd handleDestinationChange) —
-// pontosan úgy, mint az induló mezőnél.
+// mód. MANUAL: a felhasználó strukturált célcímet gépel be (Város /
+// Irányítószám vagy kerület / Utca, házszám — lásd buildStructuredAddress),
+// a szerver továbbra is a belőle összeállított `to` szöveges mezőt
+// geokódolja. KNOWN_PLACE: a /vedett-utvonal oldal egy deep linkből
+// (Védett Hely "Navigálj oda" -> Védett Útvonal) érkező, MÁR ISMERT
+// VédettSarok hely nevét és koordinátáját kapta — ezt a szerver oldali
+// routing SOSEM próbálja geocodolni (lásd app/api/admin/vedett-utvonal/
+// search/route.ts toCoordinates ága), mert a koordináta már megbízhatóan
+// ismert. Amint a felhasználó kézzel írni kezd a "Hová?" mezőbe (a
+// KNOWN_PLACE nézet egyetlen mezőjébe, lásd handleDestinationOverrideChange,
+// vagy egy MANUAL strukturált mezőbe, lásd updateDestinationManualField),
+// KNOWN_PLACE azonnal megszűnik — pontosan úgy, mint az induló mezőnél.
 type RouteDestination =
-  | { type: "MANUAL"; address: string }
+  | { type: "MANUAL"; city: string; districtOrPostalCode: string; street: string }
   | { type: "KNOWN_PLACE"; name: string; latitude: number; longitude: number };
+
+// Strukturált címbevitel (UX feladat, 2026-09-XX) — a Város / Irányítószám
+// vagy kerület / Utca, házszám mezőket a KLIENS külön kezeli (kevesebb
+// utcanév-ütközés Budapesten, pl. több "Kossuth utca" is létezik), de a
+// szerver felé — és a MEGLÉVŐ geocodeAddress() Nominatim-hívás felé — végül
+// EGYETLEN, jól formázott cím-stringet küldünk. NEM hozunk létre új
+// wire-formátumot/schemát: lib/vedett-route/schemas.ts `from`/`to` mezői
+// VÁLTOZATLANOK maradnak, továbbra is egyszerű stringek — csak a KLIENS
+// állítja össze ezt a stringet a strukturált mezőkből, mielőtt elküldi.
+// Irányítószám esetén (4 számjegy) a szokásos magyar postai formátumot
+// követjük ("1136 Budapest, ..."), kerület esetén a kerület is bekerül a
+// stringbe ("Budapest, XIII. kerület, ..."), hogy a geokódolás elé SOHA ne
+// kerüljön kevesebb infó, mint amit a felhasználó megadott.
+function buildStructuredAddress(addr: { city: string; districtOrPostalCode: string; street: string }): string {
+  const city = addr.city.trim();
+  const districtOrPostalCode = addr.districtOrPostalCode.trim();
+  const street = addr.street.trim();
+  const isPostalCode = /^\d{4}$/.test(districtOrPostalCode);
+  const cityLine = isPostalCode
+    ? [districtOrPostalCode, city].filter(Boolean).join(" ")
+    : [city, districtOrPostalCode].filter(Boolean).join(", ");
+  return [cityLine, street].filter(Boolean).join(", ");
+}
+
+// Validáció (6. pont) — város + (irányítószám VAGY kerület, ugyanaz a
+// szabadszöveges mező) + utca mind kötelező; a házszám lehet opcionális,
+// mert vannak célok, ahol nincs ismert házszám (ez a mezőn belüli
+// szabadszöveg-részlet, nem külön mező, tehát nincs is mit validálni rá
+// külön).
+function isManualAddressComplete(addr: { city: string; districtOrPostalCode: string; street: string }): boolean {
+  return Boolean(addr.city.trim() && addr.districtOrPostalCode.trim() && addr.street.trim());
+}
 
 // MapLibre a böngésző window objektumára támaszkodik -> csak kliens
 // oldalon tölthető be (SSR alatt nincs window). dynamic({ ssr: false })
@@ -506,9 +541,31 @@ const WEIGHT_FIELDS: { key: keyof PersonalizationWeights; label: string }[] = [
   { key: "waiting", label: "Várakozás zavar" },
 ];
 
+// Szenzoros prioritás UX (8-11. pont) — a felhasználó SOSEM lát nyers 0/1/2
+// technikai értéket, és SOSEM lát "súly"/"weight"/"score"/"multiplier"
+// szavakat; a Sensory Engine/ranking felé küldött ÉRTÉK (weights[key])
+// azonban PONTOSAN ugyanaz a 0/1/2 marad, mint korábban — csakis a
+// MEGJELENÍTÉS (emoji + magyar szöveg) változik, calculateSensoryScore/
+// ranking/weight-interpretáció NEM módosul. A slider lépésköze a korábbi
+// folytonos (0.25) helyett 1-re szűkült, hogy a belső érték MINDIG pontosan
+// a három megengedett állapot (0/1/2) egyike legyen, sosem egy köztes,
+// emberi nyelven nem értelmezhető törtérték.
+const SENSORY_PRIORITY_LEVELS: { value: 0 | 1 | 2; emoji: string; label: string }[] = [
+  { value: 0, emoji: "🙅", label: "Nem fontos" },
+  { value: 1, emoji: "🙂", label: "Fontos" },
+  { value: 2, emoji: "⭐", label: "Nagyon fontos" },
+];
+
+// aria-valuetext (10. pont) — screen reader SOSEM a nyers 0/1/2 számot
+// mondja be, hanem ezt az emberi megfogalmazást.
+function sensoryPriorityLabel(value: number): string {
+  return SENSORY_PRIORITY_LEVELS.find((level) => level.value === value)?.label ?? SENSORY_PRIORITY_LEVELS[1].label;
+}
+
 export default function VedettUtvonalSearchForm({
   disabled,
   initialDestination = null,
+  initialFavoritePreset = null,
 }: {
   disabled: boolean;
   // Védett Hely "Navigálj oda" -> Védett Útvonal integráció (2026-09-09).
@@ -517,17 +574,56 @@ export default function VedettUtvonalSearchForm({
   // nem végez saját validációt a bemeneten, csak megbízik a hívóban
   // (ugyanaz a minta, mint a `disabled` prop esetén).
   initialDestination?: { name: string; latitude: number; longitude: number } | null;
+  // Kedvenc útvonalak integráció (2026-09-09) — a VedettUtvonalWorkspace
+  // adja át, amikor a felhasználó egy kedvenc útvonal "Útvonal
+  // megtervezése" gombjára kattint (lásd FavoriteRoutesPanel.tsx). EZ a
+  // komponens EBBŐL a presetből seedeli az origin/destination/weights
+  // KEZDŐÁLLAPOTÁT — a preset SOHA nem tartalmaz konkrét journey-t, csak
+  // a "route preset" adatait, ezért egy friss mount mindig friss keresést
+  // igényel (nincs elavult journey visszatöltve). CURRENT_LOCATION induló
+  // mód esetén a presetben SOHA nincs koordináta (lásd a migráció GPS
+  // PRIVACY megjegyzését) — az origin state ilyenkor MANUAL/üres marad, és
+  // a `pendingFavoriteOriginLabel` state jelzi a "Aktuális helyzetem →
+  // [cél]" szándékot, amíg a felhasználó explicit nem kattint az "Aktuális
+  // helyzetem" gombra (SOSEM automatikus GPS-kérés csak a preset betöltése
+  // miatt).
+  initialFavoritePreset?: {
+    originMode: "MANUAL" | "CURRENT_LOCATION";
+    originManual: { city: string; districtOrPostalCode: string; street: string } | null;
+    destinationMode: "MANUAL" | "KNOWN_PLACE";
+    destinationManual: { city: string; districtOrPostalCode: string; street: string } | null;
+    destinationKnownPlace: { name: string; latitude: number; longitude: number; placeId: string | null } | null;
+    weights: PersonalizationWeights;
+  } | null;
 }) {
   // „Aktuális helyzetem" mint indulási pont (UX módosítás, 2026-09-09) —
   // TASK B. A `from` szabadszöveges mező helyett/mellett egy explicit,
   // két módot (MANUAL / CURRENT_LOCATION) megkülönböztető RouteOrigin
   // state — lásd a fájl elején lévő típusdefiníciót és indoklást.
-  const [origin, setOrigin] = useState<RouteOrigin>({ type: "MANUAL", address: "" });
+  const [origin, setOrigin] = useState<RouteOrigin>(
+    initialFavoritePreset && initialFavoritePreset.originMode === "MANUAL" && initialFavoritePreset.originManual
+      ? {
+          type: "MANUAL",
+          city: initialFavoritePreset.originManual.city,
+          districtOrPostalCode: initialFavoritePreset.originManual.districtOrPostalCode,
+          street: initialFavoritePreset.originManual.street,
+        }
+      : { type: "MANUAL", city: "Budapest", districtOrPostalCode: "", street: "" }
+  );
+  // Kedvenc útvonalak integráció — CURRENT_LOCATION preset esetén (lásd
+  // fenti prop-magyarázat) ez a state mutatja a "Aktuális helyzetem →
+  // [cél]" szándékot, amíg a felhasználó explicit nem kéri le a
+  // pozícióját. NEM az origin state része — az origin ilyenkor
+  // szándékosan MANUAL/üres marad (nincs koordináta a presetben).
+  const [pendingFavoriteOriginLabel, setPendingFavoriteOriginLabel] = useState<string | null>(
+    initialFavoritePreset && initialFavoritePreset.originMode === "CURRENT_LOCATION" ? "Aktuális helyzetem" : null
+  );
   // Védett Hely "Navigálj oda" integráció — ha van előre validált
   // initialDestination, a "Hová?" mező KNOWN_PLACE módban indul (a hely
-  // neve már ki van töltve); egyébként a régi, VÁLTOZATLAN MANUAL/""
-  // kezdőállapot (lásd M. regressziós teszt: "existing manual destination
-  // search továbbra is működik").
+  // neve már ki van töltve); egyébként, ha van kedvenc-preset, ABBÓL
+  // seedelünk (MANUAL strukturált cím VAGY KNOWN_PLACE); egyébként a régi,
+  // VÁLTOZATLAN MANUAL/"" kezdőállapot (lásd M. regressziós teszt:
+  // "existing manual destination search továbbra is működik").
   const [destination, setDestination] = useState<RouteDestination>(
     initialDestination
       ? {
@@ -536,21 +632,37 @@ export default function VedettUtvonalSearchForm({
           latitude: initialDestination.latitude,
           longitude: initialDestination.longitude,
         }
-      : { type: "MANUAL", address: "" }
+      : initialFavoritePreset && initialFavoritePreset.destinationMode === "KNOWN_PLACE" && initialFavoritePreset.destinationKnownPlace
+        ? {
+            type: "KNOWN_PLACE",
+            name: initialFavoritePreset.destinationKnownPlace.name,
+            latitude: initialFavoritePreset.destinationKnownPlace.latitude,
+            longitude: initialFavoritePreset.destinationKnownPlace.longitude,
+          }
+        : initialFavoritePreset && initialFavoritePreset.destinationMode === "MANUAL" && initialFavoritePreset.destinationManual
+          ? {
+              type: "MANUAL",
+              city: initialFavoritePreset.destinationManual.city,
+              districtOrPostalCode: initialFavoritePreset.destinationManual.districtOrPostalCode,
+              street: initialFavoritePreset.destinationManual.street,
+            }
+          : { type: "MANUAL", city: "Budapest", districtOrPostalCode: "", street: "" }
   );
   const [when, setWhen] = useState<"now" | "scheduled">("now");
   const [datetime, setDatetime] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<SearchApiResponse | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
-  const [weights, setWeights] = useState<PersonalizationWeights>({
-    transfers: 1,
-    modeSwitches: 1,
-    underground: 1,
-    walking: 1,
-    duration: 1,
-    waiting: 1,
-  });
+  const [weights, setWeights] = useState<PersonalizationWeights>(
+    initialFavoritePreset?.weights ?? {
+      transfers: 1,
+      modeSwitches: 1,
+      underground: 1,
+      walking: 1,
+      duration: 1,
+      waiting: 1,
+    }
+  );
   // Part B (2026-09-08) — melyik kártya térképe van éppen nyitva (index a
   // result.journeys tömben, vagy null, ha egyik sincs nyitva). Ez az
   // EGYETLEN helye annak, hogy "melyik kártya aktív" — nincs másik,
@@ -579,6 +691,10 @@ export default function VedettUtvonalSearchForm({
     if (originGeo.status === "granted" && originGeo.latitude !== null && originGeo.longitude !== null) {
       setOrigin({ type: "CURRENT_LOCATION", latitude: originGeo.latitude, longitude: originGeo.longitude });
       setOriginError(null);
+      // A kedvenc-preset "Aktuális helyzetem → [cél]" előzetes jelzése
+      // (pendingFavoriteOriginLabel) innentől felesleges — az origin state
+      // már a valódi, most lekért koordinátát tartja.
+      setPendingFavoriteOriginLabel(null);
       originRequestedRef.current = false;
     } else if (originGeo.status === "denied" || originGeo.status === "timeout" || originGeo.status === "unavailable" || originGeo.status === "error") {
       setOriginError(ORIGIN_GEOLOCATION_ERROR_COPY[originGeo.status] ?? ORIGIN_GEOLOCATION_ERROR_COPY.error);
@@ -599,26 +715,131 @@ export default function VedettUtvonalSearchForm({
     // egy friss lekérdezést indítunk.
     if (originGeo.status === "granted" && originGeo.latitude !== null && originGeo.longitude !== null) {
       setOrigin({ type: "CURRENT_LOCATION", latitude: originGeo.latitude, longitude: originGeo.longitude });
+      setPendingFavoriteOriginLabel(null);
       return;
     }
     originRequestedRef.current = true;
     originGeo.requestOnce();
   }
 
-  function handleOriginAddressChange(value: string) {
-    // B4 — bármilyen kézi gépelés az induló mezőbe AZONNAL visszaállítja
-    // MANUAL módra, SOSEM használ elavult GPS-koordinátát a routing
-    // kéréshez ezután.
-    setOrigin({ type: "MANUAL", address: value });
+  function updateOriginManualField(field: "city" | "districtOrPostalCode" | "street", value: string) {
+    // B4 (kiterjesztve a strukturált címre) — bármilyen kézi gépelés
+    // BÁRMELYIK manuális címmezőbe (Város / Irányítószám vagy kerület /
+    // Utca, házszám) AZONNAL visszaállítja MANUAL módra, SOSEM használ
+    // elavult GPS-koordinátát a routing kéréshez ezután. A már kitöltött
+    // többi mezőt megőrizzük — egyetlen mező módosítása nem törli a
+    // többit.
+    setOrigin((prev) => {
+      const base = prev.type === "MANUAL" ? prev : { type: "MANUAL" as const, city: "Budapest", districtOrPostalCode: "", street: "" };
+      return { ...base, type: "MANUAL", [field]: value };
+    });
+    // A felhasználó explicit MANUAL címet kezdett gépelni — a kedvenc
+    // preset "Aktuális helyzetem" jelzése innentől nem releváns.
+    setPendingFavoriteOriginLabel(null);
   }
 
-  function handleDestinationChange(value: string) {
-    // Védett Hely "Navigálj oda" integráció — ugyanaz a szabály, mint az
-    // induló mezőnél (B4): bármilyen kézi gépelés a "Hová?" mezőbe
-    // AZONNAL visszaállítja MANUAL módra, SOHA nem használ elavult/rossz
-    // koordinátát a routing kéréshez, ha a felhasználó a deep linkből
-    // előre kitöltött célt módosítja.
-    setDestination({ type: "MANUAL", address: value });
+  function updateDestinationManualField(field: "city" | "districtOrPostalCode" | "street", value: string) {
+    // Ugyanaz a szabály, mint az induló mezőknél. Ha épp KNOWN_PLACE volt
+    // aktív, ez a függvény csak a strukturált mezőkből hívódik (azok csak
+    // MANUAL módban látszanak) — a KNOWN_PLACE -> MANUAL átváltást a "Hová?"
+    // egyetlen mezős KNOWN_PLACE nézetéhez lásd handleDestinationOverrideChange.
+    setDestination((prev) => {
+      const base = prev.type === "MANUAL" ? prev : { type: "MANUAL" as const, city: "Budapest", districtOrPostalCode: "", street: "" };
+      return { ...base, type: "MANUAL", [field]: value };
+    });
+  }
+
+  function handleDestinationOverrideChange(value: string) {
+    // Védett Hely "Navigálj oda" integráció — ha a felhasználó a KNOWN_PLACE
+    // módban előretöltött célnév mezőbe kézzel ír, KNOWN_PLACE AZONNAL
+    // megszűnik (SOHA nem használunk elavult/rossz koordinátát a routing
+    // kéréshez ezután), és a begépelt szöveg a strukturált cím "Utca,
+    // házszám" mezőjébe kerül kiindulásként — a Város alapértelmezetten
+    // Budapest, az Irányítószám vagy kerület mező üresen indul, hogy a
+    // felhasználó kitölthesse.
+    setDestination({ type: "MANUAL", city: "Budapest", districtOrPostalCode: "", street: value });
+  }
+
+  // Kedvenc útvonalak — mentés UI állapota. "idle" -> "☆ Kedvencekhez
+  // adom" gomb; "open" -> névadó mini-form; sikeres mentés után "saved" ->
+  // "★ Kedvenc útvonal" (a spec 21. pontja szerint).
+  const [favoriteSaveState, setFavoriteSaveState] = useState<"idle" | "open" | "saved">("idle");
+  const [favoriteNameInput, setFavoriteNameInput] = useState("");
+  const [favoriteSaving, setFavoriteSaving] = useState(false);
+  const [favoriteSaveMessage, setFavoriteSaveMessage] = useState<string | null>(null);
+
+  // Determinisztikus névjavaslat (spec 21. pont: "Ne használj AI-t
+  // ehhez") — UGYANAZ az elv, mint a szerver oldali
+  // lib/vedett-route/favorites/queries.ts buildDefaultFavoriteName()
+  // (az a szerver-only adatbázis-klienst importáló modul nem hívható
+  // "use client" komponensből, ezért a logika szándékosan duplikált itt,
+  // egyszerű string-összeállítás, nem üzleti szabály).
+  function currentFavoriteOriginLabel(): string {
+    if (origin.type === "CURRENT_LOCATION") return "Aktuális helyzetem";
+    return origin.street || origin.city || "Induló hely";
+  }
+
+  function currentFavoriteDestinationLabel(): string {
+    if (destination.type === "KNOWN_PLACE") return destination.name;
+    return destination.street || destination.city || "Cél";
+  }
+
+  async function handleSaveFavorite() {
+    setFavoriteSaveMessage(null);
+    // Ugyanaz a kulturált, magyar validációs hiba, mint a fő keresésnél —
+    // nem küldünk el egy nyilvánvalóan hiányos MANUAL címet a szervernek.
+    if (origin.type === "MANUAL" && !isManualAddressComplete(origin)) {
+      setFavoriteSaveMessage("Add meg a várost, az irányítószámot vagy kerületet és az utcát.");
+      return;
+    }
+    if (destination.type === "MANUAL" && !isManualAddressComplete(destination)) {
+      setFavoriteSaveMessage("Add meg a várost, az irányítószámot vagy kerületet és az utcát.");
+      return;
+    }
+
+    setFavoriteSaving(true);
+    try {
+      const originFields =
+        origin.type === "CURRENT_LOCATION"
+          ? { originMode: "CURRENT_LOCATION" as const }
+          : {
+              originMode: "MANUAL" as const,
+              originManual: { city: origin.city, districtOrPostalCode: origin.districtOrPostalCode, street: origin.street },
+            };
+      const destinationFields =
+        destination.type === "KNOWN_PLACE"
+          ? {
+              destinationMode: "KNOWN_PLACE" as const,
+              destinationKnownPlace: { name: destination.name, latitude: destination.latitude, longitude: destination.longitude },
+            }
+          : {
+              destinationMode: "MANUAL" as const,
+              destinationManual: { city: destination.city, districtOrPostalCode: destination.districtOrPostalCode, street: destination.street },
+            };
+      const body = {
+        name: favoriteNameInput.trim() || undefined,
+        ...originFields,
+        ...destinationFields,
+        weights,
+      };
+      const res = await fetch("/api/vedett-route/favorites", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = (await res.json()) as { ok: boolean; duplicate?: boolean; message?: string };
+      if (data.ok) {
+        setFavoriteSaveState("saved");
+      } else if (data.duplicate) {
+        setFavoriteSaveMessage(data.message ?? "Ez az útvonal már a kedvenceid között van.");
+      } else {
+        setFavoriteSaveMessage(data.message ?? "Nem sikerült elmenteni a kedvenc útvonalat.");
+      }
+    } catch {
+      setFavoriteSaveMessage("Nem sikerült elmenteni a kedvenc útvonalat.");
+    } finally {
+      setFavoriteSaving(false);
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -627,12 +848,16 @@ export default function VedettUtvonalSearchForm({
     setResult(null);
     setOpenIndex(null);
 
-    if (origin.type === "MANUAL" && !origin.address.trim()) {
-      setFormError("Add meg az indulási helyet és a célhelyet.");
+    // 6. pont — kulturált, magyar validációs hiba a nyers Zod/technikai
+    // hibaüzenet helyett; a szerver felé csak akkor megy a kérés, ha a
+    // strukturált cím mindhárom kötelező része (város, irányítószám VAGY
+    // kerület, utca) ki van töltve.
+    if (origin.type === "MANUAL" && !isManualAddressComplete(origin)) {
+      setFormError("Add meg a várost, az irányítószámot vagy kerületet és az utcát.");
       return;
     }
-    if (destination.type === "MANUAL" && !destination.address.trim()) {
-      setFormError("Add meg az indulási helyet és a célhelyet.");
+    if (destination.type === "MANUAL" && !isManualAddressComplete(destination)) {
+      setFormError("Add meg a várost, az irányítószámot vagy kerületet és az utcát.");
       return;
     }
 
@@ -649,14 +874,14 @@ export default function VedettUtvonalSearchForm({
       const originFields =
         origin.type === "CURRENT_LOCATION"
           ? { fromCoordinates: { latitude: origin.latitude, longitude: origin.longitude } }
-          : { from: origin.address };
+          : { from: buildStructuredAddress(origin) };
       const destinationFields =
         destination.type === "KNOWN_PLACE"
           ? {
               toCoordinates: { latitude: destination.latitude, longitude: destination.longitude },
               toName: destination.name,
             }
-          : { to: destination.address };
+          : { to: buildStructuredAddress(destination) };
       const body = {
         ...originFields,
         ...destinationFields,
@@ -684,16 +909,8 @@ export default function VedettUtvonalSearchForm({
       <form onSubmit={handleSubmit} className="mt-3 space-y-3">
         <div>
           <label className="block text-sm font-medium text-gray-700">Indulási hely</label>
-          <input
-            type="text"
-            value={origin.type === "CURRENT_LOCATION" ? "Aktuális helyzetem" : origin.address}
-            onChange={(e) => handleOriginAddressChange(e.target.value)}
-            placeholder="Cím vagy hely"
-            disabled={disabled}
-            className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm disabled:bg-gray-100"
-          />
           {/* Task B — „Aktuális helyzetem" mint indulási pont: jól látható,
-              mobilon is könnyen érinthető opció az induló mező alatt. A
+              mobilon is könnyen érinthető opció az induló mező felett. A
               gomb loading state-et mutat kérés közben (B5), és a
               feliratban SOHA nem jelenik meg nyers technikai kivétel —
               csak a specifikáció szerinti, magyar hibaszövegek. */}
@@ -709,23 +926,125 @@ export default function VedettUtvonalSearchForm({
           {origin.type === "CURRENT_LOCATION" && (
             <p className="mt-1 text-xs text-green-700">Az induló pont: aktuális helyzeted.</p>
           )}
+          {/* Kedvenc útvonalak integráció — CURRENT_LOCATION kedvenc preset
+              betöltésekor SOHA nem indul automatikus GPS-kérés; ez a
+              jelzés mutatja a szándékot, amíg a felhasználó explicit nem
+              kattint az "Aktuális helyzetem" gombra. */}
+          {pendingFavoriteOriginLabel && origin.type !== "CURRENT_LOCATION" && (
+            <p className="mt-1 text-xs text-sni-primary">
+              Ez egy kedvenc: {pendingFavoriteOriginLabel} → kattints az "Aktuális helyzetem" gombra a legfrissebb helyzeted lekéréséhez.
+            </p>
+          )}
           {originError && <p className="mt-1 text-xs text-amber-700">{originError}</p>}
+
+          {/* Strukturált címbevitel (2. pont) — MANUAL módban három, külön
+              kezelt mező (a "Kossuth utca" jellegű, Budapesten több helyen
+              is előforduló utcanév-ütközések csökkentésére). CURRENT_LOCATION
+              módban ezeket nem kell kitöltenie a felhasználónak (a fenti
+              "Az induló pont: aktuális helyzeted." üzenet jelzi az
+              állapotot); ha ezután BÁRMELYIK mezőbe gépel, a
+              updateOriginManualField azonnal visszaállít MANUAL módra. */}
+          <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <div>
+              <label className="block text-xs text-gray-500">Város</label>
+              <input
+                type="text"
+                value={origin.type === "MANUAL" ? origin.city : ""}
+                onChange={(e) => updateOriginManualField("city", e.target.value)}
+                placeholder="Budapest"
+                disabled={disabled}
+                className="mt-0.5 w-full rounded border border-gray-300 px-2 py-1.5 text-sm disabled:bg-gray-100"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500">Irányítószám vagy kerület</label>
+              <input
+                type="text"
+                value={origin.type === "MANUAL" ? origin.districtOrPostalCode : ""}
+                onChange={(e) => updateOriginManualField("districtOrPostalCode", e.target.value)}
+                placeholder="pl. 1136 vagy XIII. kerület"
+                disabled={disabled}
+                className="mt-0.5 w-full rounded border border-gray-300 px-2 py-1.5 text-sm disabled:bg-gray-100"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500">Utca, házszám</label>
+              <input
+                type="text"
+                value={origin.type === "MANUAL" ? origin.street : ""}
+                onChange={(e) => updateOriginManualField("street", e.target.value)}
+                placeholder="pl. Kossuth Lajos utca 12."
+                disabled={disabled}
+                className="mt-0.5 w-full rounded border border-gray-300 px-2 py-1.5 text-sm disabled:bg-gray-100"
+              />
+            </div>
+          </div>
+          {/* 7. pont — Budapest BÉTA korlát: diszkrét jelzés a mezők
+              közelében, nincs hardcode-olt architektúra (csak egy induló
+              mezőérték és egy szöveges megjegyzés). */}
+          <p className="mt-1 text-[11px] text-gray-400">Jelenleg Budapesten tesztelhető.</p>
         </div>
 
         <div>
           <label className="block text-sm font-medium text-gray-700">Hová?</label>
-          <input
-            type="text"
-            value={destination.type === "KNOWN_PLACE" ? destination.name : destination.address}
-            onChange={(e) => handleDestinationChange(e.target.value)}
-            placeholder="Cím vagy VédettSarok hely"
-            disabled={disabled}
-            className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm disabled:bg-gray-100"
-          />
-          {destination.type === "KNOWN_PLACE" && (
-            <p className="mt-1 text-xs text-green-700">
-              Úti cél: {destination.name} (a VédettSarok adatbázisából, koordináta alapján — nincs szükség újbóli keresésre).
-            </p>
+          {destination.type === "KNOWN_PLACE" ? (
+            <>
+              <input
+                type="text"
+                value={destination.name}
+                onChange={(e) => handleDestinationOverrideChange(e.target.value)}
+                placeholder="Cím vagy VédettSarok hely"
+                disabled={disabled}
+                className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm disabled:bg-gray-100"
+              />
+              <p className="mt-1 text-xs text-green-700">
+                Úti cél: {destination.name} (a VédettSarok adatbázisából, koordináta alapján — nincs szükség újbóli keresésre).
+              </p>
+            </>
+          ) : (
+            <>
+              {/* Strukturált címbevitel (3. pont) — MANUAL célhely esetén
+                  UGYANAZ a három mező, mint az induló helynél. KNOWN_PLACE
+                  (Védett Hely deep link) esetén ez az ág NEM jelenik meg —
+                  a hely neve marad az egyetlen, előretöltött mező, nincs
+                  újbóli geokódolás. */}
+              <div className="mt-1 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                <div>
+                  <label className="block text-xs text-gray-500">Város</label>
+                  <input
+                    type="text"
+                    value={destination.city}
+                    onChange={(e) => updateDestinationManualField("city", e.target.value)}
+                    placeholder="Budapest"
+                    disabled={disabled}
+                    className="mt-0.5 w-full rounded border border-gray-300 px-2 py-1.5 text-sm disabled:bg-gray-100"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500">Irányítószám vagy kerület</label>
+                  <input
+                    type="text"
+                    value={destination.districtOrPostalCode}
+                    onChange={(e) => updateDestinationManualField("districtOrPostalCode", e.target.value)}
+                    placeholder="pl. 1136 vagy XIII. kerület"
+                    disabled={disabled}
+                    className="mt-0.5 w-full rounded border border-gray-300 px-2 py-1.5 text-sm disabled:bg-gray-100"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500">Utca, házszám</label>
+                  <input
+                    type="text"
+                    value={destination.street}
+                    onChange={(e) => updateDestinationManualField("street", e.target.value)}
+                    placeholder="pl. Kossuth Lajos utca 12."
+                    disabled={disabled}
+                    className="mt-0.5 w-full rounded border border-gray-300 px-2 py-1.5 text-sm disabled:bg-gray-100"
+                  />
+                </div>
+              </div>
+              <p className="mt-1 text-[11px] text-gray-400">Jelenleg Budapesten tesztelhető.</p>
+            </>
           )}
         </div>
 
@@ -751,25 +1070,44 @@ export default function VedettUtvonalSearchForm({
         </div>
 
         <div className="rounded border border-sni-primary/30 bg-sni-primary/5 p-3">
-          <h3 className="text-sm font-semibold text-sni-text">Szenzoros személyre szabás</h3>
+          <h3 className="text-sm font-semibold text-sni-text">Mennyire fontosak neked ezek a szempontok?</h3>
           <p className="mt-1 text-xs text-gray-500">
-            Ez nem diagnózis-alapú beállítás — csak a te személyes preferenciádat súlyozza, hogy a &quot;Legnyugodtabb&quot; ajánlás jobban illeszkedjen hozzád. 0 = nem számít, 1 = alapértelmezett, 2 = kétszeresen fontos.
+            Állítsd be külön-külön, melyik szempont mennyire számít neked az útvonal kiválasztásánál. Ez nem diagnózis-alapú beállítás — csak a te személyes preferenciádat veszi figyelembe, hogy a &quot;Legnyugodtabb&quot; ajánlás jobban illeszkedjen hozzád.
           </p>
-          <div className="mt-2 space-y-2">
+          <div className="mt-3 space-y-4">
             {WEIGHT_FIELDS.map(({ key, label }) => (
-              <div key={key} className="flex items-center gap-2">
-                <label className="w-56 text-xs text-gray-700">{label}</label>
+              <div key={key}>
+                <label className="text-xs text-gray-700">{label}</label>
+                {/* 9-11. pont — a három szenzoros prioritás-állapot emoji +
+                    szöveg együtt, SOSEM csak szín alapján megkülönböztetve;
+                    az aktuális állapot vizuálisan hangsúlyosabb. Unicode
+                    emoji karakterek (nincs külső asset-függőség). */}
+                <div className="mt-1 flex flex-wrap items-center justify-between gap-1 text-[11px]">
+                  {SENSORY_PRIORITY_LEVELS.map((level) => (
+                    <span
+                      key={level.value}
+                      className={
+                        weights[key] === level.value
+                          ? "flex items-center gap-1 font-semibold text-sni-primary"
+                          : "flex items-center gap-1 text-gray-400"
+                      }
+                    >
+                      <span aria-hidden="true">{level.emoji}</span>
+                      {level.label}
+                    </span>
+                  ))}
+                </div>
                 <input
                   type="range"
                   min={0}
                   max={2}
-                  step={0.25}
+                  step={1}
                   value={weights[key]}
                   disabled={disabled}
                   onChange={(e) => setWeights((w) => ({ ...w, [key]: Number(e.target.value) }))}
-                  className="flex-1"
+                  aria-valuetext={sensoryPriorityLabel(weights[key])}
+                  className="mt-1 w-full"
                 />
-                <span className="w-8 text-right text-xs text-gray-600">{weights[key]}</span>
               </div>
             ))}
           </div>
@@ -780,6 +1118,49 @@ export default function VedettUtvonalSearchForm({
         <button type="submit" disabled={disabled || loading} className="btn-primary disabled:opacity-50">
           {loading ? "Keresés…" : "Útvonal keresése"}
         </button>
+
+        {/* Kedvenc útvonalak — mentés (spec 21. pont). SZÁNDÉKOSAN a
+            preset (origin/destination/weights) mentése, SOHA a konkrét
+            kiszámolt journey — lásd handleSaveFavorite. */}
+        <div className="rounded border border-dashed border-gray-300 p-3">
+          {favoriteSaveState === "saved" ? (
+            <p className="flex items-center gap-1.5 text-sm font-medium text-sni-primary">
+              <span aria-hidden="true">★</span> Kedvenc útvonal
+            </p>
+          ) : favoriteSaveState === "open" ? (
+            <div className="space-y-2">
+              <label className="block text-xs text-gray-500">Kedvenc útvonal neve</label>
+              <input
+                type="text"
+                value={favoriteNameInput}
+                onChange={(e) => setFavoriteNameInput(e.target.value)}
+                disabled={favoriteSaving}
+                className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm disabled:bg-gray-100"
+              />
+              <div className="flex items-center gap-3">
+                <button type="button" onClick={handleSaveFavorite} disabled={favoriteSaving} className="btn-secondary text-xs disabled:opacity-50">
+                  {favoriteSaving ? "Mentés…" : "Mentés"}
+                </button>
+                <button type="button" onClick={() => setFavoriteSaveState("idle")} className="text-xs text-gray-500 underline">
+                  Mégse
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                setFavoriteSaveState("open");
+                setFavoriteNameInput(`${currentFavoriteOriginLabel()} → ${currentFavoriteDestinationLabel()}`);
+                setFavoriteSaveMessage(null);
+              }}
+              className="flex items-center gap-1.5 text-sm font-medium text-sni-primary"
+            >
+              <span aria-hidden="true">☆</span> Kedvencekhez adom
+            </button>
+          )}
+          {favoriteSaveMessage && <p className="mt-1 text-xs text-amber-700">{favoriteSaveMessage}</p>}
+        </div>
 
         {disabled && (
           <p className="text-sm text-amber-700">

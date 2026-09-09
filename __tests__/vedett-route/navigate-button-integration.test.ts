@@ -178,13 +178,23 @@ describe("I) deep link után a destination mező előre ki van töltve — Vedet
   });
 
   test("a 'Hová?' input value-ja KNOWN_PLACE módban a hely nevét mutatja, nem egy üres mezőt", () => {
-    assert.match(searchFormSrc, /destination\.type === "KNOWN_PLACE" \? destination\.name : destination\.address/);
+    // Strukturált címbevitel (2026-09-XX) óta a MANUAL célhely három
+    // mezőre bomlik (Város/Irányítószám vagy kerület/Utca, házszám), de a
+    // KNOWN_PLACE ág KÜLÖN, feltételes JSX-ágként megmaradt: egyetlen
+    // mező, előretöltve a hely nevével — nincs újbóli geokódolás.
+    const knownPlaceBranchMatch = searchFormSrc.match(/destination\.type === "KNOWN_PLACE" \? \([\s\S]{0,800}?\) : \(/);
+    assert.ok(knownPlaceBranchMatch, "meg kell találni a destination.type === \"KNOWN_PLACE\" feltételes JSX-ágat");
+    assert.match(knownPlaceBranchMatch![0], /value=\{destination\.name\}/);
   });
 
-  test("kézi gépelés a 'Hová?' mezőbe VISSZAÁLLÍTJA MANUAL módra (nem marad benne egy elavult koordináta, ha a user módosítja a célt)", () => {
-    const fnMatch = searchFormSrc.match(/function handleDestinationChange\(value: string\) \{[\s\S]*?\n  \}/);
-    assert.ok(fnMatch, "handleDestinationChange függvénynek léteznie kell");
-    assert.match(fnMatch![0], /setDestination\(\{ type: "MANUAL", address: value \}\)/);
+  test("kézi gépelés a 'Hová?' mezőbe (KNOWN_PLACE nézetben) VISSZAÁLLÍTJA MANUAL módra (nem marad benne egy elavult koordináta, ha a user módosítja a célt)", () => {
+    // A régi, egyetlen handleDestinationChange helyett a KNOWN_PLACE
+    // nézet mezője handleDestinationOverrideChange-et hív — az invariáns
+    // ugyanaz: kézi gépelés AZONNAL MANUAL módra vált, koordináta nem
+    // marad érvényben.
+    const fnMatch = searchFormSrc.match(/function handleDestinationOverrideChange\(value: string\) \{[\s\S]*?\n  \}/);
+    assert.ok(fnMatch, "handleDestinationOverrideChange függvénynek léteznie kell");
+    assert.match(fnMatch![0], /setDestination\(\{ type: "MANUAL", city: "Budapest", districtOrPostalCode: "", street: value \}\);/);
   });
 
   test("submit esetén KNOWN_PLACE destination toCoordinates+toName-t küld, MANUAL destination sima 'to' stringet — mindkettő a journeySearchSchema-val validált alakban", () => {

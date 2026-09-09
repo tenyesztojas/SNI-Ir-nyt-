@@ -44,7 +44,7 @@ import { getCurrentUserAndProfile } from "@/lib/data";
 import { isVedettRouteFeatureEnabled, VEDETT_ROUTE_ACCESS_LEVEL } from "@/lib/vedett-route/config";
 import { hasVedettRouteBetaAccess } from "@/lib/vedett-route/access";
 import { routeDestinationDeepLinkSchema } from "@/lib/vedett-route/schemas";
-import VedettUtvonalSearchForm from "@/components/vedett-utvonal/VedettUtvonalSearchForm";
+import VedettUtvonalWorkspace from "@/components/vedett-utvonal/VedettUtvonalWorkspace";
 
 // Lásd app/admin/vedett-utvonal/page.tsx fejlécét — ugyanaz a build-time
 // hálózati hívás elleni védelem indokolja itt is a force-dynamic-ot: a
@@ -134,8 +134,12 @@ export default async function VedettUtvonalPage({
         pontatlanok lehetnek.
       </p>
 
-      <div className="mt-6">
-        <VedettUtvonalSearchForm disabled={!enabled} initialDestination={initialDestination} />
+      <div className="mt-6 space-y-6">
+        {/* Kedvenc útvonalak (2026-09-09) — a lista a kereső FÖLÖTT jelenik
+            meg (spec 34. pont illusztratív UX flow-ja). A
+            VedettUtvonalWorkspace felelős a "1 kattintásos újratervezés"
+            React-key-remount mintájáért — lásd a komponens fejlécét. */}
+        <VedettUtvonalWorkspace disabled={!enabled} initialDestination={initialDestination} />
       </div>
     </div>
   );
