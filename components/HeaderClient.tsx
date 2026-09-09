@@ -29,22 +29,27 @@ const TOP_LINKS = [
   { href: "/kozosseg", label: "Közösség", newTab: false },
 ];
 
-// Pilot/pre-launch linkek — adminnak mindig látható, teszternek ha hozzáférése van
+// Pilot/pre-launch linkek — adminnak mindig látható, teszternek ha hozzáférése van.
 // key értékek: 'vedett-jelzes' | 'vedett-partner' | 'vedettmunka' | 'vedett_route_beta'
 //
-// ZÁRT BÉTA HOZZÁFÉRÉS (2026-09-09): a "Védett Útvonal" bejegyzés
-// `requiresFeatureFlag: true` -vel van megjelölve, mert ezt EGY TOVÁBBI
-// globális kill switch is védi (VEDETT_ROUTE_ENABLED, lásd
-// lib/vedett-route/config.ts isVedettRouteFeatureEnabled()) — a másik három
-// pilot modulnak nincs ilyen globális flagje. A menüpont emiatt CSAK akkor
-// jelenik meg, ha a flag be van kapcsolva ÉS (admin VAGY a felhasználó
-// pilot_access tömbje tartalmazza a "vedett_route_beta" kulcsot) — sosem
-// csak CSS-sel rejtjük el, a link elemek maguk nem is renderelődnek le.
+// PUBLIKUS, REGISZTRÁLT FELHASZNÁLÓI BÉTA (2026-09-09, korábbi zárt béta
+// szakasz után): a "Védett Útvonal" bejegyzés `requiresFeatureFlag: true`
+// -vel van megjelölve, mert ezt EGY TOVÁBBI globális kill switch is védi
+// (VEDETT_ROUTE_ENABLED, lásd lib/vedett-route/config.ts
+// isVedettRouteFeatureEnabled()) — a másik három pilot modulnak nincs ilyen
+// globális flagje. A "Védett Útvonal" menüpont láthatósága ETTŐL A PONTTÓL
+// KEZDVE NEM az admin/pilot_access grant-tól függ (lásd
+// visiblePilotLinks lent, ahol a "vedett_route_beta" kulcs saját, admin-
+// és grant-független szabályt kap) — csak a globális flagtől ÉS attól,
+// hogy a felhasználó bejelentkezett-e. A grant-alapú `requiresFeatureFlag`
+// mechanizmus és a `badge` mező a másik pilot modulokra és a jövőbeli
+// visszaállásra (rollback) miatt megmarad. A menüpont sosem csak CSS-sel
+// van elrejtve — a link elem maga nem is renderelődik le, ha nem látható.
 const PILOT_LINKS = [
   { key: "vedett-jelzes",     href: "/vedett-jelzes",            label: "Védett Jelzés",  requiresFeatureFlag: false },
   { key: "vedett-partner",    href: "/szolgaltato/regisztracio", label: "Védett Partner", requiresFeatureFlag: false },
   { key: "vedettmunka",       href: "/vedett-karrier",           label: "VédettKarrier",  requiresFeatureFlag: false },
-  { key: "vedett_route_beta", href: "/vedett-utvonal",           label: "Védett Útvonal", requiresFeatureFlag: true },
+  { key: "vedett_route_beta", href: "/vedett-utvonal",           label: "Védett Útvonal", requiresFeatureFlag: true, badge: "BÉTA" },
 ];
 
 export default function HeaderClient({
@@ -63,6 +68,17 @@ export default function HeaderClient({
   vedettRouteEnabled?: boolean;
 }) {
   const visiblePilotLinks = PILOT_LINKS.filter((l) => {
+    if (l.key === "vedett_route_beta") {
+      // PUBLIKUS, REGISZTRÁLT FELHASZNÁLÓI BÉTA (2026-09-09): a korábbi
+      // zárt béta szakasz admin/pilot_access grant-ellenőrzése itt lezárult
+      // — mostantól MINDEN bejelentkezett felhasználónak látszik, ha a
+      // globális kill switch be van kapcsolva. A grant megjelenése (a lenti
+      // isAdmin || pilotAccess.includes(...) ág) NEM vonatkozik rá többé —
+      // az "vedett_route_beta" pilot_access kulcs továbbra is létezik és
+      // működik (backwards compatibility, admin/tesztelők kezelőfelülete),
+      // de a menüpont láthatóságát már nem ez dönti el.
+      return vedettRouteEnabled && isLoggedIn;
+    }
     if (l.requiresFeatureFlag && !vedettRouteEnabled) return false;
     return isAdmin || pilotAccess.includes(l.key);
   });
@@ -149,9 +165,14 @@ export default function HeaderClient({
             <Link
               key={link.href}
               href={link.href}
-              className="relative rounded-full px-4 py-2 text-sm font-semibold text-sni-brand-teal transition-colors hover:bg-sni-brand-teal/10"
+              className="relative flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold text-sni-brand-teal transition-colors hover:bg-sni-brand-teal/10"
             >
               {link.label}
+              {link.badge && (
+                <span className="rounded bg-sni-brand-teal/15 px-1.5 py-0.5 text-[10px] font-bold uppercase leading-none text-sni-brand-teal">
+                  {link.badge}
+                </span>
+              )}
             </Link>
           ))}
 
@@ -334,9 +355,14 @@ export default function HeaderClient({
                 key={link.href}
                 href={link.href}
                 onClick={closeMobile}
-                className="rounded-xl px-4 py-3 text-base font-semibold text-sni-brand-teal hover:bg-sni-brand-teal/10"
+                className="flex items-center gap-1.5 rounded-xl px-4 py-3 text-base font-semibold text-sni-brand-teal hover:bg-sni-brand-teal/10"
               >
                 {link.label}
+                {link.badge && (
+                  <span className="rounded bg-sni-brand-teal/15 px-1.5 py-0.5 text-[10px] font-bold uppercase leading-none text-sni-brand-teal">
+                    {link.badge}
+                  </span>
+                )}
               </Link>
             ))}
 

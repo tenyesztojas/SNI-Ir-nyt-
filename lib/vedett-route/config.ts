@@ -7,21 +7,28 @@
 
 export type VedettRouteAccessLevel = "admin_only" | "authenticated_users" | "beta_testers" | "public";
 
-// ZÁRT BÉTA HOZZÁFÉRÉS (2026-09-09) — a Védett Útvonal mostantól nem
-// KIZÁRÓLAG admin, hanem admin VAGY explicit béta-tesztjoggal rendelkező
-// felhasználó számára érhető el (lásd access.ts requireVedettRouteAccess()
-// -> requireVedettRouteBetaAccess()). Ez a korábban előkészített
-// "beta_testers" szint most VÁLIK AKTÍVVÁ — a "public"/"authenticated_users"
-// szintek továbbra sem aktívak, azok egy jövőbeli, még szélesebb release
-// döntés esetén kapcsolhatók be (egyetlen sor módosítása, a route/API/RLS
-// réteg már felkészült rá, lásd access.ts switch ága).
+// PUBLIKUS, REGISZTRÁLT FELHASZNÁLÓI BÉTA (2026-09-09, korábbi zárt béta
+// szakasz után) — a Védett Útvonal mostantól BÁRMELY bejelentkezett,
+// regisztrált felhasználó számára elérhető, KIJELENTKEZETT/anonim látogató
+// számára NEM (lásd access.ts requireVedettRouteAccess() ->
+// requireVedettRouteAuthenticated()). Ez a korábban előkészített
+// "authenticated_users" szint most VÁLIK AKTÍVVÁ — a korábbi "beta_testers"
+// (admin VAGY explicit `vedett_route_beta` pilot_access grant) szakasz
+// lezárult; a grant-alapú infrastruktúra (lásd VEDETT_ROUTE_BETA_FEATURE_KEY,
+// app/admin/tesztelok) VÁLTOZATLANUL megmarad backwards compatibility és a
+// más pilot modulok (vedett-jelzes, vedett-partner, vedettmunka) miatt, de a
+// Védett Útvonal hozzáférése többé NEM függ tőle. A "public" szint továbbra
+// sem aktív — az egy jövőbeli, anonim-hozzáférésű release döntés esetén
+// kapcsolható be (egyetlen sor módosítása, a route/API/RLS réteg már
+// felkészült rá, lásd access.ts switch ága).
 //
 // FONTOS: ez a konstans A JOGOSULTSÁGI MODELLT írja le — TELJESEN FÜGGETLEN
 // a VEDETT_ROUTE_ENABLED globális kill switch-től (lásd
 // isVedettRouteFeatureEnabled() lent). A kettő EGYÜTT dönt: a feature flag
 // nélkül SENKI (admin sem) nem fér hozzá; a feature flaggel EGYÜTT ez a
-// konstans dönti el, hogy a bekapcsolt funkción belül KIK.
-export const VEDETT_ROUTE_ACCESS_LEVEL: VedettRouteAccessLevel = "beta_testers";
+// konstans dönti el, hogy a bekapcsolt funkción belül KIK (jelenleg: minden
+// bejelentkezett felhasználó).
+export const VEDETT_ROUTE_ACCESS_LEVEL: VedettRouteAccessLevel = "authenticated_users";
 
 // A "profiles.pilot_access" tömbben tárolt kulcs, amivel egy admin egy
 // felhasználót Védett Útvonal béta-tesztelővé tehet (lásd

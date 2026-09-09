@@ -1,18 +1,17 @@
 // lib/vedett-route/config.ts + access.ts — E. pont: "Auth architektúra".
 //
-// FRISSÍTVE (2026-09-09, ZÁRT BÉTA HOZZÁFÉRÉS): ez a fájl korábban azt
-// várta, hogy VEDETT_ROUTE_ACCESS_LEVEL mindig "admin_only" legyen, és
-// hogy access.ts csak KÉTÁGÚ (authenticated_users / admin_only)
-// logika alapján döntsön. Ez a feltevés SZÁNDÉKOSAN elavulttá vált: a
-// "ZÁRT BÉTA HOZZÁFÉRÉS + MENÜRENDSZER" sprint aktiválta a korábban csak
-// előkészített "beta_testers" szintet (lásd lib/vedett-route/config.ts),
-// és access.ts requireVedettRouteAccess()-e mostantól HÁROMÁGÚ:
-//   authenticated_users -> requireVedettRouteAuthenticated()
-//   beta_testers         -> requireVedettRouteBetaAccess()
-//   egyéb (pl. admin_only) -> requireVedettRouteAdmin()  [fallback]
-// A jelen fájl ezt az ÚJ, szándékos architektúrát ellenőrzi — NEM állítja
-// vissza a production kódot admin_only-ra, csak a regressziós tesztet
-// igazítja a már megvalósított, szándékos állapothoz.
+// FRISSÍTVE (2026-09-09, "Zárt béta → nyilvános, regisztrált felhasználói
+// béta" release): ez a fájl korábban azt várta, hogy VEDETT_ROUTE_ACCESS_LEVEL
+// "beta_testers" legyen (admin VAGY explicit `vedett_route_beta` pilot_access
+// grant szükséges). Ez a feltevés SZÁNDÉKOSAN elavulttá vált: a Védett
+// Útvonal a jelen release-től BÁRMELY bejelentkezett, regisztrált
+// felhasználó számára elérhető — a "authenticated_users" szint, ami korábban
+// csak előkészítve, de nem aktívan volt jelen access.ts-ben, most VÁLIK
+// AKTÍVVÁ. access.ts requireVedettRouteAccess() HÁROMÁGÚ döntése (és a
+// beta_testers/admin_only ágak) NEM változott — csak a config.ts konstans.
+// A jelen fájl ezt az ÚJ, szándékos állapotot ellenőrzi — NEM állítja vissza
+// a production kódot beta_testers-re vagy admin_only-ra, csak a regressziós
+// tesztet igazítja a már megvalósított, szándékos architektúrához.
 //
 // FONTOS: ez STATIKUS regressziós teszt. A VEDETT_ROUTE_ACCESS_LEVEL és
 // VEDETT_ROUTE_BETA_FEATURE_KEY konstansokat valóban futásidőben
@@ -31,17 +30,12 @@
 // forráskód ténylegesen a VEDETT_ROUTE_ACCESS_LEVEL alapján ágazik-e.
 //
 // ROBUSZTUSSÁG (2026-09-09, integrate/vedett-utvonal-beta cherry-pick
-// audit): a korábbi verzió a függvénytest kivágásához egy sor elejére
-// (nem beljebb húzva) várt záró kapcsos zárójelre épülő, LF-specifikus
-// regexet használt. Ez törékeny: CRLF sorvégek, Prettier-formázás, vagy egy
-// szintaktikailag irreleváns beljebb-húzási eltérés is hamis negatívot
-// okozhatott, ANÉLKÜL, hogy a mögötte lévő biztonsági logika ténylegesen
-// megváltozott volna. Ezért a függvénytest kivágása mostantól egy
-// DETERMINISZTIKUS, kapcsos-zárójel-mélység alapú extractFunctionSource()
-// helperen keresztül történik, ami sortörés-formátumtól (LF/CRLF),
-// whitespace-től és a formázási stílustól függetlenül, kizárólag a
-// tényleges nyitó/záró kapcsos zárójelek egyensúlya alapján találja meg a
-// függvény végét (string- és kommentliterálokat kihagyva).
+// audit): a függvénytest kivágása egy DETERMINISZTIKUS, kapcsos-zárójel-
+// mélység alapú extractFunctionSource() helperen keresztül történik, ami
+// sortörés-formátumtól (LF/CRLF), whitespace-től és a formázási stílustól
+// függetlenül, kizárólag a tényleges nyitó/záró kapcsos zárójelek egyensúlya
+// alapján találja meg a függvény végét (string- és kommentliterálokat
+// kihagyva).
 //
 //   node --test __tests__/vedett-route/access-architecture.test.ts
 
@@ -81,21 +75,15 @@ function extractFunctionSource(src: string, name: string): string | null {
 
   const start = sigMatch.index;
 
-  // A paraméterlista nyitó '('-je közvetlenül a signature-egyezés végén
-  // van — innen, zárójel-mélység számlálással kell megtalálni a
-  // paraméterlistát lezáró ')'-t.
-  let parenDepth = 1; // a nyitó '(' már elfogyott a signature match-ben
+  let parenDepth = 1;
   let i = sigMatch.index + sigMatch[0].length;
   for (; i < src.length && parenDepth > 0; i++) {
     const c = src[i];
     if (c === "(") parenDepth++;
     else if (c === ")") parenDepth--;
   }
-  if (parenDepth !== 0) return null; // nem egyensúlyban lévő paraméterlista
+  if (parenDepth !== 0) return null;
 
-  // Innentől (a paraméterlista lezárása után, egy esetleges visszatérési
-  // típus-annotáción átugorva) az ELSŐ '{' már a függvénytest nyitó
-  // kapcsos zárójele.
   const braceStart = src.indexOf("{", i);
   if (braceStart === -1) return null;
 
@@ -117,7 +105,7 @@ function extractFunctionSource(src: string, name: string): string | null {
       continue;
     }
     if (inString) {
-      if (c === "\\") { j++; continue; } // escapelt karakter — átugorjuk
+      if (c === "\\") { j++; continue; }
       if (c === inString) inString = null;
       continue;
     }
@@ -135,26 +123,25 @@ function extractFunctionSource(src: string, name: string): string | null {
       }
     }
   }
-  return null; // nem talált egyensúlyban lévő záró '}'-t (hibás forrás)
+  return null;
 }
 
-// ── A) ────────────────────────────────────────────────────────────────────
-test("A) VEDETT_ROUTE_ACCESS_LEVEL jelenleg 'beta_testers' (a ZÁRT BÉTA szint aktív — SZÁNDÉKOS, nem admin_only)", () => {
-  assert.equal(VEDETT_ROUTE_ACCESS_LEVEL, "beta_testers");
+// ── config szint ────────────────────────────────────────────────────────
+test("A) VEDETT_ROUTE_ACCESS_LEVEL jelenleg 'authenticated_users' (a PUBLIKUS, REGISZTRÁLT FELHASZNÁLÓI BÉTA szint aktív — SZÁNDÉKOS, nem beta_testers/admin_only)", () => {
+  assert.equal(VEDETT_ROUTE_ACCESS_LEVEL, "authenticated_users");
 });
 
-test("access.ts exportálja a requireVedettRouteAdmin függvényt", () => {
+test("access.ts exportálja a requireVedettRouteAdmin függvényt (admin_only fallback, megmarad)", () => {
   const src = readAccessSource();
   assert.match(src, /export\s+async\s+function\s+requireVedettRouteAdmin\s*\(/);
 });
 
-test("access.ts exportálja a requireVedettRouteAuthenticated függvényt (előkészítve, jelenleg nem aktív hívási útvonal)", () => {
+test("access.ts exportálja a requireVedettRouteAuthenticated függvényt (az AKTÍV hívási útvonal az authenticated_users szinten)", () => {
   const src = readAccessSource();
   assert.match(src, /export\s+async\s+function\s+requireVedettRouteAuthenticated\s*\(/);
 });
 
-// ── B) ────────────────────────────────────────────────────────────────────
-test("B) access.ts exportálja a requireVedettRouteBetaAccess függvényt (a beta_testers szint tényleges implementációja)", () => {
+test("access.ts exportálja a requireVedettRouteBetaAccess függvényt (a korábbi beta_testers szint implementációja — megmarad backwards compatibility / rollback miatt, jelenleg nem aktív ág)", () => {
   const src = readAccessSource();
   assert.match(src, /export\s+async\s+function\s+requireVedettRouteBetaAccess\s*\(/);
 });
@@ -164,29 +151,47 @@ test("access.ts exportálja a requireVedettRouteAccess függvényt", () => {
   assert.match(src, /export\s+async\s+function\s+requireVedettRouteAccess\s*\(/);
 });
 
-test("requireVedettRouteAuthenticated NEM végez admin/role ellenőrzést — csak bejelentkezést", () => {
+// ── C/D/E/F/G) requireVedettRouteAuthenticated() — az aktív ág ─────────────
+test("C) requireVedettRouteAuthenticated(): kijelentkezett/nincs user -> 401 Unauthorized", () => {
   const src = readAccessSource();
   const fnSrc = extractFunctionSource(src, "requireVedettRouteAuthenticated");
-  assert.ok(fnSrc, "nem található requireVedettRouteAuthenticated függvénytest");
-  assert.doesNotMatch(fnSrc!, /profiles|role\s*!==\s*"admin"|createAdminClient/);
+  assert.ok(fnSrc, "requireVedettRouteAuthenticated() függvénynek léteznie kell");
+  assert.match(fnSrc!, /if \(!user\)/);
+  assert.match(fnSrc!, /status:\s*401/);
+});
+
+test("D/E/F/G) requireVedettRouteAuthenticated() NEM végez admin/role/pilot_access ellenőrzést — MINDEN bejelentkezett felhasználó (normál user, admin, üres pilot_access, más modul grantje) egyformán PASS-ol, kizárólag a bejelentkezés ténye dönt", () => {
+  const src = readAccessSource();
+  const fnSrc = extractFunctionSource(src, "requireVedettRouteAuthenticated");
+  assert.ok(fnSrc, "requireVedettRouteAuthenticated() függvénynek léteznie kell");
+  // Nincs profil-lekérdezés, admin client, role vagy pilot_access hivatkozás
+  // — a döntés kizárólag a supabase.auth.getUser() eredményén alapul.
+  assert.doesNotMatch(
+    fnSrc!,
+    /profiles|pilot_access|pilotAccess|role\s*!==\s*"admin"|role\s*===\s*"admin"|createAdminClient/,
+    "requireVedettRouteAuthenticated() nem hivatkozhat role/pilot_access/profiles adatra — minden bejelentkezett usernek egyformán PASS-olnia kell"
+  );
+  // Bejelentkezett user esetén feltétel nélkül { ok: true, userId } jön
+  // vissza — nincs második, szűkítő feltétel a !user ág után.
+  assert.match(fnSrc!, /return\s*\{\s*ok:\s*true,\s*userId:\s*user\.id\s*\};/);
 });
 
 // ── B/C/D) HÁROMÁGÚ útvonalválasztás ────────────────────────────────────────
-test("B/C/D) access.ts forráskódja ténylegesen HÁROMÁGÚAN dönt VEDETT_ROUTE_ACCESS_LEVEL alapján: authenticated_users -> requireVedettRouteAuthenticated, beta_testers -> requireVedettRouteBetaAccess, egyéb -> requireVedettRouteAdmin (fallback)", () => {
+test("B/C/D) access.ts forráskódja ténylegesen HÁROMÁGÚAN dönt VEDETT_ROUTE_ACCESS_LEVEL alapján: authenticated_users -> requireVedettRouteAuthenticated, beta_testers -> requireVedettRouteBetaAccess, egyéb -> requireVedettRouteAdmin (fallback) — ez a switch NEM változott, csak a config.ts konstans", () => {
   const src = readAccessSource();
   assert.match(
     src,
     /VEDETT_ROUTE_ACCESS_LEVEL\s*===\s*"authenticated_users"\s*\?\s*await requireVedettRouteAuthenticated\(\)\s*:\s*VEDETT_ROUTE_ACCESS_LEVEL\s*===\s*"beta_testers"\s*\?\s*await requireVedettRouteBetaAccess\(\)\s*:\s*await requireVedettRouteAdmin\(\)/,
-    "a requireVedettRouteAccess()-nek a régi kétágú (authenticated/admin) helyett HÁROMÁGÚ elágazást kell tartalmaznia, a beta_testers ággal requireVedettRouteBetaAccess()-re mutatva"
+    "a requireVedettRouteAccess()-nek HÁROMÁGÚ elágazást kell tartalmaznia, az authenticated_users ággal requireVedettRouteAuthenticated()-re mutatva"
   );
 });
 
-test("C) az 'authenticated_users' ág VÁLTOZATLANUL megmaradt — a háromágú kifejezésben szó szerint jelen van", () => {
+test("az 'authenticated_users' ág szó szerint jelen van a háromágú kifejezésben", () => {
   const src = readAccessSource();
   assert.match(src, /VEDETT_ROUTE_ACCESS_LEVEL\s*===\s*"authenticated_users"/);
 });
 
-test("D) az 'admin_only' (és minden más, nem authenticated_users/beta_testers) eset a requireVedettRouteAdmin() FALLBACK ágra esik — nincs elveszett admin-only védelem", () => {
+test("az 'admin_only' (és minden más, nem authenticated_users/beta_testers) eset a requireVedettRouteAdmin() FALLBACK ágra esik — nincs elveszett admin-only védelem", () => {
   const src = readAccessSource();
   const fnSrc = extractFunctionSource(src, "requireVedettRouteAccess");
   assert.ok(fnSrc, "requireVedettRouteAccess() függvénynek léteznie kell");
@@ -197,43 +202,28 @@ test("D) az 'admin_only' (és minden más, nem authenticated_users/beta_testers)
   );
 });
 
-// ── E/F/G/H) hasVedettRouteBetaAccess() döntési logika ─────────────────────
-test("E) admin ág feltétel nélkül, a grant-ellenőrzés ELŐTT igazat ad — admin grant nélkül is hozzáfér", () => {
+// ── hasVedettRouteBetaAccess() — megmaradó, jelenleg nem aktív logika ──────
+test("hasVedettRouteBetaAccess(): admin ág feltétel nélkül, a grant-ellenőrzés ELŐTT igazat ad (a beta_testers ág logikája, backwards-compat, jelenleg nem az aktív útvonal)", () => {
   const src = readAccessSource();
   assert.match(src, /if \(profile\.role === "admin"\) return true;/);
 });
 
-test("F) a 'vedett_route_beta' pilot_access grantet hordozó felhasználó (nem admin) hozzáfér — a nem-admin ág pontosan VEDETT_ROUTE_BETA_FEATURE_KEY-t nézi", () => {
+test("hasVedettRouteBetaAccess(): a 'vedett_route_beta' pilot_access kulcs-összehasonlítás EXAKT maradt", () => {
   const src = readAccessSource();
   assert.equal(VEDETT_ROUTE_BETA_FEATURE_KEY, "vedett_route_beta");
   assert.match(src, /pilotAccess\.includes\(VEDETT_ROUTE_BETA_FEATURE_KEY\)/);
 });
 
-test("G) normál, bejelentkezett (nem admin, nincs grant) felhasználó TILTOTT — nincs implicit 'true' fallback, a függvény false-ra fut ki", () => {
+test("hasVedettRouteBetaAccess(): nincs profil esetén false, nincs implicit 'true' fallback", () => {
   const src = readAccessSource();
   assert.match(src, /if \(!profile\) return false;/);
-  // A nem-admin ág visszatérési értéke maga a pilotAccess.includes(...)
-  // logikai kifejezés eredménye — nincs utána feltétlen `return true`.
   const fnSrc = extractFunctionSource(src, "hasVedettRouteBetaAccess");
   assert.ok(fnSrc, "hasVedettRouteBetaAccess() függvénynek léteznie kell");
   assert.match(fnSrc!, /return pilotAccess\.includes\(VEDETT_ROUTE_BETA_FEATURE_KEY\);\s*\}$/);
 });
 
-test("H) egy MÁSIK pilot_access modul grantje (pl. 'vedettmunka') nem ad Védett Útvonal jogot — a kulcs-összehasonlítás EXAKT, nem 'bármilyen grant elég'", () => {
-  const src = readAccessSource();
-  assert.ok(
-    !/pilotAccess\.length\s*>\s*0/.test(src),
-    "nem szabad 'bármilyen pilot modul grantje elég' típusú logikának lennie"
-  );
-  assert.ok(
-    !/pilotAccess\.includes\(["'`](?!vedett_route_beta)/.test(src) ||
-      /pilotAccess\.includes\(VEDETT_ROUTE_BETA_FEATURE_KEY\)/.test(src),
-    "a hozzáférési döntésnek a VEDETT_ROUTE_BETA_FEATURE_KEY konstansra kell szűkülnie, nem egy másik/hardcode-olt kulcsra"
-  );
-});
-
-// ── I) globális kill switch — admin/tester sem bypassolja ──────────────────
-test("I) VEDETT_ROUTE_ENABLED=false esetén MÉG admin/tester hozzáférés-check sikere UTÁN is Forbidden a válasz — nincs admin/tester-specifikus bypass a kill switch körül", () => {
+// ── A/B) globális kill switch — admin/user sem bypassolja ──────────────────
+test("A/B) VEDETT_ROUTE_ENABLED=false esetén MÉG a sikeres auth/permission check UTÁN is Forbidden a válasz — nincs admin- vagy user-specifikus bypass a kill switch körül, ez MINDEN ágra (authenticated_users, beta_testers, admin_only) egyformán vonatkozik", () => {
   const src = readAccessSource();
   const fnSrc = extractFunctionSource(src, "requireVedettRouteAccess");
   assert.ok(fnSrc, "requireVedettRouteAccess() függvénynek léteznie kell");
@@ -243,11 +233,12 @@ test("I) VEDETT_ROUTE_ENABLED=false esetén MÉG admin/tester hozzáférés-chec
   const surrounding = fnSrc!.slice(killSwitchIdx, killSwitchIdx + 300);
   assert.ok(
     !/role === "admin"/.test(surrounding) && !/isAdmin/.test(surrounding),
-    "a kill switch ellenőrzés közelében nem szabad admin/tester-bypass feltételnek lennie — a flag mindenkit kizár, ha ki van kapcsolva"
+    "a kill switch ellenőrzés közelében nem szabad admin/user-bypass feltételnek lennie — a flag mindenkit kizár, ha ki van kapcsolva"
   );
 });
 
-test("rest-points API route-ok requireVedettRouteAccess()-t hívnak (list/create)", () => {
+// ── K) közös access guard minden route-on ──────────────────────────────────
+test("K) rest-points API route-ok requireVedettRouteAccess()-t hívnak (list/create)", () => {
   const src = fs.readFileSync(
     path.join(process.cwd(), "app", "api", "rest-points", "route.ts"),
     "utf-8"
@@ -255,7 +246,7 @@ test("rest-points API route-ok requireVedettRouteAccess()-t hívnak (list/create
   assert.match(src, /requireVedettRouteAccess\s*\(/);
 });
 
-test("rest-points/[id] API route-ok requireVedettRouteAccess()-t hívnak (update/delete)", () => {
+test("K) rest-points/[id] API route-ok requireVedettRouteAccess()-t hívnak (update/delete)", () => {
   const src = fs.readFileSync(
     path.join(process.cwd(), "app", "api", "rest-points", "[id]", "route.ts"),
     "utf-8"

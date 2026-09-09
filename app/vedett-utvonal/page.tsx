@@ -1,8 +1,9 @@
-// /vedett-utvonal — Védett Útvonal ZÁRT BÉTA, publikus (nem /admin alatti)
-// oldal a menürendszerbe integrált verzióhoz (2026-09-09).
+// /vedett-utvonal — Védett Útvonal PUBLIKUS, REGISZTRÁLT FELHASZNÁLÓI BÉTA
+// (2026-09-09, korábbi zárt béta szakasz után), publikus (nem /admin alatti)
+// oldal a menürendszerbe integrált verzióhoz.
 //
-// SZÁNDÉKOSAN KÜLÖN oldal az /admin/vedett-utvonal-tól: EZ az oldal a
-// bejelentkezett admin/béta-tesztelő felhasználóknak szól, és KIZÁRÓLAG a
+// SZÁNDÉKOSAN KÜLÖN oldal az /admin/vedett-utvonal-tól: EZ az oldal
+// BÁRMELY bejelentkezett, regisztrált felhasználónak szól, és KIZÁRÓLAG a
 // keresési/útvonaltervezési felületet (VedettUtvonalSearchForm — ami
 // magában foglalja a megosztott térképet, GPS/"Aktuális helyzetem" origint,
 // pihenőpont-discovery-t, route-to-rest-point-ot és a resume flow-t) adja
@@ -13,24 +14,24 @@
 // SZERVER OLDALI VÉDELEM (Section 8, "Ne csak CSS-sel rejtsd el"):
 // - Nincs bejelentkezve → redirect("/belepes") — ugyanaz a bejelentkezési
 //   útvonal, amit a HeaderClient "Belépés" gombja is használ.
-// - Bejelentkezve, de nincs jogosultsága (nem admin ÉS nincs
-//   `vedett_route_beta` pilot_access grant) → 403-ekvivalens app-szintű
-//   üzenet, NEM redirect — így a felhasználó érti, MIÉRT nem fér hozzá,
-//   ahelyett hogy csak visszadobná a főoldalra.
-// - VEDETT_ROUTE_ENABLED=false → a globális kill switch mindenkit (adminot
-//   is) kizár, ugyanazzal az üzenettel mint egy jogosultság nélküli
-//   felhasználó esetén, hogy ne szivárogtassa ki, hogy a funkció egyébként
-//   élesítve van-e valakinek.
+// - Bejelentkezve → hozzáfér (NEM kell admin szerep vagy `vedett_route_beta`
+//   pilot_access grant többé — a korábbi zárt béta grant-ellenőrzés
+//   lezárult, lásd config.ts VEDETT_ROUTE_ACCESS_LEVEL).
+// - VEDETT_ROUTE_ENABLED=false → a globális kill switch MINDENKIT
+//   (bejelentkezett, admin is) kizár, ugyanazzal az üzenettel, hogy ne
+//   szivárogtassa ki, hogy a funkció egyébként élesítve van-e valakinek.
 //
-// Ez a check UGYANAZT a hasVedettRouteBetaAccess()-t hívja, mint a
-// lib/vedett-route/access.ts requireVedettRouteBetaAccess() az API
-// route-okon — nincs duplikált jogosultsági logika, csak a válasz formája
-// más (redirect/JSX itt, JSON válasz ott).
+// Ez a check UGYANAZT a VEDETT_ROUTE_ACCESS_LEVEL háromágú modellt követi,
+// mint a lib/vedett-route/access.ts requireVedettRouteAccess() az API
+// route-okon — nincs duplikált/párhuzamos jogosultsági rendszer, csak a
+// válasz formája más (redirect/JSX itt, JSON válasz ott). A "beta_testers"
+// és "admin_only" ágak a switch-ben megmaradnak (a grant/admin infrastruktúra
+// nem törlődik), de jelenleg az "authenticated_users" ág aktív.
 
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getCurrentUserAndProfile } from "@/lib/data";
-import { isVedettRouteFeatureEnabled } from "@/lib/vedett-route/config";
+import { isVedettRouteFeatureEnabled, VEDETT_ROUTE_ACCESS_LEVEL } from "@/lib/vedett-route/config";
 import { hasVedettRouteBetaAccess } from "@/lib/vedett-route/access";
 import VedettUtvonalSearchForm from "@/components/vedett-utvonal/VedettUtvonalSearchForm";
 
@@ -49,19 +50,30 @@ export default async function VedettUtvonalPage() {
   }
 
   const enabled = isVedettRouteFeatureEnabled();
-  const allowed =
-    enabled &&
-    hasVedettRouteBetaAccess(
-      profile ? { role: profile.role, pilotAccess: profile.pilotAccess ?? [] } : null
-    );
+
+  // Ugyanaz a háromágú döntés, mint access.ts requireVedettRouteAccess()-ben
+  // (nem hozunk létre új/párhuzamos jogosultsági rendszert, csak a szerver
+  // komponens JSX-válaszához szükséges boolean formában ismételjük meg):
+  //   authenticated_users -> a fent már ellenőrzött bejelentkezés elég
+  //   beta_testers         -> hasVedettRouteBetaAccess() (admin VAGY grant)
+  //   egyéb (admin_only)    -> csak admin
+  const hasLevelAccess: boolean =
+    VEDETT_ROUTE_ACCESS_LEVEL === "authenticated_users"
+      ? true
+      : VEDETT_ROUTE_ACCESS_LEVEL === "beta_testers"
+        ? hasVedettRouteBetaAccess(
+            profile ? { role: profile.role, pilotAccess: profile.pilotAccess ?? [] } : null
+          )
+        : profile?.role === "admin";
+
+  const allowed = enabled && hasLevelAccess;
 
   if (!allowed) {
     return (
       <div className="mx-auto max-w-2xl px-4 py-16 text-center sm:px-6">
-        <h1 className="text-xl font-bold text-sni-text">Nincs hozzáférésed ehhez a béta funkcióhoz.</h1>
+        <h1 className="text-xl font-bold text-sni-text">A Védett Útvonal funkció jelenleg ki van kapcsolva.</h1>
         <p className="mt-3 text-gray-600">
-          A Védett Útvonal jelenleg zárt béta tesztelés alatt áll, és csak meghívott
-          tesztelők számára érhető el.
+          A Védett Útvonal (BÉTA) funkció jelenleg nem elérhető. Nézz vissza később.
         </p>
         <Link href="/" className="mt-6 inline-block text-sm font-semibold text-sni-brand-blue hover:underline">
           ← Vissza a főoldalra

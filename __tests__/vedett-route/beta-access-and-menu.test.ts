@@ -1,43 +1,48 @@
-// VÉDETT ÚTVONAL — ZÁRT BÉTA HOZZÁFÉRÉS + MENÜRENDSZER (2026-09-09)
-// Regresszió-tesztek a specifikáció Section 14 (A–R) tesztlistájához.
+// VÉDETT ÚTVONAL — ZÁRT BÉTA → NYILVÁNOS, REGISZTRÁLT FELHASZNÁLÓI BÉTA
+// (2026-09-09 release)
 //
-// Ugyanazt a mintát követi, mint a projekt már meglévő
-// single-shared-map-and-current-location.test.ts / map-rendering-fix.test.ts
-// fájljai: mivel a repo NEM tartalmaz jsdom/@testing-library/react-t, és a
-// lib/vedett-route/access.ts a "next/server" modult importálja (ami
-// standalone `node --test` alatt, Next.js bundler nélkül nem oldható fel —
-// lásd a fájl elején), a jogosultsági LOGIKÁT forráskód-szintű,
-// strukturális regresszió-tesztekkel fedjük le. A ténylegesen futtatható,
-// DB/HTTP nélküli egységteszt csak azokra a részekre vonatkozik, amik pure,
-// self-contained modulokból importálhatók (lib/vedett-route/config.ts).
+// FRISSÍTVE: ez a fájl korábban a "beta_testers" szintet (admin VAGY
+// explicit `vedett_route_beta` pilot_access grant) ellenőrizte. A jelen
+// release SZÁNDÉKOSAN aktiválta az "authenticated_users" szintet: a Védett
+// Útvonal mostantól BÁRMELY bejelentkezett, regisztrált felhasználó számára
+// elérhető, kijelentkezett/anonim látogató számára NEM. A grant-alapú
+// `hasVedettRouteBetaAccess()` logika és a hozzá tartozó admin/tesztelő
+// infrastruktúra (app/admin/tesztelok, setPilotAccess, migráció) VÁLTOZATLAN
+// marad — csak a Védett Útvonal menü/oldal/API hozzáférése nem függ tőle
+// többé. Ez a fájl az ÚJ, szándékos állapotot ellenőrzi.
+//
+// Ugyanazt a mintát követi, mint korábban: mivel a repo NEM tartalmaz
+// jsdom/@testing-library/react-t, és a lib/vedett-route/access.ts a
+// "next/server" modult importálja (ami standalone `node --test` alatt,
+// Next.js bundler nélkül nem oldható fel), a jogosultsági LOGIKÁT
+// forráskód-szintű, strukturális regresszió-tesztekkel fedjük le.
 //
 //   node --experimental-strip-types --test __tests__/vedett-route/beta-access-and-menu.test.ts
 //
-// LEFEDETTSÉG (A–R, a felhasználó Section 14 specifikációja szerint):
-//   A) admin -> access PASS grant nélkül
-//   B) tester grant -> access PASS
-//   C) sima bejelentkezett felhasználó -> access DENY
-//   D) kijelentkezve -> DENY
-//   E) lejárt grant -> DENY (N/A — lásd megjegyzés lent)
-//   F) visszavont/letiltott grant -> DENY
-//   G) VEDETT_ROUTE_ENABLED=false -> admin is DENY
-//   H) menü látható adminnak
-//   I) menü látható tesztelőnek
-//   J) menü NEM látható sima felhasználónak
-//   K) direkt oldal-URL blokkolva sima felhasználónak
-//   L) API 403 sima felhasználónak
-//   M) API PASS tesztelőnek
-//   N) API PASS adminnak
-//   O) sima felhasználó nem adhat magának hozzáférést
-//   P) admin grant/revoke működik
-//   Q) egy másik feature grantje nem ad Védett Útvonal hozzáférést
-//   R) PWA/mobil navigáció ugyanazt a hozzáférési logikát használja
+// LEFEDETTSÉG (a felhasználó minimum tesztlistája szerint):
+//   A) flag=false + admin -> DENY
+//   B) flag=false + user -> DENY
+//   C) logged-out -> 401 / redirect /belepes
+//   D) logged-in normal user -> PASS
+//   E) logged-in admin -> PASS
+//   F) user pilot_access üres -> PASS
+//   G) usernek csak más pilot grantje van -> PASS
+//   H) menü belépett normál usernek látszik
+//   I) menü kijelentkezett usernek nem látszik
+//   J) desktop/mobile ugyanaz
+//   K) minden route API közös access guardot használ
+//   L) GPS privacy regresszió változatlan
+//
+// A korábbi grant-specifikus tesztek (setPilotAccess admin-check, revoke,
+// self-escalation trigger, feature-key reuse) MEGMARADNAK, mert az a
+// infrastruktúra változatlan — csak "backwards-compat, jelenleg nem az
+// aktív hozzáférési útvonal" címkével.
 
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { VEDETT_ROUTE_BETA_FEATURE_KEY } from "../../lib/vedett-route/config.ts";
+import { VEDETT_ROUTE_BETA_FEATURE_KEY, VEDETT_ROUTE_ACCESS_LEVEL } from "../../lib/vedett-route/config.ts";
 
 const ROOT = join(import.meta.dirname, "..", "..");
 const ACCESS_PATH = join(ROOT, "lib", "vedett-route", "access.ts");
@@ -126,8 +131,8 @@ const adminConfigSrc = readFileSync(ADMIN_CONFIG_PATH, "utf-8");
 const teszteloClientSrc = readFileSync(TESZTELO_CLIENT_PATH, "utf-8");
 const migrationSrc = readFileSync(MIGRATION_PATH, "utf-8");
 
-describe("Feature key — EGYETLEN forrás, újrahasznosított rendszer (nincs duplikáció)", () => {
-  test("VEDETT_ROUTE_BETA_FEATURE_KEY valódi importált értéke 'vedett_route_beta'", () => {
+describe("Feature key — EGYETLEN forrás, újrahasznosított rendszer (nincs duplikáció, backwards-compat)", () => {
+  test("VEDETT_ROUTE_BETA_FEATURE_KEY valódi importált értéke 'vedett_route_beta' (a grant-infrastruktúra megmarad, csak nem az aktív hozzáférési útvonal)", () => {
     assert.equal(VEDETT_ROUTE_BETA_FEATURE_KEY, "vedett_route_beta");
   });
 
@@ -139,68 +144,61 @@ describe("Feature key — EGYETLEN forrás, újrahasznosított rendszer (nincs d
   });
 });
 
-describe("A/B/C/Q) hasVedettRouteBetaAccess() döntési logika", () => {
-  test("A) admin ág feltétel nélkül (grant-check ELŐTT) igazat ad vissza", () => {
+describe("hasVedettRouteBetaAccess() döntési logika — MEGMARAD, de már NEM az aktív hozzáférési útvonal a Védett Útvonalhoz", () => {
+  test("admin ág feltétel nélkül (grant-check ELŐTT) igazat ad vissza", () => {
     assert.match(
       accessSrc,
       /if \(profile\.role === "admin"\) return true;/,
-      "az admin ágnak a pilotAccess ellenőrzés ELŐTT kell visszatérnie, hogy admin sose igényeljen külön grantet"
+      "az admin ágnak a pilotAccess ellenőrzés ELŐTT kell visszatérnie"
     );
   });
 
-  test("B/Q) a nem-admin ág KIZÁRÓLAG a VEDETT_ROUTE_BETA_FEATURE_KEY kulcsot nézi — nem azt, hogy a pilotAccess tömb nem üres", () => {
+  test("a nem-admin ág KIZÁRÓLAG a VEDETT_ROUTE_BETA_FEATURE_KEY kulcsot nézi — egy MÁSIK modul (pl. 'vedettmunka') grantje NEM ad Védett Útvonal hozzáférést, ha ez az ág valaha ismét aktívvá válna", () => {
     assert.match(
       accessSrc,
       /pilotAccess\.includes\(VEDETT_ROUTE_BETA_FEATURE_KEY\)/,
-      "a pontos kulcsra kell szűrni, hogy egy MÁSIK modul (pl. 'vedettmunka') grantje NE adjon Védett Útvonal hozzáférést"
+      "a pontos kulcsra kell szűrni"
     );
     assert.ok(
       !/pilotAccess\.length\s*>\s*0/.test(accessSrc),
-      "nem szabad 'bármilyen pilot modul grantje elég' logikának lennie (ez Q tesztet sértené)"
+      "nem szabad 'bármilyen pilot modul grantje elég' logikának lennie"
     );
   });
 
-  test("C) nincs profil / nincs grant esetén a függvény false-t ad (nincs implicit 'true' fallback)", () => {
+  test("nincs profil / nincs grant esetén a függvény false-t ad (nincs implicit 'true' fallback)", () => {
     assert.match(accessSrc, /if \(!profile\) return false;/);
   });
 });
 
-describe("D) logged-out -> 401, a profil-lekérdezés ELŐTT", () => {
-  test("requireVedettRouteBetaAccess() a user hiányát 401-gyel zárja rövidre, mielőtt bármilyen profil/pilot_access adatot lekérne", () => {
-    const fnBody = extractFunctionSource(accessSrc, "requireVedettRouteBetaAccess");
-    assert.ok(fnBody, "requireVedettRouteBetaAccess() függvénynek léteznie kell");
-    const userCheckIdx = fnBody!.indexOf('status: 401');
-    const profileQueryIdx = fnBody!.indexOf('.from("profiles")');
-    assert.ok(userCheckIdx !== -1 && profileQueryIdx !== -1);
-    assert.ok(
-      userCheckIdx < profileQueryIdx,
-      "a 401 Unauthorized válasznak a profiles tábla lekérdezése ELŐTT kell megtörténnie"
+describe("C/D/E/F/G) requireVedettRouteAuthenticated() — az AKTÍV hozzáférési útvonal", () => {
+  test("C) logged-out -> 401 Unauthorized, mielőtt bármilyen profil/pilot_access adatot lekérne (nincs is profil-lekérdezés a függvényben)", () => {
+    const fnBody = extractFunctionSource(accessSrc, "requireVedettRouteAuthenticated");
+    assert.ok(fnBody, "requireVedettRouteAuthenticated() függvénynek léteznie kell");
+    assert.match(fnBody!, /if \(!user\)/);
+    assert.match(fnBody!, /status:\s*401/);
+    assert.doesNotMatch(fnBody!, /\.from\("profiles"\)/, "az authenticated_users ág nem kérdez le profilt — nincs mit 'előtte' futtatni");
+  });
+
+  test("D/E/F/G) bejelentkezett felhasználó (normál user, admin, üres pilot_access, VAGY csak más modul grantje) EGYFORMÁN PASS-ol — a döntés kizárólag a bejelentkezés tényén alapul, nincs role/pilot_access szűrés", () => {
+    const fnBody = extractFunctionSource(accessSrc, "requireVedettRouteAuthenticated");
+    assert.ok(fnBody, "requireVedettRouteAuthenticated() függvénynek léteznie kell");
+    assert.doesNotMatch(
+      fnBody!,
+      /profiles|pilot_access|pilotAccess|role\s*!==\s*"admin"|role\s*===\s*"admin"|createAdminClient/,
+      "D/E/F/G mind ugyanarra az invariánsra vezet vissza: nincs role/pilot_access alapú szűrés"
     );
+    assert.match(fnBody!, /return\s*\{\s*ok:\s*true,\s*userId:\s*user\.id\s*\};/);
   });
 });
 
-describe("E) lejárt grant — N/A, dokumentált korlátozás (a projekt tudatos döntése)", () => {
-  test("a pilot_access adatmodellnek nincs expires_at mezője — ez a meglévő rendszer újrahasznosításának ELFOGADOTT trade-offja, nem hiányzó implementáció", () => {
-    // A migráció fejléce explicit dokumentálja ezt a döntést — lásd Section
-    // 4/16 audit jegyzet. Ha valaha per-grant lejárat kell, azt egy KÜLÖN,
-    // additív migráció adhatja hozzá (a migrációs fájl rollback szekciója
-    // is jelzi, hogy ez a fájl nem érinti ezt a kérdést).
-    assert.match(migrationSrc, /nincs per-grant `expires_at` mező/);
-    assert.ok(
-      !/expires_at/i.test(adminActionsSrc),
-      "a jelenlegi grant/revoke akciók (setPilotAccess/listPilotTesters) szándékosan nem implementálnak expires_at kezelést"
-    );
-  });
-});
-
-describe("F/P) grant/revoke — setPilotAccess() (admin-only, meglévő akció, újrahasznosítva)", () => {
+describe("F/P) grant/revoke — setPilotAccess() (admin-only, meglévő akció, backwards-compat infrastruktúra, változatlan)", () => {
   test("setPilotAccess() admin-ellenőrzéssel kezdődik, mielőtt bármilyen írást végezne", () => {
     const fnBody = extractFunctionSource(adminActionsSrc, "setPilotAccess");
     assert.ok(fnBody, "setPilotAccess() függvénynek léteznie kell");
     assert.match(fnBody!, /if \(!\(await isCurrentUserAdmin\(\)\)\) throw new Error\("Unauthorized"\);/);
   });
 
-  test("F) revoke (enabled=false) a modul kulcsát KISZŰRI a tömbből (nem csak enabled=false flaget állít) — így hasVedettRouteBetaAccess().includes() azonnal false lesz", () => {
+  test("revoke (enabled=false) a modul kulcsát KISZŰRI a tömbből (nem csak enabled=false flaget állít)", () => {
     assert.match(
       adminActionsSrc,
       /current\.filter\(\(m\) => m !== module\)/,
@@ -214,13 +212,12 @@ describe("F/P) grant/revoke — setPilotAccess() (admin-only, meglévő akció, 
   });
 });
 
-describe("G) globális kill switch — admin SEM bypassolja", () => {
-  test("requireVedettRouteAccess() a VEDETT_ROUTE_ENABLED ellenőrzést az authCheck UTÁN, feltétel nélkül végzi — nincs admin-specifikus bypass ág", () => {
+describe("A/B) globális kill switch — admin/user SEM bypassolja, az authenticated_users ágon sem", () => {
+  test("A/B) requireVedettRouteAccess() a VEDETT_ROUTE_ENABLED ellenőrzést az authCheck UTÁN, feltétel nélkül végzi — nincs admin- vagy user-specifikus bypass ág, flag=false esetén MINDENKI (admin is, sima user is) DENY-t kap", () => {
     const fnBody = extractFunctionSource(accessSrc, "requireVedettRouteAccess");
     assert.ok(fnBody, "requireVedettRouteAccess() függvénynek léteznie kell");
     assert.match(fnBody!, /if \(!authCheck\.ok\) return authCheck;/);
     assert.match(fnBody!, /if \(!isVedettRouteFeatureEnabled\(\)\)/);
-    // Nincs "isAdmin" vagy hasonló bypass feltétel a flag-ellenőrzés körül.
     const killSwitchBlockIdx = fnBody!.indexOf("if (!isVedettRouteFeatureEnabled())");
     const surrounding = fnBody!.slice(killSwitchBlockIdx, killSwitchBlockIdx + 300);
     assert.ok(
@@ -230,89 +227,88 @@ describe("G) globális kill switch — admin SEM bypassolja", () => {
   });
 });
 
-describe("H/I/J/R) menü gating — HeaderClient.tsx", () => {
-  test("visiblePilotLinks EGYETLEN szűrt lista — deszktop ÉS mobil ugyanazt használja (nincs duplikált logika, ez fedi le R-t is)", () => {
+describe("H/I/J) menü gating — HeaderClient.tsx", () => {
+  test("visiblePilotLinks EGYETLEN szűrt lista — deszktop ÉS mobil ugyanazt használja (J: nincs duplikált logika)", () => {
     const usages = headerClientSrc.match(/visiblePilotLinks\.map/g) ?? [];
     assert.equal(usages.length, 2, "pontosan két helyen (desktop nav + mobil nav) kell renderelni ugyanazt a szűrt listát");
     const filterDefinitions = headerClientSrc.match(/PILOT_LINKS\.filter/g) ?? [];
     assert.equal(
       filterDefinitions.length,
       1,
-      "a PILOT_LINKS.filter(...) szűrésnek EGYETLEN helyen (a visiblePilotLinks definíciójában) kell megtörténnie — a desktop/mobil renderelés csak a már kiszámolt visiblePilotLinks-et használhatja, nem szűrhet újra"
+      "a PILOT_LINKS.filter(...) szűrésnek EGYETLEN helyen kell megtörténnie — a desktop/mobil renderelés csak a már kiszámolt visiblePilotLinks-et használja"
     );
   });
 
-  test("H) admin ág: a szűrő 'isAdmin ||' feltétellel bypassolja a pilotAccess ellenőrzést (a requiresFeatureFlag korláttól függetlenül)", () => {
+  test("H/I) a 'vedett_route_beta' bejegyzés saját, admin/grant-független szabályt kap: LÁTHATÓ minden bejelentkezett felhasználónak, ha a flag be van kapcsolva; NEM látható kijelentkezett usernek, MÉG akkor sem, ha a flag be van kapcsolva", () => {
+    // A filter callback nem külön named function — magát a speciális ágat
+    // vizsgáljuk a teljes forrásban szöveg-mintaként, mert ez egy inline
+    // arrow function egy .filter() hívásban, nem egy `function` deklaráció
+    // (amit extractFunctionSource() tudna kapcsos-zárójel-mélységgel kivágni).
+    const specialCaseMatch = headerClientSrc.match(
+      /if \(l\.key === "vedett_route_beta"\) \{[\s\S]*?return vedettRouteEnabled && isLoggedIn;/
+    );
+    assert.ok(
+      specialCaseMatch,
+      "a 'vedett_route_beta' kulcsnak külön, 'vedettRouteEnabled && isLoggedIn' feltételt kell visszaadnia — NEM admin/pilotAccess alapút"
+    );
+  });
+
+  test("H/I) a 'vedett_route_beta' különleges ág explicit a többi (isAdmin || pilotAccess.includes(...)) ág ELŐTT szerepel a filter()-ben, így az nem éri el/nem írja felül", () => {
+    const specialIdx = headerClientSrc.indexOf('if (l.key === "vedett_route_beta")');
+    const genericIdx = headerClientSrc.indexOf("return isAdmin || pilotAccess.includes(l.key);");
+    assert.ok(specialIdx !== -1 && genericIdx !== -1 && specialIdx < genericIdx);
+  });
+
+  test("a MÁSIK három pilot modul (vedett-jelzes, vedett-partner, vedettmunka) láthatósági szabálya VÁLTOZATLAN maradt: isAdmin || pilotAccess.includes(l.key)", () => {
     assert.match(headerClientSrc, /return isAdmin \|\| pilotAccess\.includes\(l\.key\);/);
   });
 
-  test("I) tesztelő ág: a 'vedett_route_beta' bejegyzésnek szerepelnie kell a PILOT_LINKS tömbben, a helyes href-fel", () => {
+  test("a 'vedett_route_beta' bejegyzésnek szerepelnie kell a PILOT_LINKS tömbben, a helyes href-fel, és BÉTA badge-dzsel", () => {
     assert.match(headerClientSrc, /key:\s*"vedett_route_beta",\s*href:\s*"\/vedett-utvonal"/);
+    assert.match(headerClientSrc, /key:\s*"vedett_route_beta"[^\n]*badge:\s*"BÉTA"/);
   });
 
-  test("J) sima felhasználónak (nem admin, nincs grant) a szűrő false-t ad — nincs 'mindig látszik' kivétel", () => {
-    // A filter callback két explicit feltételt tartalmaz (flag + admin-or-grant),
-    // whitelisting nélkül — nincs pl. `|| true` vagy hasonló bypass.
-    assert.ok(!/\|\|\s*true/.test(headerClientSrc));
+  test("a BÉTA badge mindkét (desktop + mobil) renderelési helyen megjelenik, ha a link objektumnak van badge mezője — nem sugall kész/garantált szolgáltatást, csak jelöl", () => {
+    const badgeRenders = headerClientSrc.match(/\{link\.badge && \(/g) ?? [];
+    assert.equal(badgeRenders.length, 2, "a badge-nek desktop és mobil nézetben is meg kell jelennie");
   });
 
-  test("a flag-védett bejegyzés (requiresFeatureFlag: true) NEM CSS-sel, hanem a filter() elhagyásával tűnik el — nincs 'hidden'/'display: none' a Védett Útvonal linkhez kötve", () => {
+  test("I) a flag-védett bejegyzés (requiresFeatureFlag: true) a MÁSIK három linkre NEM CSS-sel, hanem a filter() elhagyásával tűnik el", () => {
     assert.match(headerClientSrc, /if \(l\.requiresFeatureFlag && !vedettRouteEnabled\) return false;/);
   });
 
-  test("Header.tsx (szerver komponens) ténylegesen az isVedettRouteFeatureEnabled() valós flag-értéket adja át, nem hardcode-olt true/false-t", () => {
+  test("Header.tsx (szerver komponens) ténylegesen az isVedettRouteFeatureEnabled() valós flag-értéket ÉS a valódi bejelentkezési állapotot adja át, nem hardcode-olt értéket", () => {
     assert.match(headerSrc, /vedettRouteEnabled=\{isVedettRouteFeatureEnabled\(\)\}/);
+    assert.match(headerSrc, /isLoggedIn=\{!!user\}/);
     assert.match(headerSrc, /import \{ isVedettRouteFeatureEnabled \} from "@\/lib\/vedett-route\/config"/);
-  });
-
-  test("a régi, elavult 'Védett Útvonal szándékosan nincs a menüben' fejlesztői megjegyzés eltávolításra került", () => {
-    assert.ok(
-      !/szándékosan NEM szerepel itt/.test(headerClientSrc),
-      "a komment elavulttá vált, mióta a Védett Útvonal a menürendszer része lett zárt béta mögött"
-    );
   });
 });
 
-describe("K/L/M/N) szerver oldali oldal- és API-védelem", () => {
-  test("K) app/vedett-utvonal/page.tsx: kijelentkezett felhasználó redirect('/belepes')-t kap", () => {
+describe("K) szerver oldali oldal- és API-védelem — közös access guard", () => {
+  test("app/vedett-utvonal/page.tsx: kijelentkezett felhasználó redirect('/belepes')-t kap", () => {
     assert.match(pageSrc, /if \(!user\) \{\s*redirect\("\/belepes"\);/);
   });
 
-  test("K) app/vedett-utvonal/page.tsx: a hozzáférési döntés a KÖZÖS hasVedettRouteBetaAccess()-t hívja — nincs duplikált/eltérő logika az oldalon", () => {
-    assert.match(pageSrc, /import \{ hasVedettRouteBetaAccess \} from "@\/lib\/vedett-route\/access"/);
-    assert.match(pageSrc, /hasVedettRouteBetaAccess\(/);
+  test("app/vedett-utvonal/page.tsx: a hozzáférési döntés a KÖZÖS VEDETT_ROUTE_ACCESS_LEVEL háromágú modellt követi (nem egy hardcode-olt, csak-grant-alapú logikát) — a döntés jelenleg (authenticated_users) minden bejelentkezett usert átenged", () => {
+    assert.match(pageSrc, /import \{ isVedettRouteFeatureEnabled, VEDETT_ROUTE_ACCESS_LEVEL \} from "@\/lib\/vedett-route\/config"/);
+    assert.match(pageSrc, /VEDETT_ROUTE_ACCESS_LEVEL === "authenticated_users"\s*\n\s*\? true/);
   });
 
-  test("K) jogosulatlan, bejelentkezett felhasználó app-szintű üzenetet kap ('Nincs hozzáférésed ehhez a béta funkcióhoz.'), NEM engedi tovább a keresési formot", () => {
-    assert.match(pageSrc, /Nincs hozzáférésed ehhez a béta funkcióhoz\./);
-    // A VedettUtvonalSearchForm csak az `allowed` ágon kívül (a return előtt) töretlenül,
-    // az `allowed` check UTÁN renderelődik.
+  test("app/vedett-utvonal/page.tsx: a form csak az enabled+access ellenőrzés UTÁN (az `allowed` ágon kívül) renderelődik", () => {
     const allowedIdx = pageSrc.indexOf("if (!allowed)");
     const formRenderIdx = pageSrc.indexOf("<VedettUtvonalSearchForm");
     assert.ok(allowedIdx !== -1 && formRenderIdx !== -1 && allowedIdx < formRenderIdx);
   });
 
-  test("L/M/N) requireVedettRouteBetaAccess(): DENY -> 403 Forbidden JSON, PASS (tesztelő VAGY admin) -> { ok: true }", () => {
-    // ROBUSZTUSSÁG: a korábbi verzió egy pontos whitespace-re/üres sorra
-    // támaszkodó regexet használt annak bizonyítására, hogy a 403 blokk után
-    // közvetlenül a sikeres return jön — ez CRLF vagy eltérő sorköz-
-    // formázás esetén hamis negatívot adhat. A determinisztikusan kivágott
-    // függvénytesten dolgozva ugyanazt az invariánst (DENY jelen van, ÉS a
-    // sikeres return UTÁNA következik a forrásban) sorrend-alapú indexOf-fal
-    // ellenőrizzük, formázástól függetlenül.
-    const fnBody = extractFunctionSource(accessSrc, "requireVedettRouteBetaAccess");
-    assert.ok(fnBody, "requireVedettRouteBetaAccess() függvénynek léteznie kell");
-    assert.match(fnBody!, /status: 403/, "DENY esetén 403-at kell visszaadnia");
-    assert.match(fnBody!, /return \{ ok: true, userId: user\.id \};/, "PASS esetén { ok: true, userId } -t kell visszaadnia");
-    const denyIdx = fnBody!.indexOf("status: 403");
-    const passIdx = fnBody!.indexOf("return { ok: true, userId: user.id };");
+  test("A/B) flag=false esetén a bejelentkezett (akár admin) felhasználó is a 'funkció ki van kapcsolva' üzenetet kapja, NEM a régi 'zárt béta, csak meghívott tesztelőknek' szöveget", () => {
+    assert.match(pageSrc, /A Védett Útvonal funkció jelenleg ki van kapcsolva\./);
     assert.ok(
-      denyIdx < passIdx,
-      "a 403 DENY ágnak a forrásban a sikeres { ok: true } return ELŐTT kell állnia"
+      !/csak meghívott\s*\n?\s*tesztelők számára érhető el/.test(pageSrc),
+      "a régi, zárt béta szövegnek el kellett tűnnie, mert félrevezető lenne a publikus bétában"
     );
   });
 
-  test("L/M/N) mind a 6 meglévő Védett Útvonal API route a KÖZÖS requireVedettRouteAccess()-en keresztül fut — a beta_testers szint bevezetése egyetlen access.ts módosítással minden route-ra érvényes, route-fájlokat nem kellett módosítani", () => {
+  test("K) mind a Védett Útvonal API route-ok a KÖZÖS requireVedettRouteAccess()-en keresztül futnak — a szint-váltás egyetlen access.ts/config.ts módosítással minden route-ra érvényes, route-fájlokat nem kellett módosítani", () => {
     const apiRoutePaths = [
       join(ROOT, "app", "api", "rest-points", "route.ts"),
       join(ROOT, "app", "api", "rest-points", "[id]", "route.ts"),
@@ -330,12 +326,12 @@ describe("K/L/M/N) szerver oldali oldal- és API-védelem", () => {
   });
 });
 
-describe("O) sima felhasználó nem adhat magának hozzáférést", () => {
-  test("O) setPilotAccess() (az EGYETLEN írási útvonal a pilot_access mezőre) admin-only — kliens oldalon nincs közvetlen Supabase update", () => {
+describe("O) sima felhasználó nem adhat magának hozzáférést (backwards-compat infrastruktúra, változatlan)", () => {
+  test("setPilotAccess() (az EGYETLEN írási útvonal a pilot_access mezőre) admin-only — kliens oldalon nincs közvetlen Supabase update", () => {
     assert.match(adminActionsSrc, /if \(!\(await isCurrentUserAdmin\(\)\)\) throw new Error\("Unauthorized"\);/);
   });
 
-  test("O) a migráció DB-szintű védelmet is ad: self-escalation trigger a pilot_access oszlopra, a MEGLÉVŐ role-védelemmel (prevent_role_self_escalation) analóg mintát követve", () => {
+  test("a migráció DB-szintű védelmet is ad: self-escalation trigger a pilot_access oszlopra", () => {
     assert.match(migrationSrc, /prevent_pilot_access_self_escalation/);
     assert.match(
       migrationSrc,
@@ -344,7 +340,7 @@ describe("O) sima felhasználó nem adhat magának hozzáférést", () => {
     assert.match(migrationSrc, /create trigger profiles_prevent_pilot_access_escalation before update on public\.profiles/);
   });
 
-  test("a migráció additív/idempotens (nem destruktív) és tartalmaz rollback dokumentációt, ahogy a specifikáció kéri", () => {
+  test("a migráció additív/idempotens (nem destruktív) és tartalmaz rollback dokumentációt", () => {
     assert.match(migrationSrc, /add column if not exists pilot_access/);
     assert.match(migrationSrc, /create index if not exists profiles_pilot_access_gin_idx/);
     assert.match(migrationSrc, /ROLLBACK/);
@@ -355,17 +351,18 @@ describe("O) sima felhasználó nem adhat magának hozzáférést", () => {
   });
 });
 
-describe("GPS PRIVACY REGRESSION (Section 13) — a béta-hozzáférési réteg nem érinti a GPS-t", () => {
-  test("sem access.ts, sem a beta-grant admin akciók nem kezelnek GPS/koordináta adatot", () => {
-    for (const src of [accessSrc, adminActionsSrc, migrationSrc]) {
+describe("L) GPS PRIVACY REGRESSION — a hozzáférési modell váltása nem érinti a GPS-t", () => {
+  test("sem access.ts, sem a beta-grant admin akciók, sem a page.tsx nem kezel GPS/koordináta adatot", () => {
+    for (const src of [accessSrc, adminActionsSrc, migrationSrc, pageSrc]) {
       assert.ok(!/latitude|longitude|navigator\.geolocation/i.test(src));
     }
   });
 });
 
-describe("Konfiguráció — VEDETT_ROUTE_ACCESS_LEVEL ténylegesen 'beta_testers'-re váltott, és a globális flag változatlan marad", () => {
-  test("config.ts a korábban előkészített, addig inaktív 'beta_testers' szintet aktiválja", () => {
-    assert.match(configSrc, /export const VEDETT_ROUTE_ACCESS_LEVEL: VedettRouteAccessLevel = "beta_testers";/);
+describe("Konfiguráció — VEDETT_ROUTE_ACCESS_LEVEL ténylegesen 'authenticated_users'-re váltott, és a globális flag változatlan marad", () => {
+  test("config.ts a korábban előkészített, addig inaktív 'authenticated_users' szintet aktiválja", () => {
+    assert.equal(VEDETT_ROUTE_ACCESS_LEVEL, "authenticated_users");
+    assert.match(configSrc, /export const VEDETT_ROUTE_ACCESS_LEVEL: VedettRouteAccessLevel = "authenticated_users";/);
   });
 
   test("isVedettRouteFeatureEnabled() továbbra is process.env.VEDETT_ROUTE_ENABLED === \"true\" — a globális kill switch mechanizmusa NEM változott", () => {

@@ -58,14 +58,15 @@ test("MOTIS_BASE_URL nélkül getMotisBaseUrl() null-t ad vissza", async () => {
   assert.equal(getMotisBaseUrl(), null);
 });
 
-test("A) VEDETT_ROUTE_ACCESS_LEVEL a ZÁRT BÉTA HOZZÁFÉRÉS sprint óta 'beta_testers' (nem admin_only), függetlenül az env-től", async () => {
-  // FRISSÍTVE (2026-09-09): a korábbi "Fázis 1" állapotban ez a konstans
-  // mindig "admin_only" volt. A "ZÁRT BÉTA HOZZÁFÉRÉS + MENÜRENDSZER"
-  // sprint SZÁNDÉKOSAN aktiválta a korábban csak előkészített
-  // "beta_testers" szintet (lásd lib/vedett-route/config.ts és
-  // access-architecture.test.ts a háromágú útvonalválasztás tesztjéért).
-  // Ez a teszt nem regresszió-e, hanem a ténylegesen megvalósított,
-  // szándékos architektúrát igazolja.
+test("A) VEDETT_ROUTE_ACCESS_LEVEL a PUBLIKUS, REGISZTRÁLT FELHASZNÁLÓI BÉTA sprint óta 'authenticated_users' (nem admin_only, nem beta_testers), függetlenül az env-től", async () => {
+  // FRISSÍTVE (2026-09-09): a korábbi "ZÁRT BÉTA HOZZÁFÉRÉS" szakaszban ez
+  // a konstans "beta_testers" volt (admin VAGY explicit `vedett_route_beta`
+  // pilot_access grant szükséges). A "Zárt béta → nyilvános, regisztrált
+  // felhasználói béta" release SZÁNDÉKOSAN aktiválta a korábban csak
+  // előkészített "authenticated_users" szintet (lásd
+  // lib/vedett-route/config.ts és access-architecture.test.ts a háromágú
+  // útvonalválasztás tesztjéért). Ez a teszt nem regressziót jelez, hanem a
+  // ténylegesen megvalósított, szándékos architektúrát igazolja.
   const { VEDETT_ROUTE_ACCESS_LEVEL } = await freshConfigModule();
-  assert.equal(VEDETT_ROUTE_ACCESS_LEVEL, "beta_testers");
+  assert.equal(VEDETT_ROUTE_ACCESS_LEVEL, "authenticated_users");
 });
