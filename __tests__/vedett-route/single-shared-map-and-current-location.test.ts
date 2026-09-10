@@ -150,9 +150,15 @@ describe("TASK B — „Aktuális helyzetem” mint indulási pont", () => {
   test("I) app/api/admin/vedett-utvonal/search/route.ts fromCoordinates jelenlétekor NEM hívja meg a geocodeAddress()-t az induló pontra", () => {
     const routePath = join(import.meta.dirname, "..", "..", "app", "api", "admin", "vedett-utvonal", "search", "route.ts");
     const routeSrc = readFileSync(routePath, "utf-8");
+    // Geocoding hardening (2026-09-10) óta az objektum egy explicit
+    // `quality: "EXACT" as const` mezőt is kap (lásd geocode.ts — minden
+    // geokódolt eredményhez EXACT/APPROXIMATE minőség tartozik; a
+    // fromCoordinates/toCoordinates ág MÁR ISMERT, megbízható koordináta,
+    // ezért mindig EXACT-nak jelöljük) — az invariáns változatlan: a
+    // geocodeAddress() hívást ez az ág TELJESEN kihagyja.
     assert.match(
       routeSrc,
-      /fromCoordinates\s*\n\s*\?\s*Promise\.resolve\(\{ name: "Jelenlegi hely", lat: fromCoordinates\.latitude, lon: fromCoordinates\.longitude \}\)\s*\n\s*:\s*geocodeAddress\(from as string\),/,
+      /fromCoordinates\s*\n\s*\?\s*Promise\.resolve\(\{ name: "Jelenlegi hely", lat: fromCoordinates\.latitude, lon: fromCoordinates\.longitude, quality: "EXACT" as const \}\)\s*\n\s*:\s*geocodeAddress\(from as string\),/,
       "fromCoordinates esetén a geocodeAddress() hívást teljesen ki kell hagyni, statikus 'Jelenlegi hely' névvel kell helyettesíteni"
     );
   });

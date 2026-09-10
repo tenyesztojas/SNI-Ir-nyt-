@@ -41,9 +41,18 @@ type RouteOrigin =
 // KNOWN_PLACE nézet egyetlen mezőjébe, lásd handleDestinationOverrideChange,
 // vagy egy MANUAL strukturált mezőbe, lásd updateDestinationManualField),
 // KNOWN_PLACE azonnal megszűnik — pontosan úgy, mint az induló mezőnél.
+// Geocoding hardening (2026-09-10) — a KNOWN_PLACE mintáját követő, de
+// SZEMANTIKAILAG külön harmadik mód: a felhasználó egy APPROXIMATE
+// geokódolási találat után saját maga jelölte ki a pontos célt a térképen
+// (lásd DestinationMapPicker.tsx). A wire-protokoll szintjén (route.ts felé)
+// UGYANÚGY toCoordinates/toName megy, mint KNOWN_PLACE esetén (13. pont:
+// "ne geokódold újra") — külön típusként tartjuk, hogy a UI-szöveg
+// ("Térképen kijelölt célpont") és a jövőbeli logika ne keveredjen össze a
+// Védett Hely deep link KNOWN_PLACE jelentésével.
 type RouteDestination =
   | { type: "MANUAL"; city: string; districtOrPostalCode: string; street: string }
-  | { type: "KNOWN_PLACE"; name: string; latitude: number; longitude: number };
+  | { type: "KNOWN_PLACE"; name: string; latitude: number; longitude: number }
+  | { type: "MAP_PICKED"; name: string; latitude: number; longitude: number };
 
 // Strukturált címbevitel (UX feladat, 2026-09-XX) — a Város / Irányítószám
 // vagy kerület / Utca, házszám mezőket a KLIENS külön kezeli (kevesebb
@@ -82,9 +91,32 @@ function isManualAddressComplete(addr: { city: string; districtOrPostalCode: str
 // a Next.js hivatalos mintája erre.
 const VedettUtvonalMap = dynamic(() => import("./VedettUtvonalMap"), { ssr: false });
 
+// Geocoding hardening (2026-09-10, "Alacskai út 63" audit) — a térképes
+// célpont-kijelölő is a MEGLÉVŐ MapLibre/OpenFreeMap infrastruktúrát
+// használja (11. pont: "NE hozz létre teljesen külön térképrendszert"),
+// ugyanazzal a dynamic({ssr:false}) mintával, mint a fenti VedettUtvonalMap.
+const DestinationMapPicker = dynamic(() => import("./DestinationMapPicker"), { ssr: false });
+
 type SearchApiResponse =
   | OrchestratedSearchResult
-  | { ok: false; reason: string; message: string };
+  // Geocoding hardening (2026-09-10) — a szerver (route.ts) ÚJ, egymástól
+  // KÜLÖN kezelt hibaágakat ad: "address_not_found" (nincs elfogadható
+  // Nominatim-találat) és "address_approximate" (utca/település igazolt,
+  // de a konkrét házszám nem — lásd geocode.ts). Az "address_approximate"
+  // esetben a szerver a geokódolt KÖZELÍTŐ koordinátát is visszaadja
+  // (approximateLocation), hogy a térképes célpont-kijelölő ott induljon
+  // (12. pont). `field`/`helperMessage`/`approximateLocation` mind
+  // OPCIONÁLIS — a régi (routing-szintű) hibaágak ("routing_engine_unavailable"/
+  // "no_route_found"/"invalid_request") ezeket sosem küldik, a kliens ott
+  // egyszerűen csak a `message`-et jeleníti meg, változatlanul.
+  | {
+      ok: false;
+      reason: string;
+      message: string;
+      field?: "from" | "to";
+      helperMessage?: string;
+      approximateLocation?: { name: string; lat: number; lon: number };
+    };
 
 const LABEL_META: Record<RankingLabel, { text: string; className: string }> = {
   FASTEST: { text: "Leggyorsabb", className: "bg-blue-100 text-blue-800" },
@@ -875,6 +907,13 @@ export default function VedettUtvonalSearchForm({
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<SearchApiResponse | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  // Geocoding hardening (2026-09-10) — a térképes célpont-kijelölő NYITOTT/
+  // ZÁRT állapota, és a rá induláshoz szükséges közelítő koordináta (a
+  // szerver address_approximate válaszából, lásd handleSubmit). Tisztán UI
+  // állapot — nem érinti az állapotgépet vagy a routing kérést, amíg a
+  // felhasználó nem hagyja jóvá a kijelölt pontot (lásd handleMapPickerConfirm).
+  const [destinationMapPickerOpen, setDestinationMapPickerOpen] = useState(false);
+  const [approximateDestination, setApproximateDestination] = useState<{ name: string; lat: number; lon: number } | null>(null);
   const [weights, setWeights] = useState<PersonalizationWeights>(
     initialFavoritePreset?.weights ?? {
       transfers: 1,
@@ -982,6 +1021,27 @@ export default function VedettUtvonalSearchForm({
     setDestination({ type: "MANUAL", city: "Budapest", districtOrPostalCode: "", street: value });
   }
 
+  // Geocoding hardening (2026-09-10), 11-13. pont — a felhasználó a
+  // térképen jóváhagyta a pontos célt: a kijelölt lat/lon MOSTANTÓL
+  // közvetlenül a MEGLÉVŐ toCoordinates útvonalon megy (lásd
+  // destinationFields handleSubmit-ben) — SOHA nem geokódoljuk újra, SOHA
+  // nem küldünk reverse-geocode kérést, SOHA nem perzisztáljuk ezt a
+  // koordinátát (sem adatbázisba, sem analyticsbe) — kizárólag a jelenlegi
+  // React state-ben él, amíg a felhasználó újra nem keres.
+  function handleMapPickerConfirm(lat: number, lon: number) {
+    setDestination({
+      type: "MAP_PICKED",
+      name: "Térképen kijelölt célpont",
+      latitude: lat,
+      longitude: lon,
+    });
+    setDestinationMapPickerOpen(false);
+  }
+
+  function handleMapPickerCancel() {
+    setDestinationMapPickerOpen(false);
+  }
+
   // Kedvenc útvonalak — mentés UI állapota (Favorites CTA UX sprint,
   // 2026-09-10, spec 8. pont: "idle" -> "♡ Kedvencekhez adom" nagy,
   // hangsúlyos másodlagos CTA; "open" -> névadó mini-form, mentés közben
@@ -1009,7 +1069,13 @@ export default function VedettUtvonalSearchForm({
   }
 
   function currentFavoriteDestinationLabel(): string {
-    if (destination.type === "KNOWN_PLACE") return destination.name;
+    // Geocoding hardening (2026-09-10) — a MAP_PICKED cél (térképen
+    // kijelölt, korábban APPROXIMATE geokódolási találat után pontosított
+    // pont, lásd DestinationMapPicker.tsx) egy MÁR ISMERT koordinátájú cél,
+    // pontosan úgy mint a KNOWN_PLACE (Védett Hely deep link) — mindkettőnek
+    // van .name mezője, nincs .street/.city (azok csak a MANUAL cím-ágon
+    // léteznek), ezért ugyanabba az ágba tartoznak itt is.
+    if (destination.type === "KNOWN_PLACE" || destination.type === "MAP_PICKED") return destination.name;
     return destination.street || destination.city || "Cél";
   }
 
@@ -1035,8 +1101,17 @@ export default function VedettUtvonalSearchForm({
               originMode: "MANUAL" as const,
               originManual: { city: origin.city, districtOrPostalCode: origin.districtOrPostalCode, street: origin.street },
             };
+      // Geocoding hardening (2026-09-10) — a kedvenc-mentés favoritesMode-ja
+      // szempontjából a MAP_PICKED cél (térképen pontosított, korábban
+      // APPROXIMATE eredmény, lásd DestinationMapPicker.tsx) egy MÁR ISMERT
+      // koordinátájú cél, UGYANÚGY mint a KNOWN_PLACE (Védett Hely deep
+      // link) — nincs külön "MAP_PICKED" favoritesMode a szerver oldali
+      // sémában (nem is kell: a kedvenc szempontjából csak a koordináta és
+      // egy megjelenítési név számít, a "honnan jött a koordináta" nem
+      // releváns adat, amit el kellene tárolni), ezért ide is
+      // KNOWN_PLACE-ként megy.
       const destinationFields =
-        destination.type === "KNOWN_PLACE"
+        destination.type === "KNOWN_PLACE" || destination.type === "MAP_PICKED"
           ? {
               destinationMode: "KNOWN_PLACE" as const,
               destinationKnownPlace: { name: destination.name, latitude: destination.latitude, longitude: destination.longitude },
@@ -1109,8 +1184,13 @@ export default function VedettUtvonalSearchForm({
         origin.type === "CURRENT_LOCATION"
           ? { fromCoordinates: { latitude: origin.latitude, longitude: origin.longitude } }
           : { from: buildStructuredAddress(origin) };
+      // Geocoding hardening (2026-09-10) — a MAP_PICKED cél (a felhasználó
+      // a térképen jelölte ki, egy APPROXIMATE geokódolási találat után,
+      // lásd DestinationMapPicker.tsx) UGYANÚGY toCoordinates/toName-en
+      // megy, mint a KNOWN_PLACE (Védett Hely deep link) cél — 13. pont:
+      // "ne geokódold újra". Csak a MANUAL ág épít cím-stringet.
       const destinationFields =
-        destination.type === "KNOWN_PLACE"
+        destination.type === "KNOWN_PLACE" || destination.type === "MAP_PICKED"
           ? {
               toCoordinates: { latitude: destination.latitude, longitude: destination.longitude },
               toName: destination.name,
@@ -1129,6 +1209,17 @@ export default function VedettUtvonalSearchForm({
       });
       const data = (await res.json()) as SearchApiResponse;
       setResult(data);
+      // Geocoding hardening (2026-09-10), 11-12. pont — a destination
+      // address_approximate válasz esetén elmentjük a szerver által adott
+      // közelítő koordinátát, hogy a térképes kijelölő ERRE fókuszálva
+      // induljon el (nem Budapest-szintű alapnézettel). A CTA gomb (lásd
+      // lent) hívja meg setDestinationMapPickerOpen(true)-t, ez itt csak
+      // az adatot készíti elő.
+      if (!data.ok && data.reason === "address_approximate" && data.field === "to" && data.approximateLocation) {
+        setApproximateDestination(data.approximateLocation);
+      } else {
+        setApproximateDestination(null);
+      }
     } catch {
       setResult({ ok: false, reason: "routing_engine_unavailable", message: "Az útvonaltervezés átmenetileg nem érhető el." });
     } finally {
@@ -1221,7 +1312,7 @@ export default function VedettUtvonalSearchForm({
 
         <div>
           <label className="block text-sm font-medium text-gray-700">Hová?</label>
-          {destination.type === "KNOWN_PLACE" ? (
+          {destination.type === "KNOWN_PLACE" || destination.type === "MAP_PICKED" ? (
             <>
               <input
                 type="text"
@@ -1231,9 +1322,18 @@ export default function VedettUtvonalSearchForm({
                 disabled={disabled}
                 className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm disabled:bg-gray-100"
               />
-              <p className="mt-1 text-xs text-green-700">
-                Úti cél: {destination.name} (a VédettSarok adatbázisából, koordináta alapján — nincs szükség újbóli keresésre).
-              </p>
+              {destination.type === "KNOWN_PLACE" ? (
+                <p className="mt-1 text-xs text-green-700">
+                  Úti cél: {destination.name} (a VédettSarok adatbázisából, koordináta alapján — nincs szükség újbóli keresésre).
+                </p>
+              ) : (
+                // Geocoding hardening (2026-09-10) — a térképen kijelölt cél
+                // ugyanúgy már ismert koordináta, mint a KNOWN_PLACE ág (13.
+                // pont), csak külön szöveggel jelezve az eredetét.
+                <p className="mt-1 text-xs text-green-700">
+                  Úti cél: {destination.name} (a térképen kijelölt koordináta alapján — nincs szükség újbóli keresésre).
+                </p>
+              )}
             </>
           ) : (
             <>
@@ -1474,7 +1574,40 @@ export default function VedettUtvonalSearchForm({
       </form>
 
       {result && !result.ok && (
-        <p className="mt-4 rounded bg-gray-50 p-3 text-sm text-gray-700">{result.message}</p>
+        <div className="mt-4 rounded bg-gray-50 p-3 text-sm text-gray-700">
+          <p>{result.message}</p>
+          {/* Geocoding hardening (2026-09-10), 10-12. pont — ADDRESS_APPROXIMATE
+              KÜLÖN, saját segítő szöveget és CTA-t kap, megkülönböztetve az
+              ADDRESS_NOT_FOUND és NO_ROUTE_FOUND állapotoktól (10. pont: "ne
+              mosódjon össze"). A térképes kijelölés CTA-ja ebben a sprintben
+              KIZÁRÓLAG a destination (to) mezőre épül (14. pont: "elsődlegesen
+              a destination"), origin esetén csak a szöveg jelenik meg.
+              Touch target: min. 44px magas (mobil/PWA first, 12. pont). */}
+          {result.reason === "address_approximate" && (
+            <>
+              {result.helperMessage && <p className="mt-1 text-gray-600">{result.helperMessage}</p>}
+              {result.field === "to" && approximateDestination && (
+                <button
+                  type="button"
+                  onClick={() => setDestinationMapPickerOpen(true)}
+                  aria-label="Célpont kijelölése a térképen"
+                  className="mt-2 flex min-h-[44px] w-full items-center justify-center rounded-lg border border-sni-primary/40 bg-white px-4 py-2.5 text-sm font-semibold text-sni-primary shadow-sm sm:w-auto"
+                >
+                  Célpont kijelölése a térképen
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {destinationMapPickerOpen && approximateDestination && (
+        <DestinationMapPicker
+          initialLat={approximateDestination.lat}
+          initialLon={approximateDestination.lon}
+          onConfirm={handleMapPickerConfirm}
+          onCancel={handleMapPickerCancel}
+        />
       )}
 
       {result?.ok && result.journeys.length === 0 && (

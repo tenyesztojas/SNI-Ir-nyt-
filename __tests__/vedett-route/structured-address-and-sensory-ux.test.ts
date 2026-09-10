@@ -146,17 +146,23 @@ describe("TASK — CURRENT_LOCATION / KNOWN_PLACE regresszió a strukturált cí
   });
 
   test("G) KNOWN_PLACE destination továbbra is toCoordinates+toName-t küld", () => {
-    assert.match(formSrc, /destination\.type === "KNOWN_PLACE"\s*\n\s*\? \{/);
+    // Geocoding hardening (2026-09-10) óta ez a feltétel a térképen
+    // kijelölt (MAP_PICKED) célt is magába foglalja — mindkettő egy már
+    // ismert koordinátájú cél, UGYANAZON toCoordinates/toName ágon megy
+    // (lásd DestinationMapPicker.tsx fejléce, 13. pont), az invariáns maga
+    // (KNOWN_PLACE -> toCoordinates+toName, nincs újra-geokódolás)
+    // változatlan.
+    assert.match(formSrc, /destination\.type === "KNOWN_PLACE" \|\| destination\.type === "MAP_PICKED"\s*\n\s*\? \{/);
     assert.match(formSrc, /toCoordinates: \{ latitude: destination\.latitude, longitude: destination\.longitude \},/);
     assert.match(formSrc, /toName: destination\.name,/);
   });
 
   test("H) KNOWN_PLACE esetén NEM hívódik buildStructuredAddress — nincs felesleges újra-geokódolás egy már ismert koordinátájú Védett Helyre", () => {
-    const knownPlaceBranch = formSrc.match(/destination\.type === "KNOWN_PLACE"\s*\n\s*\? \{[\s\S]*?\}\s*\n\s*: \{ to: buildStructuredAddress\(destination\) \};/);
-    assert.ok(knownPlaceBranch, "meg kell találni a destinationFields KNOWN_PLACE/MANUAL elágazását");
+    const knownPlaceBranch = formSrc.match(/destination\.type === "KNOWN_PLACE" \|\| destination\.type === "MAP_PICKED"\s*\n\s*\? \{[\s\S]*?\}\s*\n\s*: \{ to: buildStructuredAddress\(destination\) \};/);
+    assert.ok(knownPlaceBranch, "meg kell találni a destinationFields KNOWN_PLACE/MAP_PICKED/MANUAL elágazását");
     assert.ok(
       !/buildStructuredAddress/.test(knownPlaceBranch![0].split(": {")[0]),
-      "a KNOWN_PLACE ág nem hívhatja a buildStructuredAddress()-t"
+      "a KNOWN_PLACE/MAP_PICKED ág nem hívhatja a buildStructuredAddress()-t"
     );
   });
 });

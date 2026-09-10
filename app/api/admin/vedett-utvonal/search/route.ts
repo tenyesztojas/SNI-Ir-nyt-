@@ -62,27 +62,78 @@ export async function POST(request: Request) {
   // eredményt is adó Nominatim-lekérdezésre. `toName` egy tisztán
   // megjelenítési célú label (a Védett Hely neve); hiányában egy semleges
   // alapértelmezés jelenik meg.
+  // GEOCODING HARDENING (2026-09-10, "Alacskai út 63" audit) — a
+  // fromCoordinates/toCoordinates ág (GPS "Aktuális helyzetem", illetve a
+  // Védett Hely "Navigálj oda" KNOWN_PLACE koordinátája, MOSTANTÓL a
+  // térképen kijelölt célpont is, lásd VedettUtvonalMap.tsx/
+  // VedettUtvonalSearchForm.tsx) mindig MEGBÍZHATÓ, MÁR ISMERT koordináta —
+  // ezt explicit `quality: "EXACT"`-ként jelöljük, hogy a lenti egységes
+  // minőség-ellenőrzés helyesen SOHA ne akassza meg ezeket az ágakat.
   const [fromGeo, toGeo] = await Promise.all([
     fromCoordinates
-      ? Promise.resolve({ name: "Jelenlegi hely", lat: fromCoordinates.latitude, lon: fromCoordinates.longitude })
+      ? Promise.resolve({ name: "Jelenlegi hely", lat: fromCoordinates.latitude, lon: fromCoordinates.longitude, quality: "EXACT" as const })
       : geocodeAddress(from as string),
     toCoordinates
-      ? Promise.resolve({ name: toName ?? "Kiválasztott cél", lat: toCoordinates.latitude, lon: toCoordinates.longitude })
+      ? Promise.resolve({ name: toName ?? "Kiválasztott cél", lat: toCoordinates.latitude, lon: toCoordinates.longitude, quality: "EXACT" as const })
       : geocodeAddress(to as string),
   ]);
 
+  // ADDRESS_NOT_FOUND — nincs ELFOGADHATÓ Nominatim-találat SEMMILYEN
+  // próbált lekérdezésre (lásd geocode.ts geocodeAddress() 3-lépéses
+  // fallback-lánca). KÜLÖN reason/szöveg a routing-specifikus
+  // "no_route_found"-tól (10. pont) — ez sose mosódhat össze azzal.
   if (!fromGeo || !toGeo) {
     return NextResponse.json(
       {
         ok: false,
-        reason: "invalid_request",
-        message: !fromGeo ? "Az indulási hely nem található." : "A célhely nem található.",
+        reason: "address_not_found",
+        field: !fromGeo ? "from" : "to",
+        message: "Nem találtuk ezt a címet.",
       },
       { status: 400 }
     );
   }
 
-  vedettRouteLog("routing_error", "info", { from: fromGeo.name, to: toGeo.name, phase: "search_requested" });
+  // ADDRESS_APPROXIMATE — a település/utca igazolható, de a konkrét
+  // házszám NEM (pl. Nominatim csak road/highway szintű találatot adott,
+  // ahogy az Alacskai út 63 esetén bizonyítottan történt). Ez a koordináta
+  // SOHA nem küldhető automatikusan a routingnak pontos célként (5. pont) —
+  // a kliens felé egy külön, a "nincs útvonal" hibától megkülönböztetett
+  // állapotot adunk vissza, a geokódolt (közelítő) koordinátával együtt,
+  // hogy a UI fel tudja ajánlani a térképes célpont-kijelölést (11-13.
+  // pont). Az origin/destination logika SZÁNDÉKOSAN szimmetrikus (14.
+  // pont: ne legyen destination-only hack) — a kliens ebben a sprintben
+  // csak a destination oldalra épít térképes CTA-t, de a szerver-oldali
+  // szabály mindkét mezőre egyformán érvényes, SOHA nem enged tovább egy
+  // APPROXIMATE koordinátát a routingnak.
+  if (fromGeo.quality === "APPROXIMATE" || toGeo.quality === "APPROXIMATE") {
+    const field: "from" | "to" = fromGeo.quality === "APPROXIMATE" ? "from" : "to";
+    const approximate = field === "from" ? fromGeo : toGeo;
+    return NextResponse.json(
+      {
+        ok: false,
+        reason: "address_approximate",
+        field,
+        message: "Az utcát megtaláltuk, de a pontos címet nem.",
+        helperMessage: "Jelöld meg a célpontot a térképen, hogy biztosan jó helyre tervezzünk.",
+        approximateLocation: { name: approximate.name, lat: approximate.lat, lon: approximate.lon },
+      },
+      { status: 400 }
+    );
+  }
+
+  // PRIVACY (16. pont): a diagnosztikai log NEM tartalmazhat teljes címet,
+  // házszámot vagy koordinátát — a korábbi verzió itt a Nominatim
+  // display_name-jét (a TELJES felbontott cím-szöveget) logolta, ami már
+  // ennek a hardening-nek is ELLENTMOND (lásd fenti fejléc "16. PRIVACY"
+  // pontja: "Új geocoding loggingban NE legyen: teljes cím, házszám,
+  // ... koordináta"). Mostantól kizárólag a megkövetelt, nem-azonosító
+  // diagnosztikai mezőket logoljuk.
+  vedettRouteLog("routing_error", "info", {
+    fromQuality: fromGeo.quality,
+    toQuality: toGeo.quality,
+    phase: "search_requested",
+  });
 
   // Rövid TTL-ű, csak folyamaton belüli cache (lásd routeCache.ts fejléce a
   // korlátairól) — a percre kerekített indulási idő + a súlyok is a kulcs

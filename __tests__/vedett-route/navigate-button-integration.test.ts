@@ -182,8 +182,12 @@ describe("I) deep link után a destination mező előre ki van töltve — Vedet
     // mezőre bomlik (Város/Irányítószám vagy kerület/Utca, házszám), de a
     // KNOWN_PLACE ág KÜLÖN, feltételes JSX-ágként megmaradt: egyetlen
     // mező, előretöltve a hely nevével — nincs újbóli geokódolás.
-    const knownPlaceBranchMatch = searchFormSrc.match(/destination\.type === "KNOWN_PLACE" \? \([\s\S]{0,800}?\) : \(/);
-    assert.ok(knownPlaceBranchMatch, "meg kell találni a destination.type === \"KNOWN_PLACE\" feltételes JSX-ágat");
+    // Geocoding hardening (2026-09-10) óta ez a feltételes ág a térképen
+    // kijelölt (MAP_PICKED) célt is lefedi — ugyanaz az input, ugyanaz a
+    // value={destination.name}, csak a jóváhagyás mögötti eredet más
+    // (lásd a belső KNOWN_PLACE-vs-MAP_PICKED segítő szöveg elágazást).
+    const knownPlaceBranchMatch = searchFormSrc.match(/destination\.type === "KNOWN_PLACE" \|\| destination\.type === "MAP_PICKED" \? \([\s\S]{0,800}?\) : \(/);
+    assert.ok(knownPlaceBranchMatch, "meg kell találni a destination.type === \"KNOWN_PLACE\" || \"MAP_PICKED\" feltételes JSX-ágat");
     assert.match(knownPlaceBranchMatch![0], /value=\{destination\.name\}/);
   });
 
