@@ -334,8 +334,18 @@ describe("V-X) 'Pihenőpont hozzáadása' globális copy — a korábbi '+ Pihen
     assert.ok(!/\+Pihenőpont/.test(restPointQuickAddSrc), "nem maradhat '+Pihenőpont' feliratú gomb");
   });
 
-  test("X) van 'Pihenőpont hozzáadása' felirat, aria-label-lel, nem csak ikon", () => {
-    assert.match(restPointQuickAddSrc, /<button type="button" onClick=\{handleOpen\} className="btn-secondary" aria-label="Pihenőpont hozzáadása">\s*\n\s*Pihenőpont hozzáadása\s*\n\s*<\/button>/);
+  test("X) van 'Pihenőpont hozzáadása' felirat, aria-label-lel, nem csak ikon, min. 44px touch targettel", () => {
+    // A trigger gomb blokkját (handleOpen-t hívó <button>, a legközelebbi
+    // </button>-ig) anchor-alapon nyerjük ki — nem egy törékeny, pontos
+    // attribútum-sorrendre/whitespace-re építő teljes-string regexet
+    // (a fullscreen pihenőpont sprint, 2026-09-10, min-h-[44px] touch
+    // targetet adott a gombhoz, lásd RestPointQuickAdd.tsx).
+    const buttonMatch = restPointQuickAddSrc.match(/<button[\s\S]*?onClick=\{handleOpen\}[\s\S]*?<\/button>/);
+    assert.ok(buttonMatch, "meg kell találni a 'Pihenőpont hozzáadása' trigger gombot");
+    const buttonBlock = buttonMatch![0];
+    assert.match(buttonBlock, /aria-label="Pihenőpont hozzáadása"/);
+    assert.match(buttonBlock, />\s*Pihenőpont hozzáadása\s*</, "a szövegnek is meg kell jelennie, nem csak az aria-label-ben");
+    assert.match(buttonBlock, /min-h-\[44px\]/, "a gombnak legalább 44px touch targettel kell rendelkeznie");
   });
 
   test("csak a user-facing felirat változott — a komponens neve, props-ai és a mentés-flow (handleSubmit, RestPointCreatedPayload) nem módosult", () => {

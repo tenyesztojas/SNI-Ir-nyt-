@@ -633,24 +633,63 @@ function RankedJourneyCard({
             )}
           </div>
 
-          <RestPointQuickAdd onCreated={(rp) => setSessionRestPoints((points) => [...points, rp])} />
+          {/* Fullscreen pihenőpont integráció (2026-09-10, spec 1-6./24-27.
+              pont) — KORÁBBAN ez a két blokk (RestPointQuickAdd,
+              RestStopFlowPanel) a fullscreen térkép MÖGÖTT rendereleődött:
+              a fullscreen map wrapper (fenn) `position: fixed; inset: 0;
+              z-50`, ez a két blokk pedig utána, a normál dokumentum-
+              folyamban következett — fullscreen (navigationMode VAGY
+              manualFullscreen) alatt emiatt A FELHASZNÁLÓ SOSEM ÉRTE EL
+              ŐKET a fullscreen map alól kilépés nélkül. Ez a wrapper <div>
+              ezt oldja meg: fullscreen alatt `position: fixed`, a
+              képernyő aljára rögzítve, magasabb z-indexszel, mint a
+              fullscreen map (z-[60] > z-50) — VIZUÁLISAN a térkép fölé
+              kerül, de a REACT FA-POZÍCIÓJA nem változik (a wrapper MINDIG
+              itt, ugyanebben a pozícióban van, csak a className vált) —
+              ezért a benne élő <RestPointQuickAdd>/<RestStopFlowPanel>
+              SOHA nem remountol a fullscreen be/kikapcsolásakor, pontosan
+              úgy, mint a fenti <VedettUtvonalMap> instance. Egy folyamatban
+              lévő "Pihenőre van szükségem" flow (RestStopFlowPanel saját
+              állapotgépe) így egy fullscreen-váltás közben sem vész el.
+              A KÉT KOMPONENS MAGA NEM DUPLIKÁLÓDIK — egyetlen JSX-elem van
+              mindkettőből, nincs második, párhuzamos flow/state machine. */}
+          <div
+            className={
+              mapFullscreen
+                ? "fixed inset-x-0 bottom-0 z-[60] max-h-[45dvh] space-y-3 overflow-y-auto rounded-t-2xl border-t border-gray-200 bg-white px-3 pt-3 shadow-2xl"
+                : "space-y-3"
+            }
+            style={mapFullscreen ? { paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 12px)" } : undefined}
+          >
+            <RestPointQuickAdd onCreated={(rp) => setSessionRestPoints((points) => [...points, rp])} />
 
-          {/* Sprint E — "Pihenőre van szükségem": az eredeti célt a
-              MEGJELENÍTETT (nem feltétlenül az eredeti) itinerary utolsó
-              lábának valós MOTIS koordinátáiból származtatjuk — ha a
-              felhasználó már folytatta az utat egy pihenő után, a
-              displayedJourney már a friss, resume utáni itinerary, és
-              ÍGY egy újabb "Pihenőre van szükségem" is a helyes,
-              aktuális célra vonatkozik. Ha ez a koordináta hiányzik, a
-              panel nem jelenik meg (lásd ORIGINAL_DESTINATION_MISSING,
-              Sprint E spec 9. pont). */}
-          <RestStopFlowPanel
-            originalDestination={originalDestination}
-            originalDepartAt={displayedJourney.departureTime}
-            geo={geo}
-            onRouteResumed={(nextJourney) => setDisplayedJourney(nextJourney)}
-            onMapStateChange={setRestStopMapState}
-          />
+            {/* Sprint E — "Pihenőre van szükségem": az eredeti célt a
+                MEGJELENÍTETT (nem feltétlenül az eredeti) itinerary utolsó
+                lábának valós MOTIS koordinátáiból származtatjuk — ha a
+                felhasználó már folytatta az utat egy pihenő után, a
+                displayedJourney már a friss, resume utáni itinerary, és
+                ÍGY egy újabb "Pihenőre van szükségem" is a helyes,
+                aktuális célra vonatkozik. Ha ez a koordináta hiányzik, a
+                panel nem jelenik meg (lásd ORIGINAL_DESTINATION_MISSING,
+                Sprint E spec 9. pont).
+                A trackedPosition forrása VÁLTOZATLAN: a `geo` prop UGYANAZ
+                a shared useGeolocation()-instance, amit navigationMode
+                indításakor a startNavigation() már elindított
+                (geo.startWatching()) — a panel saját belső effektje
+                (lásd RestStopFlowPanel.tsx REST_REQUESTED ága) csak akkor
+                hívna geo.requestOnce()-t, ha geo.status === "idle", ami
+                aktív navigáció alatt SOSEM igaz (már "granted"/"requesting"
+                státuszban van) — tehát a "Pihenőre van szükségem" gomb
+                explicit megnyomása SOSEM indít MÁSODIK watchPosition-t,
+                a legfrissebb, memóriában élő GPS-pozíciót használja. */}
+            <RestStopFlowPanel
+              originalDestination={originalDestination}
+              originalDepartAt={displayedJourney.departureTime}
+              geo={geo}
+              onRouteResumed={(nextJourney) => setDisplayedJourney(nextJourney)}
+              onMapStateChange={setRestStopMapState}
+            />
+          </div>
         </div>
       )}
     </div>

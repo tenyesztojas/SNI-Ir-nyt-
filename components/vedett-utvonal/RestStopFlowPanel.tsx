@@ -512,7 +512,12 @@ export default function RestStopFlowPanel({ originalDestination, originalDepartA
   return (
     <div className="mt-4 rounded border border-sni-primary/30 bg-sni-primary/5 p-3">
       {ctx.state === "ROUTE_ACTIVE" && (
-        <button type="button" onClick={() => dispatch({ type: "REQUEST_REST" })} className="btn-secondary text-sm">
+        <button
+          type="button"
+          onClick={() => dispatch({ type: "REQUEST_REST" })}
+          className="btn-secondary flex min-h-[44px] items-center text-sm"
+          aria-label="Pihenőpontok keresése a közelemben"
+        >
           Pihenőre van szükségem
         </button>
       )}

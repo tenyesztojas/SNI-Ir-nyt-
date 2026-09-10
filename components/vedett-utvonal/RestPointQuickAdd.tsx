@@ -115,7 +115,12 @@ export default function RestPointQuickAdd({ onCreated }: { onCreated?: (rp: Rest
 
   if (!open) {
     return (
-      <button type="button" onClick={handleOpen} className="btn-secondary" aria-label="Pihenőpont hozzáadása">
+      <button
+        type="button"
+        onClick={handleOpen}
+        className="btn-secondary flex min-h-[44px] items-center"
+        aria-label="Pihenőpont hozzáadása"
+      >
         Pihenőpont hozzáadása
       </button>
     );

@@ -206,11 +206,54 @@ describe("I) deep link után a destination mező előre ki van töltve — Vedet
 
 describe("J) current-location origin továbbra is külön user action — a destination-integráció nem indít automatikus GPS-kérést", () => {
   test("originGeo.requestOnce() KIZÁRÓLAG a handleUseCurrentLocation() függvényen belül, egy button onClick mögött hívódik — nincs mount-time useEffect, ami automatikusan GPS-t kérne", () => {
-    const requestOnceCalls = searchFormSrc.match(/\.requestOnce\(\)/g) ?? [];
-    assert.equal(requestOnceCalls.length, 1, "a requestOnce()-nek pontosan egyszer kell előfordulnia a forrásban");
+    // MEGJEGYZÉS (audit, 2026-09-10): a korábbi `/\.requestOnce\(\)/g`
+    // (identifier-prefix NÉLKÜLI) számlálás hamis pozitívot adott — a
+    // fullscreen pihenőpont-integráció (3. kör) egy dokumentációs
+    // kommentje ("...hívna geo.requestOnce()-t, ha geo.status ===
+    // \"idle\"...") a RestStopFlowPanel.tsx-beli, MÁSIK `geo` változóra
+    // hivatkozva prózaként tartalmazza a "geo.requestOnce()" szó szerinti
+    // részletet — ez a substring-egyezés emelte a számlálót helytelenül
+    // 1-ről 2-re, valós második hívás NÉLKÜL (PowerShell
+    // `Select-String -Pattern 'originGeo\.requestOnce\(\)'` a valódi
+    // forrásban egyetlen találatot ad). A javított teszt ezért:
+    //   1) az IDENTIFIER-SPECIFIKUS `originGeo\.requestOnce\(\)` mintára
+    //      számol (ez a komment "geo.requestOnce()" szövegére NEM illik,
+    //      mert más az azonosító előtag),
+    //   2) explicit bizonyítja, hogy a hívás a handleUseCurrentLocation()
+    //      függvényen BELÜL van,
+    //   3) explicit bizonyítja, hogy EGYETLEN useEffect blokk sem
+    //      tartalmaz originGeo.requestOnce() hívást (tehát nincs
+    //      mount-time vagy bármilyen más, useEffect-alapú automatikus
+    //      GPS-kérés — ez az invariáns, amit a teszt ténylegesen bizonyítani
+    //      hivatott, nem a nyers substring-szám).
+    const originGeoRequestOnceCalls = searchFormSrc.match(/originGeo\.requestOnce\(\)/g) ?? [];
+    assert.equal(
+      originGeoRequestOnceCalls.length,
+      1,
+      "az originGeo.requestOnce()-nek pontosan egyszer kell előfordulnia a forrásban"
+    );
+
     const fnMatch = searchFormSrc.match(/function handleUseCurrentLocation\(\) \{[\s\S]*?\n  \}/);
     assert.ok(fnMatch, "handleUseCurrentLocation() függvénynek léteznie kell");
-    assert.match(fnMatch![0], /originGeo\.requestOnce\(\);/);
+    assert.match(
+      fnMatch![0],
+      /originGeo\.requestOnce\(\);/,
+      "a handleUseCurrentLocation()-nek explicit hívnia kell az originGeo.requestOnce()-t"
+    );
+
+    // Minden useEffect(...) blokk kigyűjtése (a `}, [` mintáig, ami a
+    // dependency-listát vezeti be) — egyik sem tartalmazhatja az
+    // originGeo.requestOnce() hívást, mert az kizárólag explicit user
+    // action-ből (a fenti handleUseCurrentLocation()-ből) hívódhat.
+    const useEffectBlocks = searchFormSrc.match(/useEffect\(\(\) => \{[\s\S]*?\n  \}, \[[^\]]*\]\);/g) ?? [];
+    assert.ok(useEffectBlocks.length > 0, "legalább egy useEffect blokknak léteznie kell a fájlban (szanity check)");
+    for (const block of useEffectBlocks) {
+      assert.doesNotMatch(
+        block,
+        /originGeo\.requestOnce\(/,
+        "egyetlen useEffect blokk sem hívhatja automatikusan az originGeo.requestOnce()-t — a GPS-kérés kizárólag explicit user action-ből indulhat"
+      );
+    }
   });
 
   test("a destination KNOWN_PLACE inicializálása (initialDestination-ből) NEM hív semmilyen geolocation/GPS API-t — pusztán useState kezdőérték", () => {

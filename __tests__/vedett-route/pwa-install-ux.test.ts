@@ -24,8 +24,16 @@ const navFormSrc = readFileSync(NAV_FORM_PATH, "utf-8");
 
 describe("12) Meglévő PWA infrastruktúra audit — nincs párhuzamos második rendszer", () => {
   test("a PWAInstallBanner a MEGLÉVŐ komponens bővítése (nincs új, második install-komponens) — a fájl fejléce dokumentálja az audit eredményét", () => {
-    // A komment sortöréseit "// " folytatja, nem sima "\n"-t.
-    assert.match(bannerSrc, /MEGLÉVŐ, sitewide install-\n\/\/ infrastruktúra/);
+    // A komment sortöréseit "// " folytatja, nem sima "\n"-t. MEGJEGYZÉS
+    // (audit, 2026-09-10): a Windows worktree CRLF (\r\n) sorvégeket
+    // használ — a korábbi, kizárólag "\n"-t kereső regex emiatt sosem
+    // találta meg a mintát, holott a komment maga változatlanul jelen van
+    // a production forrásban. A `\r?\n` platformfüggetlen: LF-es és
+    // CRLF-es forrásfájlon is egyaránt illeszkedik, a bizonyítandó
+    // szemantikai invariáns (a fejléc-komment ténylegesen a "MEGLÉVŐ,
+    // sitewide install-infrastruktúra" szöveget dokumentálja) változatlan
+    // marad.
+    assert.match(bannerSrc, /MEGLÉVŐ, sitewide install-\r?\n\/\/ infrastruktúra/);
   });
 
   test("a manifest.json és sw.js útjai NEM változtak (a layout.tsx-ben lévő regisztráció NEM ehhez a fájlhoz tartozik, nem is kell duplikálni)", () => {

@@ -179,7 +179,17 @@ export default function VedettUtvonalMap({ legs, fromName, toName, currentPositi
       // esetleg hiányos attribution-t adna.
       attributionControl: false,
     });
-    map.addControl(new maplibregl.AttributionControl({ compact: false, customAttribution: MAP_ATTRIBUTION_FALLBACK }));
+    // Fullscreen pihenőpont sprint (2026-09-10, spec 3. pont) — az
+    // attribution "top-left"-re költözött (korábban MapLibre alapértelmezett
+    // "bottom-right" volt). Ok: a fullscreen Navigation Mode-ban most egy új,
+    // bottom-anchored action sheet jelenik meg ("Pihenőre van szükségem" /
+    // "Pihenőpont hozzáadása", lásd VedettUtvonalSearchForm.tsx), ami a
+    // képernyő alját foglalja el — a "ne rejtsd el az attribution-t"
+    // követelmény (lásd fent) csak akkor teljesül biztosan, ha az
+    // attribution NEM ugyanabban a sarokban van, amit ez a sheet eltakarna.
+    // A NavigationControl/CurrentLocationControl "top-right"-on marad,
+    // ezért "top-left" a maradék, mindig szabad sarok.
+    map.addControl(new maplibregl.AttributionControl({ compact: false, customAttribution: MAP_ATTRIBUTION_FALLBACK }), "top-left");
     map.addControl(new maplibregl.NavigationControl(), "top-right");
     map.addControl(new CurrentLocationControl(() => currentPositionRef.current), "top-right");
     map.on("load", () => setMapReady(true));
