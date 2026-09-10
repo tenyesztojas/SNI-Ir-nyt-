@@ -263,7 +263,7 @@ describe("TASK — Szenzoros prioritás UX (8-11. pont): a felhasználó SOSEM l
     // hibát. Az új, stabil végmarker a `formError` feltételes JSX blokk
     // kezdete, amely a szenzoros blokk UTÁN, de a submit gomb ELŐTT áll,
     // és nem függ sorvégjel-típustól vagy indentálástól.
-    const blockStart = formSrc.indexOf("Mennyire fontosak neked ezek a szempontok?");
+    const blockStart = formSrc.indexOf("Ami nekem fontos");
     assert.ok(blockStart !== -1, "meg kell találni a szenzoros prioritás blokk kezdetét");
     const blockEnd = formSrc.indexOf("{formError &&", blockStart);
     assert.ok(blockEnd !== -1, "meg kell találni a szenzoros blokk utáni stabil {formError && ...} markert");
@@ -274,11 +274,26 @@ describe("TASK — Szenzoros prioritás UX (8-11. pont): a felhasználó SOSEM l
     assert.ok(!/\bweight\b/i.test(sensoryBlock), "a 'weight' szó nem szerepelhet felhasználó-néző szövegben");
     assert.ok(!/\bscore\b/i.test(sensoryBlock), "a 'score' szó nem szerepelhet ebben a blokkban felhasználó-néző szövegként");
     assert.ok(!/\bmultiplier\b/i.test(sensoryBlock), "a 'multiplier' szó nem szerepelhet felhasználó-néző szövegben");
+    // Easy-language + "preferencia" kivezetés sprint (2026-09-10, 13. pont):
+    // a "preferencia"/"személyes preferencia"/"preferenciák" szavak sem
+    // szerepelhetnek user-facing szövegként ebben a blokkban (a BELSŐ
+    // kódnevek — preferences/personalization/weights — nem érintettek,
+    // ott nem is keresünk).
+    assert.ok(!/preferenci/i.test(sensoryBlock), "'preferencia' (vagy toldalékolt alakja) sehol nem szerepelhet a felhasználó felé ebben a blokkban");
   });
 
-  test("a magyarázó szöveg a specifikáció szerinti \"Mennyire fontosak neked ezek a szempontok?\" / segédszöveg párra frissült", () => {
-    assert.match(formSrc, /Mennyire fontosak neked ezek a szempontok\?/);
-    assert.match(formSrc, /Állítsd be külön-külön, melyik szempont mennyire számít neked az útvonal kiválasztásánál\./);
+  test("Z-AB) a blokk fő címe, alcíme és segédszövege a specifikáció szerinti easy-language megfogalmazásra frissült (\"Ami nekem fontos\" / \"Mi számít neked utazás közben?\" / segédszöveg)", () => {
+    assert.match(formSrc, /<h3 className="text-sm font-semibold text-sni-text">Ami nekem fontos<\/h3>/);
+    assert.match(formSrc, /<p className="mt-1 text-xs text-gray-500">Mi számít neked utazás közben\?<\/p>/);
+    assert.match(
+      formSrc,
+      /Állítsd be, hogy neked mi fontos\. Így olyan útvonalakat tudunk mutatni, amelyek jobban megfelelnek neked\./
+    );
+    // A korábbi, technikaibb megfogalmazás ("Mennyire fontosak..." /
+    // "...preferenciádat...") eltűnt — ez TESZT-ELAVULÁS, nem regresszió
+    // (lásd a mobil UX / easy-language sprint jelentését).
+    assert.ok(!/Mennyire fontosak neked ezek a szempontok\?/.test(formSrc));
+    assert.ok(!/személyes preferenciádat/.test(formSrc));
   });
 
   test("R) aria-valuetext a slideren mindig a magyar megfogalmazást adja, sosem a nyers számot", () => {
@@ -313,49 +328,50 @@ describe("TASK — Szenzoros prioritás UX (8-11. pont): a felhasználó SOSEM l
     assert.match(formSrc, /const body = \{\s*\n\s*\.\.\.originFields,\s*\n\s*\.\.\.destinationFields,\s*\n\s*departAt:[\s\S]{0,80}?\n\s*weights,\s*\n\s*\};/);
   });
 
-  test("a slider-jelölés emoji + szöveg együtt jelenik meg (nem csak szín alapján), és az aktuálisan kiválasztott állapot vizuálisan hangsúlyosabb (font-semibold) — SZEMANTIKUS invariánsok, nem egy pontos, teljes className string", () => {
-    // TESZT-ELAVULÁS JAVÍTÁSA (mobil UX sprint, 2026-09-10): ez a teszt
-    // korábban egy PONTOS, teljes className stringet várt el
-    // ("flex items-center gap-1 font-semibold text-sni-primary" /
-    // "flex items-center gap-1 text-gray-400"). A mobil UX sprintben a
-    // production kód SZÁNDÉKOSAN lecserélte a `flex justify-between`
-    // alapú label-sort egy stabil, 3 azonos szélességű oszlopos
-    // `grid grid-cols-3` elrendezésre — ez egy bizonyított, root-cause-
-    // szintű javítás egy VALÓS Android PWA layout-shift hibára (lásd
-    // mobile-ux-slider-and-favorites.test.ts, "B) Slider layout
-    // stabilitás" leírás), NEM regresszió. A teszt ezért mostantól a
-    // SZEMANTIKAI invariánsokat ellenőrzi külön-külön (aktív állapot
-    // félkövér + primary szín, inaktív állapot szürke, stabil grid
-    // layout, emoji+szöveg mapping), whitespace/CRLF/LF/class-sorrend-
-    // érzéketlenül — nem egy törékeny, teljes-string regexet.
-    const blockStart = formSrc.indexOf("Mennyire fontosak neked ezek a szempontok?");
+  test("a 3 állapot-skála (emoji + szöveg, nem csak szín alapján) egyszer, közösen jelenik meg a blokk tetején stabil grid-cols-3 layoutban — SZEMANTIKUS invariánsok, nem egy pontos, teljes className string", () => {
+    // TESZT-ELAVULÁS JAVÍTÁSA, MÁSODIK KÖR (kompakt slider UX sprint,
+    // 2026-09-10): a korábbi architektúra a 3 állapot-labelt MINDEN EGYES
+    // sliderhez külön renderelte, dinamikus aktív/inaktív className-
+    // elágazással (weights[key] === level.value ? font-semibold : gray).
+    // A kompakt slider UX sprint ezt egy KÖZÖS, statikus, a blokk tetején
+    // egyszer megjelenő skálára cserélte (lásd a feladat 15-19. pontját és
+    // mobile-ux-slider-and-favorites.test.ts "B) Kompakt slider UX"
+    // leírását) — a per-slider dinamikus félkövér/szürke elágazás emiatt
+    // MEGSZŰNT, ez NEM regresszió. A teszt ezért az ÚJ architektúra
+    // szemantikus invariánsait ellenőrzi: a közös skála stabil grid-cols-3
+    // layoutot használ, mindhárom állapot emoji+szöveggel jelenik meg, és
+    // a skála forrása (SENSORY_PRIORITY_LEVELS.map + {level.label}) csak
+    // EGYSZER fordul elő a blokkban.
+    const blockStart = formSrc.indexOf("Ami nekem fontos");
     assert.ok(blockStart !== -1, "meg kell találni a szenzoros prioritás blokk kezdetét");
     const blockEnd = formSrc.indexOf("{formError &&", blockStart);
     assert.ok(blockEnd !== -1, "meg kell találni a szenzoros blokk utáni stabil {formError && ...} markert");
     const sensoryBlock = formSrc.slice(blockStart, blockEnd);
 
-    const conditionalMatch = sensoryBlock.match(
-      /weights\[key\] === level\.value\s*\n\s*\?\s*"([^"]*)"\s*\n\s*:\s*"([^"]*)"/
-    );
-    assert.ok(conditionalMatch, "meg kell találni a weights[key] === level.value feltételes className-elágazást");
-    const [, activeClass, inactiveClass] = conditionalMatch;
-
-    assert.match(activeClass, /\bfont-semibold\b/, "az aktív állapotnak vizuálisan hangsúlyosnak kell lennie (font-semibold)");
-    assert.match(activeClass, /\btext-sni-primary\b/, "az aktív állapotnak meg kell tartania a jelenlegi primary szöveg-stílust");
-    assert.match(inactiveClass, /\btext-gray-400\b/, "az inaktív állapotnak vizuálisan kevésbé hangsúlyosnak kell lennie (gray)");
-    assert.ok(!/font-semibold/.test(inactiveClass), "az inaktív állapot NEM lehet félkövér");
-
-    // A stabil, 3 azonos szélességű oszlopos layout (a bizonyított Android
-    // PWA layout-shift javítása) továbbra is jelen van a label-container-en.
+    // A közös, stabil 3 azonos szélességű oszlopos layout (a bizonyított
+    // Android PWA layout-shift javítás, most a közös felső skálán).
     assert.match(
       sensoryBlock,
-      /className="mt-1 grid grid-cols-3 items-center gap-1 text-\[11px\]"/,
-      "a label-container-nak a stabil grid-cols-3 layoutot kell használnia"
+      /className="mt-3 grid grid-cols-3 items-center gap-1 rounded border border-sni-primary\/20 bg-white\/70 px-2 py-2 text-center text-xs font-medium text-sni-text"/,
+      "a közös skála konténerének a stabil grid-cols-3 layoutot kell használnia"
     );
 
-    // emoji + szöveg mapping megmaradt (mindhárom állapot ugyanabban a
-    // <span>-ben jeleníti meg az emoji-t és a label szöveget).
-    assert.match(sensoryBlock, /<span aria-hidden="true">\{level\.emoji\}<\/span>/);
-    assert.match(sensoryBlock, /\{level\.label\}/);
+    // emoji + szöveg mapping megmaradt, és PONTOSAN EGYSZER fordul elő a
+    // blokkban (nem sliderenként ismételve).
+    const labelRefs = sensoryBlock.match(/\{level\.label\}/g) ?? [];
+    assert.equal(labelRefs.length, 1, "a {level.label} referenciának pontosan egyszer kell megjelennie a blokkban");
+    const mapCalls = sensoryBlock.match(/\{SENSORY_PRIORITY_LEVELS\.map\(\(level\) => \(/g) ?? [];
+    assert.equal(mapCalls.length, 1, "a SENSORY_PRIORITY_LEVELS.map(...) hívásnak pontosan egyszer kell szerepelnie");
+    assert.match(sensoryBlock, /\{level\.emoji\}/, "az emoji-nak is meg kell jelennie a közös skálán");
+
+    // A sliderek maguk kompaktak maradtak — nincs bennük SENSORY_PRIORITY_
+    // LEVELS hivatkozás (a skála a WEIGHT_FIELDS.map(...) törzsén KÍVÜL,
+    // a blokk tetején él).
+    const weightFieldsBodyMatch = sensoryBlock.match(/\{WEIGHT_FIELDS\.map\(\(\{ key, label \}\) => \([\s\S]*?\)\)\}/);
+    assert.ok(weightFieldsBodyMatch, "meg kell találni a WEIGHT_FIELDS.map(...) törzsét");
+    assert.ok(
+      !/SENSORY_PRIORITY_LEVELS/.test(weightFieldsBodyMatch![0]),
+      "a sliderek (WEIGHT_FIELDS.map törzse) NEM tartalmazhatnak külön, sliderenkénti 3-label sort"
+    );
   });
 });

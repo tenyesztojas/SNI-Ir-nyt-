@@ -187,7 +187,7 @@ describe("TASK B — „Aktuális helyzetem” mint indulási pont", () => {
     assert.ok(!/vedettRouteLog\(/.test(panelSrc), "a panel nem hívhat vedettRouteLog()-ot (a GPS-koordináta soha nem logolható)");
   });
 
-  test("L) GPS PRIVACY: a form/panel forráskódja SEHOL nem ír Supabase-be/adatbázisba a folyamatos GPS-koordinátából (csak az explicit '+ Pihenőpont' mentés kivétel, ami külön komponens)", () => {
+  test("L) GPS PRIVACY: a form/panel forráskódja SEHOL nem ír Supabase-be/adatbázisba a folyamatos GPS-koordinátából (csak az explicit 'Pihenőpont hozzáadása' mentés kivétel, ami külön komponens)", () => {
     assert.ok(!/supabase/i.test(formSrc), "a form nem érhet közvetlenül Supabase-hez — a GPS-koordináta kizárólag React state-ben élhet");
     assert.ok(!/supabase/i.test(panelSrc), "a panel nem érhet közvetlenül Supabase-hez — a GPS-koordináta kizárólag React state-ben élhet");
   });

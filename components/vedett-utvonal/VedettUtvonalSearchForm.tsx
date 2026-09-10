@@ -151,7 +151,7 @@ function stopTypeSuffix(mode?: string): string {
 }
 
 // Egyetlen megosztott térkép (UX módosítás, 2026-09-09) — a kártya saját,
-// a session alatt (+ Pihenőpont gombbal) hozzáadott markereit ÉS a
+// a session alatt ("Pihenőpont hozzáadása" gombbal) hozzáadott markereit ÉS a
 // RestStopFlowPanel által jelentett discovery-markereket egyetlen listába
 // egyesíti a közös <VedettUtvonalMap> számára, id szerint deduplikálva
 // (ha ugyanaz a pont véletlenül mindkét forrásban szerepelne).
@@ -1266,63 +1266,60 @@ export default function VedettUtvonalSearchForm({
 
         <div
           className="rounded border border-sni-primary/30 bg-sni-primary/5 p-3"
-          // Mobil UX sprint (Android PWA slider scroll-jump hardening,
-          // 2026-09-10, spec 4. pont) — a LEGSZŰKEBB érintett konténeren
-          // (kizárólag ezen a szenzoros prioritás blokkon, NEM globálisan a
-          // body-n) kikapcsoljuk a böngésző scroll-anchoring heurisztikáját.
-          // Ok: ez a blokk az egyetlen, ahol egy csúszka mozgatása
-          // (weights[key] állapotváltás) DOM-tartalom-változást (bold/nem-
-          // bold label-váltás) okoz közvetlenül a csúszka fölött/körül —
-          // ha a böngésző ide "horgonyoz" egy scroll-anchort, egy ilyen
-          // tartalomváltás elméletileg scroll-ugrást válthat ki. Ez NEM egy
-          // vak "javítás" bizonyított root cause nélkül — lásd a lenti,
-          // 9-11. ponthoz tartozó grid-átalakítást, amely magát a
-          // geometria-változást is kiküszöböli; az overflow-anchor:none
-          // csak egy MÁSODIK, olcsó védelmi réteg ugyanerre a jelenségre,
-          // szigorúan erre a konténerre korlátozva.
+          // Slider UX kompaktálás (2026-09-10, easy-language + kompakt
+          // slider sprint) — a LEGSZŰKEBB érintett konténeren (kizárólag
+          // ezen a szenzoros/"Ami nekem fontos" blokkon, NEM globálisan a
+          // body-n) továbbra is kikapcsoljuk a böngésző scroll-anchoring
+          // heurisztikáját, másodlagos védelmi rétegként. A korábbi,
+          // bizonyított root cause (per-slider bold/nem-bold label-váltás
+          // okozta layout-shift, majd a fizikailag azonosított fókusz-
+          // vezérelt scroll-anchoring — lásd releasePreviousTextInputFocus)
+          // javításai ettől függetlenül, a maguk helyén megmaradtak; ez a
+          // hardening itt nem kerül eltávolításra, mert nincs bizonyított
+          // mellékhatása, és a blokk szerkezete (közös fejléc + kompakt
+          // sliderek) továbbra is profitálhat belőle.
           style={{ overflowAnchor: "none" }}
         >
-          <h3 className="text-sm font-semibold text-sni-text">Mennyire fontosak neked ezek a szempontok?</h3>
+          <h3 className="text-sm font-semibold text-sni-text">Ami nekem fontos</h3>
+          <p className="mt-1 text-xs text-gray-500">Mi számít neked utazás közben?</p>
           <p className="mt-1 text-xs text-gray-500">
-            Állítsd be külön-külön, melyik szempont mennyire számít neked az útvonal kiválasztásánál. Ez nem diagnózis-alapú beállítás — csak a te személyes preferenciádat veszi figyelembe, hogy a &quot;Legnyugodtabb&quot; ajánlás jobban illeszkedjen hozzád.
+            Állítsd be, hogy neked mi fontos. Így olyan útvonalakat tudunk mutatni, amelyek jobban megfelelnek neked.
           </p>
-          <div className="mt-3 space-y-4">
+
+          {/* Kompakt slider UX sprint (2026-09-10) — a 3 állapot (🙅/🙂/⭐)
+              magyarázó skálája KORÁBBAN minden egyes slider alatt
+              megismétlődött (6 szempont × 3 label sor), ami mobilon
+              feleslegesen nyújtotta meg a blokkot függőlegesen. Mostantól
+              ez a közös, fejléc alatti skála CSAK EGYSZER jelenik meg —
+              nagyobb, jobban olvasható betűmérettel, mint a korábbi,
+              soronként ismételt, kisebb változat — és stabil, azonos
+              szélességű grid-cols-3 elrendezést használ (ugyanaz a
+              root-cause-szintű, bizonyítottan layout-shift-mentes
+              elrendezés, amit korábban minden sliderhez külön-külön
+              alkalmaztunk). A skála NEM a ténylegesen kiválasztott
+              slider-értékhez van kötve (statikus jelmagyarázat, nem egy
+              adott szempont állapota) — a konkrét, aktuális értéket
+              minden slideren továbbra is az aria-valuetext adja meg
+              screen reader számára (lásd lent), vizuálisan pedig maga a
+              csúszka pozíciója. */}
+          <div
+            className="mt-3 grid grid-cols-3 items-center gap-1 rounded border border-sni-primary/20 bg-white/70 px-2 py-2 text-center text-xs font-medium text-sni-text"
+            role="presentation"
+          >
+            {SENSORY_PRIORITY_LEVELS.map((level) => (
+              <span key={level.value} className="flex flex-col items-center justify-center gap-0.5">
+                <span aria-hidden="true" className="text-base leading-none">
+                  {level.emoji}
+                </span>
+                {level.label}
+              </span>
+            ))}
+          </div>
+
+          <div className="mt-3 space-y-3">
             {WEIGHT_FIELDS.map(({ key, label }) => (
               <div key={key}>
                 <label className="text-xs text-gray-700">{label}</label>
-                {/* 9-11. pont — a három szenzoros prioritás-állapot emoji +
-                    szöveg együtt, SOSEM csak szín alapján megkülönböztetve;
-                    az aktuális állapot vizuálisan hangsúlyosabb. Unicode
-                    emoji karakterek (nincs külső asset-függőség).
-                    Android PWA slider scroll-jump hardening (2026-09-10,
-                    spec 4. pont) — a korábbi `flex justify-between` elrendezés
-                    a KIJELÖLT állapotot font-semibold-dal (szélesebb glyph)
-                    jelölte, miközben a testvér elemek pozíciója a `justify-
-                    between` miatt a tartalom szélességétől függött — csúszka-
-                    mozgatáskor ez egy VALÓS, bizonyítható layout-shiftet
-                    okozott a 3 label között (nem csak feltételezett). A
-                    javítás: 3 AZONOS SZÉLESSÉGŰ CSS grid-oszlop (`grid-cols-
-                    3`), amely a kijelölt állapot félkövér stílusát megtartja
-                    (a hangsúly így is látszik), de a saját, fix szélességű
-                    cellájában marad — a szomszédos cellák geometriája
-                    (szélessége, pozíciója) MINDIG stabil, függetlenül attól,
-                    melyik állapot van kijelölve. Ez a root-cause-szintű
-                    javítás, NEM csak egy scroll-hack. */}
-                <div className="mt-1 grid grid-cols-3 items-center gap-1 text-[11px]">
-                  {SENSORY_PRIORITY_LEVELS.map((level) => (
-                    <span
-                      key={level.value}
-                      className={
-                        weights[key] === level.value
-                          ? "flex items-center justify-center gap-1 text-center font-semibold text-sni-primary"
-                          : "flex items-center justify-center gap-1 text-center text-gray-400"
-                      }
-                    >
-                      <span aria-hidden="true">{level.emoji}</span>
-                      {level.label}
-                    </span>
-                  ))}
-                </div>
                 <input
                   type="range"
                   min={0}
@@ -1334,7 +1331,8 @@ export default function VedettUtvonalSearchForm({
                   // root cause javítása — lásd releasePreviousTextInputFocus
                   // fenti kommentje. Capture fázisban fut, mielőtt a
                   // böngésző natív pointerdown/focus-follow viselkedése
-                  // (ami a scroll-jumpot okozná) lefutna.
+                  // (ami a scroll-jumpot okozná) lefutna. A slider UX
+                  // kompaktálás NEM távolította el ezt a javítást.
                   onPointerDownCapture={(e) => releasePreviousTextInputFocus(e.currentTarget)}
                   onChange={(e) => setWeights((w) => ({ ...w, [key]: Number(e.target.value) }))}
                   aria-valuetext={sensoryPriorityLabel(weights[key])}

@@ -34,9 +34,12 @@ import { join } from "node:path";
 const FORM_PATH = join(import.meta.dirname, "..", "..", "components", "vedett-utvonal", "VedettUtvonalSearchForm.tsx");
 const formSrc = readFileSync(FORM_PATH, "utf-8");
 
+const REST_POINT_QUICK_ADD_PATH = join(import.meta.dirname, "..", "..", "components", "vedett-utvonal", "RestPointQuickAdd.tsx");
+const restPointQuickAddSrc = readFileSync(REST_POINT_QUICK_ADD_PATH, "utf-8");
+
 // A szenzoros prioritás blokk (a sliderek + label-ek konténere) kinyerése
 // — stabil horgony-szövegekre épül, nem egy törékeny, teljes-blokk regexre.
-const weightsBlockStart = formSrc.indexOf("Mennyire fontosak neked ezek a szempontok?");
+const weightsBlockStart = formSrc.indexOf("Ami nekem fontos");
 assert.ok(weightsBlockStart !== -1, "nem található a szenzoros prioritás blokk fejlécszövege");
 const weightsBlockOuterStart = formSrc.lastIndexOf("<div", weightsBlockStart);
 const weightsBlockEnd = formSrc.indexOf("{formError &&", weightsBlockStart);
@@ -137,8 +140,8 @@ describe("B2) Slider focus-release — fizikailag bizonyított Android PWA scrol
     assert.equal(callSites.length, 2, "1 függvénydefiníció + 1 hívási hely várható (a definíció maga is tartalmazza a nevet)");
   });
 
-  test("J) a grid grid-cols-3 layout hardening megmarad (a korábbi layout-shift javítás nem lett visszavonva)", () => {
-    assert.match(weightsBlock, /className="mt-1 grid grid-cols-3 items-center gap-1 text-\[11px\]"/);
+  test("J) a grid grid-cols-3 layout hardening megmarad (a korábbi layout-shift javítás nem lett visszavonva — most a közös felső skálán él, lásd 'B) Kompakt slider UX' blokk)", () => {
+    assert.match(weightsBlock, /className="mt-3 grid grid-cols-3 items-center gap-1 rounded border border-sni-primary\/20 bg-white\/70 px-2 py-2 text-center text-xs font-medium text-sni-text"/);
   });
 
   test("K) a lokális overflowAnchor hardening megmarad a szenzoros blokkon (nem globális)", () => {
@@ -185,19 +188,42 @@ describe("A) VedettUtvonalWorkspace remount-védelem — favorite preset key-rem
   });
 });
 
-describe("B) Slider layout stabilitás — root-cause javítás (grid, nem flex-justify-between)", () => {
-  test("a 3 szenzoros állapot-label CSS GRID-ben van, azonos szélességű oszlopokkal (grid-cols-3) — NEM flex justify-between (ami a bold-szélesség-változás miatt korábban valós geometria-shiftet okozott)", () => {
-    assert.match(weightsBlock, /className="mt-1 grid grid-cols-3 items-center gap-1 text-\[11px\]"/);
-    // Csak a TÉNYLEGES className attribútumokat vizsgáljuk (nem a magyarázó
-    // kommentet, amely dokumentációs célból megemlíti a korábbi, javított
-    // `flex justify-between` elrendezést) — ez zárja ki a hamis pozitív
-    // találatot, miközben továbbra is bizonyítja, hogy SEMMILYEN className
-    // nem hordoz justify-between-et a label-soron.
-    assert.ok(!/className="[^"]*justify-between[^"]*"/.test(weightsBlock), "a label-sornak NEM szabad flex justify-between-et használnia — ez volt a bizonyított layout-shift forrása");
+describe("B) Kompakt slider UX (2026-09-10) — a 3 állapot-skála CSAK EGYSZER jelenik meg, sliderenként kompakt label+range", () => {
+  // TESZT-ELAVULÁS FRISSÍTÉSE: a korábbi architektúra a 3 állapot-labelt
+  // MINDEN EGYES sliderhez külön renderelte (grid-cols-3 SLIDERENKÉNT,
+  // dinamikus font-semibold a kiválasztott állapoton). A kompakt slider UX
+  // sprint ezt SZÁNDÉKOSAN egy KÖZÖS, statikus, a blokk tetején egyszer
+  // megjelenő skálára cserélte (lásd 15-19. pont) — ez NEM regresszió, a
+  // vertikális hely csökkentése volt a cél. A grid-cols-3 layout-shift
+  // hardening maga NEM tűnt el, csak áthelyeződött erre a közös skálára.
+
+  test("a 3 állapot-skála (🙅 Nem fontos / 🙂 Fontos / ⭐ Nagyon fontos) forrása (SENSORY_PRIORITY_LEVELS.map + {level.label}) PONTOSAN EGYSZER jelenik meg a szenzoros blokkban, nem sliderenként ismételve", () => {
+    // A tényleges "Nem fontos" stb. literál szöveg a SENSORY_PRIORITY_LEVELS
+    // modul-szintű tömb deklarációjában él (a komponensen KÍVÜL), a JSX
+    // pedig dinamikusan `{level.label}`-t renderel — ezért a JSX-blokkban a
+    // `{level.label}` és a SENSORY_PRIORITY_LEVELS.map(...) hívás
+    // előfordulásainak számát vizsgáljuk, nem a literál szöveget.
+    const labelRefs = weightsBlock.match(/\{level\.label\}/g) ?? [];
+    assert.equal(labelRefs.length, 1, "a {level.label} referenciának pontosan egyszer kell megjelennie a blokkban (a közös felső skálán) — nem sliderenként ismételve");
+    // A SENSORY_PRIORITY_LEVELS.map(...) hívás a blokkban pontosan EGYSZER
+    // fordul elő — ha sliderenként ismétlődne, ez 6-szor szerepelne (6
+    // WEIGHT_FIELDS), a közös felső skála esetén viszont csak egyszer.
+    const mapCalls = weightsBlock.match(/\{SENSORY_PRIORITY_LEVELS\.map\(\(level\) => \(/g) ?? [];
+    assert.equal(mapCalls.length, 1, "a SENSORY_PRIORITY_LEVELS.map(...) hívásnak PONTOSAN EGYSZER kell szerepelnie — nem sliderenként ismételve");
   });
 
-  test("a kijelölt állapot vizuálisan hangsúlyosabb marad (font-semibold), de a saját grid-cellájában, ami NEM tolja el a szomszédos cellák pozícióját", () => {
-    assert.match(weightsBlock, /font-semibold text-sni-primary/);
+  test("a közös felső skála CSS GRID-ben van, azonos szélességű oszlopokkal (grid-cols-3) — NEM flex justify-between", () => {
+    assert.match(weightsBlock, /className="mt-3 grid grid-cols-3 items-center gap-1 rounded border border-sni-primary\/20 bg-white\/70 px-2 py-2 text-center text-xs font-medium text-sni-text"/);
+    assert.ok(!/className="[^"]*justify-between[^"]*"/.test(weightsBlock), "a skálának NEM szabad flex justify-between-et használnia");
+  });
+
+  test("nincs sliderenként ismételt, külön 3-label sor a WEIGHT_FIELDS.map(...) törzsében — a sliderek kompakt label+range szerkezetűek", () => {
+    const weightFieldsBodyMatch = weightsBlock.match(/\{WEIGHT_FIELDS\.map\(\(\{ key, label \}\) => \([\s\S]*?\)\)\}/);
+    assert.ok(weightFieldsBodyMatch, "meg kell találni a WEIGHT_FIELDS.map(...) törzsét");
+    const weightFieldsBody = weightFieldsBodyMatch![0];
+    assert.ok(!/SENSORY_PRIORITY_LEVELS/.test(weightFieldsBody), "a WEIGHT_FIELDS.map(...) törzse NEM hivatkozhat SENSORY_PRIORITY_LEVELS-re — a skála a törzsön KÍVÜL, egyszer jelenik meg");
+    assert.match(weightFieldsBody, /<label className="text-xs text-gray-700">\{label\}<\/label>/);
+    assert.match(weightFieldsBody, /type="range"/);
   });
 
   test("a legszűkebb érintett konténeren (kizárólag a szenzoros prioritás blokkon) overflow-anchor:none van beállítva — NEM globálisan/body-n", () => {
@@ -206,9 +232,9 @@ describe("B) Slider layout stabilitás — root-cause javítás (grid, nem flex-
     assert.ok(!/overflow-anchor:\s*none/i.test(formSrc.slice(0, weightsBlockOuterStart)), "az overflow-anchor:none szabálynak a szenzoros blokk ELŐTT sehol nem szabad (pl. globálisan) megjelennie");
   });
 
-  test("nincs DOM elem hozzáadás/elvétel a 3 label-állapot között (mindig mind a 3 SENSORY_PRIORITY_LEVELS elem renderelődik, csak a className vált)", () => {
+  test("a közös skála mindhárom eleme MINDIG renderelődik (nincs feltételes DOM be/kirendertálás a SENSORY_PRIORITY_LEVELS.map(...)-ban)", () => {
     assert.match(weightsBlock, /\{SENSORY_PRIORITY_LEVELS\.map\(\(level\) => \(/);
-    assert.ok(!/\{weights\[key\] === level\.value && </.test(weightsBlock), "a label-eknek MINDIG renderelődniük kell (nem feltételes DOM be/kirendertálás)");
+    assert.ok(!/\{weights\[key\] === level\.value && </.test(weightsBlock), "a skála elemeinek MINDIG renderelődniük kell (nem feltételes DOM be/kirendertálás)");
   });
 });
 
@@ -296,5 +322,78 @@ describe("L-Q) Favorite CTA — négy állapot, ikon+szöveg, aria-label, backen
 
   test("U) a favorite mentés a MEGLÉVŐ /api/vedett-route/favorites POST endpointot hívja — nincs új backend route/schema", () => {
     assert.match(formSrc, /fetch\("\/api\/vedett-route\/favorites", \{\s*\n\s*method: "POST",/);
+  });
+});
+
+describe("V-X) 'Pihenőpont hozzáadása' globális copy — a korábbi '+ Pihenőpont' feliratnak sehol nem szabad maradnia (11-12. pont)", () => {
+  test("V) nincs user-facing '+ Pihenőpont' a RestPointQuickAdd JSX-ben", () => {
+    assert.ok(!/>\s*\+\s*Pihenőpont/.test(restPointQuickAddSrc), "nem maradhat '+ Pihenőpont' feliratú gomb");
+  });
+
+  test("W) nincs user-facing '+Pihenőpont' (szóköz nélküli változat) sem", () => {
+    assert.ok(!/\+Pihenőpont/.test(restPointQuickAddSrc), "nem maradhat '+Pihenőpont' feliratú gomb");
+  });
+
+  test("X) van 'Pihenőpont hozzáadása' felirat, aria-label-lel, nem csak ikon", () => {
+    assert.match(restPointQuickAddSrc, /<button type="button" onClick=\{handleOpen\} className="btn-secondary" aria-label="Pihenőpont hozzáadása">\s*\n\s*Pihenőpont hozzáadása\s*\n\s*<\/button>/);
+  });
+
+  test("csak a user-facing felirat változott — a komponens neve, props-ai és a mentés-flow (handleSubmit, RestPointCreatedPayload) nem módosult", () => {
+    assert.match(restPointQuickAddSrc, /export default function RestPointQuickAdd/);
+    assert.match(restPointQuickAddSrc, /function handleOpen/);
+    assert.match(restPointQuickAddSrc, /async function handleSubmit/);
+  });
+});
+
+describe("Y-AB) Easy-language + 'preferencia' kivezetés — user-facing szöveg a szenzoros blokkban (13-14. pont)", () => {
+  const weightsBlockStartY = formSrc.indexOf("Ami nekem fontos");
+  const weightsBlockEndY = formSrc.indexOf("{formError &&", weightsBlockStartY);
+  const sensoryBlockY = formSrc.slice(formSrc.lastIndexOf("<div", weightsBlockStartY), weightsBlockEndY);
+
+  test("Y) nincs user-facing 'preferencia' (vagy toldalékolt alakja) a szenzoros/utazási szempontok blokkban", () => {
+    assert.ok(!/preferenci/i.test(sensoryBlockY), "a blokkban sehol nem szerepelhet 'preferencia' szó vagy toldalékolt alakja");
+  });
+
+  test("Z) van 'Ami nekem fontos' cím", () => {
+    assert.match(sensoryBlockY, /Ami nekem fontos/);
+  });
+
+  test("AA) van 'Mi számít neked utazás közben?' alcím", () => {
+    assert.match(sensoryBlockY, /Mi számít neked utazás közben\?/);
+  });
+
+  test("AB) van a specifikáció szerinti segédszöveg", () => {
+    assert.match(sensoryBlockY, /Állítsd be, hogy neked mi fontos\. Így olyan útvonalakat tudunk mutatni, amelyek jobban megfelelnek neked\./);
+  });
+
+  test("a BELSŐ kódnevek (preferences/personalization/weights) NEM lettek átnevezve — ez kizárólag user-facing copy-módosítás", () => {
+    assert.match(formSrc, /PersonalizationWeights/);
+    assert.match(formSrc, /const \[weights, setWeights\] = useState<PersonalizationWeights>/);
+  });
+});
+
+describe("AC-AE) a 3 állapot-emoji mindegyike PONTOSAN EGYSZER jelenik meg vizuálisan a közös skálán", () => {
+  // FONTOS: a tényleges emoji-karakterek (🙅/🙂/⭐) a SENSORY_PRIORITY_LEVELS
+  // modul-szintű tömb deklarációjában élnek (a JSX-blokkon KÍVÜL), a
+  // render pedig `{level.emoji}`-t referál — ezért a vizuális "pontosan
+  // egyszer megjelenik" állítást STRUKTURÁLISAN igazoljuk: (1) a tömb
+  // pontosan egy-egy bejegyzést tartalmaz mindhárom emoji-hoz, ÉS (2) a
+  // JSX-blokkban a `{level.emoji}` referencia (és maga a
+  // SENSORY_PRIORITY_LEVELS.map(...) hívás) pontosan egyszer fordul elő —
+  // nyers emoji-karakterek számolása a blokkban FÉLREVEZETŐ lenne, mert
+  // egy dokumentációs komment is véletlenül tartalmazhatja ugyanazokat a
+  // karaktereket.
+  test("AC-AE) a SENSORY_PRIORITY_LEVELS tömb pontosan egy-egy bejegyzést tartalmaz 🙅/🙂/⭐-hoz, és a render (SENSORY_PRIORITY_LEVELS.map + {level.emoji}) pontosan egyszer fordul elő a blokkban", () => {
+    assert.match(formSrc, /\{ value: 0, emoji: "🙅", label: "Nem fontos" \}/);
+    assert.match(formSrc, /\{ value: 1, emoji: "🙂", label: "Fontos" \}/);
+    assert.match(formSrc, /\{ value: 2, emoji: "⭐", label: "Nagyon fontos" \}/);
+    const levelsArrayMatch = formSrc.match(/const SENSORY_PRIORITY_LEVELS[\s\S]*?\];/);
+    assert.ok(levelsArrayMatch, "meg kell találni a SENSORY_PRIORITY_LEVELS tömb deklarációját");
+    assert.equal((levelsArrayMatch![0].match(/🙅/g) ?? []).length, 1, "🙅 pontosan egy bejegyzésben szerepelhet");
+    assert.equal((levelsArrayMatch![0].match(/🙂/g) ?? []).length, 1, "🙂 pontosan egy bejegyzésben szerepelhet");
+    assert.equal((levelsArrayMatch![0].match(/⭐/g) ?? []).length, 1, "⭐ pontosan egy bejegyzésben szerepelhet");
+
+    const emojiRefs = weightsBlock.match(/\{level\.emoji\}/g) ?? [];
+    assert.equal(emojiRefs.length, 1, "a {level.emoji} render-referenciának pontosan egyszer kell megjelennie a blokkban (a közös skálán, nem sliderenként)");
   });
 });

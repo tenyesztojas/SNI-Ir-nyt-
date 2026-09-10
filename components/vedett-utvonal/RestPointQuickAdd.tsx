@@ -1,6 +1,8 @@
 "use client";
 
-// "+ Pihenőpont" gomb + gyors űrlap — aktív útvonal közben.
+// "Pihenőpont hozzáadása" gomb + gyors űrlap — aktív útvonal közben.
+// (Copy-frissítés, 2026-09-10: a korábbi "+ Pihenőpont" felirat helyett —
+// KIZÁRÓLAG a user-facing szöveg változott, a komponens/props/logika nem.)
 //
 // SZABÁLYOK (Map/GPS/Rest Points sprint, L. pont):
 //  - a mentés NEM tünteti el / állítja meg az aktív útvonalat (a szülő
@@ -113,8 +115,8 @@ export default function RestPointQuickAdd({ onCreated }: { onCreated?: (rp: Rest
 
   if (!open) {
     return (
-      <button type="button" onClick={handleOpen} className="btn-secondary">
-        + Pihenőpont
+      <button type="button" onClick={handleOpen} className="btn-secondary" aria-label="Pihenőpont hozzáadása">
+        Pihenőpont hozzáadása
       </button>
     );
   }
