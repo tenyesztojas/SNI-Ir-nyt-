@@ -120,11 +120,28 @@ export interface RestStopFlowContext {
   selectedRestPoint?: RestPoint;
   errorReason?: RestStopFlowErrorReason;
   errorMessage?: string;
+  // Request-storm hotfix (2026-09-10) — a REST_REQUESTED -> REST_POINTS_LOADING
+  // átmenet pillanatában rögzített GPS-PILLANATKÉP (snapshot), KIZÁRÓLAG
+  // in-memory. Ez az egyetlen forrás, amit a REST_POINTS_LOADING hatás
+  // (RestStopFlowPanel.tsx) a /nearby hívás koordinátájául használ — SOHA
+  // nem a live geo.latitude/geo.longitude-ot, mert az watchPosition alatt
+  // folyamatosan változik, és egy élő függőségi tömb minden GPS-tick-re
+  // újra elindítaná a hívást (ez volt a request-storm gyökere). A mező
+  // SOSEM kerül localStorage/sessionStorage/Supabase/DB/analytics/szerver
+  // logba — csak a folyamat React state-jében él, és a
+  // CANCEL_REST_STOP/RESET_TO_ROUTE_ACTIVE ágak törlik (lásd
+  // stateMachine.ts).
+  readonly requestOrigin?: { latitude: number; longitude: number };
 }
 
 export type RestStopFlowEvent =
   | { type: "REQUEST_REST" }
-  | { type: "START_LOADING_REST_POINTS" }
+  // A requestOrigin KÖTELEZŐ payload — a RestStopFlowPanel.tsx ebben az
+  // eseményben adja át a REST_REQUESTED effektben rögzített GPS-
+  // pillanatképet (lásd RestStopFlowContext.requestOrigin kommentje). Az
+  // állapotgép ezt egyszerűen átmásolja a context-be, sosem olvassa a live
+  // geo értékeket.
+  | { type: "START_LOADING_REST_POINTS"; requestOrigin: { latitude: number; longitude: number } }
   | {
       type: "REST_POINTS_LOADED";
       restPoints: RankedRestPoint[];

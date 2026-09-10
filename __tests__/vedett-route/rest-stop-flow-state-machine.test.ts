@@ -17,6 +17,12 @@ import type { RankedRestPoint, RestStopFlowContext } from "../../lib/vedett-rout
 
 const ORIGINAL_DESTINATION = { name: "Astoria", lat: 47.4952, lon: 19.0616 };
 const ORIGINAL_DEPART_AT = "2026-09-07T10:00:00.000Z";
+// Request-storm hotfix (2026-09-10) — a START_LOADING_REST_POINTS esemény
+// mostantól kötelezően hordozza a GPS-pillanatképet (lásd
+// lib/vedett-route/restStopFlow/types.ts). Ezekben a meglévő tesztekben a
+// pontos koordináta nem releváns (nem ezt vizsgálják), ezért egy rögzített,
+// stabil érték.
+const REQUEST_ORIGIN = { latitude: 47.49, longitude: 19.06 };
 
 function makeRestPoint(overrides: Partial<RestPoint> = {}): RestPoint {
   return {
@@ -66,7 +72,7 @@ test("teljes boldog út: ROUTE_ACTIVE -> ... -> ROUTE_RESUMED (a spec 2. pontja 
 
   const steps: Array<{ event: Parameters<typeof transitionRestStopFlow>[1]; expectedState: string }> = [
     { event: { type: "REQUEST_REST" }, expectedState: "REST_REQUESTED" },
-    { event: { type: "START_LOADING_REST_POINTS" }, expectedState: "REST_POINTS_LOADING" },
+    { event: { type: "START_LOADING_REST_POINTS", requestOrigin: REQUEST_ORIGIN }, expectedState: "REST_POINTS_LOADING" },
     { event: { type: "REST_POINTS_LOADED", restPoints: ranked }, expectedState: "REST_POINTS_READY" },
     { event: { type: "SELECT_REST_POINT", restPoint }, expectedState: "REST_POINT_SELECTED" },
     { event: { type: "START_ROUTE_TO_REST_POINT" }, expectedState: "ROUTING_TO_REST_POINT" },
@@ -98,7 +104,7 @@ test("a pihenőpont csak IDEIGLENES cél — a selectedRestPoint sosem írja fel
   let ctx = createInitialRestStopFlowContext(ORIGINAL_DESTINATION, ORIGINAL_DEPART_AT);
   const restPoint = makeRestPoint({ latitude: 10, longitude: 20 });
   ctx = apply(ctx, { type: "REQUEST_REST" });
-  ctx = apply(ctx, { type: "START_LOADING_REST_POINTS" });
+  ctx = apply(ctx, { type: "START_LOADING_REST_POINTS", requestOrigin: REQUEST_ORIGIN });
   ctx = apply(ctx, { type: "REST_POINTS_LOADED", restPoints: [makeRanked(restPoint)] });
   const selectResult = transitionRestStopFlow(ctx, { type: "SELECT_REST_POINT", restPoint });
   assert.equal(selectResult.ok, true);
@@ -114,7 +120,7 @@ test("originalDestination MÉG a ROUTING_TO_REST_POINT hálózati hívás közbe
   let ctx = createInitialRestStopFlowContext(ORIGINAL_DESTINATION, ORIGINAL_DEPART_AT);
   const restPoint = makeRestPoint();
   ctx = apply(ctx, { type: "REQUEST_REST" });
-  ctx = apply(ctx, { type: "START_LOADING_REST_POINTS" });
+  ctx = apply(ctx, { type: "START_LOADING_REST_POINTS", requestOrigin: REQUEST_ORIGIN });
   ctx = apply(ctx, { type: "REST_POINTS_LOADED", restPoints: [makeRanked(restPoint)] });
   ctx = apply(ctx, { type: "SELECT_REST_POINT", restPoint });
   ctx = apply(ctx, { type: "START_ROUTE_TO_REST_POINT" });
@@ -144,7 +150,7 @@ test("érvénytelen átmenet SOSEM dob kivételt, ok:false-t ad, a context vált
 test("REST_POINTS_LOAD_FAILED -> ERROR állapot, típusos hibakóddal és üzenettel", () => {
   let ctx = createInitialRestStopFlowContext(ORIGINAL_DESTINATION, ORIGINAL_DEPART_AT);
   ctx = apply(ctx, { type: "REQUEST_REST" });
-  ctx = apply(ctx, { type: "START_LOADING_REST_POINTS" });
+  ctx = apply(ctx, { type: "START_LOADING_REST_POINTS", requestOrigin: REQUEST_ORIGIN });
   const result = transitionRestStopFlow(ctx, { type: "REST_POINTS_LOAD_FAILED", reason: "NETWORK_LOST", message: "network_error" });
   assert.equal(result.ok, true);
   if (result.ok) {
@@ -159,7 +165,7 @@ test("REST_POINTS_LOAD_FAILED -> ERROR állapot, típusos hibakóddal és üzene
 test("REST_POINTS_LOAD_FAILED: üres pihenőpont-lista esetén a NO_REST_POINTS_FOUND kód használandó", () => {
   let ctx = createInitialRestStopFlowContext(ORIGINAL_DESTINATION, ORIGINAL_DEPART_AT);
   ctx = apply(ctx, { type: "REQUEST_REST" });
-  ctx = apply(ctx, { type: "START_LOADING_REST_POINTS" });
+  ctx = apply(ctx, { type: "START_LOADING_REST_POINTS", requestOrigin: REQUEST_ORIGIN });
   const result = transitionRestStopFlow(ctx, {
     type: "REST_POINTS_LOAD_FAILED",
     reason: "NO_REST_POINTS_FOUND",

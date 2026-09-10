@@ -122,10 +122,36 @@ describe("C-D) A pihenőpont-keresés KIZÁRÓLAG explicit gombnyomásra indul �
     assert.match(restStopFlowPanelSrc, /onClick=\{\(\) => dispatch\(\{ type: "REQUEST_REST" \}\)\}/);
   });
 
-  test("D) a REST_POINTS_LOADING effekt (a tényleges /nearby hívás) KIZÁRÓLAG akkor fut, ha ctx.state === 'REST_POINTS_LOADING' — egy önmagában bekövetkező GPS-koordináta-változás (geo.latitude/longitude dep) NEM indíthatja el, amíg a state gép nem ebben az állapotban van", () => {
-    const effectMatch = restStopFlowPanelSrc.match(/\/\/ REST_POINTS_LOADING:[\s\S]*?\}, \[ctx\?\.state, geo\.latitude, geo\.longitude\]\);/);
+  test("D) a REST_POINTS_LOADING effekt (a tényleges /nearby hívás) KIZÁRÓLAG akkor fut, ha ctx.state === 'REST_POINTS_LOADING' — egy önmagában bekövetkező GPS-koordináta-változás önmagában NEM indíthatja el, amíg a state gép nem ebben az állapotban van", () => {
+    // Request-storm hotfix (2026-09-10) — ez az effekt MÁR NEM a live
+    // geo.latitude/geo.longitude-tól függ (lásd
+    // rest-point-request-storm-fix.test.ts a teljes root-cause-hoz és az
+    // ÚJ, GPS-pillanatkép-alapú architektúra bizonyításához), hanem a
+    // REST_REQUESTED átmenetkor egyszer rögzített ctx.requestOrigin-től.
+    // Ez az invariáns (GPS tick önmagában nem indíthat hívást, amíg a
+    // state gép nem REST_POINTS_LOADING-ban van) MÉG ERŐSEBBEN igaz, mint
+    // korábban — a dependency array-ben már geo.latitude/geo.longitude
+    // EGYÁLTALÁN nem szerepel.
+    const effectMatch = restStopFlowPanelSrc.match(
+      /\/\/ REST_POINTS_LOADING:[\s\S]*?\}, \[ctx\?\.state, ctx\?\.requestOrigin\?\.latitude, ctx\?\.requestOrigin\?\.longitude\]\);/
+    );
     assert.ok(effectMatch, "meg kell találni a REST_POINTS_LOADING effektet");
-    assert.match(effectMatch![0], /if \(!ctx \|\| ctx\.state !== "REST_POINTS_LOADING"\) return;/, "a guard-nak korán vissza kell térnie, ha a state gép NEM REST_POINTS_LOADING állapotban van");
+    assert.match(
+      effectMatch![0],
+      /if \(!ctx \|\| ctx\.state !== "REST_POINTS_LOADING" \|\| !ctx\.requestOrigin\) return;/,
+      "a guard-nak korán vissza kell térnie, ha a state gép NEM REST_POINTS_LOADING állapotban van (vagy nincs GPS-pillanatkép)"
+    );
+    // MEGJEGYZÉS: a teljes effectMatch[0] a magyarázó KOMMENTET is
+    // tartalmazza, ami prózában szándékosan említi a RÉGI
+    // geo.latitude/geo.longitude mintát (a root cause dokumentálásához) —
+    // ezért a doesNotMatch ellenőrzést a TÉNYLEGES kódra (a `useEffect(()
+    // => {`-től kezdve) kell szűkíteni, nem a kommentre.
+    const effectCodeOnly = effectMatch![0].slice(effectMatch![0].indexOf("useEffect(() => {"));
+    assert.doesNotMatch(
+      effectCodeOnly,
+      /geo\.latitude|geo\.longitude/,
+      "az effekt KÓDJA (a kommentet nem számítva) SEHOL nem hivatkozhat élő geo.latitude/geo.longitude-ra — csak a rögzített ctx.requestOrigin snapshotra"
+    );
   });
 });
 

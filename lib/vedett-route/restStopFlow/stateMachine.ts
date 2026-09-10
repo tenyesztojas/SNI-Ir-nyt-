@@ -68,6 +68,11 @@ export function transitionRestStopFlow(
         expandedSearch: undefined,
         discoveryPartial: undefined,
         discoverySources: undefined,
+        // Request-storm hotfix (2026-09-10) — a megszakított folyamat GPS-
+        // pillanatképét is töröljük, hogy egy KÖVETKEZŐ "Pihenőre van
+        // szükségem" kérés mindig friss snapshotot kapjon (lásd types.ts
+        // RestStopFlowContext.requestOrigin kommentje).
+        requestOrigin: undefined,
       },
     };
   }
@@ -86,6 +91,7 @@ export function transitionRestStopFlow(
         expandedSearch: undefined,
         discoveryPartial: undefined,
         discoverySources: undefined,
+        requestOrigin: undefined,
       },
     };
   }
@@ -100,7 +106,17 @@ export function transitionRestStopFlow(
 
     case "REST_REQUESTED": {
       if (event.type === "START_LOADING_REST_POINTS") {
-        return { ok: true, context: { ...context, state: "REST_POINTS_LOADING" } };
+        // Request-storm hotfix (2026-09-10) — a GPS-pillanatképet (snapshot)
+        // itt rögzítjük a context-ben, EGYETLEN alkalommal, a REST_REQUESTED
+        // -> REST_POINTS_LOADING átmenet pillanatában. A REST_POINTS_LOADING
+        // hatás (RestStopFlowPanel.tsx) ezután KIZÁRÓLAG ezt a
+        // context.requestOrigin-t használja a /nearby hívás koordinátájául —
+        // sosem a live geo.latitude/geo.longitude-ot (lásd types.ts
+        // kommentje a request-storm gyökeréről).
+        return {
+          ok: true,
+          context: { ...context, state: "REST_POINTS_LOADING", requestOrigin: event.requestOrigin },
+        };
       }
       return invalid(context, event);
     }
