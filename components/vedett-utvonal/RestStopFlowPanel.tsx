@@ -231,7 +231,13 @@ export default function RestStopFlowPanel({ originalDestination, originalDepartA
   useEffect(() => {
     if (!ctx || ctx.state !== "REST_REQUESTED") return;
     if (geo.status === "granted" && geo.latitude !== null && geo.longitude !== null) {
-      dispatch({ type: "START_LOADING_REST_POINTS" });
+      // Request-storm hotfix (2026-09-10) — a GPS-koordinátát ITT, EGYETLEN
+      // alkalommal olvassuk le és adjuk át pillanatképként (snapshot) az
+      // állapotgépnek. Ettől a ponttól a REST_POINTS_LOADING hatás már nem a
+      // live geo.latitude/geo.longitude-ot figyeli, hanem ezt a rögzített
+      // ctx.requestOrigin-t — így egy watchPosition alatti GPS-tick nem
+      // indít újra hívást (lásd stateMachine.ts + types.ts kommentjei).
+      dispatch({ type: "START_LOADING_REST_POINTS", requestOrigin: { latitude: geo.latitude, longitude: geo.longitude } });
       return;
     }
     if (geo.status === "denied") {
@@ -254,14 +260,29 @@ export default function RestStopFlowPanel({ originalDestination, originalDepartA
   }, [ctx?.state, geo.status, geo.latitude, geo.longitude]);
 
   // REST_POINTS_LOADING: a /nearby végpont hívása.
+  //
+  // Request-storm hotfix (2026-09-10) — KORÁBBAN ez a hatás [ctx?.state,
+  // geo.latitude, geo.longitude]-tól függött. Mivel Navigation Mode alatt a
+  // watchPosition folyamatosan frissíti geo.latitude/geo.longitude-ot, és a
+  // ctx.state csak a fetch LEZÁRULÁSAKOR vált át READY/ERROR-ra, minden
+  // egyes GPS-tick (ami a fetch függvényben van, tehát MÉG NEM zárult le)
+  // egy ÚJ effect-futást és ezzel egy ÚJ /nearby hívást indított — ez volt a
+  // production request-storm (tömeges overpass_timeout/http_429, majd a
+  // saját rate limiter 429-je) gyökere. A JAVÍTÁS: a hatás mostantól
+  // KIZÁRÓLAG a REST_REQUESTED átmenetkor egyszer rögzített
+  // ctx.requestOrigin-től függ (ami a state-tel EGYÜTT, egyetlen dispatch-
+  // ben áll be, és a REST_POINTS_LOADING állapotban belül SOSEM változik) —
+  // nem a live geo.latitude/geo.longitude-tól. Így egy explicit "Pihenőre
+  // van szükségem" kattintás pontosan EGY /nearby hívást indít, függetlenül
+  // attól, hány GPS-tick érkezik a hívás közben.
   useEffect(() => {
-    if (!ctx || ctx.state !== "REST_POINTS_LOADING") return;
-    if (geo.latitude === null || geo.longitude === null) return;
+    if (!ctx || ctx.state !== "REST_POINTS_LOADING" || !ctx.requestOrigin) return;
+    const { latitude, longitude } = ctx.requestOrigin;
     let cancelled = false;
     (async () => {
       const result = await postJson<{ restPoints: RankedRestPoint[]; expandedSearch?: boolean; partial?: boolean }>(
         "/api/vedett-route/rest-stops/nearby",
-        { currentPosition: { lat: geo.latitude, lon: geo.longitude } }
+        { currentPosition: { lat: latitude, lon: longitude } }
       );
       if (cancelled) return;
       if (result.ok) {
@@ -285,7 +306,7 @@ export default function RestStopFlowPanel({ originalDestination, originalDepartA
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ctx?.state, geo.latitude, geo.longitude]);
+  }, [ctx?.state, ctx?.requestOrigin?.latitude, ctx?.requestOrigin?.longitude]);
 
   // ROUTING_TO_REST_POINT: a /route-to-rest-point végpont hívása.
   useEffect(() => {
