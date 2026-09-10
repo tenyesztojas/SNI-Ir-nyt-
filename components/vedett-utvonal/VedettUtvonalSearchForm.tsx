@@ -700,6 +700,51 @@ function sensoryPriorityLabel(value: number): string {
   return SENSORY_PRIORITY_LEVELS.find((level) => level.value === value)?.label ?? SENSORY_PRIORITY_LEVELS[1].label;
 }
 
+// Android PWA slider scroll-jump — FIZIKAILAG BIZONYÍTOTT root cause
+// célzott javítása (2026-09-10, mobil UX sprint folytatása, fizikai
+// telepített Android PWA teszt alapján). A korábban azonosított label-
+// layout-shift (flex justify-between -> grid grid-cols-3) VALÓS hardening
+// volt, de a fizikai reprodukció bebizonyította: a tényleges root cause
+// az, hogy a felhasználó a "Utca, házszám" (vagy bármely más strukturált
+// cím-) mezőben hagyja a kurzort/fókuszt, legörget, majd megérinti a
+// sensory slider-t — Android Chromium (telepített, standalone PWA-ban) a
+// viewporton kívülre görgetett, FÓKUSZBAN maradt text inputot "focus
+// anchor"-ként kezeli, és a slider pointer-interakciója UTÁN
+// visszagörgeti a viewportot pontosan ahhoz a mezőhöz. Ez egy BÖNGÉSZŐ-
+// szintű, fókusz-vezérelt scroll-anchoring viselkedés, amit KIZÁRÓLAG a
+// fókusz FORRÁSÁNÁL (a régi text input explicit blur-ölésével) javítunk —
+// NEM utólagos scroll-kompenzációval (window.scrollTo, scrollIntoView,
+// scrollTop-manipuláció, setTimeout-os visszagörgetés vagy globális
+// "blur minden scrollkor"/body overflow-anchor-kikapcsolás nincs itt).
+//
+// KIZÁRÓLAG akkor fut, amikor a felhasználó ténylegesen POINTER/TAP
+// interakcióval elkezdi használni a sensory range slidert (onPointerDown-
+// Capture a range inputon) — NEM minden slider onChange-nél, NEM minden
+// rendernél, NEM egy useEffect-alapú automatikus blur-rel. Ha a fókuszban
+// lévő elem maga a range input (pl. Tab-bal ért oda billentyűzettel),
+// nem történik semmi — a billentyűzetes használat és a nyíl-billentyűs
+// vezérlés változatlan marad.
+function releasePreviousTextInputFocus(target: EventTarget | null): void {
+  const active = document.activeElement;
+  if (!(active instanceof HTMLElement)) return;
+  if (active === target) return;
+
+  const isTextLikeControl =
+    active instanceof HTMLInputElement
+      ? active.type !== "range" &&
+        active.type !== "checkbox" &&
+        active.type !== "radio" &&
+        active.type !== "button" &&
+        active.type !== "submit"
+      : active instanceof HTMLTextAreaElement ||
+        active instanceof HTMLSelectElement ||
+        active.isContentEditable;
+
+  if (isTextLikeControl) {
+    active.blur();
+  }
+}
+
 export default function VedettUtvonalSearchForm({
   disabled,
   initialDestination = null,
@@ -1285,6 +1330,12 @@ export default function VedettUtvonalSearchForm({
                   step={1}
                   value={weights[key]}
                   disabled={disabled}
+                  // Android PWA slider scroll-jump, fizikailag bizonyított
+                  // root cause javítása — lásd releasePreviousTextInputFocus
+                  // fenti kommentje. Capture fázisban fut, mielőtt a
+                  // böngésző natív pointerdown/focus-follow viselkedése
+                  // (ami a scroll-jumpot okozná) lefutna.
+                  onPointerDownCapture={(e) => releasePreviousTextInputFocus(e.currentTarget)}
                   onChange={(e) => setWeights((w) => ({ ...w, [key]: Number(e.target.value) }))}
                   aria-valuetext={sensoryPriorityLabel(weights[key])}
                   className="mt-1 w-full"

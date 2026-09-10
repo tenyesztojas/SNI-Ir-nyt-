@@ -9,12 +9,21 @@
 //   node --test --experimental-strip-types __tests__/vedett-route/mobile-ux-slider-and-favorites.test.ts
 //
 // FONTOS a slider tesztekről: ezek a tesztek bizonyítják, hogy az
-// APPLIKÁCIÓ-RÉTEG nem tartalmaz explicit remount/scroll/focus/router-
-// navigáció triggert a csúszka mozgatásakor, ÉS hogy a bizonyított,
+// APPLIKÁCIÓ-RÉTEG nem tartalmaz explicit remount/scroll/router-navigáció
+// triggert a csúszka mozgatásakor, ÉS hogy a korábban azonosított,
 // javított layout-shift forrás (a 3 állapot-label nem egyenlő szélességű
-// flex-elrendezése) grid-alapú, stabil geometriára váltott. NEM állítják,
-// hogy a fizikai Android telepített PWA-ban észlelt scroll-jump ezzel
-// teljesen bizonyítottan megszűnt — ehhez fizikai eszközön validálás
+// flex-elrendezése helyett grid-alapú, stabil geometria) továbbra is
+// hardening-ként jelen van.
+//
+// FRISSÍTÉS (2026-09-10, fizikai Android PWA teszt eredménye alapján): a
+// layout-shift hardening ÖNMAGÁBAN NEM volt elegendő — fizikai, telepített
+// Android PWA-n reprodukált bizonyíték szerint a scroll-jump a fókuszban
+// maradt "Utca, házszám" (vagy más strukturált cím-) mezőhöz tér mindig
+// vissza. A root cause ezért egy böngésző-szintű, fókusz-vezérelt
+// scroll-anchoring viselkedés — ezt a "B2) Slider focus-release" blokk
+// tesztjei fedik le (releasePreviousTextInputFocus, onPointerDownCapture
+// a range inputon). Ez a javítás önmagában sem állítható fizikailag
+// bizonyítottan teljes megoldásnak — fizikai Android PWA validáció
 // szükséges (lásd a feladat végső jelentését).
 
 import { test, describe } from "node:test";
@@ -60,6 +69,106 @@ describe("A) Android PWA slider scroll-jump — application-layer audit (nincs e
 
   test("a WEIGHT_FIELDS.map(...) React key stabil (a mezőnév kulcsa, key={key}) — nem index-alapú, nem generált minden renderre", () => {
     assert.match(weightsBlock, /\{WEIGHT_FIELDS\.map\(\(\{ key, label \}\) => \(\s*\n\s*<div key=\{key\}>/);
+  });
+});
+
+// A releasePreviousTextInputFocus modul-szintű függvény a fájl teteje felé
+// van definiálva (a sensoryPriorityLabel után, a komponens előtt) — ezért
+// a teljes formSrc-en vizsgáljuk, nem a szűkebb weightsBlock-on.
+const focusReleaseFnMatch = formSrc.match(/function releasePreviousTextInputFocus\(target: EventTarget \| null\): void \{[\s\S]*?\n\}/);
+
+describe("B2) Slider focus-release — fizikailag bizonyított Android PWA scroll-jump root cause célzott javítása", () => {
+  test("A) a sensory range inputnak van pointer-interakciós focus-release kezelése (onPointerDownCapture, nem onChange/useEffect)", () => {
+    assert.match(weightsBlock, /onPointerDownCapture=\{\(e\) => releasePreviousTextInputFocus\(e\.currentTarget\)\}/);
+  });
+
+  test("B) a handler document.activeElement-et vizsgálja", () => {
+    assert.ok(focusReleaseFnMatch, "meg kell találni a releasePreviousTextInputFocus függvényt");
+    assert.match(focusReleaseFnMatch![0], /const active = document\.activeElement;/);
+  });
+
+  test("C) egy előző szöveges/text-like inputot (input/textarea/select/contenteditable, kizárva range/checkbox/radio/button/submit) blur-ölhet", () => {
+    const body = focusReleaseFnMatch![0];
+    assert.match(body, /active instanceof HTMLTextAreaElement/);
+    assert.match(body, /active instanceof HTMLSelectElement/);
+    assert.match(body, /active\.isContentEditable/);
+    assert.match(body, /active\.type !== "range"/);
+    assert.match(body, /active\.type !== "checkbox"/);
+    assert.match(body, /active\.type !== "radio"/);
+    assert.match(body, /active\.type !== "button"/);
+    assert.match(body, /active\.type !== "submit"/);
+    assert.match(body, /active\.blur\(\);/);
+  });
+
+  test("D) magát a range inputot (a slider-t, amire a pointerdown irányult) NEM bluröli — early-return, ha active === target", () => {
+    const body = focusReleaseFnMatch![0];
+    assert.match(body, /if \(active === target\) return;/);
+  });
+
+  test("E) a slider onChange handlere NEM hív blur-t minden value update-nél — a blur kizárólag a pointerdown-capture handlerben történik", () => {
+    assert.ok(
+      !/onChange=\{\(e\) => setWeights\(\(w\) => \(\{ \.\.\.w, \[key\]: Number\(e\.target\.value\) \}\)\)\}[^}]*blur/.test(weightsBlock),
+      "az onChange handler nem hívhat blur()-t"
+    );
+    // Az onChange handler saját maga (a releasePreviousTextInputFocus
+    // hívás nélkül) kizárólag a weights state-et módosítja.
+    assert.match(weightsBlock, /onChange=\{\(e\) => setWeights\(\(w\) => \(\{ \.\.\.w, \[key\]: Number\(e\.target\.value\) \}\)\)\}/);
+  });
+
+  test("F) nincs window.scrollTo() a teljes fájlban (a javítás fókusz-alapú, nem scroll-kompenzáció)", () => {
+    assert.ok(!/window\.scrollTo\(/.test(formSrc));
+  });
+
+  test("G) nincs scrollIntoView() a teljes fájlban", () => {
+    assert.ok(!/scrollIntoView\(/.test(formSrc));
+  });
+
+  test("H) nincs document/body scrollTop manipuláció a fájlban", () => {
+    assert.ok(!/\.scrollTop\s*=/.test(formSrc), "nem szabad scrollTop-ot közvetlenül állítani");
+    assert.ok(!/document\.body\.scroll/.test(formSrc));
+  });
+
+  test("I) nincs globális \"blur minden scrollkor\" mechanizmus — nincs scroll eseményfigyelő a fájlban, a blur kizárólag a slider pointerdown-capture-jéhez kötött", () => {
+    assert.ok(!/addEventListener\(\s*["']scroll["']/.test(formSrc), "nem szabad globális scroll-eseményfigyelőnek lennie");
+    // Csak EGYETLEN releasePreviousTextInputFocus hívás létezik a fájlban
+    // (a sensory range input onPointerDownCapture-jén) — nem fut minden
+    // rendernél vagy más eseményen.
+    const callSites = formSrc.match(/releasePreviousTextInputFocus\(/g) ?? [];
+    assert.equal(callSites.length, 2, "1 függvénydefiníció + 1 hívási hely várható (a definíció maga is tartalmazza a nevet)");
+  });
+
+  test("J) a grid grid-cols-3 layout hardening megmarad (a korábbi layout-shift javítás nem lett visszavonva)", () => {
+    assert.match(weightsBlock, /className="mt-1 grid grid-cols-3 items-center gap-1 text-\[11px\]"/);
+  });
+
+  test("K) a lokális overflowAnchor hardening megmarad a szenzoros blokkon (nem globális)", () => {
+    assert.match(weightsBlock, /style=\{\{ overflowAnchor: "none" \}\}/);
+    assert.ok(!/body\s*\{[^}]*overflow-anchor/.test(formSrc));
+  });
+
+  test("L) a range input min=0, max=2, step=1 változatlan", () => {
+    assert.match(weightsBlock, /type="range"\s*\n\s*min=\{0\}\s*\n\s*max=\{2\}\s*\n\s*step=\{1\}/);
+  });
+
+  test("M) a billentyűzetes accessibility nincs elrontva — nincs tabIndex={-1} vagy disabled a range inputon (a disabled prop kizárólag a form-szintű `disabled` state-hez kötött, nem a fókusz-javításhoz), és a slider aria-valuetext változatlan", () => {
+    assert.ok(!/type="range"[\s\S]{0,200}tabIndex=\{-1\}/.test(weightsBlock), "a range input nem kaphat tabIndex={-1}-et");
+    assert.match(weightsBlock, /aria-valuetext=\{sensoryPriorityLabel\(weights\[key\]\)\}/);
+    // A focus-release függvény maga NEM hivatkozik semmilyen tabIndex-re
+    // vagy billentyűzet-eseményre — kizárólag pointerdown-capture-höz kötött.
+    assert.ok(!/tabIndex/.test(focusReleaseFnMatch![0]));
+    assert.ok(!/KeyboardEvent|onKeyDown|e\.key/.test(focusReleaseFnMatch![0]));
+  });
+
+  test("N) a címmezők (strukturált MANUAL city/districtOrPostalCode/street) onChange kezelése változatlan — a javítás nem módosítja a beviteli mezők működését", () => {
+    assert.match(formSrc, /onChange=\{\(e\) => updateOriginManualField\("city", e\.target\.value\)\}/);
+    assert.match(formSrc, /value=\{origin\.type === "MANUAL" \? origin\.city : ""\}/);
+    // A releasePreviousTextInputFocus SEHOL nincs bekötve a cím-mezők
+    // onChange/onBlur/onFocus eseményeibe — kizárólag a range input
+    // onPointerDownCapture-jéhez kötött.
+    assert.ok(
+      !/updateOriginManualField[\s\S]{0,120}releasePreviousTextInputFocus/.test(formSrc),
+      "a cím-mezők onChange-e nem hívhatja a focus-release függvényt"
+    );
   });
 });
 
