@@ -7,6 +7,7 @@ import { useGeolocation } from "@/lib/hooks/useGeolocation";
 import RestPointQuickAdd, { type RestPointCreatedPayload } from "./RestPointQuickAdd";
 import RestStopFlowPanel, { type RestStopMapState } from "./RestStopFlowPanel";
 import type { RestPointMarker } from "./VedettUtvonalMap";
+import { setNavigationModeActive } from "@/lib/pwa/navigationModeSignal";
 
 // „Aktuális helyzetem" mint indulási pont (UX módosítás, 2026-09-09) — a
 // keresési form induló-mezője mostantól két, egymást KIZÁRÓ móddal
@@ -390,6 +391,22 @@ function RankedJourneyCard({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
+
+  // PWA install UX sprint, spec 23./25. pont — sitewide jelzés a
+  // navigationModeSignal modulon keresztül (lásd ott a fejléc), hogy a
+  // PWAInstallBanner (teljesen külön React-fa, app/layout.tsx) sose
+  // jelenjen meg AKTÍV Navigation Mode fölött, és ha épp nyitva van,
+  // amikor a Navigation Mode elindul, záródjon. Az effekt maga NEM ismer
+  // semmit a PWA-ról — csak a saját navigationMode állapotát sugározza ki;
+  // unmountkor (és minden más navigationMode=false átmenetkor, pl.
+  // stopNavigation/isOpen-close) explicit false-ra állítja, hogy sose
+  // maradjon "beragadva" true-n egy eltűnt kártya után.
+  useEffect(() => {
+    setNavigationModeActive(navigationMode);
+    return () => {
+      setNavigationModeActive(false);
+    };
+  }, [navigationMode]);
 
   // Egyetlen megosztott térkép (UX módosítás, 2026-09-09) — a
   // RestStopFlowPanel NEM hoz létre saját térképet, hanem ezen a callback-en
@@ -881,10 +898,17 @@ export default function VedettUtvonalSearchForm({
     setDestination({ type: "MANUAL", city: "Budapest", districtOrPostalCode: "", street: value });
   }
 
-  // Kedvenc útvonalak — mentés UI állapota. "idle" -> "☆ Kedvencekhez
-  // adom" gomb; "open" -> névadó mini-form; sikeres mentés után "saved" ->
-  // "★ Kedvenc útvonal" (a spec 21. pontja szerint).
-  const [favoriteSaveState, setFavoriteSaveState] = useState<"idle" | "open" | "saved">("idle");
+  // Kedvenc útvonalak — mentés UI állapota (Favorites CTA UX sprint,
+  // 2026-09-10, spec 8. pont: "idle" -> "♡ Kedvencekhez adom" nagy,
+  // hangsúlyos másodlagos CTA; "open" -> névadó mini-form, mentés közben
+  // "♡ Kedvenc mentése…"; sikeres mentés után "saved" -> "♥ Kedvenc
+  // útvonal"; ha a preset már létezik, "duplicate" -> "♥ Már a
+  // kedvenceid között". A "duplicate" ÚJ állapot ehhez a sprinthez — a
+  // MEGLÉVŐ backend duplicate-detekciót (lásd handleSaveFavorite lent,
+  // data.duplicate) használja, NEM hoz létre új backend-logikát; csak a
+  // UI-állapotot bontja szét külön, kulturált megjelenésre a korábbi
+  // "nyitva marad + hibaszöveg" viselkedés helyett.
+  const [favoriteSaveState, setFavoriteSaveState] = useState<"idle" | "open" | "saved" | "duplicate">("idle");
   const [favoriteNameInput, setFavoriteNameInput] = useState("");
   const [favoriteSaving, setFavoriteSaving] = useState(false);
   const [favoriteSaveMessage, setFavoriteSaveMessage] = useState<string | null>(null);
@@ -952,7 +976,12 @@ export default function VedettUtvonalSearchForm({
       if (data.ok) {
         setFavoriteSaveState("saved");
       } else if (data.duplicate) {
+        // Favorites CTA UX sprint, spec 8. pont — a duplicate a MEGLÉVŐ
+        // backend detekció eredménye (data.duplicate), csak a UI most egy
+        // önálló, kulturált "♥ Már a kedvenceid között" állapotot mutat
+        // ehelyett, hogy a névadó mini-form nyitva marad egy hibaszöveggel.
         setFavoriteSaveMessage(data.message ?? "Ez az útvonal már a kedvenceid között van.");
+        setFavoriteSaveState("duplicate");
       } else {
         setFavoriteSaveMessage(data.message ?? "Nem sikerült elmenteni a kedvenc útvonalat.");
       }
@@ -1190,7 +1219,24 @@ export default function VedettUtvonalSearchForm({
           </div>
         </div>
 
-        <div className="rounded border border-sni-primary/30 bg-sni-primary/5 p-3">
+        <div
+          className="rounded border border-sni-primary/30 bg-sni-primary/5 p-3"
+          // Mobil UX sprint (Android PWA slider scroll-jump hardening,
+          // 2026-09-10, spec 4. pont) — a LEGSZŰKEBB érintett konténeren
+          // (kizárólag ezen a szenzoros prioritás blokkon, NEM globálisan a
+          // body-n) kikapcsoljuk a böngésző scroll-anchoring heurisztikáját.
+          // Ok: ez a blokk az egyetlen, ahol egy csúszka mozgatása
+          // (weights[key] állapotváltás) DOM-tartalom-változást (bold/nem-
+          // bold label-váltás) okoz közvetlenül a csúszka fölött/körül —
+          // ha a böngésző ide "horgonyoz" egy scroll-anchort, egy ilyen
+          // tartalomváltás elméletileg scroll-ugrást válthat ki. Ez NEM egy
+          // vak "javítás" bizonyított root cause nélkül — lásd a lenti,
+          // 9-11. ponthoz tartozó grid-átalakítást, amely magát a
+          // geometria-változást is kiküszöböli; az overflow-anchor:none
+          // csak egy MÁSODIK, olcsó védelmi réteg ugyanerre a jelenségre,
+          // szigorúan erre a konténerre korlátozva.
+          style={{ overflowAnchor: "none" }}
+        >
           <h3 className="text-sm font-semibold text-sni-text">Mennyire fontosak neked ezek a szempontok?</h3>
           <p className="mt-1 text-xs text-gray-500">
             Állítsd be külön-külön, melyik szempont mennyire számít neked az útvonal kiválasztásánál. Ez nem diagnózis-alapú beállítás — csak a te személyes preferenciádat veszi figyelembe, hogy a &quot;Legnyugodtabb&quot; ajánlás jobban illeszkedjen hozzád.
@@ -1202,15 +1248,29 @@ export default function VedettUtvonalSearchForm({
                 {/* 9-11. pont — a három szenzoros prioritás-állapot emoji +
                     szöveg együtt, SOSEM csak szín alapján megkülönböztetve;
                     az aktuális állapot vizuálisan hangsúlyosabb. Unicode
-                    emoji karakterek (nincs külső asset-függőség). */}
-                <div className="mt-1 flex flex-wrap items-center justify-between gap-1 text-[11px]">
+                    emoji karakterek (nincs külső asset-függőség).
+                    Android PWA slider scroll-jump hardening (2026-09-10,
+                    spec 4. pont) — a korábbi `flex justify-between` elrendezés
+                    a KIJELÖLT állapotot font-semibold-dal (szélesebb glyph)
+                    jelölte, miközben a testvér elemek pozíciója a `justify-
+                    between` miatt a tartalom szélességétől függött — csúszka-
+                    mozgatáskor ez egy VALÓS, bizonyítható layout-shiftet
+                    okozott a 3 label között (nem csak feltételezett). A
+                    javítás: 3 AZONOS SZÉLESSÉGŰ CSS grid-oszlop (`grid-cols-
+                    3`), amely a kijelölt állapot félkövér stílusát megtartja
+                    (a hangsúly így is látszik), de a saját, fix szélességű
+                    cellájában marad — a szomszédos cellák geometriája
+                    (szélessége, pozíciója) MINDIG stabil, függetlenül attól,
+                    melyik állapot van kijelölve. Ez a root-cause-szintű
+                    javítás, NEM csak egy scroll-hack. */}
+                <div className="mt-1 grid grid-cols-3 items-center gap-1 text-[11px]">
                   {SENSORY_PRIORITY_LEVELS.map((level) => (
                     <span
                       key={level.value}
                       className={
                         weights[key] === level.value
-                          ? "flex items-center gap-1 font-semibold text-sni-primary"
-                          : "flex items-center gap-1 text-gray-400"
+                          ? "flex items-center justify-center gap-1 text-center font-semibold text-sni-primary"
+                          : "flex items-center justify-center gap-1 text-center text-gray-400"
                       }
                     >
                       <span aria-hidden="true">{level.emoji}</span>
@@ -1240,13 +1300,35 @@ export default function VedettUtvonalSearchForm({
           {loading ? "Keresés…" : "Útvonal keresése"}
         </button>
 
-        {/* Kedvenc útvonalak — mentés (spec 21. pont). SZÁNDÉKOSAN a
-            preset (origin/destination/weights) mentése, SOHA a konkrét
-            kiszámolt journey — lásd handleSaveFavorite. */}
+        {/* Kedvenc útvonalak — mentés (Favorites CTA UX sprint, 2026-09-10,
+            eredetileg spec 21. pont, most a 7-10. pont szerint nagyobb,
+            hangsúlyosabb CTA-vá alakítva). SZÁNDÉKOSAN a preset (origin/
+            destination/weights) mentése, SOHA a konkrét kiszámolt journey
+            — lásd handleSaveFavorite; a backend/RLS/duplicate-logika
+            VÁLTOZATLAN, kizárólag a UI-megjelenés bővült. A ▶ Navigáció
+            indítása marad az elsődleges CTA (btn-primary, a submit gomb
+            alatt) — ez itt egy ERŐS MÁSODLAGOS CTA, vizuálisan
+            visszafogottabb, de mobilon is jól érinthető (≥44px touch
+            target, közel teljes szélesség), sosem apró link-jellegű. */}
         <div className="rounded border border-dashed border-gray-300 p-3">
           {favoriteSaveState === "saved" ? (
-            <p className="flex items-center gap-1.5 text-sm font-medium text-sni-primary">
-              <span aria-hidden="true">★</span> Kedvenc útvonal
+            // Mentés után (spec 10. pont): a szív ÖNMAGÁBAN nem hordoz
+            // információt — mindig szöveg is kíséri; az aria-label a
+            // screen reader számára a teljes, kulturált mondatot mondja be.
+            <p
+              className="flex min-h-[44px] items-center gap-1.5 rounded-lg bg-sni-primary/10 px-3 py-2 text-sm font-semibold text-sni-primary"
+              role="status"
+              aria-label="Ez az útvonal a kedvenceid között van"
+            >
+              <span aria-hidden="true">♥</span> Kedvenc útvonal
+            </p>
+          ) : favoriteSaveState === "duplicate" ? (
+            <p
+              className="flex min-h-[44px] items-center gap-1.5 rounded-lg bg-sni-primary/10 px-3 py-2 text-sm font-semibold text-sni-primary"
+              role="status"
+              aria-label="Ez az útvonal már a kedvenceid között van"
+            >
+              <span aria-hidden="true">♥</span> Már a kedvenceid között
             </p>
           ) : favoriteSaveState === "open" ? (
             <div className="space-y-2">
@@ -1258,11 +1340,18 @@ export default function VedettUtvonalSearchForm({
                 disabled={favoriteSaving}
                 className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm disabled:bg-gray-100"
               />
-              <div className="flex items-center gap-3">
-                <button type="button" onClick={handleSaveFavorite} disabled={favoriteSaving} className="btn-secondary text-xs disabled:opacity-50">
-                  {favoriteSaving ? "Mentés…" : "Mentés"}
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={handleSaveFavorite}
+                  disabled={favoriteSaving}
+                  aria-label={favoriteSaving ? "Kedvenc mentése…" : "Kedvenc útvonal mentése"}
+                  aria-busy={favoriteSaving}
+                  className="flex min-h-[44px] items-center gap-1.5 rounded-lg border border-sni-primary/40 bg-white px-4 text-sm font-semibold text-sni-primary shadow-sm disabled:opacity-50"
+                >
+                  <span aria-hidden="true">♡</span> {favoriteSaving ? "Kedvenc mentése…" : "Mentés"}
                 </button>
-                <button type="button" onClick={() => setFavoriteSaveState("idle")} className="text-xs text-gray-500 underline">
+                <button type="button" onClick={() => setFavoriteSaveState("idle")} disabled={favoriteSaving} className="text-xs text-gray-500 underline disabled:opacity-50">
                   Mégse
                 </button>
               </div>
@@ -1275,12 +1364,18 @@ export default function VedettUtvonalSearchForm({
                 setFavoriteNameInput(`${currentFavoriteOriginLabel()} → ${currentFavoriteDestinationLabel()}`);
                 setFavoriteSaveMessage(null);
               }}
-              className="flex items-center gap-1.5 text-sm font-medium text-sni-primary"
+              aria-label="Kedvenc útvonal mentése"
+              // Mobil UX: legalább 44px magas, jól látható, közel teljes
+              // szélességű touch target — NEM apró link (spec 9. pont).
+              // Desktopon is jól látható, de nem kötelező full-width.
+              className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg border border-sni-primary/40 bg-white px-4 py-2.5 text-sm font-semibold text-sni-primary shadow-sm sm:w-auto sm:justify-start"
             >
-              <span aria-hidden="true">☆</span> Kedvencekhez adom
+              <span aria-hidden="true">♡</span> Kedvencekhez adom
             </button>
           )}
-          {favoriteSaveMessage && <p className="mt-1 text-xs text-amber-700">{favoriteSaveMessage}</p>}
+          {favoriteSaveMessage && favoriteSaveState !== "duplicate" && (
+            <p className="mt-1 text-xs text-amber-700">{favoriteSaveMessage}</p>
+          )}
         </div>
 
         {disabled && (

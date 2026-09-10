@@ -313,10 +313,49 @@ describe("TASK — Szenzoros prioritás UX (8-11. pont): a felhasználó SOSEM l
     assert.match(formSrc, /const body = \{\s*\n\s*\.\.\.originFields,\s*\n\s*\.\.\.destinationFields,\s*\n\s*departAt:[\s\S]{0,80}?\n\s*weights,\s*\n\s*\};/);
   });
 
-  test("a slider-jelölés emoji + szöveg együtt jelenik meg (nem csak szín alapján), és az aktuálisan kiválasztott állapot vizuálisan hangsúlyosabb (font-semibold)", () => {
-    assert.match(
-      formSrc,
-      /weights\[key\] === level\.value\s*\n\s*\? "flex items-center gap-1 font-semibold text-sni-primary"\s*\n\s*: "flex items-center gap-1 text-gray-400"/
+  test("a slider-jelölés emoji + szöveg együtt jelenik meg (nem csak szín alapján), és az aktuálisan kiválasztott állapot vizuálisan hangsúlyosabb (font-semibold) — SZEMANTIKUS invariánsok, nem egy pontos, teljes className string", () => {
+    // TESZT-ELAVULÁS JAVÍTÁSA (mobil UX sprint, 2026-09-10): ez a teszt
+    // korábban egy PONTOS, teljes className stringet várt el
+    // ("flex items-center gap-1 font-semibold text-sni-primary" /
+    // "flex items-center gap-1 text-gray-400"). A mobil UX sprintben a
+    // production kód SZÁNDÉKOSAN lecserélte a `flex justify-between`
+    // alapú label-sort egy stabil, 3 azonos szélességű oszlopos
+    // `grid grid-cols-3` elrendezésre — ez egy bizonyított, root-cause-
+    // szintű javítás egy VALÓS Android PWA layout-shift hibára (lásd
+    // mobile-ux-slider-and-favorites.test.ts, "B) Slider layout
+    // stabilitás" leírás), NEM regresszió. A teszt ezért mostantól a
+    // SZEMANTIKAI invariánsokat ellenőrzi külön-külön (aktív állapot
+    // félkövér + primary szín, inaktív állapot szürke, stabil grid
+    // layout, emoji+szöveg mapping), whitespace/CRLF/LF/class-sorrend-
+    // érzéketlenül — nem egy törékeny, teljes-string regexet.
+    const blockStart = formSrc.indexOf("Mennyire fontosak neked ezek a szempontok?");
+    assert.ok(blockStart !== -1, "meg kell találni a szenzoros prioritás blokk kezdetét");
+    const blockEnd = formSrc.indexOf("{formError &&", blockStart);
+    assert.ok(blockEnd !== -1, "meg kell találni a szenzoros blokk utáni stabil {formError && ...} markert");
+    const sensoryBlock = formSrc.slice(blockStart, blockEnd);
+
+    const conditionalMatch = sensoryBlock.match(
+      /weights\[key\] === level\.value\s*\n\s*\?\s*"([^"]*)"\s*\n\s*:\s*"([^"]*)"/
     );
+    assert.ok(conditionalMatch, "meg kell találni a weights[key] === level.value feltételes className-elágazást");
+    const [, activeClass, inactiveClass] = conditionalMatch;
+
+    assert.match(activeClass, /\bfont-semibold\b/, "az aktív állapotnak vizuálisan hangsúlyosnak kell lennie (font-semibold)");
+    assert.match(activeClass, /\btext-sni-primary\b/, "az aktív állapotnak meg kell tartania a jelenlegi primary szöveg-stílust");
+    assert.match(inactiveClass, /\btext-gray-400\b/, "az inaktív állapotnak vizuálisan kevésbé hangsúlyosnak kell lennie (gray)");
+    assert.ok(!/font-semibold/.test(inactiveClass), "az inaktív állapot NEM lehet félkövér");
+
+    // A stabil, 3 azonos szélességű oszlopos layout (a bizonyított Android
+    // PWA layout-shift javítása) továbbra is jelen van a label-container-en.
+    assert.match(
+      sensoryBlock,
+      /className="mt-1 grid grid-cols-3 items-center gap-1 text-\[11px\]"/,
+      "a label-container-nak a stabil grid-cols-3 layoutot kell használnia"
+    );
+
+    // emoji + szöveg mapping megmaradt (mindhárom állapot ugyanabban a
+    // <span>-ben jeleníti meg az emoji-t és a label szöveget).
+    assert.match(sensoryBlock, /<span aria-hidden="true">\{level\.emoji\}<\/span>/);
+    assert.match(sensoryBlock, /\{level\.label\}/);
   });
 });
