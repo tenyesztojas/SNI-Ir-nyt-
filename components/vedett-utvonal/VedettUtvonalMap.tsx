@@ -73,6 +73,25 @@ export interface VedettUtvonalMapProps {
   // aktív). Alapértelmezett false = a régi, route-fitBounds viselkedés.
   restPointFocusMode?: boolean;
   className?: string;
+  // Explicit Navigation Mode (Mobil navigációs UX sprint, 10. pont) — amíg
+  // followMode=true, a kamerát EZ a komponens tartja folyamatosan a
+  // currentPosition-höz igazítva (easeTo, navigationZoom szintre), a FENTI
+  // két fitBounds-alapú effekt (route-nézet, pihenőpont-fókusz) ekkor
+  // szándékosan kikapcsol — ne versengjenek a kameráért. Alapértelmezett
+  // false, tehát a MEGLÉVŐ hívási helyeken (props nélkül) a viselkedés
+  // BYTE-pontosan a régi marad.
+  followMode?: boolean;
+  // A follow-mode zoom szintje (spec: navigációs zoom ~15-17). Csak akkor
+  // van hatása, ha followMode=true.
+  navigationZoom?: number;
+  // 11. pont — "a felhasználó saját pan/zoom/drag gesztusa szakítsa meg a
+  // follow-módot, de a térkép SAJÁT programozott kameramozgása (easeTo/
+  // fitBounds) NE". A MapLibre GL JS dragstart/zoomstart/rotatestart/
+  // pitchstart eseményeinek `originalEvent` mezője KIZÁRÓLAG valódi
+  // felhasználói input (mouse/touch/wheel) esetén van jelen — programozott
+  // hívásoknál (easeTo/jumpTo/fitBounds) mindig undefined. Ez a hivatalos,
+  // dokumentált MapLibre/Mapbox mintázat a user-vs-programmatic megkülönb.
+  onUserGestureCancelFollow?: () => void;
 }
 
 // Egyedi MapLibre control gomb — a NavigationControl (zoom +/-) mellé, a
@@ -118,13 +137,22 @@ class CurrentLocationControl implements maplibregl.IControl {
   }
 }
 
-export default function VedettUtvonalMap({ legs, fromName, toName, currentPosition, restPoints = [], selectedRestPointId = null, onSelectRestPoint, restPointFocusMode = false, className }: VedettUtvonalMapProps) {
+export default function VedettUtvonalMap({ legs, fromName, toName, currentPosition, restPoints = [], selectedRestPointId = null, onSelectRestPoint, restPointFocusMode = false, className, followMode = false, navigationZoom = 16, onUserGestureCancelFollow }: VedettUtvonalMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const currentPosMarkerRef = useRef<maplibregl.Marker | null>(null);
   const restPointMarkersRef = useRef<maplibregl.Marker[]>([]);
   const currentPositionRef = useRef<{ latitude: number; longitude: number } | null>(currentPosition ?? null);
   const [mapReady, setMapReady] = useState(false);
+
+  // A user-gesture-cancel callback mindig ezen a ref-en keresztül fut —
+  // így az egyszer (mount-kor) regisztrált MapLibre event listener mindig
+  // a LEGFRISSEBB callback-et hívja, nem egy elavult closure-t, anélkül,
+  // hogy a listenert újra kellene regisztrálni minden rendernél.
+  const onUserGestureCancelFollowRef = useRef(onUserGestureCancelFollow);
+  useEffect(() => {
+    onUserGestureCancelFollowRef.current = onUserGestureCancelFollow;
+  }, [onUserGestureCancelFollow]);
 
   // A GPS-gomb mindig ezt a ref-et olvassa — nem hoz létre új GPS-watch-ot,
   // nem perzisztálja/logolja a koordinátát (lásd useGeolocation.ts
@@ -155,9 +183,44 @@ export default function VedettUtvonalMap({ legs, fromName, toName, currentPositi
     map.addControl(new maplibregl.NavigationControl(), "top-right");
     map.addControl(new CurrentLocationControl(() => currentPositionRef.current), "top-right");
     map.on("load", () => setMapReady(true));
+
+    // 11. pont — follow-mode megszakítása VALÓDI felhasználói gesztusra
+    // (drag/pinch/wheel/rotate), de NEM a saját programozott kameramozgásra
+    // (easeTo a follow-effektből, fitBounds a route-/pihenőpont-nézetből).
+    // A MapLibre *start eseményeinek `originalEvent` mezője kizárólag
+    // valódi input (MouseEvent/TouchEvent/WheelEvent) esetén létezik —
+    // programozott hívásoknál mindig undefined, ez a hivatalos, dokumentált
+    // megkülönböztetési mód.
+    const handlePossibleUserGesture = (e: { originalEvent?: unknown }) => {
+      if (e.originalEvent) {
+        onUserGestureCancelFollowRef.current?.();
+      }
+    };
+    map.on("dragstart", handlePossibleUserGesture);
+    map.on("zoomstart", handlePossibleUserGesture);
+    map.on("rotatestart", handlePossibleUserGesture);
+    map.on("pitchstart", handlePossibleUserGesture);
+
+    // 7. pont — "a manuális teljes képernyő gomb és a Navigation Mode
+    // fullscreen váltása után a MapLibre-nek KÖTELEZŐ map.resize()-t
+    // hívni" (a canvas nem méretezi át magát automatikusan, ha a
+    // konténer CSS-mérete változik, pl. normál <-> fixed fullscreen
+    // váltásnál). A ResizeObserver ezt a konténer TÉNYLEGES pixel-
+    // méretváltozására figyelve automatikusan megteszi — nem kell a
+    // hívó oldalnak (VedettUtvonalSearchForm) tudnia a MapLibre belső
+    // API-járól, elég a className-et váltania.
+    let resizeObserver: ResizeObserver | undefined;
+    if (containerRef.current && typeof ResizeObserver !== "undefined") {
+      resizeObserver = new ResizeObserver(() => {
+        map.resize();
+      });
+      resizeObserver.observe(containerRef.current);
+    }
+
     mapRef.current = map;
 
     return () => {
+      resizeObserver?.disconnect();
       map.remove();
       mapRef.current = null;
     };
@@ -284,10 +347,17 @@ export default function VedettUtvonalMap({ legs, fromName, toName, currentPositi
     // (vonalak/megállók) rajzolása ettől függetlenül MINDIG megtörténik
     // fent — a route SOHA nem tűnik el pihenőpont-fókuszban, csak a
     // kamera nem igazodik hozzá addig.
-    if (hasCoords && !restPointFocusMode) {
+    // Explicit Navigation Mode, 10./13. pont: amíg followMode aktív, a
+    // KAMERÁÉRT a lenti follow-effekt felel (easeTo a currentPosition-höz,
+    // navigációs zoomra) — ez a fitBounds itt ilyenkor szándékosan NEM fut,
+    // nehogy a kettő versengjen és láthatóan "ugráljon" a térkép. Az
+    // útvonal-geometria rajzolása (a fenti addSource/addLayer) ettől
+    // FÜGGETLENÜL mindig megtörténik — a route SOHA nem tűnik el
+    // navigáció közben (spec 13. pont, "route stays visible").
+    if (hasCoords && !restPointFocusMode && !followMode) {
       map.fitBounds(bounds, { padding: 48, maxZoom: 17, duration: 300 });
     }
-  }, [legs, mapReady, restPointFocusMode]);
+  }, [legs, mapReady, restPointFocusMode, followMode]);
 
   // Sprint E.1 hotfix (2026-09-08), frissítve az Egyetlen Megosztott Térkép
   // UX módosításnál (2026-09-09) — pihenőpont-jelölt nézet fitBounds/zoom
@@ -327,6 +397,9 @@ export default function VedettUtvonalMap({ legs, fromName, toName, currentPositi
     // Nincs aktív pihenőpont-fókusz -> a FENTI effekt felelős a nézetért
     // (route-fitBounds), ez az effekt itt szándékosan nem csinál semmit.
     if (!restPointFocusMode) return;
+    // Explicit Navigation Mode, 10. pont: followMode alatt a lenti
+    // follow-effekt felel a kameráért, ez itt sem fut ilyenkor.
+    if (followMode) return;
 
     const hasCurrentPosition = typeof currentLat === "number" && typeof currentLon === "number";
     if (!hasCurrentPosition && restPoints.length === 0) {
@@ -354,7 +427,27 @@ export default function VedettUtvonalMap({ legs, fromName, toName, currentPositi
     }
     map.fitBounds(bounds, { padding: 56, maxZoom: 16, duration: 300 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [restPointFocusMode, mapReady, restPointIdsKey, currentLat, currentLon]);
+  }, [restPointFocusMode, mapReady, restPointIdsKey, currentLat, currentLon, followMode]);
+
+  // Explicit Navigation Mode (10./11. pont) — amíg followMode aktív, a
+  // kamera FOLYAMATOSAN a currentPosition-t követi navigációs zoomon
+  // (easeTo, sima animációval), a felhasználó saját GPS-mozgásával együtt
+  // araszolva. Az első fix is ide tartozik: mivel followMode a navigáció
+  // INDÍTÁSAKOR már true, az első beérkező pozíció is ezen az ágon esik át
+  // -> nincs szükség külön "első fix" külön esetre, ugyanez az effekt intézi
+  // a kezdeti auto-recenter-t is (spec 8./10. pont). Ha a felhasználó saját
+  // gesztussal elmozdítja a kamerát, a szülő (RankedJourneyCard) a
+  // onUserGestureCancelFollow callback-en keresztül followMode=false-ra
+  // állítja, és ez az effekt attól a pillanattól nem ír bele többé a
+  // kamerába, amíg a felhasználó nem kér explicit "Kövesd a helyzetem"
+  // visszaállást.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+    if (!followMode) return;
+    if (typeof currentLat !== "number" || typeof currentLon !== "number") return;
+    map.easeTo({ center: [currentLon, currentLat], zoom: navigationZoom, duration: 400 });
+  }, [followMode, mapReady, currentLat, currentLon, navigationZoom]);
 
   // Aktuális GPS-pozíció marker — csak a jelenlegi renderben él, nincs
   // perzisztálás (lásd lib/hooks/useGeolocation.ts fejléce).

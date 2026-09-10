@@ -331,6 +331,66 @@ function RankedJourneyCard({
   const [sessionRestPoints, setSessionRestPoints] = useState<RestPointCreatedPayload[]>([]);
   const geo = useGeolocation();
 
+  // Explicit Navigation Mode (Mobil navigációs UX sprint, 5-14. pont).
+  //
+  // navigationMode: a felhasználó explicit "▶ Navigáció indítása" gombjára
+  // aktiválódik — SOHA automatikusan (spec 8. pont, "foreground, explicit
+  // indítású GPS-követés"). Amíg aktív, a térkép fullscreen (lásd
+  // mapFullscreen lent) és a geo-t folyamatos watchPosition módban tartja.
+  //
+  // followMode: amíg true, a <VedettUtvonalMap> kamerája folyamatosan a
+  // currentPosition-t követi (lásd a map komponens follow-effektjét).
+  // navigationMode indításakor mindig true (auto-recenter az első fixre és
+  // minden további GPS-tickre), a felhasználó saját pan/zoom/drag
+  // gesztusára false-ra vált (handleUserGestureCancelFollow lent) — ekkor
+  // egy "📍 Kövesd a helyzetem" gomb jelenik meg, ami vissza tudja
+  // kapcsolni. FONTOS: navigationMode=false esetén followMode-nak is
+  // false-nak KELL lennie (lásd stopNavigation) — nincs értelme "követni"
+  // egy le nem navigáló nézetben, és ez zárja ki, hogy egy korábbi
+  // navigáció maradék follow-állapota átszivárogjon egy újba.
+  const [navigationMode, setNavigationMode] = useState(false);
+  const [followMode, setFollowMode] = useState(false);
+
+  // Manuális teljes képernyő (spec 7. pont) — a NORMÁL (nem navigáló) map
+  // nézeten is elérhető "⛶ Teljes képernyő" gomb, KÜLÖN a navigationMode-tól:
+  // ez nem indít GPS-követést, csak nagyobb nézetet ad. A kettő UNIÓJA
+  // dönti el, hogy a térkép konténere fixed-fullscreen CSS-t kapjon-e (lásd
+  // mapFullscreen lent) — navigationMode mindig fullscreen-t is jelent,
+  // manualFullscreen önmagában is elég a nagy nézethez navigáció nélkül.
+  const [manualFullscreen, setManualFullscreen] = useState(false);
+  const mapFullscreen = navigationMode || manualFullscreen;
+
+  const startNavigation = () => {
+    setNavigationMode(true);
+    setFollowMode(true);
+    setManualFullscreen(false); // navigationMode már magában fullscreen — nincs szükség a külön manuális flagre is.
+    geo.startWatching();
+  };
+
+  const stopNavigation = () => {
+    setNavigationMode(false);
+    setFollowMode(false);
+    geo.stopWatching();
+  };
+
+  // WatchPosition lifecycle (spec 9. pont, "mandatory clearWatch on stop/
+  // unmount") — ha a kártya BEZÁRUL (isOpen -> false) navigáció közben, a
+  // GPS-követést AZONNAL le kell állítani, nem hagyhatjuk némán futni egy
+  // olyan nézet mögött, ami már nem is látható. A useGeolocation() saját
+  // unmount-cleanupja (lásd a hook fejléce) csak a TELJES komponens
+  // unmountjára vonatkozik — ez a kártya viszont isOpen=false esetén NEM
+  // unmountol (lásd a komponens fejléce elején), csak a JSX-blokkja tűnik
+  // el, a geo/navigationMode state él tovább -> ezt itt explicit kell
+  // kezelni.
+  useEffect(() => {
+    if (!isOpen && navigationMode) {
+      setNavigationMode(false);
+      setFollowMode(false);
+      geo.stopWatching();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
+
   // Egyetlen megosztott térkép (UX módosítás, 2026-09-09) — a
   // RestStopFlowPanel NEM hoz létre saját térképet, hanem ezen a callback-en
   // keresztül jelenti, hogy a "Pihenőre van szükségem" folyamat éppen milyen
@@ -467,30 +527,91 @@ function RankedJourneyCard({
               folyamat nem aktív (restStopMapState.active === false), ez
               pontosan a Task A előtti, normál navigációs nézetet
               eredményezi (A1). */}
-          <VedettUtvonalMap
-            legs={restStopMapState.active && restStopMapState.legsOverride ? restStopMapState.legsOverride : displayedJourney.legs}
-            currentPosition={currentPosition}
-            restPoints={mergeRestPointMarkers(
-              sessionRestPoints.map((rp) => ({ id: rp.id, name: rp.name, latitude: rp.latitude, longitude: rp.longitude })),
-              restStopMapState.active ? restStopMapState.restPoints : []
+          {/* Explicit Navigation Mode / manuális teljes képernyő (spec 6./7.
+              pont) — EZ A KONTÉNER mindig ugyanaz a DOM-elem marad, csak a
+              className vált fixed-fullscreen és normál között; a benne élő
+              <VedettUtvonalMap> SOHA nem unmountolódik/remountolódik a
+              fullscreen be/kikapcsolásakor (spec 13./14. pont — "no remount
+              on navigation start/stop"), csak props/className változik.
+              Fullscreen alatt `position: fixed; inset: 0` + `100dvh` (a
+              dvh a mobil böngészők dinamikus cím/eszközsávjaival is
+              helyesen viselkedik, nem csak a statikus vh). */}
+          <div
+            className={mapFullscreen ? "fixed inset-0 z-50 bg-black" : "relative"}
+            style={mapFullscreen ? { height: "100dvh" } : undefined}
+          >
+            <VedettUtvonalMap
+              legs={restStopMapState.active && restStopMapState.legsOverride ? restStopMapState.legsOverride : displayedJourney.legs}
+              currentPosition={currentPosition}
+              restPoints={mergeRestPointMarkers(
+                sessionRestPoints.map((rp) => ({ id: rp.id, name: rp.name, latitude: rp.latitude, longitude: rp.longitude })),
+                restStopMapState.active ? restStopMapState.restPoints : []
+              )}
+              selectedRestPointId={restStopMapState.active ? restStopMapState.selectedRestPointId : null}
+              onSelectRestPoint={restStopMapState.active ? restStopMapState.onSelectRestPoint : undefined}
+              restPointFocusMode={restStopMapState.active && restStopMapState.focusOnRestPoints}
+              className={mapFullscreen ? "h-full w-full" : "h-[300px] w-full rounded border border-gray-200 sm:h-[360px] md:h-[450px]"}
+              followMode={followMode}
+              navigationZoom={16}
+              onUserGestureCancelFollow={() => setFollowMode(false)}
+            />
+
+            {mapFullscreen && (
+              <div className="absolute left-2 right-2 top-2 z-10 flex flex-wrap items-center gap-2">
+                {navigationMode ? (
+                  <button type="button" onClick={stopNavigation} className="btn-secondary bg-white text-xs shadow">
+                    ✕ Navigáció befejezése
+                  </button>
+                ) : (
+                  <button type="button" onClick={() => setManualFullscreen(false)} className="btn-secondary bg-white text-xs shadow">
+                    ✕ Kis nézet
+                  </button>
+                )}
+                {navigationMode && geo.status === "requesting" && (
+                  <span className="rounded bg-white/90 px-2 py-1 text-xs text-gray-700 shadow">Helyzet meghatározása…</span>
+                )}
+                {navigationMode && geo.status === "denied" && (
+                  <span className="rounded bg-white/90 px-2 py-1 text-xs text-amber-700 shadow">
+                    A navigációhoz engedélyezd a helymeghatározást a böngésződben.
+                  </span>
+                )}
+                {navigationMode && (geo.status === "unavailable" || geo.status === "timeout") && (
+                  <span className="rounded bg-white/90 px-2 py-1 text-xs text-amber-700 shadow">
+                    A jelenlegi hely most nem érhető el.
+                  </span>
+                )}
+                {navigationMode && !followMode && (
+                  <button type="button" onClick={() => setFollowMode(true)} className="btn-primary text-xs shadow">
+                    📍 Kövesd a helyzetem
+                  </button>
+                )}
+              </div>
             )}
-            selectedRestPointId={restStopMapState.active ? restStopMapState.selectedRestPointId : null}
-            onSelectRestPoint={restStopMapState.active ? restStopMapState.onSelectRestPoint : undefined}
-            restPointFocusMode={restStopMapState.active && restStopMapState.focusOnRestPoints}
-            className="h-[300px] w-full rounded border border-gray-200 sm:h-[360px] md:h-[450px]"
-          />
+          </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <button type="button" onClick={geo.startWatching} className="btn-secondary text-xs" disabled={geo.isWatching}>
-              {geo.isWatching ? "Aktuális hely követése be van kapcsolva" : "Aktuális hely megjelenítése"}
-            </button>
-            {geo.isWatching && (
-              <button type="button" onClick={geo.stopWatching} className="text-xs text-gray-500 underline">
-                Követés leállítása
-              </button>
+            {!navigationMode && (
+              <>
+                <button type="button" onClick={geo.startWatching} className="btn-secondary text-xs" disabled={geo.isWatching}>
+                  {geo.isWatching ? "Aktuális hely követése be van kapcsolva" : "Aktuális hely megjelenítése"}
+                </button>
+                {geo.isWatching && (
+                  <button type="button" onClick={geo.stopWatching} className="text-xs text-gray-500 underline">
+                    Követés leállítása
+                  </button>
+                )}
+                <button type="button" onClick={startNavigation} className="btn-primary text-xs">
+                  ▶ Navigáció indítása
+                </button>
+                {!manualFullscreen && (
+                  <button type="button" onClick={() => setManualFullscreen(true)} className="btn-secondary text-xs">
+                    ⛶ Teljes képernyő
+                  </button>
+                )}
+              </>
             )}
-            {geo.status === "denied" && <span className="text-xs text-amber-700">GPS engedély elutasítva.</span>}
-            {(geo.status === "unavailable" || geo.status === "timeout") && (
+            {!navigationMode && geo.status === "denied" && <span className="text-xs text-amber-700">GPS engedély elutasítva.</span>}
+            {!navigationMode && (geo.status === "unavailable" || geo.status === "timeout") && (
               <span className="text-xs text-amber-700">A jelenlegi hely most nem elérhető — az útvonaltervezés ettől függetlenül működik.</span>
             )}
           </div>
