@@ -253,9 +253,10 @@ describe("11-13. eset — térképes célpont-kijelölő: MapLibre/OpenFreeMap, 
   test("12b) van 'Ez legyen a cél' megerősítő és 'Mégse' gomb, mindkettő legalább 44px érintési célterülettel (min-h-[44px])", () => {
     assert.match(pickerSrc, /Ez legyen a cél/);
     assert.match(pickerSrc, /Mégse/);
-    const confirmButtonBlock = pickerSrc.match(/onClick=\{\(\) => onConfirm[\s\S]{0,120}/)?.[0] ?? "";
+    const confirmButtonBlock = pickerSrc.match(/onClick=\{handleConfirmClick\}[\s\S]{0,220}/)?.[0] ?? "";
     const cancelButtonBlock = pickerSrc.match(/onClick=\{onCancel\}[\s\S]{0,120}/)?.[0] ?? "";
-    assert.match(pickerSrc + confirmButtonBlock + cancelButtonBlock, /min-h-\[44px\]/);
+    assert.match(confirmButtonBlock, /min-h-\[44px\]/);
+    assert.match(cancelButtonBlock, /min-h-\[44px\]/);
   });
 
   test("13) a jóváhagyott célpont közvetlenül onConfirm(lat, lon)-t hív — nincs benne re-geokódolás, fetch, vagy Nominatim-hívás", () => {
@@ -264,7 +265,11 @@ describe("11-13. eset — térképes célpont-kijelölő: MapLibre/OpenFreeMap, 
     // kódban ellenőrizzük a tényleges hiányát.
     assert.doesNotMatch(pickerCode, /nominatim/i);
     assert.doesNotMatch(pickerCode, /fetch\(/);
-    assert.match(pickerSrc, /onConfirm\(pickedPosition\.lat, pickedPosition\.lon\)/);
+    // RUNTIME UX HOTFIX (2026-09-10) óta a confirm handler egy
+    // selectedPoint-ot olvas ki (nem a régi, mindig-inicializált
+    // pickedPosition-t) — lásd a "RUNTIME UX HOTFIX" describe blokkot lent
+    // a teljes state-modell tesztjeihez.
+    assert.match(pickerSrc, /onConfirm\(selectedPoint\.lat, selectedPoint\.lon\)/);
   });
 
   test("13b) a form oldalon a MAP_PICKED cél UGYANAZON toCoordinates/toName ágon megy a szerver felé, mint a KNOWN_PLACE (nincs re-geokódolás, nincs saveFavorite auto-persist)", () => {
@@ -372,5 +377,130 @@ describe("18-19. eset — privacy invariant + nincs kliens-oldali re-geokódolá
     // "nem küldünk reverse-geocode kérést" (13. pont dokumentálása) — a
     // kommentektől megtisztított kódban ellenőrizzük a tényleges hiányát.
     assert.doesNotMatch(formCode, /reverse.?geocod/i);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// RUNTIME UX HOTFIX (2026-09-10) — a "Ez legyen a cél" gomb valós böngészőben
+// nem látszott. Root cause: `bg-sni-primary`/`text-sni-primary` osztályok
+// egy NEM LÉTEZŐ Tailwind színt hivatkoztak (tailwind.config.ts
+// theme.extend.colors.sni csak bg/blue/bluedark/green/greendark/beige/
+// text/warn/brand.teal/brand.blue/brand.navy kulcsokat ismer — "primary"
+// nincs köztük), ezért a gomb háttere transzparens maradt, a fehér szöveg
+// pedig fehér/átlátszó alapon láthatatlanná vált. Javítás: a globals.css-ben
+// bizonyítottan MŰKÖDŐ .btn-primary/.btn-secondary osztályok. Emellett a
+// state-modell is szétvált: `selectedPoint` (a felhasználó TÉNYLEGES
+// kijelölése) különbözik az `initialLat`/`initialLon` (a szülőtől kapott,
+// csak tájékozódási célú APPROXIMATE koordináta) propoktól — a confirm
+// gomb csak akkor enabled, ha van selectedPoint.
+//
+// Ezek a tesztek a jelenlegi teszt-infrastruktúra korlátai miatt (nincs
+// jsdom/@testing-library/react a devDependencies között — lásd
+// __tests__/vedett-route/README.md és a projekt már meglévő vedett-route
+// tesztjeinek mintája) NEM valódi React-interakció tesztek (nincs tényleges
+// kattintás-szimuláció DOM-on), hanem a lehető legerősebb forráskód-szintű
+// strukturális/state-machine asszerciók: azt ellenőrzik, hogy a KAPCSOLÓDÓ
+// KÓD (a state-változó neve, a feltétel, a CSS-osztály, a handler-hívás)
+// ténylegesen megvan és a helyes szerkezetben — nem pedig azt, hogy egy
+// böngésző ezt vizuálisan hogyan rendereli.
+// ---------------------------------------------------------------------------
+describe("RUNTIME UX HOTFIX — DestinationMapPicker footer mindig látható, selectedPoint state-gép", () => {
+  test("root cause regresszióvédelem: a picker SEHOL nem használ nem létező 'sni-primary' Tailwind osztályt (bg-sni-primary/text-sni-primary/border-sni-primary)", () => {
+    assert.doesNotMatch(pickerCode, /sni-primary/);
+  });
+
+  test("a confirm gomb a bizonyítottan működő .btn-primary osztályt használja (globals.css-ben definiált, valós sni-brand-teal/sni-brand-blue színekkel)", () => {
+    const confirmButtonBlock = pickerSrc.match(/<button\s[\s\S]{0,400}?Ez legyen a cél/)?.[0] ?? "";
+    assert.ok(confirmButtonBlock.length > 0, "meg kell találni a confirm gomb JSX-ét");
+    assert.match(confirmButtonBlock, /className="[^"]*\bbtn-primary\b/);
+  });
+
+  test("1) a confirm gomb MINDIG renderelődik — nincs feltételes JSX, ami a gomb ELEMÉT (nem csak az enabled állapotát) eltüntetné", () => {
+    // A footer JSX blokkban a "Ez legyen a cél" szöveg nem állhat egy
+    // `{valami && (...)}`-szerű feltételes renderelés belsejében — csak a
+    // `disabled`/`aria-disabled` attribútum függhet állapottól.
+    const footerBlock = pickerSrc.match(/paddingBottom:[\s\S]*?<\/div>\s*\);/)?.[0] ?? "";
+    assert.ok(footerBlock.length > 0, "meg kell találni a footer blokkot");
+    assert.match(footerBlock, /Ez legyen a cél/);
+    assert.match(footerBlock, /Mégse/);
+    // Nincs `{selectedPoint && (` vagy hasonló feltételes wrapper a KÉT gomb
+    // körül — csak a `disabled={!selectedPoint}` attribútumban jelenik meg
+    // a state.
+    assert.doesNotMatch(footerBlock, /\{selectedPoint && \(/);
+  });
+
+  test("2) selectedPoint kezdetben null — a confirm gomb induláskor disabled", () => {
+    assert.match(pickerSrc, /useState<\{ lat: number; lon: number \} \| null>\(null\)/);
+    assert.match(pickerSrc, /disabled=\{!selectedPoint\}/);
+  });
+
+  test("3) map click után selectedPoint frissül (enabled állapotba kerül)", () => {
+    const clickHandlerBlock = pickerSrc.match(/const handleMapClick = \(e: maplibregl\.MapMouseEvent\) => \{[\s\S]*?\n    \};/)?.[0] ?? "";
+    assert.ok(clickHandlerBlock.length > 0, "meg kell találni a handleMapClick handlert");
+    assert.match(clickHandlerBlock, /setSelectedPoint\(\{ lat: e\.lngLat\.lat, lon: e\.lngLat\.lng \}\)/);
+  });
+
+  test("4) marker dragend után selectedPoint frissül (enabled állapotba kerül)", () => {
+    const dragendBlock = pickerSrc.match(/marker\.on\("dragend", \(\) => \{[\s\S]*?\n    \}\);/)?.[0] ?? "";
+    assert.ok(dragendBlock.length > 0, "meg kell találni a marker dragend handlerét");
+    assert.match(dragendBlock, /setSelectedPoint\(\{ lat, lon: lng \}\)/);
+  });
+
+  test("5) confirm a selectedPoint koordinátájával hívja az onConfirm-ot (nem az initialLat/initialLon propokkal)", () => {
+    const confirmFn = pickerSrc.match(/function handleConfirmClick\(\) \{[\s\S]*?\n  \}/)?.[0] ?? "";
+    assert.ok(confirmFn.length > 0, "meg kell találni a handleConfirmClick függvényt");
+    assert.match(confirmFn, /if \(!selectedPoint\) return;/);
+    assert.match(confirmFn, /onConfirm\(selectedPoint\.lat, selectedPoint\.lon\)/);
+  });
+
+  test("6) a szülő komponensben (VedettUtvonalSearchForm.tsx) a confirm callback (handleMapPickerConfirm) MAP_PICKED destination-t hoz létre", () => {
+    const block = formSrc.match(/function handleMapPickerConfirm\(lat: number, lon: number\) \{[\s\S]*?\n  \}/)?.[0] ?? "";
+    assert.ok(block.length > 0, "hiányzik a handleMapPickerConfirm handler");
+    assert.match(block, /type: "MAP_PICKED"/);
+    assert.match(block, /latitude: lat/);
+    assert.match(block, /longitude: lon/);
+  });
+
+  test("7) MAP_PICKED destination a toCoordinates ágon megy a szerver felé (ugyanúgy, mint KNOWN_PLACE)", () => {
+    assert.match(
+      formSrc,
+      /destination\.type === "KNOWN_PLACE" \|\| destination\.type === "MAP_PICKED"\s*\n\s*\? \{\s*\n\s*toCoordinates:/
+    );
+  });
+
+  test("8) a MAP_PICKED cél SOHA nem geokódolódik újra — a picker kódjában nincs fetch/Nominatim-hívás, a form MAP_PICKED ágában nincs geocodeAddress/buildStructuredAddress hívás", () => {
+    assert.doesNotMatch(pickerCode, /fetch\(/);
+    assert.doesNotMatch(pickerCode, /nominatim/i);
+    const destinationFieldsBlock = formSrc.match(/destination\.type === "KNOWN_PLACE" \|\| destination\.type === "MAP_PICKED"\s*\n\s*\? \{[\s\S]*?\}\s*\n\s*: \{ to: buildStructuredAddress\(destination\) \};/)?.[0] ?? "";
+    assert.ok(destinationFieldsBlock.length > 0, "meg kell találni a destinationFields KNOWN_PLACE/MAP_PICKED elágazását");
+    assert.doesNotMatch(destinationFieldsBlock.split(": {")[0], /buildStructuredAddress|geocodeAddress/);
+  });
+
+  test("9) cancel (handleMapPickerCancel) NEM módosítja a destinationt — csak a picker bezárását végzi", () => {
+    const block = formSrc.match(/function handleMapPickerCancel\(\) \{[\s\S]*?\n  \}/)?.[0] ?? "";
+    assert.ok(block.length > 0, "hiányzik a handleMapPickerCancel handler");
+    assert.doesNotMatch(block, /setDestination\(/);
+    assert.doesNotMatch(block, /handleSubmit/);
+    assert.match(block, /setDestinationMapPickerOpen\(false\)/);
+  });
+
+  test("10) a footerben EGYSZERRE van jelen a 'Mégse' ÉS az 'Ez legyen a cél' gomb, ugyanabban a flex-shrink-0 footer konténerben", () => {
+    const footerContainerMatch = pickerSrc.match(/className="flex flex-shrink-0 gap-2 bg-white[\s\S]*?<\/div>/);
+    assert.ok(footerContainerMatch, "meg kell találni a flex-shrink-0 footer konténert");
+    assert.match(footerContainerMatch![0], /Mégse/);
+    assert.match(footerContainerMatch![0], /Ez legyen a cél/);
+  });
+
+  test("a footer explicit flex-shrink-0-t kap, a térkép-terület explicit min-h-0-t — a footer sosem nyomódhat ki a látható területről", () => {
+    assert.match(pickerSrc, /className="flex flex-shrink-0 gap-2 bg-white/);
+    assert.match(pickerSrc, /className="min-h-0 flex-1"/);
+  });
+
+  test("a külső konténer figyelembe veszi a mobil dinamikus viewportot (h-dvh) a fixed inset-0 mellett", () => {
+    assert.match(pickerSrc, /className="fixed inset-0 z-\[70\] flex h-dvh flex-col/);
+  });
+
+  test("a footer figyelembe veszi a rendszer alsó safe area-ját (env(safe-area-inset-bottom))", () => {
+    assert.match(pickerSrc, /env\(safe-area-inset-bottom\)/);
   });
 });
