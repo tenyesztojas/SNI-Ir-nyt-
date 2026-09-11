@@ -323,10 +323,26 @@ describe("16. eset — privacy: nincs teljes cím/házszám/koordináta a diagno
 
 describe("17. eset — regresszióvédelem: meglévő ágak (CURRENT_LOCATION, KNOWN_PLACE, MANUAL) és a szerver/MOTIS-határ változatlan", () => {
   test("CURRENT_LOCATION (fromCoordinates) továbbra is KIHAGYJA a geocodeAddress()-t, quality: EXACT-tal", () => {
+    // GEOCODING KORREKCIÓ (2026-09-11, C4.1) — a fromCoordinates ág mostantól
+    // a toName mintáját követő, opcionális `fromName` megjelenítési labelt
+    // is elfogadja (a térképen kijelölt/jelölt-listából választott induló
+    // pont esetére, lásd VedettUtvonalSearchForm.tsx) — a régi, VÁLTOZATLAN
+    // CURRENT_LOCATION invariáns (nincs geocodeAddress()-hívás, quality
+    // EXACT, a statikus "Jelenlegi hely" a `fromName` HIÁNYÁBAN jelenik
+    // meg) itt a `fromName ?? "Jelenlegi hely"` alakon ellenőrzött.
     assert.match(
       routeSrc,
-      /fromCoordinates\s*\n\s*\? Promise\.resolve\(\{ name: "Jelenlegi hely", lat: fromCoordinates\.latitude, lon: fromCoordinates\.longitude, quality: "EXACT" as const \}\)/
+      /fromCoordinates\s*\n\s*\? Promise\.resolve\(\{ name: fromName \?\? "Jelenlegi hely", lat: fromCoordinates\.latitude, lon: fromCoordinates\.longitude, quality: "EXACT" as const \}\)/
     );
+  });
+
+  test("MAP_PICKED/jelölt-választás induló pont esetén a fromCoordinates ÁG NEM adhatja vissza a statikus 'Jelenlegi hely' nevet — a fromName mezőt kell figyelembe vennie", () => {
+    // Regresszióvédelem a C4.1 root cause ellen: korábban a fromCoordinates
+    // ág FELTÉTEL NÉLKÜL "Jelenlegi hely"-t adott, függetlenül attól, hogy a
+    // koordináta GPS-ből vagy térképes kijelölésből/jelölt-választásból
+    // származott. A javított kódnak a `fromName` mezőt kell használnia,
+    // amikor az jelen van.
+    assert.doesNotMatch(routeSrc, /Promise\.resolve\(\{ name: "Jelenlegi hely"/);
   });
 
   test("KNOWN_PLACE (toCoordinates) továbbra is KIHAGYJA a geocodeAddress()-t, quality: EXACT-tal", () => {

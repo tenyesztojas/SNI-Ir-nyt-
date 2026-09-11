@@ -47,6 +47,13 @@ export const journeySearchSchema = z
   .object({
     from: z.string().min(2, "Az indulási hely megadása kötelező.").optional(),
     fromCoordinates: routeOriginCoordinatesSchema.optional(),
+    // GEOCODING KORREKCIÓ (2026-09-11, C4.1) — a `toName` mintáját követő,
+    // szimmetrikus, opcionális megjelenítési label a MÁR ISMERT indulási
+    // koordinátához (pl. térképen kijelölt induló pont, vagy egy
+    // többértelmű-jelölt-listából választott hely). Hiányában a szerver
+    // (route.ts) a korábbi, statikus "Jelenlegi hely" nevet adja — ez a
+    // mező KIZÁRÓLAG megjelenítési célú, SOHA nem megy geokódolásra.
+    fromName: z.string().trim().min(1).max(200).optional(),
     to: z.string().min(2, "A célhely megadása kötelező.").optional(),
     toCoordinates: routeOriginCoordinatesSchema.optional(),
     toName: z.string().trim().min(1).max(200).optional(),

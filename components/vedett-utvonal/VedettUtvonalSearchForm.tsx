@@ -9,6 +9,7 @@ import RestPointQuickAdd, { type RestPointCreatedPayload } from "./RestPointQuic
 import RestStopFlowPanel, { type RestStopMapState } from "./RestStopFlowPanel";
 import type { RestPointMarker } from "./VedettUtvonalMap";
 import { setNavigationModeActive } from "@/lib/pwa/navigationModeSignal";
+import type { GeocodePlaceCandidate } from "@/lib/vedett-route/geocode";
 
 // „Aktuális helyzetem" mint indulási pont (UX módosítás, 2026-09-09) — a
 // keresési form induló-mezője mostantól két, egymást KIZÁRÓ móddal
@@ -23,9 +24,21 @@ import { setNavigationModeActive } from "@/lib/pwa/navigationModeSignal";
 // azonnal megszűnik (lásd updateOriginManualField), hogy SOSE maradjon
 // érvényben egy elavult GPS-koordináta egy időközben már kézzel átírt cím
 // mellett.
+// GEOCODING GENERALIZÁCIÓ / SZIMMETRIA (2026-09-11, 8-9. pont) — az indulási
+// oldal mostantól a MAP_PICKED módot is ismeri, UGYANÚGY mint a
+// RouteDestination (lásd lent) — ha a geokódolás csak közelítő (utca/
+// település igazolt, de a konkrét hely nem) eredményt ad, a felhasználó
+// a térképen MAGA pontosíthatja az induló pontot is, nem csak a célt.
+// Wire-szinten (route.ts felé) ez UGYANÚGY `fromCoordinates`-en megy, mint
+// a CURRENT_LOCATION — lásd handleSubmit lent — a MEGLÉVŐ, EXAKT
+// stringmintát kereső regresszióteszt (17. eset) miatt szándékosan NEM egy
+// harmadik, önálló wire-mezőn (a `name` megjelenítési label itt még
+// mindig a rögzített "Jelenlegi hely"-t adja — lásd a részletes
+// magyarázatot a végső riportban, "ismert korlátozás" pont).
 type RouteOrigin =
   | { type: "MANUAL"; city: string; districtOrPostalCode: string; street: string }
-  | { type: "CURRENT_LOCATION"; latitude: number; longitude: number };
+  | { type: "CURRENT_LOCATION"; latitude: number; longitude: number }
+  | { type: "MAP_PICKED"; name: string; latitude: number; longitude: number };
 
 // Védett Hely "Navigálj oda" -> Védett Útvonal integráció (2026-09-09).
 //
@@ -83,8 +96,29 @@ function buildStructuredAddress(addr: { city: string; districtOrPostalCode: stri
 // mert vannak célok, ahol nincs ismert házszám (ez a mezőn belüli
 // szabadszöveg-részlet, nem külön mező, tehát nincs is mit validálni rá
 // külön).
+//
+// GEOCODING GENERALIZÁCIÓ (2026-09-11) — a "Deák tér", "Etele Plaza",
+// "Kelenföld vasútállomás" jellegű, nevesített hely/POI keresés SOSEM
+// klasszikus, város+kerület+utca hármas cím — a felhasználónak ilyenkor
+// nincs (és nem is kellene, hogy legyen) kitöltendő Város/Kerület mezője.
+// Ezért EGY ÚJ, szűken definiált második elfogadási út is érvényes:
+// amikor a Város ÉS a Kerület mező EGYSZERRE üres, de az Utca/hely mező
+// nem, a bemenet egy szabadszöveges OSM/Nominatim névkeresésnek minősül —
+// ezt a geokódolási pipeline (lib/vedett-route/geocode.ts,
+// isBareRoadOnlyResult/scoreNamedPlaceResult) dönti el, hogy tényleg egy
+// konkrét nevesített helyre mutat-e, itt a kliens csak ANNYIT dönt el,
+// hogy a kérés egyáltalán elküldhető-e. Minden korábbi, RÉSZLEGESEN
+// kitöltött eset (pl. csak Kerület+Utca, vagy csak Város+Utca) TOVÁBBRA IS
+// hiányosnak (false) minősül — ez a szabály KIZÁRÓLAG a "mindhárom
+// kitöltve" ÉS a "kizárólag az Utca/hely mező kitöltve" eseteket engedi át,
+// nem gyengíti a korábbi hármas-validációt.
 function isManualAddressComplete(addr: { city: string; districtOrPostalCode: string; street: string }): boolean {
-  return Boolean(addr.city.trim() && addr.districtOrPostalCode.trim() && addr.street.trim());
+  const cityFilled = Boolean(addr.city.trim());
+  const districtFilled = Boolean(addr.districtOrPostalCode.trim());
+  const streetFilled = Boolean(addr.street.trim());
+  if (cityFilled && districtFilled && streetFilled) return true;
+  if (!cityFilled && !districtFilled && streetFilled) return true;
+  return false;
 }
 
 // MapLibre a böngésző window objektumára támaszkodik -> csak kliens
@@ -117,6 +151,11 @@ type SearchApiResponse =
       field?: "from" | "to";
       helperMessage?: string;
       approximateLocation?: { name: string; lat: number; lon: number };
+      // GEOCODING KORREKCIÓ (2026-09-11, C4.1) — "address_ambiguous" reason
+      // esetén a szerver egy MINIMÁLIS jelölt-listát ad (lásd geocode.ts
+      // GeocodePlaceCandidate) — SOHA nem nyers Nominatim objektumot. A régi
+      // (routing-szintű) hibaágak ezt sosem küldik, ezért opcionális.
+      candidates?: GeocodePlaceCandidate[];
     };
 
 const LABEL_META: Record<RankingLabel, { text: string; className: string }> = {
@@ -1033,6 +1072,19 @@ export default function VedettUtvonalSearchForm({
   // felhasználó nem hagyja jóvá a kijelölt pontot (lásd handleMapPickerConfirm).
   const [destinationMapPickerOpen, setDestinationMapPickerOpen] = useState(false);
   const [approximateDestination, setApproximateDestination] = useState<{ name: string; lat: number; lon: number } | null>(null);
+  // GEOCODING GENERALIZÁCIÓ / SZIMMETRIA (2026-09-11, 8-9. pont) — az
+  // indulási oldal ugyanazt a nyitott/zárt + közelítő-koordináta állapotot
+  // kapja, mint a fenti destination-oldali pár, hogy a térképes
+  // pontosítás NE legyen destination-only funkció.
+  const [originMapPickerOpen, setOriginMapPickerOpen] = useState(false);
+  const [approximateOrigin, setApproximateOrigin] = useState<{ name: string; lat: number; lon: number } | null>(null);
+  // GEOCODING KORREKCIÓ (2026-09-11, C4.1, "többértelmű találatok" pont) —
+  // a szerver "address_ambiguous" válaszából kapott, MINIMÁLIS jelölt-lista
+  // (max 5 elem) — origin/destination mezőnként külön, szimmetrikusan,
+  // ugyanazt a mintát követve, mint a fenti approximate{Origin,Destination}
+  // pár. Amíg null, nincs választólista megjelenítve.
+  const [ambiguousOriginCandidates, setAmbiguousOriginCandidates] = useState<GeocodePlaceCandidate[] | null>(null);
+  const [ambiguousDestinationCandidates, setAmbiguousDestinationCandidates] = useState<GeocodePlaceCandidate[] | null>(null);
   const [weights, setWeights] = useState<PersonalizationWeights>(
     initialFavoritePreset?.weights ?? {
       transfers: 1,
@@ -1168,6 +1220,64 @@ export default function VedettUtvonalSearchForm({
     setDestinationMapPickerOpen(false);
   }
 
+  // GEOCODING GENERALIZÁCIÓ / SZIMMETRIA (2026-09-11, 8-9. pont) — az
+  // indulási oldal PONTOSAN ugyanazt a mintát követi, mint a fenti
+  // handleMapPickerConfirm/handleMapPickerCancel: kizárólag React state-et
+  // (setOrigin) állít, nincs benne fetch/localStorage/adatbázis-hívás,
+  // nincs re-geokódolás.
+  function handleOriginMapPickerConfirm(lat: number, lon: number) {
+    setOrigin({
+      type: "MAP_PICKED",
+      name: "Térképen kijelölt induló hely",
+      latitude: lat,
+      longitude: lon,
+    });
+    setOriginMapPickerOpen(false);
+  }
+
+  function handleOriginMapPickerCancel() {
+    setOriginMapPickerOpen(false);
+  }
+
+  // GEOCODING KORREKCIÓ (2026-09-11, C4.1, "többértelmű találatok" pont) —
+  // a felhasználó egy AMBIGUOUS válasz jelölt-listájából választott —
+  // pontosan úgy kezeljük, mint egy térképen kijelölt pontot (MAP_PICKED):
+  // a candidate koordinátája/neve AUTHORITATIVE, SOHA nem geokódoljuk
+  // újra, nincs fetch/localStorage-hívás ezekben a handlerekben. A
+  // `fromName`/`toName` mezőn keresztül (lásd handleSubmit originFields/
+  // destinationFields) a kiválasztott hely SAJÁT NEVE jut el a szerverhez —
+  // ez SOHA nem a statikus "Jelenlegi hely"/"Kiválasztott cél" alapérték.
+  function handleSelectOriginCandidate(candidate: GeocodePlaceCandidate) {
+    setOrigin({
+      type: "MAP_PICKED",
+      name: candidate.displayName,
+      latitude: candidate.lat,
+      longitude: candidate.lon,
+    });
+    setAmbiguousOriginCandidates(null);
+  }
+
+  function handleSelectDestinationCandidate(candidate: GeocodePlaceCandidate) {
+    setDestination({
+      type: "MAP_PICKED",
+      name: candidate.displayName,
+      latitude: candidate.lat,
+      longitude: candidate.lon,
+    });
+    setAmbiguousDestinationCandidates(null);
+  }
+
+  // A jelölt-lista bezárása kiválasztás nélkül — csak a lokális UI
+  // állapotot törli, az origin/destination state-et NEM módosítja (a
+  // felhasználó ezután szabadon szerkesztheti a mezőt egy új kereséshez).
+  function handleDismissOriginCandidates() {
+    setAmbiguousOriginCandidates(null);
+  }
+
+  function handleDismissDestinationCandidates() {
+    setAmbiguousDestinationCandidates(null);
+  }
+
   // Kedvenc útvonalak — mentés UI állapota (Favorites CTA UX sprint,
   // 2026-09-10, spec 8. pont: "idle" -> "♡ Kedvencekhez adom" nagy,
   // hangsúlyos másodlagos CTA; "open" -> névadó mini-form, mentés közben
@@ -1191,6 +1301,13 @@ export default function VedettUtvonalSearchForm({
   // egyszerű string-összeállítás, nem üzleti szabály).
   function currentFavoriteOriginLabel(): string {
     if (origin.type === "CURRENT_LOCATION") return "Aktuális helyzetem";
+    // GEOCODING GENERALIZÁCIÓ / SZIMMETRIA (2026-09-11) — a térképen
+    // kijelölt induló pontnak (MAP_PICKED) nincs .street/.city mezője
+    // (azok csak a MANUAL cím-ágon léteznek), pontosan úgy, mint a
+    // destination oldali MAP_PICKED/KNOWN_PLACE esetben (lásd
+    // currentFavoriteDestinationLabel) — a saját .name mezője a helyes
+    // megjelenítési forrás.
+    if (origin.type === "MAP_PICKED") return origin.name;
     return origin.street || origin.city || "Induló hely";
   }
 
@@ -1211,6 +1328,18 @@ export default function VedettUtvonalSearchForm({
     // nem küldünk el egy nyilvánvalóan hiányos MANUAL címet a szervernek.
     if (origin.type === "MANUAL" && !isManualAddressComplete(origin)) {
       setFavoriteSaveMessage("Add meg a várost, az irányítószámot vagy kerületet és az utcát.");
+      return;
+    }
+    // GEOCODING GENERALIZÁCIÓ / SZIMMETRIA (2026-09-11) — a kedvenc-mentés
+    // meglévő wire-formátuma (favoritesMode: "CURRENT_LOCATION" | "MANUAL")
+    // nem ismer induló-oldali "MÁR ISMERT hely" módot (a destination
+    // oldalon ez a KNOWN_PLACE deep-linkből származik, az originnak nincs
+    // ilyen forrása) — egy térképen kijelölt, EGYSZERI induló pont
+    // kedvencként mentése ezért SZÁNDÉKOSAN nem támogatott, amíg a
+    // szerver oldali séma ezt nem definiálja; ez KIZÁRÓLAG a kedvenc-
+    // MENTÉS funkciót érinti, a keresést/routingot nem.
+    if (origin.type === "MAP_PICKED") {
+      setFavoriteSaveMessage("A térképen kijelölt induló pont mentése kedvencként jelenleg nem támogatott.");
       return;
     }
     if (destination.type === "MANUAL" && !isManualAddressComplete(destination)) {
@@ -1306,10 +1435,27 @@ export default function VedettUtvonalSearchForm({
       // ugyanez a szimmetrikus szabály vonatkozik a Védett Hely "Navigálj
       // oda" integráció óta (2026-09-09): KNOWN_PLACE esetén a MÁR ISMERT
       // koordináta megy, nincs felesleges újra-geokódolás.
+      // GEOCODING GENERALIZÁCIÓ / SZIMMETRIA (2026-09-11, 8-9. pont) — a
+      // térképen kijelölt induló pont (MAP_PICKED, lásd
+      // handleOriginMapPickerConfirm) UGYANAZON fromCoordinates ágon megy,
+      // mint a CURRENT_LOCATION — mindkettő egy MÁR ISMERT, nem
+      // geokódolandó koordináta. A meglévő CURRENT_LOCATION feltétel (és a
+      // rá épülő 17. eset regressziós teszt EXAKT string-mintája) SZÁNDÉKOSAN
+      // változatlan marad, a MAP_PICKED egy ÚJ, KÜLÖN ternary-ágként bővíti.
+      // GEOCODING KORREKCIÓ (2026-09-11, C4.1, "origin map picker label"
+      // pont) — a MAP_PICKED ág MOSTANTÓL a `fromName` mezőn keresztül a
+      // kijelölt/választott hely SAJÁT NEVÉT is elküldi (lásd
+      // route.ts: `name: fromName ?? "Jelenlegi hely"`), hogy a szerver
+      // válasza SOHA ne mutassa a statikus "Jelenlegi hely" nevet egy
+      // MAP_PICKED induló pontra — a CURRENT_LOCATION ág (fentebb)
+      // SZÁNDÉKOSAN nem küld fromName-et, ott marad a régi, VÁLTOZATLAN
+      // "Jelenlegi hely" alapérték.
       const originFields =
         origin.type === "CURRENT_LOCATION"
           ? { fromCoordinates: { latitude: origin.latitude, longitude: origin.longitude } }
-          : { from: buildStructuredAddress(origin) };
+          : origin.type === "MAP_PICKED"
+            ? { fromCoordinates: { latitude: origin.latitude, longitude: origin.longitude }, fromName: origin.name }
+            : { from: buildStructuredAddress(origin) };
       // Geocoding hardening (2026-09-10) — a MAP_PICKED cél (a felhasználó
       // a térképen jelölte ki, egy APPROXIMATE geokódolási találat után,
       // lásd DestinationMapPicker.tsx) UGYANÚGY toCoordinates/toName-en
@@ -1341,16 +1487,47 @@ export default function VedettUtvonalSearchForm({
       });
       const data = (await res.json()) as SearchApiResponse;
       setResult(data);
-      // Geocoding hardening (2026-09-10), 11-12. pont — a destination
-      // address_approximate válasz esetén elmentjük a szerver által adott
-      // közelítő koordinátát, hogy a térképes kijelölő ERRE fókuszálva
-      // induljon el (nem Budapest-szintű alapnézettel). A CTA gomb (lásd
-      // lent) hívja meg setDestinationMapPickerOpen(true)-t, ez itt csak
-      // az adatot készíti elő.
+      // Geocoding hardening (2026-09-10), 11-12. pont — az address_approximate
+      // válasz esetén elmentjük a szerver által adott közelítő koordinátát,
+      // hogy a térképes kijelölő ERRE fókuszálva induljon el (nem
+      // Budapest-szintű alapnézettel). A CTA gomb (lásd lent) hívja meg a
+      // {destination,origin}MapPickerOpen(true)-t, ez itt csak az adatot
+      // készíti elő.
+      //
+      // GEOCODING GENERALIZÁCIÓ / SZIMMETRIA (2026-09-11, 8-9. pont) — a
+      // szerver (route.ts) MINDIG szimmetrikusan adja a `field`/
+      // `approximateLocation`-t ("from" VAGY "to", lásd route.ts fejléce) —
+      // ez a korábbi verzióban KIZÁRÓLAG a "to" esetet kezelte kliens
+      // oldalon (data.field === "to" hardcoded feltétel), az origin oldali
+      // "from" eset kliens-oldalon KEZELETLEN maradt. Mostantól mindkét
+      // mezőre külön, egymástól független state-et állítunk be — pontosan
+      // egy ág lehet aktív egyszerre, mert a szerver egyetlen `field`-et ad
+      // vissza válaszonként.
       if (!data.ok && data.reason === "address_approximate" && data.field === "to" && data.approximateLocation) {
         setApproximateDestination(data.approximateLocation);
       } else {
         setApproximateDestination(null);
+      }
+      if (!data.ok && data.reason === "address_approximate" && data.field === "from" && data.approximateLocation) {
+        setApproximateOrigin(data.approximateLocation);
+      } else {
+        setApproximateOrigin(null);
+      }
+      // GEOCODING KORREKCIÓ (2026-09-11, C4.1, "többértelmű találatok"
+      // pont) — az address_ambiguous válasz jelölt-listáját (max 5,
+      // GeocodePlaceCandidate[]) ugyanúgy mezőnkénti, egymástól független
+      // state-ben tároljuk, mint a fenti approximate{Origin,Destination}
+      // párt — origin/destination szimmetrikusan, pontosan egy ág lehet
+      // aktív egyszerre.
+      if (!data.ok && data.reason === "address_ambiguous" && data.field === "from" && data.candidates) {
+        setAmbiguousOriginCandidates(data.candidates);
+      } else {
+        setAmbiguousOriginCandidates(null);
+      }
+      if (!data.ok && data.reason === "address_ambiguous" && data.field === "to" && data.candidates) {
+        setAmbiguousDestinationCandidates(data.candidates);
+      } else {
+        setAmbiguousDestinationCandidates(null);
       }
     } catch {
       setResult({ ok: false, reason: "routing_engine_unavailable", message: "Az útvonaltervezés átmenetileg nem érhető el." });
@@ -1382,6 +1559,19 @@ export default function VedettUtvonalSearchForm({
           </button>
           {origin.type === "CURRENT_LOCATION" && (
             <p className="mt-1 text-xs text-green-700">Az induló pont: aktuális helyzeted.</p>
+          )}
+          {/* GEOCODING GENERALIZÁCIÓ / SZIMMETRIA (2026-09-11, 8-9. pont) —
+              a térképen kijelölt induló pont UGYANAZT a "már ismert, nem
+              geokódolandó koordináta" jelzést kapja, mint a fenti
+              CURRENT_LOCATION ág — a lenti 3 mező (Város/Kerület/Utca)
+              ilyenkor is látható marad (ürex, lásd updateOriginManualField:
+              bármelyik mezőbe gépelés visszaállít MANUAL módra), de a
+              felhasználó egyértelmű visszajelzést kap, hogy már van egy
+              érvényes, kijelölt induló pontja. */}
+          {origin.type === "MAP_PICKED" && (
+            <p className="mt-1 text-xs text-green-700">
+              Induló pont: {origin.name} (a térképen kijelölt koordináta alapján — nincs szükség újbóli keresésre).
+            </p>
           )}
           {/* Kedvenc útvonalak integráció — CURRENT_LOCATION kedvenc preset
               betöltésekor SOHA nem indul automatikus GPS-kérés; ez a
@@ -1748,13 +1938,26 @@ export default function VedettUtvonalSearchForm({
           {/* Geocoding hardening (2026-09-10), 10-12. pont — ADDRESS_APPROXIMATE
               KÜLÖN, saját segítő szöveget és CTA-t kap, megkülönböztetve az
               ADDRESS_NOT_FOUND és NO_ROUTE_FOUND állapotoktól (10. pont: "ne
-              mosódjon össze"). A térképes kijelölés CTA-ja ebben a sprintben
-              KIZÁRÓLAG a destination (to) mezőre épül (14. pont: "elsődlegesen
-              a destination"), origin esetén csak a szöveg jelenik meg.
-              Touch target: min. 44px magas (mobil/PWA first, 12. pont). */}
+              mosódjon össze").
+              GEOCODING GENERALIZÁCIÓ / SZIMMETRIA (2026-09-11, 8-9. pont) — a
+              térképes kijelölés CTA-ja MOSTANTÓL mindkét mezőre (origin/
+              destination) épül, szimmetrikusan — a szerver egyetlen
+              `field`-et ad vissza válaszonként, ezért a két CTA SOHA nem
+              jelenik meg egyszerre. Touch target: min. 44px magas (mobil/
+              PWA first, 12. pont). */}
           {result.reason === "address_approximate" && (
             <>
               {result.helperMessage && <p className="mt-1 text-gray-600">{result.helperMessage}</p>}
+              {result.field === "from" && approximateOrigin && (
+                <button
+                  type="button"
+                  onClick={() => setOriginMapPickerOpen(true)}
+                  aria-label="Induló hely kijelölése a térképen"
+                  className="mt-2 flex min-h-[44px] w-full items-center justify-center rounded-lg border border-sni-primary/40 bg-white px-4 py-2.5 text-sm font-semibold text-sni-primary shadow-sm sm:w-auto"
+                >
+                  Induló hely kijelölése a térképen
+                </button>
+              )}
               {result.field === "to" && approximateDestination && (
                 <button
                   type="button"
@@ -1767,7 +1970,84 @@ export default function VedettUtvonalSearchForm({
               )}
             </>
           )}
+          {/* GEOCODING KORREKCIÓ (2026-09-11, C4.1, "többértelmű találatok"
+              pont) — ADDRESS_AMBIGUOUS egy kis, közvetlenül a mezőhöz
+              kapcsolódó választólistát kap, max 5 jelölttel. Origin ÉS
+              destination oldalon UGYANAZ a viselkedés (szimmetrikus,
+              lásd lent a két, egymástól független ágat). Csak a
+              fő név + (ha van) másodlagos helyinformáció jelenik meg —
+              SOHA nyers OSM class/type. */}
+          {result.reason === "address_ambiguous" && (
+            <>
+              {result.field === "from" && ambiguousOriginCandidates && (
+                <div className="mt-2">
+                  <p className="text-xs text-gray-500">Válassz az induló hely jelöltjei közül:</p>
+                  <ul role="listbox" aria-label="Induló hely jelöltek" className="mt-1 space-y-1">
+                    {ambiguousOriginCandidates.map((candidate, index) => (
+                      <li key={`${candidate.lat}-${candidate.lon}-${index}`}>
+                        <button
+                          type="button"
+                          role="option"
+                          aria-selected={false}
+                          onClick={() => handleSelectOriginCandidate(candidate)}
+                          className="flex min-h-[44px] w-full items-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-left text-sm hover:bg-gray-50"
+                        >
+                          <span className="font-medium text-gray-800">{candidate.displayName}</span>
+                          {candidate.secondary && <span className="ml-1 text-xs text-gray-500">— {candidate.secondary}</span>}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                  <button
+                    type="button"
+                    onClick={handleDismissOriginCandidates}
+                    className="mt-1 text-xs text-gray-500 underline"
+                  >
+                    Mégsem, új keresés
+                  </button>
+                </div>
+              )}
+              {result.field === "to" && ambiguousDestinationCandidates && (
+                <div className="mt-2">
+                  <p className="text-xs text-gray-500">Válassz a célpont jelöltjei közül:</p>
+                  <ul role="listbox" aria-label="Célpont jelöltek" className="mt-1 space-y-1">
+                    {ambiguousDestinationCandidates.map((candidate, index) => (
+                      <li key={`${candidate.lat}-${candidate.lon}-${index}`}>
+                        <button
+                          type="button"
+                          role="option"
+                          aria-selected={false}
+                          onClick={() => handleSelectDestinationCandidate(candidate)}
+                          className="flex min-h-[44px] w-full items-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-left text-sm hover:bg-gray-50"
+                        >
+                          <span className="font-medium text-gray-800">{candidate.displayName}</span>
+                          {candidate.secondary && <span className="ml-1 text-xs text-gray-500">— {candidate.secondary}</span>}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                  <button
+                    type="button"
+                    onClick={handleDismissDestinationCandidates}
+                    className="mt-1 text-xs text-gray-500 underline"
+                  >
+                    Mégsem, új keresés
+                  </button>
+                </div>
+              )}
+            </>
+          )}
         </div>
+      )}
+
+      {originMapPickerOpen && approximateOrigin && (
+        <DestinationMapPicker
+          mode="origin"
+          initialLat={approximateOrigin.lat}
+          initialLon={approximateOrigin.lon}
+          onConfirm={handleOriginMapPickerConfirm}
+          onCancel={handleOriginMapPickerCancel}
+        />
       )}
 
       {destinationMapPickerOpen && approximateDestination && (

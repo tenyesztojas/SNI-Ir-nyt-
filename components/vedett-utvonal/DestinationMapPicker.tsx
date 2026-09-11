@@ -75,9 +75,25 @@ export interface DestinationMapPickerProps {
   initialLon: number;
   onConfirm: (lat: number, lon: number) => void;
   onCancel: () => void;
+  // GEOCODING GENERALIZÁCIÓ / SZIMMETRIA (2026-09-11) — a picker maga
+  // mindvégig destination-agnosztikus logikájú volt (lásd fenti fejléc),
+  // csak a COPY (szövegek) voltak célpont-specifikusak. Ez a mező
+  // KIZÁRÓLAG a megjelenített szövegeket választja szét — a
+  // térkép/marker/state-gép viselkedése (selectedPoint, drag/click,
+  // onConfirm(lat, lon)) TELJESEN azonos indulás és célpont esetén (8.
+  // pont: a két oldal szimmetrikus). Alapérték "destination", hogy a
+  // MEGLÉVŐ (célpont) hívási helyek és tesztek változatlanul működjenek.
+  mode?: "origin" | "destination";
 }
 
-export default function DestinationMapPicker({ initialLat, initialLon, onConfirm, onCancel }: DestinationMapPickerProps) {
+export default function DestinationMapPicker({
+  initialLat,
+  initialLon,
+  onConfirm,
+  onCancel,
+  mode = "destination",
+}: DestinationMapPickerProps) {
+  const isOrigin = mode === "origin";
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markerRef = useRef<maplibregl.Marker | null>(null);
@@ -148,10 +164,12 @@ export default function DestinationMapPicker({ initialLat, initialLon, onConfirm
       className="fixed inset-0 z-[70] flex h-dvh flex-col bg-black/40"
       role="dialog"
       aria-modal="true"
-      aria-label="Célpont kijelölése a térképen"
+      aria-label={isOrigin ? "Induló hely kijelölése a térképen" : "Célpont kijelölése a térképen"}
     >
       <div className="flex flex-shrink-0 items-center justify-between bg-white px-4 py-3 shadow-sm">
-        <p className="text-sm font-medium text-gray-700">Jelöld meg a pontos célt a térképen</p>
+        <p className="text-sm font-medium text-gray-700">
+          {isOrigin ? "Jelöld meg a pontos indulási helyet a térképen" : "Jelöld meg a pontos célt a térképen"}
+        </p>
       </div>
 
       {/* min-h-0: flexbox alapértelmezett min-height:auto nélkül a
@@ -162,12 +180,12 @@ export default function DestinationMapPicker({ initialLat, initialLon, onConfirm
         ref={containerRef}
         className="min-h-0 flex-1"
         role="img"
-        aria-label="Térkép — koppints vagy húzd a markert a pontos célra"
+        aria-label={isOrigin ? "Térkép — koppints vagy húzd a markert a pontos indulási helyre" : "Térkép — koppints vagy húzd a markert a pontos célra"}
       />
 
       {!selectedPoint && (
         <p className="flex-shrink-0 bg-amber-50 px-4 py-1.5 text-center text-xs text-amber-800">
-          Koppints a térképre, vagy húzd a markert a pontos célra.
+          {isOrigin ? "Koppints a térképre, vagy húzd a markert a pontos indulási helyre." : "Koppints a térképre, vagy húzd a markert a pontos célra."}
         </p>
       )}
 
@@ -189,7 +207,7 @@ export default function DestinationMapPicker({ initialLat, initialLon, onConfirm
           aria-disabled={!selectedPoint}
           className="btn-primary min-h-[44px] flex-1 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          Ez legyen a cél
+          {isOrigin ? "Ez legyen az indulás" : "Ez legyen a cél"}
         </button>
       </div>
     </div>

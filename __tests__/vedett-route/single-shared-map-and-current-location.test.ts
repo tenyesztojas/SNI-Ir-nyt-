@@ -156,10 +156,17 @@ describe("TASK B — „Aktuális helyzetem” mint indulási pont", () => {
     // fromCoordinates/toCoordinates ág MÁR ISMERT, megbízható koordináta,
     // ezért mindig EXACT-nak jelöljük) — az invariáns változatlan: a
     // geocodeAddress() hívást ez az ág TELJESEN kihagyja.
+    //
+    // GEOCODING KORREKCIÓ (2026-09-11, C4.1) — a statikus "Jelenlegi hely"
+    // mostantól a `fromName` mező HIÁNYÁBAN jelenik meg (lásd
+    // VedettUtvonalSearchForm.tsx originFields: CURRENT_LOCATION SOSEM küld
+    // fromName-et, ezért itt a régi, VÁLTOZATLAN felirat marad — a
+    // MAP_PICKED/jelölt-választás ág viszont MINDIG küld fromName-et, lásd
+    // a geocoding-poi-generalization.test.ts "B) MAP_PICKED origin" tesztjét).
     assert.match(
       routeSrc,
-      /fromCoordinates\s*\n\s*\?\s*Promise\.resolve\(\{ name: "Jelenlegi hely", lat: fromCoordinates\.latitude, lon: fromCoordinates\.longitude, quality: "EXACT" as const \}\)\s*\n\s*:\s*geocodeAddress\(from as string\),/,
-      "fromCoordinates esetén a geocodeAddress() hívást teljesen ki kell hagyni, statikus 'Jelenlegi hely' névvel kell helyettesíteni"
+      /fromCoordinates\s*\n\s*\?\s*Promise\.resolve\(\{ name: fromName \?\? "Jelenlegi hely", lat: fromCoordinates\.latitude, lon: fromCoordinates\.longitude, quality: "EXACT" as const \}\)\s*\n\s*:\s*geocodeAddress\(from as string\),/,
+      "fromCoordinates esetén a geocodeAddress() hívást teljesen ki kell hagyni, a fromName hiányában statikus 'Jelenlegi hely' névvel kell helyettesíteni"
     );
   });
 

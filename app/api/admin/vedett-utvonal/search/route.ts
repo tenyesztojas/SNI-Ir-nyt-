@@ -13,7 +13,7 @@
 import { NextResponse } from "next/server";
 import { requireVedettRouteAccess } from "@/lib/vedett-route/access";
 import { journeySearchSchema } from "@/lib/vedett-route/schemas";
-import { geocodeAddress } from "@/lib/vedett-route/geocode";
+import { geocodeAddress, isAmbiguousGeocodeResult } from "@/lib/vedett-route/geocode";
 import { searchVedettRoutes } from "@/lib/vedett-route/orchestrator";
 import { buildRouteCacheKey, getCached, setCached } from "@/lib/vedett-route/routeCache";
 import type { OrchestratedSearchResult } from "@/lib/vedett-route/types";
@@ -33,7 +33,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const { from, fromCoordinates, to, toCoordinates, toName, weights, stepFreeRequired } = parsed.data;
+  const { from, fromCoordinates, fromName, to, toCoordinates, toName, weights, stepFreeRequired } = parsed.data;
   const departAt = parsed.data.departAt ?? new Date().toISOString();
 
   // Múltbeli időpont ellenőrzése (31. pont: routing tesztek).
@@ -69,9 +69,18 @@ export async function POST(request: Request) {
   // VedettUtvonalSearchForm.tsx) mindig MEGBÍZHATÓ, MÁR ISMERT koordináta —
   // ezt explicit `quality: "EXACT"`-ként jelöljük, hogy a lenti egységes
   // minőség-ellenőrzés helyesen SOHA ne akassza meg ezeket az ágakat.
+  // GEOCODING KORREKCIÓ (2026-09-11, C4.1, "origin map picker label" pont)
+  // — a `fromCoordinates` ág (CURRENT_LOCATION GPS, MOSTANTÓL a térképen
+  // kijelölt/jelölt-listából választott induló pont is) UGYANAZT a
+  // `toName`-mintát követi, mint a `toCoordinates` ág: opcionális,
+  // KIZÁRÓLAG megjelenítési célú `fromName`. Hiányában (a régi,
+  // VÁLTOZATLAN CURRENT_LOCATION eset) a statikus "Jelenlegi hely" marad —
+  // ez SOHA nem jelenhet meg egy MAP_PICKED/jelölt-választás eredményeként,
+  // mert a kliens ilyenkor MINDIG küld fromName-et (lásd
+  // VedettUtvonalSearchForm.tsx originFields).
   const [fromGeo, toGeo] = await Promise.all([
     fromCoordinates
-      ? Promise.resolve({ name: "Jelenlegi hely", lat: fromCoordinates.latitude, lon: fromCoordinates.longitude, quality: "EXACT" as const })
+      ? Promise.resolve({ name: fromName ?? "Jelenlegi hely", lat: fromCoordinates.latitude, lon: fromCoordinates.longitude, quality: "EXACT" as const })
       : geocodeAddress(from as string),
     toCoordinates
       ? Promise.resolve({ name: toName ?? "Kiválasztott cél", lat: toCoordinates.latitude, lon: toCoordinates.longitude, quality: "EXACT" as const })
@@ -79,9 +88,9 @@ export async function POST(request: Request) {
   ]);
 
   // ADDRESS_NOT_FOUND — nincs ELFOGADHATÓ Nominatim-találat SEMMILYEN
-  // próbált lekérdezésre (lásd geocode.ts geocodeAddress() 3-lépéses
-  // fallback-lánca). KÜLÖN reason/szöveg a routing-specifikus
-  // "no_route_found"-tól (10. pont) — ez sose mosódhat össze azzal.
+  // próbált lekérdezésre (lásd geocode.ts geocodeAddress() fallback-lánca).
+  // KÜLÖN reason/szöveg a routing-specifikus "no_route_found"-tól (10.
+  // pont) — ez sose mosódhat össze azzal.
   if (!fromGeo || !toGeo) {
     return NextResponse.json(
       {
@@ -89,6 +98,43 @@ export async function POST(request: Request) {
         reason: "address_not_found",
         field: !fromGeo ? "from" : "to",
         message: "Nem találtuk ezt a címet.",
+      },
+      { status: 400 }
+    );
+  }
+
+  // ADDRESS_AMBIGUOUS (2026-09-11, C4.1) — a geokódolás TÖBB, egymáshoz
+  // közeli pontszámú nevesített hely-jelöltet talált (lásd geocode.ts
+  // classifyNamedPlaceCandidates) — ez KORÁBBAN egyszerűen NOT_FOUND-ra
+  // esett volna vissza. Ez EGY KÜLÖN, a NOT_FOUND/APPROXIMATE-től
+  // elkülönített hibaállapot, a jelölt-listával együtt — a kliens ebből
+  // épít egy kis választólistát (mindkét mezőn szimmetrikusan). A
+  // `candidates` mező KIZÁRÓLAG a minimális GeocodePlaceCandidate alakot
+  // tartalmazza (displayName/lat/lon/secondary) — SOHA nem nyers Nominatim
+  // objektumot. Ez a check SZÁNDÉKOSAN két KÜLÖN if-ággal fut (nem egy
+  // `||`-lel összevont feltétellel), hogy a TypeScript control-flow
+  // elemzése helyesen szűkítse (narrow-olja) fromGeo/toGeo típusát a lenti
+  // `.quality` hozzáféréshez.
+  if (isAmbiguousGeocodeResult(fromGeo)) {
+    return NextResponse.json(
+      {
+        ok: false,
+        reason: "address_ambiguous",
+        field: "from" as const,
+        message: "Több találat is lehetséges — válassz a listából.",
+        candidates: fromGeo.candidates,
+      },
+      { status: 400 }
+    );
+  }
+  if (isAmbiguousGeocodeResult(toGeo)) {
+    return NextResponse.json(
+      {
+        ok: false,
+        reason: "address_ambiguous",
+        field: "to" as const,
+        message: "Több találat is lehetséges — válassz a listából.",
+        candidates: toGeo.candidates,
       },
       { status: 400 }
     );
