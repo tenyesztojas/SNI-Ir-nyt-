@@ -220,6 +220,12 @@ describe("TASK — Validáció (6. pont) — kulturált magyar hibaüzenet, NEM 
     // egy easy-language segítő szöveg is bővült — ez a mögötte álló
     // state-et/logikát (origin.street/destination.street,
     // buildStructuredAddress, isManualAddressComplete) NEM érinti.
+    //
+    // RESZPONZÍV LAYOUT KORREKCIÓ (2026-09-11, a "Cím vagy hely"
+    // placeholder/helper-text kilógását javító kör) — a placeholder és a
+    // helper text tovább rövidült/tördelhetővé vált, hogy ne lógjon ki a
+    // keskenyebb (tablet/mobil) konténerből; ez is KIZÁRÓLAG szöveg/CSS,
+    // nem érinti a fenti state-et/logikát.
     const cityLabelCount = (formSrc.match(/<label className="block text-xs text-gray-500">Város<\/label>/g) ?? []).length;
     const districtLabelCount = (formSrc.match(/<label className="block text-xs text-gray-500">Irányítószám vagy kerület<\/label>/g) ?? []).length;
     const streetLabelCount = (formSrc.match(/<label className="block text-xs text-gray-500">Cím vagy hely<\/label>/g) ?? []).length;
@@ -227,13 +233,58 @@ describe("TASK — Validáció (6. pont) — kulturált magyar hibaüzenet, NEM 
     assert.equal(districtLabelCount, 2);
     assert.equal(streetLabelCount, 2);
     assert.match(formSrc, /placeholder="pl\. 1136 vagy XIII\. kerület"/);
-    const streetPlaceholderCount = (formSrc.match(/placeholder="pl\. Váci utca 12, Astoria vagy Déli pályaudvar"/g) ?? []).length;
+    const streetPlaceholderCount = (formSrc.match(/placeholder="pl\. Astoria vagy Váci utca 12"/g) ?? []).length;
     assert.equal(streetPlaceholderCount, 2);
-    // A korábbi, klasszikus-cím-only placeholder ("pl. Kossuth Lajos utca
-    // 12.") TELJESEN lecserélve — sehol nem maradhat a régi szöveg.
+    // A korábbi placeholderek TELJESEN lecserélve — sehol nem maradhat a
+    // régi szöveg (sem a klasszikus-cím-only, sem az előző, hosszabb
+    // "Váci utca 12, Astoria vagy Déli pályaudvar" verzió).
     assert.doesNotMatch(formSrc, /placeholder="pl\. Kossuth Lajos utca 12\."/);
-    const helperTextCount = (formSrc.match(/Írhatsz címet vagy egy hely nevét is\./g) ?? []).length;
+    assert.doesNotMatch(formSrc, /placeholder="pl\. Váci utca 12, Astoria vagy Déli pályaudvar"/);
+    const helperTextCount = (formSrc.match(/Írhatsz címet vagy helyet is, pl\. Déli pályaudvar\./g) ?? []).length;
     assert.equal(helperTextCount, 2, "az easy-language segítő szövegnek mindkét (origin+destination) blokkban meg kell jelennie");
+    // A korábbi, rövidebb helper text szövege sehol ne maradjon.
+    assert.doesNotMatch(formSrc, /Írhatsz címet vagy egy hely nevét is\./);
+    // A helper text tudjon több sorba törni és ne lógjon ki a
+    // konténerből: whitespace-normal + break-words (nowrap tilos).
+    const helperTextWrapCount = (
+      formSrc.match(
+        /<p className="mt-0\.5 w-full whitespace-normal break-words text-\[11px\] text-gray-400">\s*\n\s*Írhatsz címet vagy helyet is, pl\. Déli pályaudvar\.\s*\n\s*<\/p>/g
+      ) ?? []
+    ).length;
+    assert.equal(helperTextWrapCount, 2, "a helper text <p>-nek whitespace-normal + break-words osztályokkal kell tördelnie, sortörést engedve");
+    assert.doesNotMatch(formSrc, /className="[^"]*\bwhitespace-nowrap\b[^"]*">\s*\n?\s*Írhatsz címet vagy helyet is/);
+  });
+
+  test("a Város / Irányítószám vagy kerület / Cím vagy hely reszponzív grid mindkét (origin + destination MANUAL) blokkban 3 lépcsőben törik: mobil 1 oszlop, tablet (sm) 2 oszlop + a Cím vagy hely teljes sort kap, desktop (lg) 3 egyenlő oszlop", () => {
+    // RESZPONZÍV LAYOUT KORREKCIÓ (2026-09-11) — a korábbi, csak
+    // grid-cols-1 → sm:grid-cols-3 törésű grid helyett most egy köztes
+    // tablet-lépcső is van (sm:grid-cols-2), ahol a "Cím vagy hely" mező
+    // sm:col-span-2 miatt saját, teljes szélességű sort kap a Város+Kerület
+    // páros alatt; desktopon (lg:grid-cols-3 + lg:col-span-1) visszaáll a
+    // jelenlegi hárommezős, egy soros elrendezés. Ez KIZÁRÓLAG CSS/layout,
+    // az input-mezők értékei/onChange-ei/state-je nem változott.
+    const gridContainerCount = (
+      formSrc.match(/grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3/g) ?? []
+    ).length;
+    assert.equal(gridContainerCount, 2, "mindkét (origin + destination MANUAL) strukturált cím-blokk grid konténerének 3 lépcsős törést kell használnia");
+    assert.doesNotMatch(formSrc, /grid grid-cols-1 gap-2 sm:grid-cols-3/, "a régi, köztes tablet-lépcső nélküli grid osztálynak sehol nem szabad maradnia");
+    const streetColSpanCount = (
+      formSrc.match(/<div className="min-w-0 sm:col-span-2 lg:col-span-1">/g) ?? []
+    ).length;
+    assert.equal(streetColSpanCount, 2, "a 'Cím vagy hely' mezőt tartalmazó div-nek sm:col-span-2 lg:col-span-1 osztályokkal kell teljes tablet-sort, majd desktopon egy oszlopot kapnia");
+  });
+
+  test("a 'Cím vagy hely' input mindkét (origin + destination) blokkban width:100% + min-width:0, hogy ne okozzon horizontal overflow-t szűk konténerben", () => {
+    // RESZPONZÍV LAYOUT KORREKCIÓ (2026-09-11) — a Tailwind w-full már
+    // korábban is megvolt, most min-w-0 is bekerült, hogy a grid-item
+    // implicit min-width:auto viselkedése sose feszítse szét a konténert
+    // (funkcionális logika, value/onChange változatlan).
+    const minWFullInputCount = (
+      formSrc.match(
+        /placeholder="pl\. Astoria vagy Váci utca 12"\s*\n\s*disabled=\{disabled\}\s*\n\s*className="mt-0\.5 w-full min-w-0 rounded border border-gray-300 px-2 py-1\.5 text-sm disabled:bg-gray-100"/g
+      ) ?? []
+    ).length;
+    assert.equal(minWFullInputCount, 2, "mindkét 'Cím vagy hely' inputnak w-full ÉS min-w-0 osztállyal kell rendelkeznie");
   });
 });
 

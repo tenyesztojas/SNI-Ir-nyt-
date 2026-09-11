@@ -1586,8 +1586,20 @@ export default function VedettUtvonalSearchForm({
               "Az induló pont: aktuális helyzeted." üzenet jelzi az
               állapotot); ha ezután BÁRMELYIK mezőbe gépel, a
               updateOriginManualField azonnal visszaállít MANUAL módra. */}
-          <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
-            <div>
+          {/* RESZPONZÍV LAYOUT KORREKCIÓ (2026-09-11, "Cím vagy hely" mező
+              placeholder/helper-text kilógás javítása kör) — KIZÁRÓLAG
+              layout/szöveg/responsive CSS, funkcionális logika (state,
+              geokódolás, validáció) VÁLTOZATLAN. A grid mostantól három
+              lépcsőben törik: mobil (alap, grid-cols-1) = Város / Kerület /
+              Cím vagy hely egymás alatt, egy oszlopban; tablet (sm:, ≥640px,
+              grid-cols-2) = Város és Kerület egy sorban, a "Cím vagy hely"
+              mező pedig sm:col-span-2 miatt saját, teljes szélességű sort
+              kap alattuk; desktop (lg:, ≥1024px, grid-cols-3) = a jelenlegi
+              hárommezős, egy sorba rendezett elrendezés (Város | Kerület |
+              Cím vagy hely), a lg:col-span-1 visszaállítja az egyenlő
+              oszlopszélességet. */}
+          <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="min-w-0">
               <label className="block text-xs text-gray-500">Város</label>
               <input
                 type="text"
@@ -1595,10 +1607,10 @@ export default function VedettUtvonalSearchForm({
                 onChange={(e) => updateOriginManualField("city", e.target.value)}
                 placeholder="Budapest"
                 disabled={disabled}
-                className="mt-0.5 w-full rounded border border-gray-300 px-2 py-1.5 text-sm disabled:bg-gray-100"
+                className="mt-0.5 w-full min-w-0 rounded border border-gray-300 px-2 py-1.5 text-sm disabled:bg-gray-100"
               />
             </div>
-            <div>
+            <div className="min-w-0">
               <label className="block text-xs text-gray-500">Irányítószám vagy kerület</label>
               <input
                 type="text"
@@ -1606,10 +1618,10 @@ export default function VedettUtvonalSearchForm({
                 onChange={(e) => updateOriginManualField("districtOrPostalCode", e.target.value)}
                 placeholder="pl. 1136 vagy XIII. kerület"
                 disabled={disabled}
-                className="mt-0.5 w-full rounded border border-gray-300 px-2 py-1.5 text-sm disabled:bg-gray-100"
+                className="mt-0.5 w-full min-w-0 rounded border border-gray-300 px-2 py-1.5 text-sm disabled:bg-gray-100"
               />
             </div>
-            <div>
+            <div className="min-w-0 sm:col-span-2 lg:col-span-1">
               {/* UI/SZÖVEGEZÉSI KORREKCIÓ (2026-09-11, "utolsó, kizárólag
                   UI/szövegezési módosítás" kör, 1. pont) — a mező neve/
                   placeholdere/segítő szövege KIZÁRÓLAG szöveg, NEM érinti a
@@ -1618,17 +1630,21 @@ export default function VedettUtvonalSearchForm({
                   (lásd updateOriginManualField/buildStructuredAddress). A
                   cél, hogy a felhasználó easy-language módon értse, hogy a
                   mezőbe cím ÉS hely/POI név is beírható, ne csak "utca,
-                  házszám". */}
+                  házszám". A placeholder és a helper text 2026-09-11-én,
+                  a reszponzív layout javítás körben rövidebbre/tördelhetőre
+                  cserélve, hogy ne lógjon ki a keskenyebb konténerből. */}
               <label className="block text-xs text-gray-500">Cím vagy hely</label>
               <input
                 type="text"
                 value={origin.type === "MANUAL" ? origin.street : ""}
                 onChange={(e) => updateOriginManualField("street", e.target.value)}
-                placeholder="pl. Váci utca 12, Astoria vagy Déli pályaudvar"
+                placeholder="pl. Astoria vagy Váci utca 12"
                 disabled={disabled}
-                className="mt-0.5 w-full rounded border border-gray-300 px-2 py-1.5 text-sm disabled:bg-gray-100"
+                className="mt-0.5 w-full min-w-0 rounded border border-gray-300 px-2 py-1.5 text-sm disabled:bg-gray-100"
               />
-              <p className="mt-0.5 text-[11px] text-gray-400">Írhatsz címet vagy egy hely nevét is.</p>
+              <p className="mt-0.5 w-full whitespace-normal break-words text-[11px] text-gray-400">
+                Írhatsz címet vagy helyet is, pl. Déli pályaudvar.
+              </p>
             </div>
           </div>
           {/* 7. pont — Budapest BÉTA korlát: diszkrét jelzés a mezők
@@ -1669,8 +1685,13 @@ export default function VedettUtvonalSearchForm({
                   (Védett Hely deep link) esetén ez az ág NEM jelenik meg —
                   a hely neve marad az egyetlen, előretöltött mező, nincs
                   újbóli geokódolás. */}
-              <div className="mt-1 grid grid-cols-1 gap-2 sm:grid-cols-3">
-                <div>
+              {/* RESZPONZÍV LAYOUT KORREKCIÓ (2026-09-11) — az origin
+                  blokkal szimmetrikus grid-törés, lásd ott a részletes
+                  komment (mobil: 1 oszlop; tablet sm: Város+Kerület egy
+                  sorban, "Cím vagy hely" saját teljes sorban; desktop lg:
+                  visszaáll a hárommezős, egy soros elrendezés). */}
+              <div className="mt-1 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="min-w-0">
                   <label className="block text-xs text-gray-500">Város</label>
                   <input
                     type="text"
@@ -1678,10 +1699,10 @@ export default function VedettUtvonalSearchForm({
                     onChange={(e) => updateDestinationManualField("city", e.target.value)}
                     placeholder="Budapest"
                     disabled={disabled}
-                    className="mt-0.5 w-full rounded border border-gray-300 px-2 py-1.5 text-sm disabled:bg-gray-100"
+                    className="mt-0.5 w-full min-w-0 rounded border border-gray-300 px-2 py-1.5 text-sm disabled:bg-gray-100"
                   />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <label className="block text-xs text-gray-500">Irányítószám vagy kerület</label>
                   <input
                     type="text"
@@ -1689,23 +1710,26 @@ export default function VedettUtvonalSearchForm({
                     onChange={(e) => updateDestinationManualField("districtOrPostalCode", e.target.value)}
                     placeholder="pl. 1136 vagy XIII. kerület"
                     disabled={disabled}
-                    className="mt-0.5 w-full rounded border border-gray-300 px-2 py-1.5 text-sm disabled:bg-gray-100"
+                    className="mt-0.5 w-full min-w-0 rounded border border-gray-300 px-2 py-1.5 text-sm disabled:bg-gray-100"
                   />
                 </div>
-                <div>
+                <div className="min-w-0 sm:col-span-2 lg:col-span-1">
                   {/* UI/SZÖVEGEZÉSI KORREKCIÓ (2026-09-11) — az origin
                       blokkal szimmetrikus szöveg-változás, lásd ott a
-                      komment. */}
+                      komment. A placeholder és a helper text a reszponzív
+                      layout javítás körben rövidebbre/tördelhetőre cserélve. */}
                   <label className="block text-xs text-gray-500">Cím vagy hely</label>
                   <input
                     type="text"
                     value={destination.street}
                     onChange={(e) => updateDestinationManualField("street", e.target.value)}
-                    placeholder="pl. Váci utca 12, Astoria vagy Déli pályaudvar"
+                    placeholder="pl. Astoria vagy Váci utca 12"
                     disabled={disabled}
-                    className="mt-0.5 w-full rounded border border-gray-300 px-2 py-1.5 text-sm disabled:bg-gray-100"
+                    className="mt-0.5 w-full min-w-0 rounded border border-gray-300 px-2 py-1.5 text-sm disabled:bg-gray-100"
                   />
-                  <p className="mt-0.5 text-[11px] text-gray-400">Írhatsz címet vagy egy hely nevét is.</p>
+                  <p className="mt-0.5 w-full whitespace-normal break-words text-[11px] text-gray-400">
+                    Írhatsz címet vagy helyet is, pl. Déli pályaudvar.
+                  </p>
                 </div>
               </div>
               <p className="mt-1 text-[11px] text-gray-400">Jelenleg Budapesten tesztelhető.</p>
