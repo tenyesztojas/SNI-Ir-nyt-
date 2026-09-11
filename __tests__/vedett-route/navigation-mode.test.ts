@@ -48,7 +48,7 @@ describe("I) Explicit Navigation Mode — SOHA nem automatikus", () => {
   test("startNavigation() explicit user-akcióra hívja geo.startWatching()-et, nem valamilyen effektből/mountból", () => {
     assert.match(
       formSrc,
-      /const startNavigation = \(\) => \{\s*\n\s*setNavigationMode\(true\);\s*\n\s*setFollowMode\(true\);\s*\n\s*setManualFullscreen\(false\);[\s\S]{0,120}?geo\.startWatching\(\);\s*\n\s*\};/
+      /const startNavigation = \(\) => \{\s*\n\s*setNavigationMode\(true\);\s*\n\s*setFollowMode\(true\);\s*\n\s*setManualFullscreen\(false\);[\s\S]{0,400}?geo\.startWatching\(\);\s*\n\s*\};/
     );
   });
 });

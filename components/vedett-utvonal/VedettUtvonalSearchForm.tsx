@@ -393,10 +393,26 @@ function RankedJourneyCard({
   const [manualFullscreen, setManualFullscreen] = useState(false);
   const mapFullscreen = navigationMode || manualFullscreen;
 
+  // PIHENŐPONT PANEL BEZÁRÁSA (2026-09-11) — TISZTÁN UI-szintű
+  // láthatóság-kapcsoló a fullscreen navigációban megjelenő pihenőpont
+  // bottom sheethez (RestPointQuickAdd + RestStopFlowPanel). SZÁNDÉKOSAN
+  // NEM a rest-stop-flow state machine-hez (lib/vedett-route/restStopFlow/
+  // stateMachine.ts) tartozik, és SOHA nem dispatchol rá semmilyen eseményt
+  // (CANCEL_REST_STOP-ot, RESET_TO_ROUTE_ACTIVE-t, stb.) — a "Bezárás" itt
+  // KIZÁRÓLAG azt dönti el, hogy a bottom sheet DOM-ban látható-e
+  // (display: none, sosem unmount), a folyamatban lévő pihenőpont-flow
+  // (ha van) a háttérben változatlanul tovább fut, GPS-t/route-ot/
+  // navigationMode-ot/followMode-ot nem érint. Alapértéke false — a panel
+  // egy friss navigáció-indításkor mindig ZÁRT állapotból indul (a kompakt
+  // "Pihenőpont hozzáadása" gombbal a fullscreen navigáció fölött), a
+  // teljes képernyős térkép legyen az elsődleges nézet navigáció indításakor.
+  const [restPanelVisible, setRestPanelVisible] = useState(false);
+
   const startNavigation = () => {
     setNavigationMode(true);
     setFollowMode(true);
     setManualFullscreen(false); // navigationMode már magában fullscreen — nincs szükség a külön manuális flagre is.
+    setRestPanelVisible(false); // friss navigációs session mindig ZÁRT pihenőpont-panellel indul — a teljes képernyős térkép az elsődleges nézet.
     geo.startWatching();
   };
 
@@ -684,18 +700,72 @@ function RankedJourneyCard({
               lévő "Pihenőre van szükségem" flow (RestStopFlowPanel saját
               állapotgépe) így egy fullscreen-váltás közben sem vész el.
               A KÉT KOMPONENS MAGA NEM DUPLIKÁLÓDIK — egyetlen JSX-elem van
-              mindkettőből, nincs második, párhuzamos flow/state machine. */}
+              mindkettőből, nincs második, párhuzamos flow/state machine.
+
+              PIHENŐPONT PANEL BEZÁRÁSA (2026-09-11) — a production fizikai
+              teszt (Kelenföld) kimutatta, hogy fullscreen navigáció alatt
+              ennek a sheetnek KORÁBBAN nem volt semmilyen bezárási
+              lehetősége: mindig látható volt, kitakarva a teljes képernyős
+              navigációt, és a felhasználó nem tudott "visszatérni" hozzá. A
+              javítás: fullscreen alatt egy sticky fejléc jelenik meg
+              ("Pihenőpont hozzáadása" cím + "✕ Bezárás", legalább 44x44 px,
+              aria-label="Pihenőpontok bezárása"), ami a `restPanelVisible`
+              UI-state-et false-ra állítja. A tartalom (RestPointQuickAdd +
+              RestStopFlowPanel) EKKOR IS a DOM-ban marad (a külső wrapper
+              className vált "hidden"-re, a belső komponensek SOHA nem
+              unmountolnak) — pontosan ugyanaz az elv, mint a fenti
+              fullscreen map wrapper esetében, hogy egy folyamatban lévő
+              "Pihenőre van szükségem" flow (state machine + esetleges async
+              /nearby vagy /route-to-rest-point kérés) a panel bezárása után
+              is zavartalanul folytatódjon a háttérben — a bezárás SOSEM
+              hívja a stateMachine.ts semelyik eseményét (nincs
+              CANCEL_REST_STOP, nincs RESET_TO_ROUTE_ACTIVE), SOSEM érinti a
+              navigationMode/followMode/GPS-watch/journey állapotot, és egy
+              async válasz megérkezése SEM nyitja vissza automatikusan a
+              sheetet (a `restPanelVisible` state ettől függetlenül,
+              KIZÁRÓLAG a felhasználó explicit kattintására vált). Bezárt
+              állapotban egy kompakt, ugyanígy legalább 44x44 px-es
+              "Pihenőpont hozzáadása" gomb marad elérhető (lásd lent), amivel
+              bármikor újranyitható — ez NEM indít új keresést/eseményt, csak
+              visszaállítja a láthatóságot.
+
+              UX-frissítés (2026-09-11, második kör): a `restPanelVisible`
+              alapértéke — és a startNavigation() reset-je — false-ra
+              változott. Minden friss navigáció-indítás ZÁRT panellel
+              indul: a teljes képernyős térkép az elsődleges nézet, a
+              kompakt "Pihenőpont hozzáadása" gomb rögtön elérhető, és a
+              felhasználó explicit kattintására nyílik meg a panel. A
+              zárás/nyitás/GPS/journey-érintetlenség szabályai fentebb
+              változatlanok. */}
           <div
             className={
               mapFullscreen
-                ? "fixed inset-x-0 bottom-0 z-[60] max-h-[45dvh] space-y-3 overflow-y-auto rounded-t-2xl border-t border-gray-200 bg-white px-3 pt-3 shadow-2xl"
+                ? restPanelVisible
+                  ? "fixed inset-x-0 bottom-0 z-[60] flex max-h-[45dvh] flex-col rounded-t-2xl border-t border-gray-200 bg-white shadow-2xl"
+                  : "hidden"
                 : "space-y-3"
             }
-            style={mapFullscreen ? { paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 12px)" } : undefined}
           >
-            <RestPointQuickAdd onCreated={(rp) => setSessionRestPoints((points) => [...points, rp])} />
+            {mapFullscreen && (
+              <div className="sticky top-0 z-10 flex flex-shrink-0 items-center justify-between rounded-t-2xl border-b border-gray-100 bg-white px-3 py-1">
+                <span className="text-sm font-semibold text-sni-text">Pihenőpont hozzáadása</span>
+                <button
+                  type="button"
+                  onClick={() => setRestPanelVisible(false)}
+                  aria-label="Pihenőpontok bezárása"
+                  className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full text-lg text-gray-600"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+            <div
+              className={mapFullscreen ? "space-y-3 overflow-y-auto px-3 pt-3" : "space-y-3"}
+              style={mapFullscreen ? { paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 12px)" } : undefined}
+            >
+              <RestPointQuickAdd onCreated={(rp) => setSessionRestPoints((points) => [...points, rp])} />
 
-            {/* Sprint E — "Pihenőre van szükségem": az eredeti célt a
+              {/* Sprint E — "Pihenőre van szükségem": az eredeti célt a
                 MEGJELENÍTETT (nem feltétlenül az eredeti) itinerary utolsó
                 lábának valós MOTIS koordinátáiból származtatjuk — ha a
                 felhasználó már folytatta az utat egy pihenő után, a
@@ -714,14 +784,39 @@ function RankedJourneyCard({
                 státuszban van) — tehát a "Pihenőre van szükségem" gomb
                 explicit megnyomása SOSEM indít MÁSODIK watchPosition-t,
                 a legfrissebb, memóriában élő GPS-pozíciót használja. */}
-            <RestStopFlowPanel
-              originalDestination={originalDestination}
-              originalDepartAt={displayedJourney.departureTime}
-              geo={geo}
-              onRouteResumed={(nextJourney) => setDisplayedJourney(nextJourney)}
-              onMapStateChange={setRestStopMapState}
-            />
+              <RestStopFlowPanel
+                originalDestination={originalDestination}
+                originalDepartAt={displayedJourney.departureTime}
+                geo={geo}
+                onRouteResumed={(nextJourney) => setDisplayedJourney(nextJourney)}
+                onMapStateChange={setRestStopMapState}
+              />
+            </div>
           </div>
+
+          {/* Bezárt pihenőpont-panel újranyitása (2026-09-11) — csak
+              fullscreen alatt, amíg restPanelVisible === false, jelenik meg.
+              Legalább 44x44 px, a meglévő "Pihenőpont hozzáadása" felirattal
+              (spec 5. pont: a MEGLÉVŐ funkcióval nyitható vissza) — a
+              kattintás KIZÁRÓLAG a `restPanelVisible` UI-state-et állítja
+              true-ra, nem indít semmilyen új keresést/state-machine
+              eseményt (a REST_REQUESTED-et továbbra is csak a
+              RestStopFlowPanel saját, explicit "Pihenőre van szükségem"
+              gombja indítja, lásd stateMachine.ts CANCELLABLE_STATES fenti
+              kommentje). Jobb alsó sarok, a biztonsági (safe-area) sáv
+              figyelembevételével, hogy notch/browser chrome alá sose
+              kerüljön. */}
+          {mapFullscreen && !restPanelVisible && (
+            <button
+              type="button"
+              onClick={() => setRestPanelVisible(true)}
+              aria-label="Pihenőpont hozzáadása"
+              className="fixed right-3 z-[60] flex min-h-[44px] items-center rounded-full bg-white px-4 text-sm font-medium text-sni-text shadow-2xl"
+              style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 12px)" }}
+            >
+              Pihenőpont hozzáadása
+            </button>
+          )}
         </div>
       )}
     </div>

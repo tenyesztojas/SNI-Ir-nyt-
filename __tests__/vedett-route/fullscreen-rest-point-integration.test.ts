@@ -49,8 +49,13 @@ const cardSrc = formSrc.slice(cardStart, cardEnd);
 // MEGJEGYZÉS: a projekt e fájljai (és a legtöbb vedett-utvonal komponens)
 // CRLF sorvégekkel vannak tárolva — a horgony-string ezért \r\n-t használ
 // (nem csak \n-t), különben az indexOf() sosem találná meg a mintát.
-const wrapperStart = cardSrc.indexOf("mapFullscreen\r\n                ? \"fixed inset-x-0 bottom-0");
-const wrapperEnd = cardSrc.indexOf("</div>\r\n        </div>\r\n      )}\r\n    </div>\r\n  );");
+//
+// PIHENŐPONT PANEL BEZÁRÁSA (2026-09-11) — a wrapper ternary-ja ETTŐL A
+// KÖRTŐL kezdve egy MÁSODIK, `restPanelVisible`-től függő szintet is
+// tartalmaz (lásd rest-point-panel-close.test.ts a részletes lefedettségért)
+// — a horgony-string ezért innen `? restPanelVisible`-lel folytatódik, nem
+// közvetlenül a class-string literállal.
+const wrapperStart = cardSrc.indexOf("mapFullscreen\r\n                ? restPanelVisible");
 
 describe("A-B) 'Pihenőre van szükségem' és 'Pihenőpont hozzáadása' fullscreen Navigation Mode-ban is elérhető", () => {
   test("A-B) a wrapper <div> (RestPointQuickAdd + RestStopFlowPanel) NINCS a '!navigationMode &&' feltételes blokkba zárva — fullscreen alatt is renderelődik", () => {
@@ -67,10 +72,15 @@ describe("A-B) 'Pihenőre van szükségem' és 'Pihenőpont hozzáadása' fullsc
     );
   });
 
-  test("A wrapper <div> className-e fullscreen alatt fixed, bottom-anchored, magasabb z-indexszel, mint a fullscreen map (z-50)", () => {
+  test("A wrapper <div> className-e fullscreen+látható alatt fixed, bottom-anchored, magasabb z-indexszel, mint a fullscreen map (z-50); a görgetés/safe-area a belső content <div>-re költözött, de a wrapperen belül továbbra is jelen van", () => {
     assert.ok(wrapperStart !== -1);
-    const wrapperBlock = cardSrc.slice(wrapperStart, wrapperStart + 600);
-    assert.match(wrapperBlock, /fixed inset-x-0 bottom-0 z-\[60\]/, "fullscreen alatt fixed, bottom-anchored, z-[60] rétegnek kell lennie");
+    // PIHENŐPONT PANEL BEZÁRÁSA (2026-09-11): a wrapper mostantól egy
+    // beágyazott (restPanelVisible-függő) ternary-t is tartalmaz, ezért a
+    // korábbi 600 karakteres ablak már nem elég a teljes wrapper +
+    // sticky fejléc + belső content <div> (overflow-y-auto/safe-area)
+    // eléréséhez — 1400 karakter biztonságosan lefedi mindet.
+    const wrapperBlock = cardSrc.slice(wrapperStart, wrapperStart + 1400);
+    assert.match(wrapperBlock, /fixed inset-x-0 bottom-0 z-\[60\]/, "fullscreen+látható alatt fixed, bottom-anchored, z-[60] rétegnek kell lennie");
     assert.match(wrapperBlock, /max-h-\[45dvh\]/, "korlátozott magasságúnak kell lennie (ne vegye el teljesen a térképet)");
     assert.match(wrapperBlock, /overflow-y-auto/, "görgethetőnek kell lennie, ha a tartalom hosszabb");
     assert.match(wrapperBlock, /rounded-t-2xl/, "bottom sheet jellegű, felül lekerekített konténernek kell lennie");
@@ -79,7 +89,7 @@ describe("A-B) 'Pihenőre van szükségem' és 'Pihenőpont hozzáadása' fullsc
 
   test("nem-fullscreen esetben a wrapper egyszerű, normál-flow konténer marad (space-y-3), nincs fixed pozicionálás", () => {
     assert.ok(wrapperStart !== -1);
-    const wrapperBlock = cardSrc.slice(wrapperStart, wrapperStart + 600);
+    const wrapperBlock = cardSrc.slice(wrapperStart, wrapperStart + 1400);
     assert.match(wrapperBlock, /: "space-y-3"/, "a ternary else-ágának egyszerű, normál-flow className-nek kell lennie");
   });
 });
@@ -171,7 +181,7 @@ describe("E-F) trackedPosition = legfrissebb, MEGOSZTOTT GPS-pozíció — nincs
 
   test("F) a RestStopFlowPanel.tsx SOSEM hívja geo.startWatching()-et — a folyamatos GPS-követést KIZÁRÓLAG a startNavigation() indíthatja el", () => {
     assert.ok(!/geo\.startWatching\(/.test(restStopFlowPanelSrc), "a RestStopFlowPanel nem indíthat második watchPosition-t");
-    assert.match(cardSrc, /const startNavigation = \(\) => \{[\s\S]{0,300}geo\.startWatching\(\);/, "a watchPosition indítása kizárólag a startNavigation()-ben él");
+    assert.match(cardSrc, /const startNavigation = \(\) => \{[\s\S]{0,500}geo\.startWatching\(\);/, "a watchPosition indítása kizárólag a startNavigation()-ben él");
   });
 });
 
