@@ -10,6 +10,13 @@
 export interface MotisPlace {
   name?: string;
   stopId?: string;
+  // AKADÁLYMENTES / LÉPCSŐMENTES MVP (2026-09-11, Task C2) — a VPS runtime-
+  // teszttel BIZONYÍTOTTAN megfigyelt mező (lásd a feature riport "MOTIS
+  // válasz audit" szakasza): a klaszter/anya-állomás MOTIS-azonosítója
+  // (pl. "bkkgtfs_CS056215"), amikor a stopId egy annál specifikusabb
+  // gyerek-megállóra mutat. Opcionális — nem minden MotisPlace-nek van
+  // szülője.
+  parentId?: string;
   lat?: number;
   lon?: number;
   level?: number;
@@ -46,6 +53,16 @@ export interface MotisLegGeometry {
   length?: number; // koordináta-pontok száma (csak informatív)
 }
 
+// AKADÁLYMENTES / LÉPCSŐMENTES MVP (2026-09-11, Task C2, spec 2. pont) — a
+// pinned MOTIS v2.11.2 WHEELCHAIR pedestrian profil melletti VPS runtime-
+// teszttel BIZONYÍTOTTAN megfigyelt érték-halmaz. FONTOS (spec 1. pont,
+// kötelező alkalmazásoldali hard filter): a WHEELCHAIR profil NEM szűri ki
+// megbízhatóan a NOT_ACCESSIBLE transit legeket — a runtime tesztben egy
+// route 41 leg NOT_ACCESSIBLE-ként tért vissza MÉG WHEELCHAIR módban is.
+// Ez a mező tehát csak egy BEMENET a hard filterhez (lásd accessibility.ts),
+// SOSEM önmagában elégséges bizonyíték az útvonal akadálymentességére.
+export type MotisWheelchairAccessible = "ACCESSIBLE" | "NOT_ACCESSIBLE" | string;
+
 export interface MotisLeg {
   mode: MotisLegMode;
   from: MotisPlace;
@@ -55,6 +72,12 @@ export interface MotisLeg {
   endTime?: string;
   routeShortName?: string;
   routeLongName?: string;
+  // AKADÁLYMENTES / LÉPCSŐMENTES MVP (2026-09-11, Task C2) — a VPS runtime-
+  // teszttel bizonyítottan megfigyelt routeId (pl. "bkkgtfs_5400") — a GTFS
+  // route_id-vel a motisIdNormalization.ts normalizeMotisRouteId()-jén
+  // keresztül köthető össze. Opcionális — nem minden mód (pl. WALK) ad
+  // routeId-t.
+  routeId?: string;
   tripId?: string;
   headsign?: string;
   realTime?: boolean;
@@ -62,6 +85,14 @@ export interface MotisLeg {
   cancelled?: boolean;
   distance?: number; // méter (jellemzően WALK lábakon)
   agencyName?: string;
+  agencyId?: string;
+  // AKADÁLYMENTES / LÉPCSŐMENTES MVP (2026-09-11, Task C2, spec 2. pont) —
+  // a WHEELCHAIR pedestrian profil melletti VPS runtime-teszttel
+  // BIZONYÍTOTTAN megfigyelt, transit legenkénti jármű-akadálymentességi
+  // mező. Opcionális — csak stepFreeRequired=true (WHEELCHAIR profil)
+  // mellett figyeltük meg, normál (FOOT) kérésnél NEM feltételezzük a
+  // jelenlétét.
+  wheelchairAccessible?: MotisWheelchairAccessible;
   // Valós MOTIS válaszban megfigyelt mezők (2026-09-06), térkép-megjelenítéshez:
   legGeometry?: MotisLegGeometry;
   intermediateStops?: MotisPlace[];
@@ -137,6 +168,17 @@ export interface MotisPlanParams {
   // (elsődleges) MOTIS kérés SOHA nem állítja be ezt a mezőt, lásd
   // orchestrator.ts searchVedettRoutes() fejléc-kommentje.
   radius?: number; // méter
+  // AKADÁLYMENTES / LÉPCSŐMENTES MVP (2026-09-11, Task C2, spec 1/6. pont)
+  // — VPS RUNTIME-TESZTTEL BIZONYÍTOTT MOTIS v2.11.2 paraméterek (NEM
+  // találgatás — lásd a feature riport "MOTIS v2.11.2 runtime" szakasza):
+  // ezek a pinned production MOTIS instance-on ténylegesen elfogadottak,
+  // és a válasz bizonyítottan ELTÉR a normál FOOT routingtól. KIZÁRÓLAG az
+  // orchestrator.ts állítja be, KIZÁRÓLAG amikor request.stepFreeRequired
+  // === true (lásd searchVedettRoutes()) — normál keresésben SOHA nincs
+  // jelen egyik sem.
+  pedestrianProfile?: "WHEELCHAIR" | string;
+  useRoutedTransfers?: boolean;
+  timetableView?: boolean;
 }
 
 export type MotisPlanResult =

@@ -16,7 +16,8 @@
 // biztosít, ez a provider lecserélhető/bővíthető anélkül, hogy a
 // TransitProvider interfészt vagy a hívó kódot módosítani kellene.
 
-import { mkdir, writeFile, readFile } from "node:fs/promises";
+import { mkdir, writeFile, readFile, rename } from "node:fs/promises";
+import { createHash, randomUUID } from "node:crypto";
 import path from "node:path";
 import AdmZip from "adm-zip";
 import type {
@@ -29,6 +30,68 @@ import type {
   VehiclePosition,
 } from "../types.ts";
 import { vedettRouteLog } from "../logger.ts";
+import { buildAccessibilityIndexFromGtfsZip, type AccessibilityIndex } from "../accessibilityIndex.ts";
+
+// AKADÁLYMENTES / LÉPCSŐMENTES MVP — ACCESSIBILITY INDEX RUNTIME STORAGE
+// DÖNTÉS (2026-09-11, Task C2, spec 4. pont)
+//
+// AUDIT: a jelenlegi architektúra a GTFS statikus feedet KÉTFÉLE helyen
+// tartja: (1) a MOTIS routing motor a VPS-en, egy ETTŐL A NEXT.JS ALKALMAZÁSTÓL
+// TELJESEN FÜGGETLEN, saját betöltési folyamaton keresztül (a route service
+// mögött, lásd motisClient.ts fejléce — ez a repo NEM látja és NEM
+// vezérli, hogyan/mikor tölti be a MOTIS a saját GTFS-ét); (2) ez a
+// staticFileProvider.ts egy, az admin által feltöltött zip-et validál és
+// tárol a Next.js app SAJÁT, helyi (`.vedett-cache/gtfs-static/<provider>/`)
+// könyvtárában, KIZÁRÓLAG a Fázis 2 (MÁV/Volán) providerek számára —
+// FONTOS: a BKK (a jelenlegi, egyetlen éles provider) esetén ez a
+// feltöltési mechanizmus NINCS használatban productionben (a BKK saját,
+// kulcsos GTFS-Realtime API-val rendelkezik, lásd providers/bkk.ts) — tehát
+// jelenleg NINCS olyan, ebben a repóban élő, admin-feltöltött BKK GTFS zip,
+// amiből ezt az indexet ma ténylegesen fel lehetne építeni productionben.
+//
+// DÖNTÉS: az accessibility index ÉPÍTÉSÉT és TÁROLÁSÁT UGYANIDE, a már
+// meglévő providerenkénti cache-könyvtárba tesszük (`accessibility-index.json`
+// a `gtfs.zip`/`meta.json` mellett) — ez a LEGKISEBB, a meglévő
+// architektúrát követő módosítás, ami:
+//   - Vercel runtime-on elérhető (ugyanaz a fájlrendszer-hozzáférés, amit a
+//     meglévő getStaticDataStatus()/refreshStaticData() is használ — bár
+//     FONTOS KORLÁT, lásd routeCache.ts hasonló megjegyzését: egy
+//     szerverless/több-instance Vercel-környezetben a helyi fájlrendszer
+//     NEM garantáltan perzisztens/megosztott a hívások között — ez a
+//     KORLÁT MÁR MA IS fennáll a meglévő GTFS-cache mechanizmusra, ez a
+//     kör nem vezet be új kockázatot, de nem is oldja fel a meglévőt);
+//   - NEM parszol GTFS zip-et minden route requestnél — az index egyszer,
+//     feltöltéskor (ingestUploadedGtfsZip) épül, utána a runtime csak a
+//     kis JSON-t olvassa (lásd getAccessibilityIndex());
+//   - ATOMIKUSAN cserélődik (temp fájlba írás + rename(), lásd lent) — egy
+//     félbeszakadt írás SOHA nem hagy korrupt/részleges indexet olvasható
+//     állapotban;
+//   - a `generation` mező (a bemeneti zip TARTALMÁNAK SHA-256 hash-e,
+//     lásd computeGtfsZipGeneration()) az INDEXET a BEMENETI ZIP-hez köti.
+//
+// NYITOTT, DOKUMENTÁLT BIZONYTALANSÁG (spec 21. pont — NE hamisíts
+// szinkront): ez a `generation` KIZÁRÓLAG azt garantálja, hogy az index
+// pontosan ehhez a Next.js app által tárolt zip-tartalomhoz tartozik — AZT
+// NEM garantálja (és a jelenlegi repo/infrastruktúra alapján NEM
+// dönthető el biztonságosan), hogy a MOTIS routing motor a VPS-en
+// UGYANEZT a feed-generációt tölti-e be éppen. A MOTIS saját feed-frissítési
+// folyamata ennek a Next.js alkalmazásnak NEM látható és NEM vezérelt
+// felülete. Amíg ez a két rendszer (Next.js accessibility index vs. MOTIS
+// routing feed) nem kap egy KÖZÖS, mindkét oldalról olvasható
+// verzió-/generation-jelzőt (pl. egy megosztott feed-manifest fájl vagy
+// egy közös adatbázis-tábla, amit MIND a MOTIS betöltő szkript, MIND ez az
+// app frissít ugyanabból a forrás-zip-ből), az orchestrator.ts SOHA nem
+// jelenít meg KNOWN_ACCESSIBLE eredményt PUSZTÁN azon az alapon, hogy "az
+// index létezik" — a hard filter/klasszifikáció mindig a Journey-ben
+// TÉNYLEGESEN szereplő MOTIS stopId/tripId ellenében fut, nem feltételezi
+// előre, hogy a két feed egyezik.
+function computeGtfsZipGeneration(buffer: Buffer): string {
+  return createHash("sha256").update(buffer).digest("hex").slice(0, 16);
+}
+
+function accessibilityIndexPath(providerDirName: string): string {
+  return path.join(cacheDirFor(providerDirName), "accessibility-index.json");
+}
 
 // Egy GTFS static feed-nek ezeket a fájlokat KÖTELEZŐ tartalmaznia ahhoz,
 // hogy a routing engine (majd) fel tudja dolgozni. (calendar_dates.txt,
@@ -87,7 +150,7 @@ export function validateGtfsZip(buffer: Buffer): GtfsUploadValidationResult {
   return { valid: missingFiles.length === 0, missingFiles, entryNames, feedInfo };
 }
 
-function cacheDirFor(providerDirName: string): string {
+export function cacheDirFor(providerDirName: string): string {
   return path.join(process.cwd(), ".vedett-cache", "gtfs-static", providerDirName);
 }
 
@@ -115,7 +178,63 @@ export async function ingestUploadedGtfsZip(
   await writeFile(path.join(dir, "meta.json"), JSON.stringify(meta, null, 2));
   vedettRouteLog("gtfs_static_refresh", "info", { provider: providerDirName, sizeBytes: buffer.byteLength, source: "admin_upload" });
 
+  // AKADÁLYMENTES / LÉPCSŐMENTES MVP (2026-09-11, Task C2) — "GTFS UPDATE
+  // -> accessibility index rebuild -> atomic replacement" (spec 4. pont
+  // preferált elve). Az index UGYANEBBŐL a már validált `buffer`-ből épül
+  // (nem egy külön letöltésből/lekérdezésből), tehát BIZTOSAN ugyanahhoz a
+  // feed-tartalomhoz tartozik, mint a most mentett gtfs.zip. Az írás
+  // ATOMIKUS: egy egyedi nevű temp fájlba írunk, majd rename()-elünk a
+  // végleges névre — a rename() ugyanazon a fájlrendszeren belül atomikus
+  // (POSIX), így egy konkurens olvasó SOHA nem láthat részleges/korrupt
+  // JSON-t. Az index-építés hibáját (pl. váratlanul hibás pathways.txt)
+  // SOHA nem engedjük a feltöltés egészét elbuktatni — a GTFS zip maga már
+  // validált és elmentve; egy accessibility-index hiba esetén a runtime
+  // egyszerűen nem talál indexet (lásd getAccessibilityIndex() lent), ami
+  // biztonságosan UNKNOWN-t eredményez MINDEN klasszifikációra, SOSEM
+  // hibát vagy kitalált adatot.
+  try {
+    const generation = computeGtfsZipGeneration(buffer);
+    const index = buildAccessibilityIndexFromGtfsZip(buffer, providerDirName as TransitProviderId, generation);
+    const finalPath = accessibilityIndexPath(providerDirName);
+    const tmpPath = path.join(dir, `accessibility-index.${randomUUID()}.tmp.json`);
+    await writeFile(tmpPath, JSON.stringify(index));
+    await rename(tmpPath, finalPath);
+    vedettRouteLog("gtfs_static_refresh", "info", {
+      provider: providerDirName,
+      reason: "accessibility_index_rebuilt",
+      generation,
+      stopsCount: Object.keys(index.stopsById).length,
+      tripsCount: Object.keys(index.tripsById).length,
+      pathwaysCount: index.pathways.length,
+    });
+  } catch (err) {
+    vedettRouteLog("malformed_response", "error", {
+      provider: providerDirName,
+      reason: "accessibility_index_build_failed",
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+
   return { provider: providerDirName as TransitProviderId, available: true, lastUpdated: uploadedAt, feedVersion: validation.feedInfo?.feedVersion ?? null, validation };
+}
+
+/**
+ * A jelenleg tárolt accessibility index betöltése egy providerhez —
+ * SOSEM dob hibát: hiányzó/korrupt/olvashatatlan index esetén `null`-t ad,
+ * amit a hívó (orchestrator.ts) úgy kezel, mintha nem lenne semmilyen
+ * accessibility adat (minden klasszifikáció UNKNOWN-ra esik vissza).
+ */
+export async function getAccessibilityIndex(providerDirName: string): Promise<AccessibilityIndex | null> {
+  try {
+    const raw = await readFile(accessibilityIndexPath(providerDirName), "utf-8");
+    const parsed = JSON.parse(raw) as AccessibilityIndex;
+    if (!parsed || typeof parsed !== "object" || !parsed.stopsById || !parsed.tripsById || !Array.isArray(parsed.pathways)) {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
 }
 
 export class StaticOnlyGtfsProvider implements TransitProvider {

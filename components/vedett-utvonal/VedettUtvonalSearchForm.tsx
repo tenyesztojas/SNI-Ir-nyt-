@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { Journey, OrchestratedSearchResult, PersonalizationWeights, RankedJourney, RankingLabel } from "@/lib/vedett-route/types";
+import type { AccessibilityResultStatus } from "@/lib/vedett-route/accessibility";
 import dynamic from "next/dynamic";
 import { useGeolocation } from "@/lib/hooks/useGeolocation";
 import RestPointQuickAdd, { type RestPointCreatedPayload } from "./RestPointQuickAdd";
@@ -123,6 +124,17 @@ const LABEL_META: Record<RankingLabel, { text: string; className: string }> = {
   FEWEST_TRANSFERS: { text: "Legkevesebb átszállás", className: "bg-purple-100 text-purple-800" },
   CALMEST: { text: "Legnyugodtabb (becsült)", className: "bg-green-100 text-green-800" },
   LEAST_WALKING: { text: "Legkevesebb gyaloglás", className: "bg-amber-100 text-amber-800" },
+};
+
+// AKADÁLYMENTES / LÉPCSŐMENTES MVP (2026-09-11, Task C, spec 6. pont —
+// "Felhasználói nyelv") — journey.accessibilityStatus KIZÁRÓLAG akkor van
+// jelen, ha a keresés stepFreeRequired=true volt (lásd orchestrator.ts).
+// KNOWN_NOT_ACCESSIBLE SZÁNDÉKOSAN NINCS ebben a táblában — a szerver már
+// kiszűri (isEligibleForStepFreeResults), ez a UI-kód SOHA nem kap/jelenít
+// meg ilyen journey-t "akadálymentes" listaelemként.
+const ACCESSIBILITY_RESULT_META: Record<Exclude<AccessibilityResultStatus, "KNOWN_NOT_ACCESSIBLE">, { text: string; className: string }> = {
+  KNOWN_ACCESSIBLE: { text: "♿ Az elérhető adatok alapján lépcsőmentes", className: "bg-teal-100 text-teal-800" },
+  PARTIALLY_UNKNOWN: { text: "♿ Az akadálymentesség egy része nem igazolt", className: "bg-gray-200 text-gray-700" },
 };
 
 const TRANSIT_MODE_LABELS: Record<string, string> = {
@@ -492,6 +504,18 @@ function RankedJourneyCard({
             {LABEL_META[label].text}
           </span>
         ))}
+        {/* AKADÁLYMENTES / LÉPCSŐMENTES MVP (2026-09-11) — journey.accessibilityStatus
+            csak stepFreeRequired=true keresésnél van jelen, és a szerver már
+            kiszűrte a KNOWN_NOT_ACCESSIBLE eredményeket (lásd orchestrator.ts) —
+            ez a badge tehát KIZÁRÓLAG a két megjelenítendő állapotot ("KNOWN_ACCESSIBLE"/
+            "PARTIALLY_UNKNOWN") kaphatja meg, sosem a "nem lépcsőmentes" állítást. */}
+        {journey.accessibilityStatus && journey.accessibilityStatus !== "KNOWN_NOT_ACCESSIBLE" && (
+          <span
+            className={`rounded-full px-2 py-0.5 text-xs font-semibold ${ACCESSIBILITY_RESULT_META[journey.accessibilityStatus].className}`}
+          >
+            {ACCESSIBILITY_RESULT_META[journey.accessibilityStatus].text}
+          </span>
+        )}
       </div>
 
       <div className="mt-2 flex items-baseline justify-between">
@@ -1019,6 +1043,13 @@ export default function VedettUtvonalSearchForm({
       waiting: 1,
     }
   );
+  // AKADÁLYMENTES / LÉPCSŐMENTES MVP (2026-09-11, Task C) — explicit,
+  // tisztán UI-szintű preferencia-kapcsoló. Alapértéke false (spec 3.
+  // pont: "Default: false. Ha false: a jelenlegi routing működés
+  // SEMMILYEN módon ne változzon."). KÜLÖN marad a `weights`
+  // (Sensory Engine) állapottól — ez EGY DIMENZIÓ, nem egy szenzoros
+  // szempont (spec 10. pont).
+  const [stepFreeRequired, setStepFreeRequired] = useState(false);
   // Part B (2026-09-08) — melyik kártya térképe van éppen nyitva (index a
   // result.journeys tömben, vagy null, ha egyik sincs nyitva). Ez az
   // EGYETLEN helye annak, hogy "melyik kártya aktív" — nincs másik,
@@ -1296,6 +1327,12 @@ export default function VedettUtvonalSearchForm({
         ...destinationFields,
         departAt: when === "now" ? new Date().toISOString() : new Date(datetime).toISOString(),
         weights,
+        // AKADÁLYMENTES / LÉPCSŐMENTES MVP (2026-09-11) — mindig explicit
+        // boolean-ként megy (nem csak igaz esetén), hogy a szerver oldali
+        // cache-kulcs (lásd route.ts) és a request értelmezése egyértelmű
+        // legyen; alapértéke false, ami a jelenlegi routing viselkedést
+        // változatlanul hagyja.
+        stepFreeRequired,
       };
       const res = await fetch("/api/admin/vedett-utvonal/search", {
         method: "POST",
@@ -1575,6 +1612,43 @@ export default function VedettUtvonalSearchForm({
               </div>
             ))}
           </div>
+        </div>
+
+        {/* AKADÁLYMENTES / LÉPCSŐMENTES MVP (2026-09-11, Task C, spec 4.
+            pont) — SZÁNDÉKOSAN KÜLÖN kártya a fenti "Ami nekem fontos"
+            (Sensory Engine) blokktól, mert ez EGY KÜLÖN DIMENZIÓ (spec 10.
+            pont), nem egy szenzoros szempont. Alapértéke false (nem
+            bejelölt) — a jelenlegi routing viselkedés csak akkor változik,
+            ha a felhasználó EXPLICIT bejelöli. A szöveg SZÁNDÉKOSAN nem
+            ígér semmilyen garanciát a kerekesszékkel/lépcső nélkül való
+            használhatóságról (lásd spec 4. pont TILALMI listáját a
+            feature riportban) — csak azt állítja, amit a tényleges
+            (jelenleg még hiányos) adat bizonyít. */}
+        <div className="rounded border border-sni-primary/30 bg-sni-primary/5 p-3">
+          <label className="flex min-h-[44px] cursor-pointer items-start gap-2.5">
+            <input
+              type="checkbox"
+              checked={stepFreeRequired}
+              disabled={disabled}
+              onChange={(e) => setStepFreeRequired(e.target.checked)}
+              className="mt-0.5 h-5 w-5 flex-shrink-0"
+              aria-describedby="vedett-step-free-help"
+            />
+            <span>
+              <span className="flex flex-wrap items-center gap-1.5 text-sm font-semibold text-sni-text">
+                <span aria-hidden="true">♿</span> Lépcsőmentes útvonal
+                <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-800">
+                  BÉTA
+                </span>
+              </span>
+              <span className="mt-0.5 block text-xs text-gray-600">
+                Az ismert akadálymentességi adatok alapján keressük a lépcsőmentesebb lehetőségeket.
+              </span>
+            </span>
+          </label>
+          <p id="vedett-step-free-help" className="mt-2 text-xs text-gray-500">
+            Az akadálymentességi adatok nem minden megállónál és útvonalszakasznál teljesek.
+          </p>
         </div>
 
         {formError && <p className="text-sm text-red-600">{formError}</p>}

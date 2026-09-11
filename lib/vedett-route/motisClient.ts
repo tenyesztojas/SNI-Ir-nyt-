@@ -72,6 +72,14 @@ function buildQuery(params: MotisPlanParams): URLSearchParams {
   // motisTypes.ts MotisPlanParams.radius kommentje); a normál/elsődleges
   // kérésben SOHA nincs jelen.
   if (params.radius !== undefined) q.set("radius", String(params.radius));
+  // AKADÁLYMENTES / LÉPCSŐMENTES MVP (2026-09-11, Task C2) — VPS runtime-
+  // teszttel bizonyított paraméterek (lásd motisTypes.ts MotisPlanParams
+  // kommentje) — KIZÁRÓLAG akkor jelennek meg, ha az orchestrator.ts
+  // ténylegesen beállítja őket (stepFreeRequired=true esetén). Normál
+  // kérésben egyik sem szerepel, mert a params objektumban sincs jelen.
+  if (params.pedestrianProfile !== undefined) q.set("pedestrianProfile", params.pedestrianProfile);
+  if (params.useRoutedTransfers !== undefined) q.set("useRoutedTransfers", String(params.useRoutedTransfers));
+  if (params.timetableView !== undefined) q.set("timetableView", String(params.timetableView));
   return q;
 }
 

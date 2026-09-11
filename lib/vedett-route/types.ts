@@ -5,6 +5,8 @@
 // a MÁV (vasút) és a MÁV/Volán (autóbusz) provider, anélkül hogy a routing
 // réteget vagy a UI-t újra kellene írni.
 
+import type { AccessibilityResultStatus, AccessibilityStatus } from "./accessibility.ts";
+
 export type TransitProviderId = "BKK" | "MAV_RAIL" | "MAV_BUS";
 
 export interface ServiceAlert {
@@ -112,6 +114,22 @@ export interface JourneyLeg {
   geometryPrecision?: number;
   intermediateStops?: { name: string; lat?: number; lon?: number }[];
   routeColor?: string;
+  // AKADÁLYMENTES / LÉPCSŐMENTES MVP — Task C (2026-09-11) örökség, Task C2
+  // (2026-09-11) óta NEM HASZNÁLT, SZÁNDÉKOSAN ITT HAGYOTT mezők.
+  //
+  // Task C idején ezek voltak a tervezett hordozói a megálló/jármű
+  // akadálymentességi klasszifikációnak — de Task C2-ben a tényleges
+  // klasszifikáció a NYERS MOTIS itinerary legs-eken fut (lásd
+  // orchestrator.ts classifyItineraryStepFreeAccessibility() hívása,
+  // accessibility.ts StepFreeLegLike), MIELŐTT a mapMotisItineraryToJourney()
+  // JourneyLeg-eket készítene belőlük — a JourneyLeg egyszerűen sosem
+  // kapja meg ezt az adatot, mert nincs is szüksége rá. Ez a két mező
+  // MOSTANTÓL PERMANENSEN kitöltetlen marad — SZÁNDÉKOSAN nem töröltük
+  // (kis, biztonságos, opcionális mezők, egy jövőbeli kör esetleg
+  // felhasználhatja per-leg diagnosztikára), de az orchestrator.ts SEHOL
+  // nem ír vagy olvas belőlük.
+  stopAccessibility?: AccessibilityStatus;
+  vehicleAccessibility?: AccessibilityStatus;
 }
 
 export interface Journey {
@@ -141,12 +159,32 @@ export interface Journey {
   fingerprint?: string; // Sprint 2: itinerary-dedup kulcs
   sensory?: SensoryScore; // Sprint 2: Sensory Engine V1 kimenet
   walkingDistanceMeters?: number; // csak akkor, ha MINDEN gyaloglási lábhoz volt valós MOTIS távolság-adat
+  // AKADÁLYMENTES / LÉPCSŐMENTES MVP (2026-09-11, Task C2-től a NYERS MOTIS
+  // itinerary legs-ekből számolva, lásd orchestrator.ts
+  // classifyItineraryStepFreeAccessibility() hívása és accessibility.ts) —
+  // a teljes journey akadálymentességi minősítése, a jármű (MOTIS+GTFS
+  // keresztellenőrzés)/megálló/pathway komponensek "leggyengébb bizonyított
+  // szakasz" szabály szerinti kombinációja. KIZÁRÓLAG akkor kerül
+  // kitöltésre, ha a kérés request.stepFreeRequired === true volt —
+  // ez EGY DIMENZIÓ, KÜLÖN a Sensory Engine-től (spec 10. pont), SOHA nem
+  // kerül bele a SensoryScore számításába. Hiányában (stepFreeRequired
+  // false/hiányzó) a mező egyszerűen undefined — a normál, nem-akadálymentes
+  // keresés kimenete emiatt BYTE-RA egyezik a korábbi viselkedéssel.
+  accessibilityStatus?: AccessibilityResultStatus;
 }
 
 export interface JourneySearchRequest {
   from: { name: string; lat: number; lon: number };
   to: { name: string; lat: number; lon: number };
   departAt: string; // ISO timestamp
+  // AKADÁLYMENTES / LÉPCSŐMENTES MVP (2026-09-11, Task C) — explicit
+  // felhasználói preferencia, NEM marketingcímke/garancia (lásd
+  // accessibility.ts fejléce). Alapérték: false. Ha false (vagy hiányzik),
+  // a jelenlegi routing működés SEMMILYEN módon nem változik — lásd
+  // orchestrator.ts searchVedettRoutes(), a teljes akadálymentességi
+  // klasszifikáció/szűrés egyetlen `if (request.stepFreeRequired)` ág
+  // mögé van zárva.
+  stepFreeRequired?: boolean;
 }
 
 export type JourneySearchResult =

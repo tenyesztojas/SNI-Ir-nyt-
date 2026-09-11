@@ -52,6 +52,13 @@ export const journeySearchSchema = z
     toName: z.string().trim().min(1).max(200).optional(),
     departAt: z.string().datetime().optional(),
     weights: personalizationWeightsSchema,
+    // AKADÁLYMENTES / LÉPCSŐMENTES MVP (2026-09-11, Task C) — explicit,
+    // opcionális felhasználói preferencia (lásd lib/vedett-route/types.ts
+    // JourneySearchRequest.stepFreeRequired kommentje). Hiányzó/undefined
+    // esetén a route.ts `?? false`-t alkalmaz — a mezőnek NINCS itt zod
+    // .default()-je, hogy a hiányzó érték és az explicit `false` egyaránt
+    // tisztán "false"-ként legyen kezelve, változatlan viselkedéssel.
+    stepFreeRequired: z.boolean().optional(),
   })
   .superRefine((data, ctx) => {
     const hasFrom = typeof data.from === "string" && data.from.trim().length >= 2;

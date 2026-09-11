@@ -33,7 +33,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const { from, fromCoordinates, to, toCoordinates, toName, weights } = parsed.data;
+  const { from, fromCoordinates, to, toCoordinates, toName, weights, stepFreeRequired } = parsed.data;
   const departAt = parsed.data.departAt ?? new Date().toISOString();
 
   // Múltbeli időpont ellenőrzése (31. pont: routing tesztek).
@@ -138,6 +138,14 @@ export async function POST(request: Request) {
   // Rövid TTL-ű, csak folyamaton belüli cache (lásd routeCache.ts fejléce a
   // korlátairól) — a percre kerekített indulási idő + a súlyok is a kulcs
   // része, hogy sosem adjon vissza más paraméterekkel kért választ.
+  // AKADÁLYMENTES / LÉPCSŐMENTES MVP (2026-09-11, Task C) — a
+  // stepFreeRequired preferencia a cache-kulcs RÉSZE (lásd routeCache.ts
+  // fejléce: "a kérés MINDEN, az eredményt befolyásoló mezőjét
+  // tartalmazza"), különben egy korábban, MÁS preferenciával cache-elt
+  // válasz téves eredményt adna vissza. `?? false`, hogy a hiányzó mező és
+  // az explicit `false` UGYANAZT a cache-kulcsot (és viselkedést) adja.
+  const stepFree = stepFreeRequired ?? false;
+
   const cacheKey = buildRouteCacheKey({
     fromLat: fromGeo.lat,
     fromLon: fromGeo.lon,
@@ -145,6 +153,7 @@ export async function POST(request: Request) {
     toLon: toGeo.lon,
     departAtMinute: departAt.slice(0, 16),
     weights: weights ?? null,
+    stepFreeRequired: stepFree,
   });
 
   const cached = getCached<OrchestratedSearchResult | OrchestratorErrorResult>(cacheKey);
@@ -157,6 +166,7 @@ export async function POST(request: Request) {
       from: { name: fromGeo.name, lat: fromGeo.lat, lon: fromGeo.lon },
       to: { name: toGeo.name, lat: toGeo.lat, lon: toGeo.lon },
       departAt,
+      stepFreeRequired: stepFree,
     },
     weights
   );

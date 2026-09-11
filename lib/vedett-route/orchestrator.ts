@@ -19,6 +19,13 @@ import { rankJourneys } from "./ranking.ts";
 import { normalizePersonalizationWeights } from "./personalization.ts";
 import { vedettRouteLog } from "./logger.ts";
 import { getTransitProvider } from "./providers/registry.ts";
+import { getAccessibilityIndex } from "./providers/staticFileProvider.ts";
+import {
+  classifyItineraryStepFreeAccessibility,
+  isEligibleForStepFreeResults,
+  type AccessibilityIndexLike,
+  type StepFreeLegLike,
+} from "./accessibility.ts";
 import type { MotisItinerary, MotisLeg } from "./motisTypes.ts";
 import type {
   Journey,
@@ -140,7 +147,20 @@ export function mapMotisItineraryToJourney(
 
 export interface OrchestratorErrorResult {
   ok: false;
-  reason: "routing_engine_unavailable" | "no_route_found" | "invalid_request" | "routing_error" | "timeout";
+  reason:
+    | "routing_engine_unavailable"
+    | "no_route_found"
+    | "invalid_request"
+    | "routing_error"
+    | "timeout"
+    // AKADÁLYMENTES / LÉPCSŐMENTES MVP (2026-09-11, Task C2, spec 16. pont)
+    // — KÜLÖN, a generikus "no_route_found"-tól megkülönböztetett ok:
+    // a MOTIS WHEELCHAIR-módú lekérdezés adott vissza itinerary(ka)t, DE
+    // az alkalmazásoldali kőkemény szűrő (lásd lent) MINDET kizárta, mert
+    // egyik sem volt bizonyítottan nem-KNOWN_NOT_ACCESSIBLE. Ez tudatosan
+    // KÜLÖNBÖZIK attól az esettől, amikor a MOTIS eleve 0 itineraryt adott
+    // (az a normál "no_route_found" ág marad, lásd lent).
+    | "no_step_free_route_found";
   message: string;
 }
 
@@ -160,6 +180,62 @@ export interface OrchestratorErrorResult {
 // Szándékosan NINCS ennél nagyobb (pl. 2000 m) automatikus eszkalációs
 // lépcső ebben a körben.
 export const LAST_MILE_FALLBACK_RADIUS_METERS = 1500;
+
+// AKADÁLYMENTES / LÉPCSŐMENTES MVP (2026-09-11, Task C2, spec 6/7/11. pont)
+// — a fenti last-mile fallback és a stepFreeRequired preferencia VISZONYA.
+//
+// Task C idején (lásd git history) ez a szakasz még azt dokumentálta, hogy
+// SEMMILYEN pedestrianProfile/wheelchair paraméter nincs bizonyítva — AZÓTA
+// (Task C2) a felhasználó saját, éles VPS MOTIS v2.11.2 ellen futtatott
+// runtime tesztje BIZONYÍTOTTA, hogy a pinned instance elfogadja és
+// ténylegesen eltérően viselkedik a `pedestrianProfile=WHEELCHAIR`,
+// `useRoutedTransfers=true`, `timetableView=false` paraméter-hármas
+// mellett (lásd motisTypes.ts MotisPlanParams és a feature riport "MOTIS
+// v2.11.2 runtime" szakasza). Ezért MOSTANTÓL:
+//
+//   - request.stepFreeRequired === true esetén MINDHÁROM MOTIS kérés
+//     (a két normál "alap"/"metrómentes" stratégia ÉS az EGYETLEN
+//     lehetséges last-mile fallback hívás) MEGKAPJA ugyanezt a
+//     paraméter-hármast — lásd STEP_FREE_MOTIS_PARAMS lent.
+//   - request.stepFreeRequired === false/hiányzó esetén EGYIK kérés SEM
+//     kapja meg — a normál keresés MOTIS felé küldött kérése BYTE-RA
+//     változatlan marad (spec 3. pont).
+//   - A last-mile fallback SOHA nem eshet vissza "csendben" FOOT profilra
+//     pusztán azért, mert fallback történik — a STEP_FREE_MOTIS_PARAMS
+//     szétterítése MINDHÁROM hívásra ugyanabból az egyetlen forrásból
+//     (request.stepFreeRequired) történik, tehát a fallback mindig
+//     ugyanazt a profilt kapja, mint a két normál kérés.
+//
+// A tényleges akadálymentesség-bizonyítás (a MOTIS wheelchairAccessible
+// mezője NEM megbízható önmagában, lásd motisTypes.ts MotisWheelchairAccessible
+// kommentje) TOVÁBBRA IS az EREDMÉNY GTFS-keresztellenőrzéssel kombinált,
+// alkalmazásoldali hard filterén keresztül történik (lásd lent
+// searchVedettRoutes() és accessibility.ts classifyItineraryStepFreeAccessibility()) —
+// a MOTIS saját WHEELCHAIR profilja csak EGY bemenet, sosem az egyetlen
+// bizonyíték.
+const STEP_FREE_MOTIS_PARAMS = {
+  pedestrianProfile: "WHEELCHAIR" as const,
+  useRoutedTransfers: true,
+  timetableView: false,
+};
+
+// AKADÁLYMENTES / LÉPCSŐMENTES MVP — ACCESSIBILITY INDEX PROVIDER-KULCS
+// (2026-09-11, Task C2, spec 4. pont) — lásd providers/staticFileProvider.ts
+// fejléce a teljes runtime-storage döntésért és annak NYITOTT
+// bizonytalanságáért. FONTOS, ŐSZINTÉN DOKUMENTÁLT KORLÁT: a jelenlegi
+// egyetlen éles provider (BKK) a saját, kulcsos GTFS-Realtime API-ját
+// használja (lásd providers/bkk.ts, providers/registry.ts) — NEM ezt a
+// staticFileProvider.ts admin-feltöltési útvonalat (az KIZÁRÓLAG a Fázis 2
+// MÁV/Volán providereknek készült). Emiatt getAccessibilityIndex("bkk")
+// MA, productionben, SZINTE BIZTOSAN `null`-t ad vissza (nincs feltöltött
+// BKK GTFS zip ebben a cache-könyvtárban) — ez NEM hiba, a lenti
+// classifyItineraryStepFreeAccessibility() ezt biztonságosan úgy kezeli,
+// mintha egyáltalán nem lenne accessibility adat (minden komponens
+// UNKNOWN-ra esik vissza, SOHA nem KNOWN_ACCESSIBLE-re kitalálva). Amint
+// egy jövőbeli kör a BKK GTFS statikus feedjét is bekötné ebbe a
+// cache-könyvtárba (vagy egy külön, BKK-specifikus tárolási útvonalat
+// épít), ez a konstans és/vagy a lekérdezés helye frissítendő.
+const ACCESSIBILITY_INDEX_PROVIDER_DIR = "bkk";
 
 // LAST-MILE OFFSET FALLBACK VÉGSŐ SZŰKÍTÉS (2026-09-11, "VÉGSŐ SZŰKÍTÉS"
 // kör) — a valódi worktree audit alapján a puszta "0 itinerary" ÖNMAGÁBAN
@@ -224,10 +300,24 @@ export async function searchVedettRoutes(
   // de attól teljesen függetlenül: egy realtime feed-hiba SOHA nem akaszthatja
   // meg vagy hiúsíthatja meg a statikus routingot (lásd 4. és 16. pont). Ezért
   // itt sosem dobunk hibát tovább — sikertelenség esetén üres tömb.
-  const [defaultResult, calmerResult, serviceAlerts] = await Promise.all([
-    fetchMotisPlan({ fromPlace, toPlace, time: request.departAt, numItineraries: 6 }),
-    fetchMotisPlan({ fromPlace, toPlace, time: request.departAt, numItineraries: 4, transitModes: ["BUS", "TRAM", "RAIL", "COACH"] }),
+  const stepFreeMotisParams = request.stepFreeRequired ? STEP_FREE_MOTIS_PARAMS : undefined;
+
+  const [defaultResult, calmerResult, serviceAlerts, accessibilityIndex] = await Promise.all([
+    fetchMotisPlan({ fromPlace, toPlace, time: request.departAt, numItineraries: 6, ...stepFreeMotisParams }),
+    fetchMotisPlan({
+      fromPlace,
+      toPlace,
+      time: request.departAt,
+      numItineraries: 4,
+      transitModes: ["BUS", "TRAM", "RAIL", "COACH"],
+      ...stepFreeMotisParams,
+    }),
     fetchServiceAlertsSafely(),
+    // Csak akkor töltjük be (lásd getAccessibilityIndex() a
+    // staticFileProvider.ts-ben, SOSEM dob hibát) — stepFreeRequired=false
+    // esetén ez a hívás elmarad, hogy a normál keresés viselkedése/
+    // időzítése BYTE-RA változatlan maradjon (spec 3. pont).
+    request.stepFreeRequired ? getAccessibilityIndex(ACCESSIBILITY_INDEX_PROVIDER_DIR) : Promise.resolve(null),
   ]);
 
   if (!defaultResult.ok && !calmerResult.ok) {
@@ -267,6 +357,10 @@ export async function searchVedettRoutes(
       time: request.departAt,
       numItineraries: 6,
       radius: LAST_MILE_FALLBACK_RADIUS_METERS,
+      // Lásd a fenti "STEP_FREE_MOTIS_PARAMS" fejléc-komment — a fallback
+      // SOHA nem eshet vissza csendben FOOT profilra: pontosan ugyanazt a
+      // stepFreeMotisParams-ot kapja, mint a két normál kérés fentebb.
+      ...stepFreeMotisParams,
     });
 
     if (fallbackResult.ok) {
@@ -307,7 +401,100 @@ export async function searchVedettRoutes(
     to: shortPlaceName(request.to.name),
   };
   const journeys = rawItineraries.map((it) => mapMotisItineraryToJourney(it, displayNames));
-  const deduped = deduplicateJourneys(journeys);
+
+  // AKADÁLYMENTES / LÉPCSŐMENTES MVP (2026-09-11, Task C2) — a lentebbi
+  // klasszifikáció a NYERS MOTIS legs-eket igényli (stopId/tripId/
+  // wheelchairAccessible — lásd StepFreeLegLike), amit a mapMotisItineraryToJourney()
+  // már NEM őriz meg a JourneyLeg-ekben. A fingerprint (ami a dedup UTÁN is
+  // stabil marad, lásd fingerprint.ts) a kapocs a deduped Journey és az őt
+  // létrehozó nyers MotisItinerary között — az ELSŐ előfordulást tároljuk,
+  // ugyanazzal a "első nyer" szabállyal, mint amit deduplicateJourneys()
+  // maga is követ, tehát a két lista MINDIG konzisztens marad egymással.
+  const rawItineraryByFingerprint = new Map<string, MotisItinerary>();
+  journeys.forEach((journey, idx) => {
+    if (journey.fingerprint && !rawItineraryByFingerprint.has(journey.fingerprint)) {
+      rawItineraryByFingerprint.set(journey.fingerprint, rawItineraries[idx]);
+    }
+  });
+
+  let deduped = deduplicateJourneys(journeys);
+
+  // AKADÁLYMENTES / LÉPCSŐMENTES MVP (2026-09-11, Task C, spec 5/6/10.
+  // pont) — EZ A BLOKK KIZÁRÓLAG akkor fut, ha a felhasználó explicit
+  // kérte (request.stepFreeRequired === true). Ha false/hiányzó, a `deduped`
+  // tömb módosítás nélkül halad tovább a Sensory Engine/ranking felé — a
+  // normál keresés viselkedése BYTE-RA változatlan (spec 3. pont: "Ha
+  // false: a jelenlegi routing működés SEMMILYEN módon ne változzon.").
+  //
+  // Az akadálymentességi minősítés/szűrés SZÁNDÉKOSAN a Sensory Engine
+  // ELŐTT fut (spec 10. pont: "Accessibility filter/minősítés előbb
+  // történjen, majd az elfogadható candidate-eket rangsorolhatja a
+  // meglévő Sensory Engine.") — ez egy KÜLÖN dimenzió, SOHA nem kerül be a
+  // SensoryScore számításába (a sensoryEngine.ts "vehicleAccessibility"
+  // faktora ettől függetlenül, változatlanul mindig "unavailable" marad).
+  if (request.stepFreeRequired) {
+    // AccessibilityIndexLike egy minimális, strukturális alak (lásd
+    // accessibility.ts) — a getAccessibilityIndex() teljes AccessibilityIndex
+    // típusa (stopsById/tripsById extra mezőkkel, pathways extra
+    // pathwayId/traversalTime mezőkkel) strukturálisan kompatibilis vele,
+    // nincs szükség külön adapter/mapping rétegre.
+    const index: AccessibilityIndexLike | null = accessibilityIndex;
+    let anyVehicleConflict = false;
+
+    const withAccessibility = deduped.map((journey) => {
+      const rawItinerary = journey.fingerprint ? rawItineraryByFingerprint.get(journey.fingerprint) : undefined;
+      const rawLegs: StepFreeLegLike[] = (rawItinerary?.legs ?? []).map((leg: MotisLeg) => ({
+        mode: leg.mode,
+        tripId: leg.tripId,
+        wheelchairAccessible: leg.wheelchairAccessible,
+        from: { stopId: leg.from?.stopId },
+        to: { stopId: leg.to?.stopId },
+      }));
+      const classification = classifyItineraryStepFreeAccessibility(rawLegs, index);
+      if (classification.hasVehicleConflict) anyVehicleConflict = true;
+      return { ...journey, accessibilityStatus: classification.resultStatus };
+    });
+
+    // KNOWN_NOT_ACCESSIBLE SOHA nem ajánlható fel akadálymentes opcióként
+    // (spec 5/6. pont) — kiesik a lépcsőmentes eredményhalmazból.
+    // KNOWN_ACCESSIBLE és PARTIALLY_UNKNOWN (UNKNOWN elemet tartalmazó,
+    // de nem BIZONYÍTOTTAN nem-elérhető) útvonal egyaránt megjelenhet —
+    // a PARTIALLY_UNKNOWN külön figyelmeztetést kap a UI-ban (spec 6. pont
+    // felhasználói nyelve, lásd types.ts Journey.accessibilityStatus).
+    const eligible = withAccessibility.filter((journey) => isEligibleForStepFreeResults(journey.accessibilityStatus!));
+
+    // hasVehicleConflict (MOTIS és GTFS trips.txt egymásnak ellentmondó
+    // jelzése, spec 9. pont) KIZÁRÓLAG szerver-oldali diagnosztikai
+    // logolásra — SOHA nem kerül a felhasználó felé, és SOHA nem
+    // tartalmaz belső MOTIS/GTFS azonosítót (lásd vedettRouteLog()
+    // redaktálását is).
+    vedettRouteLog("routing_error", "info", {
+      reason: "step_free_accessibility_filter_applied",
+      candidateCount: withAccessibility.length,
+      eligibleCount: eligible.length,
+      excludedKnownNotAccessibleCount: withAccessibility.length - eligible.length,
+      hadAccessibilityIndex: index !== null,
+      hasAnyVehicleSignalConflict: anyVehicleConflict,
+    });
+
+    if (eligible.length === 0) {
+      // Minden candidate KNOWN_NOT_ACCESSIBLE volt (a WHEELCHAIR-módú MOTIS
+      // válasz ADOTT itineraryt/itineraryket, de a kőkemény alkalmazásoldali
+      // szűrő mindegyiket kizárta, spec 16. pont) — ez KÜLÖNBÖZIK attól az
+      // esettől, amikor a MOTIS eleve 0 itineraryt adott (az a fenti,
+      // korábbi "no_route_found" ág, ami ERRE A PONTRA egyáltalán el sem
+      // jut). Ezért egy ÚJ, distinkt reason-t adunk vissza a pontos, a
+      // spec által előírt üzenettel.
+      vedettRouteLog("routing_error", "info", { reason: "no_step_free_itineraries" });
+      return {
+        ok: false,
+        reason: "no_step_free_route_found",
+        message: "Nem találtunk olyan útvonalat, amely a rendelkezésre álló adatok alapján megfelel a lépcsőmentes feltételeknek.",
+      };
+    }
+
+    deduped = eligible;
+  }
 
   const withSensory = deduped.map((journey) => ({ ...journey, sensory: computeSensoryScore(journey, weights) }));
   const ranked = rankJourneys(withSensory);

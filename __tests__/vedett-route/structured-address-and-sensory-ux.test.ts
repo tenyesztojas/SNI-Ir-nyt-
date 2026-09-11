@@ -330,8 +330,34 @@ describe("TASK — Szenzoros prioritás UX (8-11. pont): a felhasználó SOSEM l
       /\?\? \{\s*\n\s*transfers: 1,\s*\n\s*modeSwitches: 1,\s*\n\s*underground: 1,\s*\n\s*walking: 1,\s*\n\s*duration: 1,\s*\n\s*waiting: 1,\s*\n\s*\}/
     );
     // A ranking/calculateSensoryScore hívás módja (a weights objektum a
-    // request body-ban) nem módosult — lásd a body konstrukciót.
-    assert.match(formSrc, /const body = \{\s*\n\s*\.\.\.originFields,\s*\n\s*\.\.\.destinationFields,\s*\n\s*departAt:[\s\S]{0,80}?\n\s*weights,\s*\n\s*\};/);
+    // request body-ban) nem módosult. FONTOS: a fájlban KÉT "const body = {"
+    // blokk is szerepel (a kedvenc-mentés body-ja ÉS a tényleges keresési
+    // kérés body-ja) — a keresési body-t a benne szereplő `departAt:` mező
+    // alapján különítjük el egyértelműen, mert csak abban van jelen.
+    //
+    // SZÁNDÉKOSAN NEM egyetlen, pontos mezősorrendet megkövetelő nagy
+    // regex (ez volt a korábbi, törékeny változat, ami a Task C
+    // Akadálymentes/Lépcsőmentes MVP `stepFreeRequired` mezőjének
+    // hozzáadásakor elszállt) — helyette a body blokkot KÜLÖN, célzott
+    // assert-ekkel vizsgáljuk, hogy egy jövőbeli, hasonlóan legitim új
+    // mező (a meglévők sorrendjét/tartalmát nem érintve) ne törhesse el
+    // ismét ezt a regressziós tesztet.
+    const searchBodyBlockMatch = formSrc.match(/const body = \{[\s\S]{0,2000}?\n\s*\};/g)?.find((block) => /departAt:/.test(block));
+    assert.ok(
+      searchBodyBlockMatch,
+      "meg kell találni a keresési kérés body blokkját (a departAt mező alapján megkülönböztetve a kedvenc-mentés body-jától)"
+    );
+    const searchBodyBlock = searchBodyBlockMatch!;
+
+    assert.match(searchBodyBlock, /\.\.\.originFields,/, "1) ...originFields benne van a body-ban");
+    assert.match(searchBodyBlock, /\.\.\.destinationFields,/, "2) ...destinationFields benne van a body-ban");
+    assert.match(searchBodyBlock, /departAt:/, "3) departAt benne van a body-ban");
+    assert.match(searchBodyBlock, /\n\s*weights,\s*\n/, "4) weights benne van a body-ban (önálló mezőként, nem beágyazva)");
+    // 7) AKADÁLYMENTES / LÉPCSŐMENTES MVP (Task C, 2026-09-11) — a
+    // stepFreeRequired mező a body-ban SZÁNDÉKOS és ELVÁRT, nem
+    // regresszió — ez a teszt ezt mostantól explicit MEGENGEDETTKÉNT (és
+    // jelenlévőként) dokumentálja, nem tiltja.
+    assert.match(searchBodyBlock, /\n\s*stepFreeRequired,?\s*\n/, "7) stepFreeRequired jelenléte a body-ban elvárt (Task C)");
   });
 
   test("a 3 állapot-skála (emoji + szöveg, nem csak szín alapján) egyszer, közösen jelenik meg a blokk tetején stabil grid-cols-3 layoutban — SZEMANTIKUS invariánsok, nem egy pontos, teljes className string", () => {
