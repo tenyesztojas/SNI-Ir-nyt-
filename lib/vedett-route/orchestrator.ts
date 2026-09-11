@@ -19,7 +19,7 @@ import { rankJourneys } from "./ranking.ts";
 import { normalizePersonalizationWeights } from "./personalization.ts";
 import { vedettRouteLog } from "./logger.ts";
 import { getTransitProvider } from "./providers/registry.ts";
-import { getAccessibilityIndex } from "./providers/staticFileProvider.ts";
+import { lookupAccessibilityIndexForItineraries } from "./accessibilityLookupClient.ts";
 import {
   classifyItineraryStepFreeAccessibility,
   isEligibleForStepFreeResults,
@@ -219,23 +219,17 @@ const STEP_FREE_MOTIS_PARAMS = {
   timetableView: false,
 };
 
-// AKADÁLYMENTES / LÉPCSŐMENTES MVP — ACCESSIBILITY INDEX PROVIDER-KULCS
-// (2026-09-11, Task C2, spec 4. pont) — lásd providers/staticFileProvider.ts
-// fejléce a teljes runtime-storage döntésért és annak NYITOTT
-// bizonytalanságáért. FONTOS, ŐSZINTÉN DOKUMENTÁLT KORLÁT: a jelenlegi
-// egyetlen éles provider (BKK) a saját, kulcsos GTFS-Realtime API-ját
-// használja (lásd providers/bkk.ts, providers/registry.ts) — NEM ezt a
-// staticFileProvider.ts admin-feltöltési útvonalat (az KIZÁRÓLAG a Fázis 2
-// MÁV/Volán providereknek készült). Emiatt getAccessibilityIndex("bkk")
-// MA, productionben, SZINTE BIZTOSAN `null`-t ad vissza (nincs feltöltött
-// BKK GTFS zip ebben a cache-könyvtárban) — ez NEM hiba, a lenti
-// classifyItineraryStepFreeAccessibility() ezt biztonságosan úgy kezeli,
-// mintha egyáltalán nem lenne accessibility adat (minden komponens
-// UNKNOWN-ra esik vissza, SOHA nem KNOWN_ACCESSIBLE-re kitalálva). Amint
-// egy jövőbeli kör a BKK GTFS statikus feedjét is bekötné ebbe a
-// cache-könyvtárba (vagy egy külön, BKK-specifikus tárolási útvonalat
-// épít), ez a konstans és/vagy a lekérdezés helye frissítendő.
-const ACCESSIBILITY_INDEX_PROVIDER_DIR = "bkk";
+// AKADÁLYMENTES / LÉPCSŐMENTES MVP — PRODUCTION DATA PLANE (2026-09-11,
+// Task C3): a fenti Task C2 megjegyzés (amely a getAccessibilityIndex("bkk")
+// local-cache-alapú, productionben nem működő útját dokumentálta) MOSTANTÓL
+// ELAVULT — az accessibility index forrása a VPS-en futó, a MOTIS által is
+// használt UGYANAZON canonical BKK GTFS zipből épült sidecar (lásd
+// accessibilityLookupClient.ts fejléce és vps-accessibility-sidecar/). Az
+// alábbi searchVedettRoutes() a lookupot MOST a rawItineraries VÉGLEGESSÉ
+// válása UTÁN (a last-mile fallback eldöntése után) indítja, mert a
+// batch-elt lookuphoz a TÉNYLEGESEN visszakapott MOTIS legs-ekre van
+// szükség — ezzel is elkerülve egy felesleges, elvetett hívást abban az
+// (ritka) esetben, ha a last-mile fallback más itinerary-halmazt hoz.
 
 // LAST-MILE OFFSET FALLBACK VÉGSŐ SZŰKÍTÉS (2026-09-11, "VÉGSŐ SZŰKÍTÉS"
 // kör) — a valódi worktree audit alapján a puszta "0 itinerary" ÖNMAGÁBAN
@@ -302,7 +296,7 @@ export async function searchVedettRoutes(
   // itt sosem dobunk hibát tovább — sikertelenség esetén üres tömb.
   const stepFreeMotisParams = request.stepFreeRequired ? STEP_FREE_MOTIS_PARAMS : undefined;
 
-  const [defaultResult, calmerResult, serviceAlerts, accessibilityIndex] = await Promise.all([
+  const [defaultResult, calmerResult, serviceAlerts] = await Promise.all([
     fetchMotisPlan({ fromPlace, toPlace, time: request.departAt, numItineraries: 6, ...stepFreeMotisParams }),
     fetchMotisPlan({
       fromPlace,
@@ -313,11 +307,6 @@ export async function searchVedettRoutes(
       ...stepFreeMotisParams,
     }),
     fetchServiceAlertsSafely(),
-    // Csak akkor töltjük be (lásd getAccessibilityIndex() a
-    // staticFileProvider.ts-ben, SOSEM dob hibát) — stepFreeRequired=false
-    // esetén ez a hívás elmarad, hogy a normál keresés viselkedése/
-    // időzítése BYTE-RA változatlan maradjon (spec 3. pont).
-    request.stepFreeRequired ? getAccessibilityIndex(ACCESSIBILITY_INDEX_PROVIDER_DIR) : Promise.resolve(null),
   ]);
 
   if (!defaultResult.ok && !calmerResult.ok) {
@@ -433,23 +422,39 @@ export async function searchVedettRoutes(
   // SensoryScore számításába (a sensoryEngine.ts "vehicleAccessibility"
   // faktora ettől függetlenül, változatlanul mindig "unavailable" marad).
   if (request.stepFreeRequired) {
-    // AccessibilityIndexLike egy minimális, strukturális alak (lásd
-    // accessibility.ts) — a getAccessibilityIndex() teljes AccessibilityIndex
-    // típusa (stopsById/tripsById extra mezőkkel, pathways extra
-    // pathwayId/traversalTime mezőkkel) strukturálisan kompatibilis vele,
-    // nincs szükség külön adapter/mapping rétegre.
-    const index: AccessibilityIndexLike | null = accessibilityIndex;
-    let anyVehicleConflict = false;
-
-    const withAccessibility = deduped.map((journey) => {
+    // A NYERS MOTIS legs-eket egyszer alakítjuk StepFreeLegLike[]-lá,
+    // dedupelt journey-nkánt — ugyanez a lista szolgál (1) a lenti EGYETLEN,
+    // batch-elt VPS accessibility-sidecar lookup bemeneteként, ÉS (2) a
+    // klasszifikáció bemeneteként, hogy a két lépés garantáltan ugyanazokat
+    // a lábakat lássa (spec 14. pont: "egyetlen/néhány batch-elt kérés,
+    // sosem N+1").
+    const rawLegsByJourney: StepFreeLegLike[][] = deduped.map((journey) => {
       const rawItinerary = journey.fingerprint ? rawItineraryByFingerprint.get(journey.fingerprint) : undefined;
-      const rawLegs: StepFreeLegLike[] = (rawItinerary?.legs ?? []).map((leg: MotisLeg) => ({
+      return (rawItinerary?.legs ?? []).map((leg: MotisLeg) => ({
         mode: leg.mode,
         tripId: leg.tripId,
         wheelchairAccessible: leg.wheelchairAccessible,
         from: { stopId: leg.from?.stopId },
         to: { stopId: leg.to?.stopId },
       }));
+    });
+
+    // AKADÁLYMENTES / LÉPCSŐMENTES MVP — PRODUCTION DATA PLANE (Task C3):
+    // a lookup ITT, a végleges (last-mile fallback utáni) rawItineraries
+    // alapján, EGYETLEN batch-elt hívással történik — lásd
+    // accessibilityLookupClient.ts fejléce a fail-safe szerződésért (SOHA
+    // nem dob hibát, hiba/timeout/nincs-konfigurálva esetén egyaránt
+    // `null`-t ad, amit a classifyItineraryStepFreeAccessibility() PONTOSAN
+    // úgy kezel, mint a korábbi Task C2 "nincs feltöltött cache" esetet —
+    // ld. AccessibilityIndexLike lent). AccessibilityIndexLike egy
+    // minimális, strukturális alak (lásd accessibility.ts) — a sidecar
+    // válaszából épített index strukturálisan kompatibilis vele, nincs
+    // szükség külön adapter/mapping rétegre.
+    const index: AccessibilityIndexLike | null = await lookupAccessibilityIndexForItineraries(rawLegsByJourney);
+    let anyVehicleConflict = false;
+
+    const withAccessibility = deduped.map((journey, idx) => {
+      const rawLegs = rawLegsByJourney[idx];
       const classification = classifyItineraryStepFreeAccessibility(rawLegs, index);
       if (classification.hasVehicleConflict) anyVehicleConflict = true;
       return { ...journey, accessibilityStatus: classification.resultStatus };

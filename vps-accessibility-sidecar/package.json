@@ -1,0 +1,25 @@
+{
+  "name": "vedett-route-accessibility-sidecar",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Vedett Utvonal - VPS accessibility lookup sidecar (Task C3). Small, framework-free Node process: serves the accessibility index built from the canonical BKK GTFS zip as a server-to-server lookup for the Next.js server, so it never downloads/parses the full GTFS per request.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "build:test": "tsc -p tsconfig.test.json",
+    "pretest": "npm run build && npm run build:test",
+    "build-index": "node dist/buildIndex.js",
+    "start": "node dist/server.js",
+    "test": "node --test dist-test/**/*.test.js"
+  },
+  "dependencies": {
+    "adm-zip": "0.6.1"
+  },
+  "devDependencies": {
+    "@types/node": "20.14.2",
+    "typescript": "5.5.4"
+  }
+}

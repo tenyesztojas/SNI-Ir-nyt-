@@ -14,3 +14,6 @@ out
 # MOTIS routing engine local data (large binaries, never committed)
 /motis-data
 plan_test_*.json
+
+vps-accessibility-sidecar/dist/
+vps-accessibility-sidecar/dist-test/

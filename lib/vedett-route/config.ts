@@ -115,6 +115,61 @@ export function getRouteServiceConfig(): RouteServiceConfig | null {
   return { baseUrl, authToken, timeoutMs };
 }
 
+// ACCESSIBILITY LOOKUP SIDECAR (Task C3, 2026-09-11): a lépcsőmentes
+// (stepFreeRequired) keresések accessibility-adatait (stop/trip/pathway)
+// a Next.js szerver EZEN A KÜLÖN, a route service-től FÜGGETLEN
+// server-to-server hívási úton kéri le — NEM a route service
+// (route.vedettsarok.hu -> localhost:8081 MOTIS) endpointján keresztül,
+// hanem egy külön, a VPS-en futó, in-memory index-et szolgáló sidecar
+// processen keresztül (lásd docs/vedett-route/ACCESSIBILITY_SIDECAR.md és
+// vps-accessibility-sidecar/src/server.ts). A Caddy réteg ezt a sidecart
+// egy KÜLÖN útvonalon (pl. https://route.vedettsarok.hu/accessibility/lookup)
+// proxyolja a MEGLÉVŐ Bearer-auth mintát követve — de SZÁNDÉKOSAN EGY
+// KÜLÖN TOKENNEL (ACCESSIBILITY_SIDECAR_AUTH_TOKEN, nem
+// ROUTE_SERVICE_AUTH_TOKEN), hogy a két rendszer secretje ne legyen
+// összekeverve/megosztva, és egyik kompromittálása se adjon automatikus
+// hozzáférést a másikhoz.
+//
+// ACCESSIBILITY_SIDECAR_URL és ACCESSIBILITY_SIDECAR_AUTH_TOKEN EGYÜTT
+// kötelezőek — ha bármelyik hiányzik, getAccessibilitySidecarConfig()
+// null-t ad, és a hívó (accessibilityLookupClient.ts) ezt PONTOSAN
+// ugyanúgy kezeli, mint egy időtúllépést/5xx-et: a lookup null indexet ad
+// vissza, a routing folytatódik, a klasszifikáció UNKNOWN-ra esik vissza
+// (spec 15. pont — SOHA nem KNOWN_ACCESSIBLE, ha a lookup nem érhető el).
+//
+// Rövid timeout (spec 16. pont: "rövid, dokumentált, tesztelt timeout,
+// hogy egy sidecar-kiesés ne adjon 10-20s-ot a routing-hoz") — jóval
+// rövidebb, mint a route service timeoutja, mert ez egy tisztán belső,
+// VPS-en-belüli (Caddy -> localhost sidecar) hívás, nem egy külső MOTIS
+// route-számítás.
+export interface AccessibilitySidecarConfig {
+  baseUrl: string;
+  authToken: string;
+  timeoutMs: number;
+}
+
+const DEFAULT_ACCESSIBILITY_SIDECAR_TIMEOUT_MS = 2_500;
+const MAX_ACCESSIBILITY_SIDECAR_TIMEOUT_MS = 8_000; // jóval a Vercel function timeout alatt kell maradnia, és jóval a ROUTE_SERVICE_TIMEOUT_MS alatt is
+
+export function getAccessibilitySidecarConfig(): AccessibilitySidecarConfig | null {
+  const baseUrl = process.env.ACCESSIBILITY_SIDECAR_URL?.trim();
+  const authToken = process.env.ACCESSIBILITY_SIDECAR_AUTH_TOKEN?.trim();
+  if (!baseUrl || !authToken) return null;
+
+  const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i.test(baseUrl);
+  if (!baseUrl.startsWith("https://") && !isLocalhost) {
+    return null;
+  }
+
+  const rawTimeout = Number(process.env.ACCESSIBILITY_SIDECAR_TIMEOUT_MS ?? DEFAULT_ACCESSIBILITY_SIDECAR_TIMEOUT_MS);
+  const timeoutMs =
+    Number.isFinite(rawTimeout) && rawTimeout > 0
+      ? Math.min(rawTimeout, MAX_ACCESSIBILITY_SIDECAR_TIMEOUT_MS)
+      : DEFAULT_ACCESSIBILITY_SIDECAR_TIMEOUT_MS;
+
+  return { baseUrl, authToken, timeoutMs };
+}
+
 // Cache-időtartamok (másodpercben), konfigurálhatóan — 30. pont.
 //
 // realtimeMaxAgeSeconds (15. pont, BKK Realtime integráció): a MOTIS
