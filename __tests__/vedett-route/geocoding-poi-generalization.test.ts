@@ -277,21 +277,30 @@ describe("H) origin (indulási) oldali nevesített hely / POI keresés — a Rou
     // eslint-disable-next-line no-new-func
     const isManualAddressComplete = new Function(`${src}\nreturn isManualAddressComplete;`)();
 
-    // Meglévő (VÁLTOZATLAN) esetek — a structured-address-and-sensory-ux.test.ts
-    // J) tesztjével EGYEZŐ elvárások, itt csak regresszió-védelemként
-    // megismételve, hogy EBBEN a fájlban is látható legyen, hogy az ÚJ ág
-    // nem gyengítette a régit.
-    assert.equal(isManualAddressComplete({ city: "", districtOrPostalCode: "1136", street: "Kossuth Lajos utca 12." }), false);
-    assert.equal(isManualAddressComplete({ city: "Budapest", districtOrPostalCode: "", street: "Kossuth Lajos utca 12." }), false);
+    // GEOCODING KORREKCIÓ (2026-09-11, C4.2, "3. PLACE-ONLY INPUT LEGYEN
+    // ÉRVÉNYES" pont) — a City mező ALAPÉRTELMEZETTEN "Budapest", ezért a
+    // korábbi "Város ÉS Kerület egyszerre üres" bypass a gyakorlatban SOSEM
+    // aktiválódott (egy "Arena Plaza" keresésnél City="Budapest" marad,
+    // District="" — ez a RÉGI szabály szerint HIÁNYOS volt, ez okozta a
+    // valós Preview-ban tapasztalt, geokódolás ELŐTTI blokkolást). Az ÚJ,
+    // explicit üzleti szabály szerint a Város/Kerület/irányítószám
+    // OPCIONÁLIS, szűkítő kontextus — KIZÁRÓLAG az Utca/hely mező kötelező.
+    // Ez SZÁNDÉKOS viselkedés-változás (nem "teszt-gyengítés"): a City/
+    // District mezők hiánya vagy jelenléte TÖBBÉ NEM dönt a kérés
+    // elküldhetőségéről — a földrajzi szűkítést a szerver oldali
+    // GeoContextConstraint hard constraint érvényesíti (lásd geocode.ts).
+    assert.equal(isManualAddressComplete({ city: "", districtOrPostalCode: "1136", street: "Kossuth Lajos utca 12." }), true);
+    assert.equal(isManualAddressComplete({ city: "Budapest", districtOrPostalCode: "", street: "Kossuth Lajos utca 12." }), true);
     assert.equal(isManualAddressComplete({ city: "Budapest", districtOrPostalCode: "1136", street: "" }), false);
     assert.equal(isManualAddressComplete({ city: "Budapest", districtOrPostalCode: "1136", street: "Kossuth Lajos utca 12." }), true);
 
-    // ÚJ eset — bare, szabadszöveges POI-keresés: Város ÉS Kerület egyszerre
-    // üres, de az Utca/hely mező egy nevesített helyet tartalmaz.
+    // Bare, szabadszöveges POI-keresés: Város ÉS Kerület egyszerre üres, de
+    // az Utca/hely mező egy nevesített helyet tartalmaz — TOVÁBBRA IS true.
     assert.equal(isManualAddressComplete({ city: "", districtOrPostalCode: "", street: "Deák tér" }), true);
-    // Részlegesen kitöltött (pl. csak Város, Kerület/Utca nélkül) TOVÁBBRA
-    // IS hiányos — az új szabály NEM gyengíti ezt.
+    // Az Utca/hely mező hiánya TOVÁBBRA IS hiányos, FÜGGETLENÜL attól, hogy
+    // Város/Kerület ki van-e töltve — ez az EGYETLEN kötelező feltétel.
     assert.equal(isManualAddressComplete({ city: "Budapest", districtOrPostalCode: "", street: "" }), false);
+    assert.equal(isManualAddressComplete({ city: "", districtOrPostalCode: "", street: "" }), false);
   });
 });
 

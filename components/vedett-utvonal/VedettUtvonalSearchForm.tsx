@@ -91,34 +91,29 @@ function buildStructuredAddress(addr: { city: string; districtOrPostalCode: stri
   return [cityLine, street].filter(Boolean).join(", ");
 }
 
-// Validáció (6. pont) — város + (irányítószám VAGY kerület, ugyanaz a
-// szabadszöveges mező) + utca mind kötelező; a házszám lehet opcionális,
-// mert vannak célok, ahol nincs ismert házszám (ez a mezőn belüli
-// szabadszöveg-részlet, nem külön mező, tehát nincs is mit validálni rá
-// külön).
+// GEOCODING KORREKCIÓ (2026-09-11, C4.2, "3. PLACE-ONLY INPUT LEGYEN
+// ÉRVÉNYES" pont) — BIZONYÍTOTT root cause: a City mező ALAPÉRTELMEZETTEN
+// "Budapest"-tel van feltöltve (lásd a MANUAL state kezdőértékét lejjebb),
+// tehát a korábbi "Város ÉS Kerület EGYSZERRE üres" bypass-szabály a
+// GYAKORLATBAN SOSEM aktiválódott — egy "Arena Plaza" keresésnél a City
+// mező a legtöbb felhasználónál "Budapest" marad, a Kerület mező pedig
+// üres, ez a korábbi logika szerint HIÁNYOS (cityFilled && !districtFilled
+// -> false), ezért a kliens MÉG A GEOKÓDOLÓ HÍVÁSA ELŐTT elutasította a
+// kérést a "Add meg a várost, az irányítószámot vagy kerületet és az
+// utcát." hibaszöveggel — pontosan ez a valós Preview-ban tapasztalt hiba.
 //
-// GEOCODING GENERALIZÁCIÓ (2026-09-11) — a "Deák tér", "Etele Plaza",
-// "Kelenföld vasútállomás" jellegű, nevesített hely/POI keresés SOSEM
-// klasszikus, város+kerület+utca hármas cím — a felhasználónak ilyenkor
-// nincs (és nem is kellene, hogy legyen) kitöltendő Város/Kerület mezője.
-// Ezért EGY ÚJ, szűken definiált második elfogadási út is érvényes:
-// amikor a Város ÉS a Kerület mező EGYSZERRE üres, de az Utca/hely mező
-// nem, a bemenet egy szabadszöveges OSM/Nominatim névkeresésnek minősül —
-// ezt a geokódolási pipeline (lib/vedett-route/geocode.ts,
-// isBareRoadOnlyResult/scoreNamedPlaceResult) dönti el, hogy tényleg egy
-// konkrét nevesített helyre mutat-e, itt a kliens csak ANNYIT dönt el,
-// hogy a kérés egyáltalán elküldhető-e. Minden korábbi, RÉSZLEGESEN
-// kitöltött eset (pl. csak Kerület+Utca, vagy csak Város+Utca) TOVÁBBRA IS
-// hiányosnak (false) minősül — ez a szabály KIZÁRÓLAG a "mindhárom
-// kitöltve" ÉS a "kizárólag az Utca/hely mező kitöltve" eseteket engedi át,
-// nem gyengíti a korábbi hármas-validációt.
+// ÚJ SZABÁLY: egy nem üres Utca/hely mező ÖNMAGÁBAN elég a geokódoló
+// meghívásához — a Város és a Kerület/irányítószám mostantól OPCIONÁLIS,
+// SZŰKÍTŐ kontextus (amit a szerver oldali geocode.ts GeoContextConstraint
+// hard constraintként érvényesít, ha ki van töltve — lásd
+// candidateViolatesGeoContext), NEM kötelező mező. A klasszikus,
+// "Kossuth Lajos utca 12."-szerű teljes cím és a "Deák tér"/"Arena
+// Plaza"-szerű named place/POI keresés a kliens szemszögéből EGYSZERRE
+// érvényes — a kliensnek NEM kell (és nem is tudja biztonságosan)
+// eldönteni, hogy a beírt szöveg utca, tér, üzlet, plaza, állomás, park,
+// POI vagy intézmény; ezt a szerver oldali geokódolási pipeline dönti el.
 function isManualAddressComplete(addr: { city: string; districtOrPostalCode: string; street: string }): boolean {
-  const cityFilled = Boolean(addr.city.trim());
-  const districtFilled = Boolean(addr.districtOrPostalCode.trim());
-  const streetFilled = Boolean(addr.street.trim());
-  if (cityFilled && districtFilled && streetFilled) return true;
-  if (!cityFilled && !districtFilled && streetFilled) return true;
-  return false;
+  return Boolean(addr.street.trim());
 }
 
 // MapLibre a böngésző window objektumára támaszkodik -> csak kliens

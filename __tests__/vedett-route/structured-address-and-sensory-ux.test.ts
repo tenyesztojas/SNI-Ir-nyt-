@@ -177,12 +177,26 @@ describe("TASK — Kézi módosítás KNOWN_PLACE -> MANUAL (I)", () => {
 });
 
 describe("TASK — Validáció (6. pont) — kulturált magyar hibaüzenet, NEM Zod/technikai hiba (J)", () => {
-  test("J) isManualAddressComplete hiányos strukturált cím esetén false-t ad (üres város/irányítószám-vagy-kerület/utca)", () => {
-    assert.equal(isManualAddressComplete({ city: "", districtOrPostalCode: "1136", street: "Kossuth Lajos utca 12." }), false);
-    assert.equal(isManualAddressComplete({ city: "Budapest", districtOrPostalCode: "", street: "Kossuth Lajos utca 12." }), false);
+  // GEOCODING KORREKCIÓ (2026-09-11, C4.2, "3. PLACE-ONLY INPUT LEGYEN
+  // ÉRVÉNYES" pont) — a City mező alapértelmezetten "Budapest", ezért a
+  // korábbi hármas-validáció a gyakorlatban blokkolt egy sima "Arena
+  // Plaza"-szerű keresést is (lásd VedettUtvonalSearchForm.tsx
+  // isManualAddressComplete komment). Az ÚJ szabály szerint KIZÁRÓLAG az
+  // Utca/hely mező kötelező — Város/Kerület/irányítószám opcionális,
+  // szűkítő kontextus. Ez SZÁNDÉKOS, a specifikáció által előírt
+  // viselkedés-változás, nem a teszt gyengítése.
+  test("J) isManualAddressComplete KIZÁRÓLAG az Utca/hely mezőt követeli meg — Város/Kerület/irányítószám opcionális szűkítő kontextus", () => {
+    assert.equal(isManualAddressComplete({ city: "", districtOrPostalCode: "1136", street: "Kossuth Lajos utca 12." }), true);
+    assert.equal(isManualAddressComplete({ city: "Budapest", districtOrPostalCode: "", street: "Kossuth Lajos utca 12." }), true);
     assert.equal(isManualAddressComplete({ city: "Budapest", districtOrPostalCode: "1136", street: "" }), false);
-    assert.equal(isManualAddressComplete({ city: "  ", districtOrPostalCode: "1136", street: "Kossuth Lajos utca 12." }), false);
+    assert.equal(isManualAddressComplete({ city: "  ", districtOrPostalCode: "1136", street: "Kossuth Lajos utca 12." }), true);
     assert.equal(isManualAddressComplete({ city: "Budapest", districtOrPostalCode: "1136", street: "Kossuth Lajos utca 12." }), true);
+    // Az EGYETLEN kötelező feltétel: az Utca/hely mező üres.
+    assert.equal(isManualAddressComplete({ city: "Budapest", districtOrPostalCode: "1136", street: "   " }), false);
+    // Place-only keresés (pl. "Arena Plaza") — a valós Preview-ban
+    // tapasztalt hiba pontosan ez volt: City="Budapest" (alapérték),
+    // District="" — ez a régi szabály szerint hiányos volt.
+    assert.equal(isManualAddressComplete({ city: "Budapest", districtOrPostalCode: "", street: "Arena Plaza" }), true);
   });
 
   test("J) handleSubmit a hiányos strukturált cím esetén a specifikáció szó szerinti magyar hibaüzenetét jeleníti meg, NEM egy Zod/technikai hibát", () => {

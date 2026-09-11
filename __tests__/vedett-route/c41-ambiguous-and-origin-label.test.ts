@@ -276,12 +276,17 @@ describe("I) a candidate lista sosem hosszabb MAX_AMBIGUOUS_CANDIDATES (5) elemn
     assert.equal(MAX_AMBIGUOUS_CANDIDATES, 5);
   });
 
-  test("classifyNamedPlaceCandidates 7 közeli pontszámú találatra is legfeljebb 5 candidate-et ad", () => {
+  test("classifyNamedPlaceCandidates 7, EGYMÁSTÓL VALÓDIAN TÁVOLI (több km, tehát KÜLÖN klaszterbe eső) azonos-nevű találatra is legfeljebb 5 candidate-et ad — a C4.2 same-place klaszterezés NEM ezt a tesztet gyengíti, csak a valódi ambiguitás fogalmát pontosítja (lásd a c41-ambiguous-and-origin-label.test.ts H/I pontjait a klaszterezett dedup-ra)", () => {
+    // SZÁNDÉKOSAN nagy (0.05 fok, kb. 5-6 km) lépésköz — ez GARANTÁLTAN
+    // SAME_PLACE_CLUSTER_RADIUS_METERS (350 m) FELETTI távolság minden
+    // szomszédos pár között, tehát mind a 7 találat KÜLÖN klaszterbe esik
+    // (nincs same-place dedup), és a max-5 vágás valóban a klaszter-cap-ot
+    // teszteli, nem a klaszterezést.
     const results: NominatimRawResult[] = Array.from({ length: 7 }, (_, i) =>
       makeNamedPlace({
         display_name: `Deák tér variáns ${i}, Budapest, Magyarország`,
-        lat: String(47.4 + i * 0.001),
-        lon: String(19.0 + i * 0.001),
+        lat: String(47.4 + i * 0.05),
+        lon: String(19.0 + i * 0.05),
       })
     );
     const classification = classifyNamedPlaceCandidates(results, "Deák tér");
@@ -369,7 +374,14 @@ describe("Astoria (3. pont) — a generikus classifyNamedPlaceCandidates dönt, 
     // feltételben) — a szövegben szabadon szerepelhet dokumentációs
     // komment-példaként (lásd a classifyNamedPlaceCandidates fejlécét).
     assert.doesNotMatch(geocodeSrc, /(===|!==|\.includes\(|\.startsWith\(|\.endsWith\(|case )\s*["']Astoria["']/i);
-    assert.match(geocodeSrc, /export function classifyNamedPlaceCandidates\(results: NominatimRawResult\[\], query: string\)/);
+    // A C4.2 kör egy opcionális, 3. `constraint` paraméterrel bővítette a
+    // szignatúrát (explicit földrajzi hard constraint, lásd
+    // GeoContextConstraint) — a regex ezt is elfogadja, de a függvény neve/
+    // első két paramétere VÁLTOZATLAN kell maradjon.
+    assert.match(
+      geocodeSrc,
+      /export function classifyNamedPlaceCandidates\(\s*results: NominatimRawResult\[\],\s*query: string,\s*constraint\?: GeoContextConstraint\s*\)/
+    );
   });
 });
 

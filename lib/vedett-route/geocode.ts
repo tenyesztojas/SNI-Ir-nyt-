@@ -107,6 +107,14 @@ export interface NominatimAddressDetails {
   suburb?: string;
   postcode?: string;
   country_code?: string;
+  // GEOCODING KORREKCIÓ (2026-09-11, C4.2, "explicit földrajzi kontextus =
+  // hard constraint" pont) — a Nominatim válasz ezeken a mezőkön keresztül
+  // adhat kerület-szintű admin-egységet (Budapesten a kerület jellemzően
+  // city_district/borough/suburb/quarter alatt jelenik meg, a konkrét
+  // mezőnév a lekérdezés típusától függ) — lásd extractCandidateDistrictIdentity.
+  city_district?: string;
+  borough?: string;
+  quarter?: string;
 }
 
 // A Nominatim `namedetails=1` paraméterrel adott, a hely SAJÁT nevét (és
@@ -198,10 +206,21 @@ const ROMAN_DISTRICTS = [
   "XXI", "XXII", "XXIII",
 ];
 
-export function normalizeDistrictOrPostalCode(raw: string): string {
+// GEOCODING KORREKCIÓ (2026-09-11, C4.2) — a canonikus kerület-azonosítás
+// KIVÁLASZTVA a normalizeDistrictOrPostalCode()-ból egy önálló, "null, ha
+// nem ismerhető fel biztonságosan" függvénybe (extractDistrictIdentity),
+// mert a district hard-constraint validációnak (lásd
+// extractCandidateDistrictIdentity/candidateViolatesGeoContext lent) KÜLÖN
+// KELL tudnia "nincs használható infó" (null) és "ez a felhasználó SAJÁT,
+// már ismert bemenete, tartsuk meg változatlanul" (normalizeDistrictOrPostalCode
+// visszaesési ága) között — a candidate-oldali kinyerésnél SOHA nem
+// szabad kitalálni egy kerületet, ha a mező tartalma nem egyértelműen
+// kerület-jelölés (pl. egy suburb neve, mint "Belváros-Lipótváros", NEM
+// ismerhető fel biztonságosan kerület-számként — ez direkt, szándékos
+// viselkedés, nem hiányosság: egy elnevezés<->kerület táblázat hardcode
+// lenne, amit a specifikáció kizár).
+export function extractDistrictIdentity(raw: string): string | null {
   const trimmed = raw.trim();
-  if (/^\d{4}$/.test(trimmed)) return trimmed; // irányítószám — változatlan, SOSEM kerületté konvertálva
-
   // "kerület" szó (és környező whitespace/pont) leválasztása, hogy a
   // maradék tiszta arab vagy római jelölés legyen.
   const core = trimmed.replace(/kerület\.?/i, "").trim().replace(/\.$/, "").trim();
@@ -213,9 +232,18 @@ export function normalizeDistrictOrPostalCode(raw: string): string {
   const romanCandidate = core.toUpperCase();
   if (ROMAN_DISTRICTS.includes(romanCandidate)) return `${romanCandidate}. kerület`;
 
+  return null;
+}
+
+export function normalizeDistrictOrPostalCode(raw: string): string {
+  const trimmed = raw.trim();
+  if (/^\d{4}$/.test(trimmed)) return trimmed; // irányítószám — változatlan, SOSEM kerületté konvertálva
+
   // Nem ismerhető fel biztonságosan — a bemenetet ÉRINTETLENÜL adjuk
-  // vissza (SOHA nem találgatunk/dobunk el adatot).
-  return trimmed;
+  // vissza (SOHA nem találgatunk/dobunk el adatot). Ez a felhasználó SAJÁT
+  // bemenete (pl. egy szabadszöveges POI-keresés, "Deák tér"), ahol a
+  // "nem kerület" eset teljesen legitim, nem hiba.
+  return extractDistrictIdentity(trimmed) ?? trimmed;
 }
 
 // --- A kliens által épített cím-string visszafejtése (KIZÁRÓLAG a
@@ -255,12 +283,25 @@ export function parseExpectedAddressComponents(query: string): ExpectedAddressCo
   const firstSegment = segments[0];
   const postalMatch = firstSegment.match(/^(\d{4})\s+(.+)$/);
 
-  let city: string;
+  // GEOCODING KORREKCIÓ (2026-09-11, C4.2, "Arena Plaza" production audit) —
+  // BIZONYÍTOTT root cause EGY RÉSZE: egyetlen, vessző nélküli szabadszöveges
+  // szegmens (pl. "Arena Plaza") esetén korábban `city` a TELJES bemenetre
+  // állt (= streetName-nel azonos szöveg) — ez nem egy valódi, a
+  // felhasználó által megadott város-kontextus, csak a felbontás
+  // mellékhatása. Ha ezt később egy explicit city-constraintként
+  // használnánk (lásd GeoContextConstraint), MINDEN candidate-et elvetne
+  // (semelyiknek nincs "Arena Plaza" nevű address.city mezője). A `city`
+  // mostantól KIZÁRÓLAG akkor kap értéket, ha VALÓBAN külön szegmens (vagy
+  // irányítószám-előtag) különíti el a helytől — egyetlen szabadszöveges
+  // szegmensnél (place-only keresés) a city "" marad, azaz NINCS explicit
+  // város-kontextus (ez nem hiba, ez a "csak egy POI/hely nevet adtam meg"
+  // eset SAJÁT, legitim állapota).
+  let city = "";
   let districtOrPostalCode: string | null = null;
   if (postalMatch) {
     districtOrPostalCode = postalMatch[1];
     city = postalMatch[2].trim();
-  } else {
+  } else if (segments.length >= 2) {
     city = firstSegment;
     if (segments.length >= 3) districtOrPostalCode = normalizeDistrictOrPostalCode(segments[1]);
   }
@@ -376,6 +417,59 @@ export function getResultPrimaryName(result: NominatimRawResult): string {
   return (result.display_name ?? "").split(",")[0]?.trim() ?? "";
 }
 
+// GEOCODING KORREKCIÓ (2026-09-11, C4.2, "4. OSM alternatív/régi nevek"
+// pont) — a namedetails mostantól NEM csak a `name` mezőt adja a
+// névegyeztetéshez, hanem az OSM saját, ÁLTALÁNOS alternatívnév-mezőit is
+// (alt_name/old_name/official_name/short_name, és ezek lokalizált `*:hu`
+// stb. variánsait, ha a Nominatim válasz tartalmazza) — ez teszi
+// lehetővé, hogy egy "Arena Plaza" keresés megtalálja azt a POI-t, amit
+// az OSM már "Arena Mall"-ra nevezett át, HA az OSM saját old_name/
+// alt_name mezője ezt tényleg tartalmazza. Ez SOHA nem hardcode-olt
+// névlista — ha az OSM/Nominatim válasz nem ad alternatív nevet, ez a
+// függvény sem "talál ki" kapcsolatot, egyszerűen a getResultPrimaryName()
+// szerinti egyetlen névvel tér vissza. Egy OSM mező (pl. alt_name) több,
+// ";"-vel elválasztott nevet is tartalmazhat — ezeket külön jelöltként
+// kezeljük. A visszaadott lista KIZÁRÓLAG a szerveroldali match/scoring
+// bemenete — a kliens SOHA nem kapja meg (lásd toPlaceCandidate/
+// GeocodePlaceCandidate, ami csak a KIVÁLASZTOTT, egyetlen displayName-t
+// adja tovább).
+const ALT_NAME_FIELD_PATTERN = /^(name|alt_name|old_name|official_name|short_name)(:.+)?$/i;
+
+export function getResultNameCandidates(result: NominatimRawResult): string[] {
+  const namedetails = result.namedetails;
+  const names: string[] = [];
+  if (namedetails) {
+    for (const key of Object.keys(namedetails)) {
+      if (!ALT_NAME_FIELD_PATTERN.test(key)) continue;
+      const raw = namedetails[key];
+      if (!raw) continue;
+      for (const part of raw.split(";")) {
+        const trimmed = part.trim();
+        if (trimmed.length > 0) names.push(trimmed);
+      }
+    }
+  }
+  if (names.length === 0) {
+    const fallback = (result.display_name ?? "").split(",")[0]?.trim();
+    if (fallback) names.push(fallback);
+  }
+  return Array.from(new Set(names));
+}
+
+// Két név "ekvivalens"-e a keresés/klaszterezés szempontjából — KIZÁRÓLAG
+// pontos egyezés vagy szó-határon vett prefix-egyezés (ugyanaz a
+// konzervatív elv, mint korábban a scoreNamedPlaceResult-ban, most egy
+// önálló, a klaszterezés által is újrafelhasznált segédfüggvényben), SOHA
+// nem fuzzy/hasonlósági egyezés.
+function namesAreEquivalent(a: string, b: string): boolean {
+  const na = normalizeTextForCompare(a);
+  const nb = normalizeTextForCompare(b);
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  if (na.startsWith(`${nb} `) || nb.startsWith(`${na} `)) return true;
+  return false;
+}
+
 // Egyetlen találat pontszáma nevesített helyként a `query` szöveghez
 // viszonyítva — vagy `null`, ha a találat EGYÁLTALÁN NEM fogadható el
 // nevesített helyként (puszta út, más ország, vagy a neve túl távol áll a
@@ -394,22 +488,33 @@ export function scoreNamedPlaceResult(result: NominatimRawResult, query: string)
   const addr = result.address;
   if (addr && addr.country_code && addr.country_code.toLowerCase() !== "hu") return null;
 
-  const primaryName = getResultPrimaryName(result);
-  const normalizedPrimary = normalizeTextForCompare(primaryName);
   const normalizedQuery = normalizeTextForCompare(query);
-  if (!normalizedPrimary || !normalizedQuery) return null;
+  if (!normalizedQuery) return null;
 
-  let score: number;
-  if (normalizedPrimary === normalizedQuery) {
-    score = 100;
-  } else if (normalizedPrimary.startsWith(`${normalizedQuery} `) || normalizedQuery.startsWith(`${normalizedPrimary} `)) {
-    // Szó-határon vett prefix-egyezés (pl. "Kelenföld" <-> "Kelenföld
-    // vasútállomás") — SOSEM puszta karakterlánc-prefix (ami "Deák" <->
-    // "Deáki utca"-t is hamisan egyeztetné).
-    score = 60;
-  } else {
-    return null;
+  // GEOCODING KORREKCIÓ (2026-09-11, C4.2) — MINDEN névjelöltet (saját név +
+  // alt_name/old_name/official_name/short_name, lásd getResultNameCandidates)
+  // megpróbálunk egyeztetni a kereséssel, nem csak a namedetails.name/
+  // display_name szerinti "elsődleges" nevet — a legjobb egyezés pontszáma
+  // dönt. Ez SOHA nem gyengíti a korábbi, konzervatív egyezési szabályt
+  // (pontos egyezés vagy szó-határon vett prefix) — csak TÖBB névre
+  // alkalmazza ugyanazt a szabályt.
+  let matchScore: number | null = null;
+  for (const candidateName of getResultNameCandidates(result)) {
+    const normalizedCandidate = normalizeTextForCompare(candidateName);
+    if (!normalizedCandidate) continue;
+    if (normalizedCandidate === normalizedQuery) {
+      matchScore = 100;
+      break;
+    }
+    if (normalizedCandidate.startsWith(`${normalizedQuery} `) || normalizedQuery.startsWith(`${normalizedCandidate} `)) {
+      // Szó-határon vett prefix-egyezés (pl. "Kelenföld" <-> "Kelenföld
+      // vasútállomás") — SOSEM puszta karakterlánc-prefix (ami "Deák" <->
+      // "Deáki utca"-t is hamisan egyeztetné).
+      matchScore = Math.max(matchScore ?? 0, 60);
+    }
   }
+  if (matchScore === null) return null;
+  let score = matchScore;
 
   const cityCandidates = [addr?.city, addr?.town, addr?.village, addr?.municipality, addr?.suburb].filter(
     (v): v is string => Boolean(v)
@@ -421,6 +526,155 @@ export function scoreNamedPlaceResult(result: NominatimRawResult, query: string)
   }
 
   return score;
+}
+
+// GEOCODING KORREKCIÓ (2026-09-11, C4.2, "1. EXPLICIT FÖLDRAJZI KONTEXTUS
+// = HARD CONSTRAINT" pont) — BIZONYÍTOTT root cause: a "Budapest, V.
+// kerület, Deák tér" keresés korábban egy XXI. kerületi "Deák tér"
+// candidate-et is elfogadhatott, mert a kerület CSAK egy scoring-bónusz
+// volt (a Budapest-kontextus +10-e), NEM egy kizáró feltétel — egy másik
+// kerületi candidate egyszerűen nem kapott bónuszt, de attól még
+// versenyben maradt (és nyerhetett, pl. magasabb importance miatt). Az
+// alábbi candidateViolatesGeoContext() ezt egy KÜLÖN, a scoring ELŐTT
+// futó szűrővé teszi: ha a felhasználó explicit kerületet vagy
+// irányítószámot adott meg, egy ETTŐL BIZONYÍTOTTAN ELTÉRŐ candidate
+// KÖTELEZŐEN kizárásra kerül, függetlenül a pontszámától. Ha a
+// candidate-ben NINCS használható kerület-infó (lásd
+// extractCandidateDistrictIdentity — SOHA nem talál ki kerületet egy nem
+// egyértelmű mezőből, pl. egy puszta suburb-névből), a candidate-et NEM
+// zárjuk ki csak ezért — a specifikáció szerint csak a BIZONYÍTOTTAN
+// ellentmondó esetet kell kötelezően elvetni.
+export interface GeoContextConstraint {
+  city?: string | null;
+  districtOrPostalCode?: string | null;
+}
+
+// A candidate kerület-azonosítójának kinyerése — a Nominatim válaszban a
+// kerület-szintű admin-egység jellemzően city_district/borough/suburb/
+// quarter alatt jelenik meg (a konkrét mezőnév a lekérdezés típusától
+// függ, ezért mindet megpróbáljuk, ebben a sorrendben). KIZÁRÓLAG akkor ad
+// vissza kanonikus kerület-azonosítót, ha a mező tartalma EGYÉRTELMŰEN
+// kerület-jelölés (lásd extractDistrictIdentity) — egy puszta
+// szomszédság-név (pl. "Belváros-Lipótváros") NEM ismerhető fel
+// biztonságosan kerület-számként, ezért null-t ad, SOHA nem egy
+// hardcode-olt névtábla alapján "kitalált" kerületet.
+export function extractCandidateDistrictIdentity(addr?: NominatimAddressDetails): string | null {
+  if (!addr) return null;
+  const candidates = [addr.city_district, addr.borough, addr.suburb, addr.quarter];
+  for (const raw of candidates) {
+    if (!raw) continue;
+    const identity = extractDistrictIdentity(raw);
+    if (identity) return identity;
+  }
+  return null;
+}
+
+// A candidate BIZONYÍTOTTAN ellentmond-e a felhasználó explicit földrajzi
+// kontextusának — ha igen, KÖTELEZŐ kizárni, függetlenül a scoring
+// pontszámától (lásd classifyNamedPlaceCandidates, ahol ez a scoring ELŐTT
+// fut). Irányítószám esetén a candidate SAJÁT postcode mezőjét hasonlítjuk
+// direktben (nincs szükség kerület<->irányítószám konverzióra — az
+// irányítószám önmagában elég konkrét). Kerület esetén a fenti
+// extractCandidateDistrictIdentity()-t használjuk. Város esetén a
+// meglévő city/town/village/municipality mezőket. MINDHÁROM esetben: ha a
+// candidate-ben egyáltalán NINCS használható infó az adott dimenzióhoz,
+// NEM zárjuk ki (nem találunk ki hiányzó adatot) — csak a bizonyítottan
+// eltérő esetet.
+export function candidateViolatesGeoContext(result: NominatimRawResult, constraint: GeoContextConstraint): boolean {
+  const addr = result.address;
+
+  if (constraint.city) {
+    const cityCandidates = [addr?.city, addr?.town, addr?.village, addr?.municipality].filter(
+      (v): v is string => Boolean(v)
+    );
+    if (cityCandidates.length > 0) {
+      const expectedCity = normalizeTextForCompare(constraint.city);
+      const matches = cityCandidates.some((c) => normalizeTextForCompare(c) === expectedCity);
+      if (!matches) return true;
+    }
+  }
+
+  if (constraint.districtOrPostalCode) {
+    if (/^\d{4}$/.test(constraint.districtOrPostalCode)) {
+      if (addr?.postcode && addr.postcode.trim() !== constraint.districtOrPostalCode) return true;
+    } else {
+      const candidateDistrict = extractCandidateDistrictIdentity(addr);
+      if (candidateDistrict && candidateDistrict !== constraint.districtOrPostalCode) return true;
+    }
+  }
+
+  return false;
+}
+
+// --- Same-place klaszterezés (GEOCODING KORREKCIÓ, 2026-09-11, C4.2, "5.
+// SAME-PLACE DEDUPLICATION/CLUSTERING" pont) ---
+//
+// BIZONYÍTOTT root cause: az "Astoria" keresés 4 különböző OSM/Nominatim
+// objektumot adott (ugyanannak a budapesti csomópontnak külön bejegyzései,
+// pl. egy public_transport csomópont, egy amenity, stb.), amik egymáshoz
+// FÖLDRAJZILAG NAGYON KÖZEL vannak — a korábbi AMBIGUOUS-logika ezeket
+// mind külön jelöltként kezelte, feleslegesen választásra kényszerítve a
+// felhasználót, holott VALÓJÁBAN egyetlen helyről van szó. A determinisztikus
+// megoldás: egy egyszerű, dokumentált sugarú (lásd SAME_PLACE_CLUSTER_RADIUS_METERS)
+// Haversine-távolság + névazonosság/ekvivalencia alapján klaszterekbe
+// rendezzük a pontszámozott candidate-eket, MIELŐTT RESOLVED/AMBIGUOUS
+// döntés történne — ha az összes legjobb candidate egyetlen klaszterben
+// van, ez RESOLVED (nincs valódi földrajzi többértelműség); ha két vagy
+// több, EGYMÁSTÓL VALÓDIAN TÁVOLI klaszter versenyez, az MARAD AMBIGUOUS.
+// Nincs külső geocode-hívás — a klaszterezés KIZÁRÓLAG a MÁR meglévő
+// candidate-ek lat/lon-ján számol.
+export const SAME_PLACE_CLUSTER_RADIUS_METERS = 350;
+
+// Haversine — determinisztikus, függőségmentes gömbi távolságszámítás
+// méterben, két lat/lon pár között.
+export function haversineDistanceMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371000;
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+export interface CandidateCluster {
+  // A klaszter legjobb pontszámú tagja — EZT adjuk vissza jelöltként
+  // (RESOLVED esetén egyedüli eredményként, AMBIGUOUS esetén egy sorként a
+  // választólistában).
+  representative: NominatimRawResult;
+  score: number;
+  members: NominatimRawResult[];
+}
+
+// Pontszám szerint csökkenő sorrendbe rendezett, már megpontszámozott
+// candidate-listát klaszterez — determinisztikus "lánc" algoritmus: minden
+// candidate-et az ELSŐ olyan, MÁR létező klaszterhez csatol, amelynek
+// reprezentánsával a neve ekvivalens ÉS SAME_PLACE_CLUSTER_RADIUS_METERS-en
+// belül van; ha nincs ilyen, új klasztert nyit. Mivel a bemenet pontszám
+// szerint csökkenő sorrendben érkezik, minden klaszter reprezentánsa
+// mindig a klaszter LEGJOBB pontszámú tagja (a legjobb candidate mindig
+// elsőként érkezik egy adott klaszterhez).
+export function clusterSamePlaceCandidates(
+  scored: { result: NominatimRawResult; score: number }[]
+): CandidateCluster[] {
+  const clusters: CandidateCluster[] = [];
+  for (const item of scored) {
+    const lat = Number(item.result.lat);
+    const lon = Number(item.result.lon);
+    const name = getResultPrimaryName(item.result);
+    const matched = clusters.find((cluster) => {
+      if (!namesAreEquivalent(name, getResultPrimaryName(cluster.representative))) return false;
+      const repLat = Number(cluster.representative.lat);
+      const repLon = Number(cluster.representative.lon);
+      return haversineDistanceMeters(lat, lon, repLat, repLon) <= SAME_PLACE_CLUSTER_RADIUS_METERS;
+    });
+    if (matched) {
+      matched.members.push(item.result);
+    } else {
+      clusters.push({ representative: item.result, score: item.score, members: [item.result] });
+    }
+  }
+  return clusters;
 }
 
 // GEOCODING KORREKCIÓ (2026-09-11, C4.1, "többértelmű találatok" pont) —
@@ -435,7 +689,8 @@ export function scoreNamedPlaceResult(result: NominatimRawResult, query: string)
 export interface NamedPlaceClassification {
   status: "RESOLVED" | "AMBIGUOUS" | "NOT_FOUND";
   // RESOLVED esetén pontosan egy elem; AMBIGUOUS esetén a legjobb (max 5)
-  // jelölt, pontszám szerint csökkenő sorrendben; NOT_FOUND esetén üres.
+  // KLASZTER reprezentánsa (dedupliká­lva — lásd clusterSamePlaceCandidates),
+  // pontszám szerint csökkenő sorrendben; NOT_FOUND esetén üres.
   candidates: NominatimRawResult[];
 }
 
@@ -443,36 +698,80 @@ export const AMBIGUOUS_SCORE_GAP_THRESHOLD = 10;
 export const MAX_AMBIGUOUS_CANDIDATES = 5;
 
 // Több találat közül a nevesített hely(ek) kiválasztása, EXPLICIT
-// RESOLVED/AMBIGUOUS/NOT_FOUND minősítéssel:
-//   - NOT_FOUND: egyetlen találat sem fogadható el nevesített helyként
-//     (lásd scoreNamedPlaceResult — pl. csak puszta út/highway van, vagy
-//     semelyik név nem egyezik).
-//   - RESOLVED: pontosan egy elfogadható találat van, VAGY a legjobb
-//     találat pontszáma legalább AMBIGUOUS_SCORE_GAP_THRESHOLD-dal
-//     meghaladja a második legjobbét — ez egy EGYÉRTELMŰ, biztonságos
-//     győztes (pl. "Astoria" Budapest-kontextussal egy Budapest-kontextus
-//     nélküli, azonos nevű találat ELLEN — a Budapest-bónusz önmagában
-//     elegendő különbség).
-//   - AMBIGUOUS: két vagy több találat pontszáma túl közel van egymáshoz
-//     (a küszöbnél kisebb a különbség, VALÓDI egyenállást is beleértve) —
-//     a hívó a legjobb (max MAX_AMBIGUOUS_CANDIDATES) jelöltet kapja
-//     vissza, SOHA nem egy találgatott végleges választ.
-// A küszöb egy egyszerű, determinisztikus szám — NEM fuzzy/hasonlósági
-// logika, és NEM egyetlen konkrét helynévre hangolt (2./6. pont).
-export function classifyNamedPlaceCandidates(results: NominatimRawResult[], query: string): NamedPlaceClassification {
-  const scored = results
+// RESOLVED/AMBIGUOUS/NOT_FOUND minősítéssel. A pipeline sorrendje
+// (GEOCODING KORREKCIÓ, 2026-09-11, C4.2, "7. DISTRICT + SAME-PLACE
+// EGYÜTT" pont — a sorrend SZÁNDÉKOSAN ez, ne cseréld fel):
+//   1. (a hívó feladata) query/kontextus normalizálás
+//   2. (a hívó feladata) Nominatim candidate-ek lekérése
+//   3. explicit city/district/postcode CONSTRAINT validáció — lásd
+//      candidateViolatesGeoContext; egy BIZONYÍTOTTAN ellentmondó
+//      candidate itt, a scoring ELŐTT kizárásra kerül, függetlenül a
+//      pontszámától (1. pont: hard constraint, nem scoring bónusz).
+//   4. bare-road kizárás (isBareRoadOnlyResult, a scoreNamedPlaceResult
+//      részeként, VÁLTOZATLAN a C4/C4.1 óta)
+//   5. named-place scoring (scoreNamedPlaceResult — bővítve C4.2: alt_name/
+//      old_name/official_name/short_name is, lásd getResultNameCandidates)
+//   6. same-place klaszterezés/dedup (clusterSamePlaceCandidates) — EGY
+//      geo-kontextusnak megfelelő, névben ekvivalens és egymáshoz
+//      SAME_PLACE_CLUSTER_RADIUS_METERS-en belüli candidate-halmaz EGY
+//      klaszterként (=EGY logikai hely) számít, még ha több különálló OSM
+//      objektum is áll a hátterében. Mivel ez a lépés a 3. pont UTÁN fut,
+//      egy explicit kerület-ellentmondó candidate MÁR nem lehet jelen —
+//      SOHA nem klaszterezünk össze egy elfogadott és egy elutasított
+//      candidate-et.
+//   7. RESOLVED vagy valódi AMBIGUOUS — MOSTANTÓL klaszter-szinten:
+//        - egyetlen klaszter -> RESOLVED (a reprezentánssal), FÜGGETLENÜL
+//          attól, hány OSM objektum volt benne (pl. 4 "Astoria" candidate
+//          egy 350m-es körön belül -> 1 klaszter -> RESOLVED, NINCS
+//          választólista);
+//        - két vagy több klaszter, ahol a legjobb pontszámú klaszter
+//          pontszáma legalább AMBIGUOUS_SCORE_GAP_THRESHOLD-dal meghaladja
+//          a második legjobbét -> RESOLVED (egyértelmű győztes, pl.
+//          "Astoria" Budapest-kontextussal egy Budapest-kontextus nélküli,
+//          távoli, azonos nevű klaszter ELLEN);
+//        - egyébként AMBIGUOUS — a legjobb (max MAX_AMBIGUOUS_CANDIDATES)
+//          KLASZTER reprezentánsát adjuk vissza, SOHA nem egy találgatott
+//          végleges választ, és SOHA nem két gombot ugyanahhoz a logikai
+//          helyhez (6. pont: candidate deduplikáció a max-5 vágás ELŐTT).
+// A küszöb és a klaszter-sugár egyszerű, determinisztikus számok — NEM
+// fuzzy/hasonlósági logika, és NEM egyetlen konkrét helynévre hangolt
+// (2./6. pont — "Astoria" itt is csak PÉLDA, nincs név szerinti hardcode).
+export function classifyNamedPlaceCandidates(
+  results: NominatimRawResult[],
+  query: string,
+  constraint?: GeoContextConstraint
+): NamedPlaceClassification {
+  // 3. lépés — explicit földrajzi CONSTRAINT: egy bizonyítottan ellentmondó
+  // candidate itt, MÉG A SCORING ELŐTT kizárásra kerül.
+  const geoFiltered = constraint ? results.filter((r) => !candidateViolatesGeoContext(r, constraint)) : results;
+
+  // 4-5. lépés — bare-road kizárás (a scoreNamedPlaceResult részeként) +
+  // named-place scoring, majd pontszám szerint csökkenő sorrend (a lenti
+  // klaszterezés ELVÁRJA ezt a sorrendet, lásd clusterSamePlaceCandidates
+  // dokumentációja).
+  const scored = geoFiltered
     .map((result) => ({ result, score: scoreNamedPlaceResult(result, query) }))
     .filter((s): s is { result: NominatimRawResult; score: number } => s.score !== null)
     .sort((a, b) => b.score - a.score);
 
   if (scored.length === 0) return { status: "NOT_FOUND", candidates: [] };
-  if (scored.length === 1) return { status: "RESOLVED", candidates: [scored[0].result] };
 
-  const gap = scored[0].score - scored[1].score;
-  if (gap >= AMBIGUOUS_SCORE_GAP_THRESHOLD) {
-    return { status: "RESOLVED", candidates: [scored[0].result] };
+  // 6. lépés — same-place klaszterezés/dedup.
+  const clusters = clusterSamePlaceCandidates(scored).sort((a, b) => b.score - a.score);
+
+  // 7. lépés — RESOLVED/AMBIGUOUS klaszter-szinten.
+  if (clusters.length === 1) {
+    return { status: "RESOLVED", candidates: [clusters[0].representative] };
   }
-  return { status: "AMBIGUOUS", candidates: scored.slice(0, MAX_AMBIGUOUS_CANDIDATES).map((s) => s.result) };
+
+  const gap = clusters[0].score - clusters[1].score;
+  if (gap >= AMBIGUOUS_SCORE_GAP_THRESHOLD) {
+    return { status: "RESOLVED", candidates: [clusters[0].representative] };
+  }
+  return {
+    status: "AMBIGUOUS",
+    candidates: clusters.slice(0, MAX_AMBIGUOUS_CANDIDATES).map((c) => c.representative),
+  };
 }
 
 // Több találat közül a LEGJOBB nevesített hely kiválasztása — VÁLTOZATLAN
@@ -632,26 +931,42 @@ function buildFreeTextQueryUrl(query: string): string {
 //      ez ELTÉR az eredeti szövegtől (pl. "VIII"/"Viii"/"8" helyett
 //      "VIII. kerület") — enélkül egy bare kerület-jelölés zavarhatja
 //      Nominatim saját szövegértelmezését.
-//   4. Egy egyszerűsített free-text ("<utca, házszám>, <város>, Hungary"),
-//      kerület/irányítószám nélkül — arra az esetre, ha épp a kerület-szöveg
-//      zavarja Nominatim saját elemzését.
+//   4. Egy egyszerűsített free-text ("<utca, házszám>[, <kerület>], <város>,
+//      Hungary"). GEOCODING KORREKCIÓ (2026-09-11, C4.2, "2. QUERY
+//      CONSTRUCTION" pont) — BIZONYÍTOTT root cause: ez a lépés korábban a
+//      kerületet IS elhagyta ("kerület/irányítószám nélkül"), így egy
+//      trailing-number fallback után (pl. "Deák tér 85" + "V. kerület" ->
+//      "Deák tér" + "V. kerület") a felhasználó által megadott földrajzi
+//      kontextus CSENDBEN elveszett ebben a próbálkozásban — a Nominatim
+//      felé küldött szöveg ekkor már csak a globális "Deák tér, Budapest,
+//      Hungary" volt. Mostantól a kerület (ha van, ÉS nem irányítószám —
+//      az irányítószámot a STRUKTURÁLT (1.) lépés postalcode= paramétere
+//      már célzottan kezeli) a szövegben is megmarad. FONTOS: ez csak a
+//      Nominatim felé küldött SZÖVEGET javítja — a tényleges biztonsági
+//      garanciát az explicit kerület/irányítószám MOSTANTÓL a
+//      candidateViolatesGeoContext() hard constraint-je adja (lásd
+//      classifyNamedPlaceCandidates), ami MINDEN lépés találatait szűri,
+//      függetlenül attól, hogy az adott lépés szövege pontosan mit
+//      tartalmazott.
 //
 // MINDEN lépésnél KÉT elfogadási utat próbálunk a kapott találatokra: a
 // klasszikus cím-egyezést (pickBestGeocodeMatch — VÁLTOZATLAN, 2026-09-10
 // óta) ÉS a nevesített hely/POI elfogadást (classifyNamedPlaceCandidates —
-// bővítve, C4.1). Az első, amelyik RESOLVED/AMBIGUOUS eredményt ad, dönt —
-// ez garantálja, hogy egy valódi cím-egyezés (pl. ahol a házszám dönt
-// EXACT/APPROXIMATE között) SOHA nem "csúszik át" véletlenül a POI-útra.
+// bővítve, C4.1/C4.2). Az első, amelyik RESOLVED/AMBIGUOUS eredményt ad,
+// dönt — ez garantálja, hogy egy valódi cím-egyezés (pl. ahol a házszám
+// dönt EXACT/APPROXIMATE között) SOHA nem "csúszik át" véletlenül a
+// POI-útra.
 //
 // GEOCODING KORREKCIÓ (2026-09-11, C4.1) — a visszatérési típus bővült egy
 // `AmbiguousGeocodeResult` ággal: ha egy adott lekérdezési lépésen belül
-// TÖBB, egymáshoz közeli pontszámú nevesített hely-jelölt van (lásd
-// classifyNamedPlaceCandidates), a függvény AZONNAL ezt a jelölt-listát adja
-// vissza a hívónak (route.ts) — SOHA nem próbál egy KÉSŐBBI, egyszerűsített
-// lekérdezéssel "megkerülni" egy már felismert többértelműséget (ez
-// biztonságosabb és kiszámíthatóbb, mint tovább próbálkozni). A klasszikus
-// cím-egyezés (pickBestGeocodeMatch) útja VÁLTOZATLAN — sosem ad
-// AMBIGUOUS-t, ahogy korábban sem.
+// TÖBB, egymáshoz közeli pontszámú (és — C4.2 óta — a klaszterezés UTÁN is
+// külön maradó) nevesített hely-jelölt van (lásd classifyNamedPlaceCandidates),
+// a függvény AZONNAL ezt a jelölt-listát adja vissza a hívónak (route.ts)
+// — SOHA nem próbál egy KÉSŐBBI, egyszerűsített lekérdezéssel "megkerülni"
+// egy már felismert többértelműséget (ez biztonságosabb és
+// kiszámíthatóbb, mint tovább próbálkozni). A klasszikus cím-egyezés
+// (pickBestGeocodeMatch) útja VÁLTOZATLAN — sosem ad AMBIGUOUS-t, ahogy
+// korábban sem.
 export async function geocodeAddress(query: string): Promise<GeocodeResult | AmbiguousGeocodeResult | null> {
   const expected = parseExpectedAddressComponents(query);
   // A POI-elfogadás MINDIG a házszám nélküli, saját nevet hordozó
@@ -659,6 +974,21 @@ export async function geocodeAddress(query: string): Promise<GeocodeResult | Amb
   // szöveghez (lásd a fájl fejléce: "Rákóczi út 999" ne váljon hamisan
   // elfogadottá).
   const poiQuery = expected.streetName || query;
+
+  // GEOCODING KORREKCIÓ (2026-09-11, C4.2, "1. EXPLICIT FÖLDRAJZI KONTEXTUS
+  // = HARD CONSTRAINT" pont) — a felhasználó által explicit megadott
+  // város/kerület/irányítószám itt válik egy MINDEN lépésre egyformán
+  // alkalmazott, kizáró feltétellé (lásd candidateViolatesGeoContext),
+  // NEM csak egy scoring-bónusszá. `expected.city` "" (nincs explicit
+  // kontextus), ha a bemenet egyetlen, vessző nélküli szabadszöveges
+  // szegmens volt (place-only keresés, lásd parseExpectedAddressComponents)
+  // — ilyenkor a `constraint.city` `null` lesz, tehát NINCS
+  // város-kizárás sem (ez a "csak egy POI/hely nevet adtam meg" eset
+  // SAJÁT, legitim állapota, lásd "3. PLACE-ONLY INPUT LEGYEN ÉRVÉNYES").
+  const geoConstraint: GeoContextConstraint = {
+    city: expected.city || null,
+    districtOrPostalCode: expected.districtOrPostalCode,
+  };
 
   const attempts: string[] = [];
   attempts.push(buildStructuredQueryUrl(expected));
@@ -668,15 +998,19 @@ export async function geocodeAddress(query: string): Promise<GeocodeResult | Amb
     attempts.push(buildFreeTextQueryUrl(canonicalQuery));
   }
   if (expected.streetName) {
-    // 4. lépés (8. pont): egyszerűsített free-text, kerület/irányítószám
-    // NÉLKÜL — arra az esetre, ha épp a kerület-szöveg (vagy annak hiánya/
-    // formája) zavarja Nominatim saját elemzését. A normalizeDistrictOrPostalCode()
-    // itt szándékosan NEM kerül bele a query-be — a 9. pont szerinti
-    // normalizált kerület a STRUKTURÁLT (1.) és a KANONIKUS (3.)
-    // próbálkozásban már szerepelt, itt a cél a lehető legegyszerűbb,
-    // kerület-független alak.
+    // 4. lépés (8. pont, ld. fent a C4.2 megjegyzést): egyszerűsített
+    // free-text, MEGTARTVA a kerületet (ha van és nem irányítószám) — csak
+    // az irányítószám-specifikus struktúrát hagyjuk el, arra az esetre, ha
+    // épp AZ zavarja Nominatim saját elemzését. `expected.city` hiányában
+    // (place-only keresés) a "Hungary" országnév marad az egyetlen
+    // kiegészítés — SOHA nem szúrunk be egy üres city-szegmenst.
     const simplifiedStreet = expected.houseNumber ? `${expected.streetName} ${expected.houseNumber}` : expected.streetName;
-    attempts.push(buildFreeTextQueryUrl(`${simplifiedStreet}, ${expected.city}, Hungary`));
+    const simplifiedDistrictPart =
+      expected.districtOrPostalCode && !/^\d{4}$/.test(expected.districtOrPostalCode) ? expected.districtOrPostalCode : null;
+    const simplifiedQueryText = [simplifiedStreet, simplifiedDistrictPart, expected.city || null, "Hungary"]
+      .filter(Boolean)
+      .join(", ");
+    attempts.push(buildFreeTextQueryUrl(simplifiedQueryText));
   }
 
   for (let i = 0; i < attempts.length; i++) {
@@ -689,7 +1023,7 @@ export async function geocodeAddress(query: string): Promise<GeocodeResult | Amb
       return { name: best.result.display_name, lat: Number(best.result.lat), lon: Number(best.result.lon), quality: best.quality };
     }
 
-    const classification = classifyNamedPlaceCandidates(results, poiQuery);
+    const classification = classifyNamedPlaceCandidates(results, poiQuery, geoConstraint);
     if (classification.status === "RESOLVED") {
       const winner = classification.candidates[0];
       return { name: getResultPrimaryName(winner) || winner.display_name, lat: Number(winner.lat), lon: Number(winner.lon), quality: "EXACT" };
