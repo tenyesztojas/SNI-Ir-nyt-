@@ -92,6 +92,23 @@ export interface MotisItinerary {
   legs: MotisLeg[];
 }
 
+// MOTIS LAST-MILE OFFSET FALLBACK (2026-09-11) — a `debugOutput` mezőt (és
+// ezen belül az `n_dest_offsets`/`n_start_offsets` diagnosztikai
+// számlálókat) EGYETLEN valós MOTIS válaszban sem figyeltük meg még
+// KÖZVETLENÜL ebben a projektben — nincs róla helyi fixture vagy korábbi
+// audit-jegyzet (lásd a hotfix riportban dokumentált audit). A mező jelenléte
+// és pontos alakja NEM verifikált sem a hivatalos openapi.yaml specifikációval
+// (nincs helyi másolata a repóban), sem valós válasz-mintával — ezért itt
+// KIZÁRÓLAG védekezően, teljesen opcionálisan van feltüntetve, és az
+// orchestrator.ts a jelenlétét SOHA nem feltételezi kritikus döntési
+// pontként (lásd orchestrator.ts fallback-trigger logikája: a tényleges
+// gate mindig az itinerary-szám, a debugOutput csak KIEGÉSZÍTŐ, ha
+// történetesen jelen van, diagnosztikai logolásra).
+export interface MotisDebugOutput {
+  n_dest_offsets?: number;
+  n_start_offsets?: number;
+}
+
 export interface MotisPlanResponse {
   from?: MotisPlace;
   to?: MotisPlace;
@@ -99,6 +116,7 @@ export interface MotisPlanResponse {
   itineraries?: MotisItinerary[];
   previousPageCursor?: string;
   nextPageCursor?: string;
+  debugOutput?: MotisDebugOutput;
 }
 
 export interface MotisPlanParams {
@@ -113,6 +131,12 @@ export interface MotisPlanParams {
   searchWindow?: number; // másodperc
   algorithm?: "RAPTOR" | "PONG" | "TB";
   timeout?: number; // másodperc
+  // MOTIS LAST-MILE OFFSET FALLBACK (2026-09-11) — a gyalogos last-mile
+  // hozzáférési keresési sugár méterben. KIZÁRÓLAG az orchestrator.ts egyetlen,
+  // kontrollált fallback-hívásában kap értéket (radius=1500) — a normál
+  // (elsődleges) MOTIS kérés SOHA nem állítja be ezt a mezőt, lásd
+  // orchestrator.ts searchVedettRoutes() fejléc-kommentje.
+  radius?: number; // méter
 }
 
 export type MotisPlanResult =

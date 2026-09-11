@@ -144,6 +144,70 @@ export interface OrchestratorErrorResult {
   message: string;
 }
 
+// MOTIS LAST-MILE OFFSET FALLBACK (2026-09-11, "VÉDETT ÚTVONAL – MOTIS
+// LAST-MILE OFFSET FALLBACK HOTFIX") — a felhasználó saját, éles VPS MOTIS
+// (v2.11.2) ellen futtatott diagnosztikája bizonyította, hogy ugyanarra a
+// koordinátapárra: alapértelmezett kérés/radius=250/radius=1000 mind 0
+// itineraryt ad, radius=1500 viszont 6-ot (radius=2000 pedig még többet,
+// de EBBEN a körben SZÁNDÉKOSAN nem használjuk — lásd lent, nincs 2000 m-es
+// automatikus eszkaláció). A geokódolás, a MAP_PICKED koordináta-lánc és a
+// lat/lon sorrend egy KORÁBBI, külön auditban (lásd git history) már
+// bizonyítottan hibátlan — ez a hiba a MOTIS last-mile (gyalogos
+// megálló-hozzáférési) keresési sugarában van.
+//
+// EZ A KONSTANS a MOTIS utolsó-méteres (last-mile) gyalogos hozzáférési
+// keresési sugara (méterben) az EGYETLEN engedélyezett fallback-kísérlethez.
+// Szándékosan NINCS ennél nagyobb (pl. 2000 m) automatikus eszkalációs
+// lépcső ebben a körben.
+export const LAST_MILE_FALLBACK_RADIUS_METERS = 1500;
+
+// LAST-MILE OFFSET FALLBACK VÉGSŐ SZŰKÍTÉS (2026-09-11, "VÉGSŐ SZŰKÍTÉS"
+// kör) — a valódi worktree audit alapján a puszta "0 itinerary" ÖNMAGÁBAN
+// TÚL TÁG trigger volt: legitim, valós okokból is lehet 0 itinerary (nincs
+// járat az adott időpontban, nincs menetrendi kapcsolat, stb.), és ezeket
+// az eseteket NEM szabad automatikusan 1500 m-es last-mile keresésre
+// váltani. A bizonyítottan helyes, szűkebb feltétel: a MOTIS válasz
+// debugOutput mezőjében EXPLICIT, numerikus 0 szerepeljen a
+// n_start_offsets VAGY n_dest_offsets mezőn — ez az egyetlen jel, ami
+// ténylegesen az utolsó-méteres (gyalogos megálló-hozzáférési) candidate
+// hiányára utal, nem pedig egy legitim "nincs útvonal" eredményre.
+//
+// FONTOS: undefined debugOutput (vagy undefined n_start_offsets/
+// n_dest_offsets — pl. mert a route service proxy nem engedi át a mezőt,
+// lásd motisTypes.ts MotisDebugOutput kommentje) NEM egyenlő 0-val — ilyen
+// esetben a fallback NEM indulhat automatikusan. Kizárólag a szigorúan
+// `=== 0` numerikus érték számít triggernek.
+function hasExplicitZeroEndpointOffset(result: Awaited<ReturnType<typeof fetchMotisPlan>>): boolean {
+  if (!result.ok) return false;
+  const debugOutput = result.data.debugOutput;
+  if (!debugOutput) return false;
+  return debugOutput.n_start_offsets === 0 || debugOutput.n_dest_offsets === 0;
+}
+
+// A fallback CSAK akkor engedélyezett, ha MINDKÉT elsődleges (normál)
+// stratégia kérése ("alap" és "metrómentes") strukturálisan SIKERESEN
+// visszatért a MOTIS-tól (result.ok === true) — vagyis a routing motor
+// ténylegesen elérhető volt, hitelesítve/időtúllépés nélkül válaszolt, és a
+// válasz valid JSON volt. Ha BÁRMELYIK kérés timeout/auth hiba/hibás válasz/
+// routing_engine_unavailable miatt bukott (ok === false), ez a függvény
+// mindig false-t ad — így a fallback SOHA nem indulhat el ezeken az
+// eseteken (lásd a hotfix specifikáció explicit tiltólistája).
+//
+// A második, EGYÜTTES feltétel: 0 együttes itinerary/direct találat ÉS
+// legalább az egyik sikeres válasz debugOutput mezőjében explicit 0
+// n_start_offsets/n_dest_offsets (lásd hasExplicitZeroEndpointOffset()
+// fenti kommentje) — puszta 0 itinerary, debugOutput/endpoint-offset
+// bizonyíték nélkül, NEM elég.
+export function shouldAttemptLastMileFallback(
+  defaultResult: Awaited<ReturnType<typeof fetchMotisPlan>>,
+  calmerResult: Awaited<ReturnType<typeof fetchMotisPlan>>,
+  combinedItineraryCount: number
+): boolean {
+  if (!defaultResult.ok || !calmerResult.ok) return false;
+  if (combinedItineraryCount !== 0) return false;
+  return hasExplicitZeroEndpointOffset(defaultResult) || hasExplicitZeroEndpointOffset(calmerResult);
+}
+
 export async function searchVedettRoutes(
   request: JourneySearchRequest,
   weightsInput?: Partial<PersonalizationWeights>
@@ -170,11 +234,57 @@ export async function searchVedettRoutes(
     return { ok: false, reason: defaultResult.reason, message: defaultResult.message };
   }
 
-  const rawItineraries: MotisItinerary[] = [
+  let rawItineraries: MotisItinerary[] = [
     ...(defaultResult.ok ? defaultResult.data.itineraries ?? [] : []),
     ...(defaultResult.ok ? defaultResult.data.direct ?? [] : []),
     ...(calmerResult.ok ? calmerResult.data.itineraries ?? [] : []),
   ];
+
+  // MOTIS LAST-MILE OFFSET FALLBACK — lásd shouldAttemptLastMileFallback()
+  // fejléc-kommentje a pontos, biztonságos trigger-feltételekért. Legfeljebb
+  // EGY további MOTIS kérés indulhat itt (nincs retry-hurok, nincs 2000 m-es
+  // eszkaláció) — a `radius` paraméter KIZÁRÓLAG ebben az egyetlen hívásban
+  // jelenik meg, a fenti két normál kérésben soha.
+  let expandedAccessSearch = false;
+  if (shouldAttemptLastMileFallback(defaultResult, calmerResult, rawItineraries.length)) {
+    // Csak diagnosztikai célra: melyik válaszból (alap vagy metrómentes)
+    // származott az explicit 0 n_start_offsets/n_dest_offsets, ami a
+    // fallbacket ténylegesen kiváltotta (lásd shouldAttemptLastMileFallback()
+    // fenti kommentje a pontos feltételről).
+    const defaultDebug = defaultResult.ok ? defaultResult.data.debugOutput : undefined;
+    const calmerDebug = calmerResult.ok ? calmerResult.data.debugOutput : undefined;
+    vedettRouteLog("routing_error", "info", {
+      reason: "last_mile_fallback_triggered",
+      nDestOffsetsDefault: defaultDebug?.n_dest_offsets,
+      nStartOffsetsDefault: defaultDebug?.n_start_offsets,
+      nDestOffsetsCalmer: calmerDebug?.n_dest_offsets,
+      nStartOffsetsCalmer: calmerDebug?.n_start_offsets,
+    });
+
+    const fallbackResult = await fetchMotisPlan({
+      fromPlace,
+      toPlace,
+      time: request.departAt,
+      numItineraries: 6,
+      radius: LAST_MILE_FALLBACK_RADIUS_METERS,
+    });
+
+    if (fallbackResult.ok) {
+      const fallbackItineraries: MotisItinerary[] = [
+        ...(fallbackResult.data.itineraries ?? []),
+        ...(fallbackResult.data.direct ?? []),
+      ];
+      if (fallbackItineraries.length > 0) {
+        rawItineraries = fallbackItineraries;
+        expandedAccessSearch = true;
+        vedettRouteLog("routing_error", "info", { reason: "last_mile_fallback_succeeded" });
+      } else {
+        vedettRouteLog("routing_error", "info", { reason: "last_mile_fallback_empty" });
+      }
+    } else {
+      vedettRouteLog("routing_error", "info", { reason: "last_mile_fallback_failed" });
+    }
+  }
 
   if (rawItineraries.length === 0) {
     vedettRouteLog("routing_error", "info", { reason: "no_itineraries_returned" });
@@ -218,6 +328,16 @@ export async function searchVedettRoutes(
       motisImportedAt: process.env.VEDETT_MOTIS_DATA_IMPORTED_AT ?? null,
     },
     serviceAlerts,
+    // MOTIS LAST-MILE OFFSET FALLBACK — CSAK akkor true/jelen, ha a fenti
+    // rawItineraries ténylegesen a radius=1500 fallback keresésből
+    // származik (lásd feljebb) — normál találatnál mindkét mező hiányzik
+    // (undefined), SOHA nem false/üres string.
+    ...(expandedAccessSearch
+      ? {
+          expandedAccessSearch: true as const,
+          accessWarning: "Ehhez az útvonalhoz hosszabb gyalogos megközelítésre lehet szükség.",
+        }
+      : {}),
   };
 }
 

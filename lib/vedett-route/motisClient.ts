@@ -67,6 +67,11 @@ function buildQuery(params: MotisPlanParams): URLSearchParams {
   if (params.searchWindow !== undefined) q.set("searchWindow", String(params.searchWindow));
   if (params.algorithm) q.set("algorithm", params.algorithm);
   if (params.timeout !== undefined) q.set("timeout", String(params.timeout));
+  // MOTIS LAST-MILE OFFSET FALLBACK (2026-09-11) — KIZÁRÓLAG az
+  // orchestrator.ts egyetlen, kontrollált fallback-hívása állítja be (lásd
+  // motisTypes.ts MotisPlanParams.radius kommentje); a normál/elsődleges
+  // kérésben SOHA nincs jelen.
+  if (params.radius !== undefined) q.set("radius", String(params.radius));
   return q;
 }
 

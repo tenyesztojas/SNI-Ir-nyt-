@@ -224,4 +224,18 @@ export interface OrchestratedSearchResult {
   // információként adjuk vissza — SOHA nem állítjuk, hogy egy adott útvonalat
   // érintenek, ha ez nincs bizonyítva. Realtime feed hiba esetén üres tömb.
   serviceAlerts: ServiceAlert[];
+  // MOTIS LAST-MILE OFFSET FALLBACK (2026-09-11) — true CSAK akkor, ha az
+  // elsődleges (normál) MOTIS keresés 0 itineraryt adott, és az eredmény
+  // KIZÁRÓLAG az egyetlen, kontrollált radius=1500 last-mile fallback
+  // keresés miatt került elő (lásd orchestrator.ts searchVedettRoutes()).
+  // SZÁNDÉKOSAN nem "1500 méteres gyaloglás"-ként elnevezve/leírva — ez egy
+  // belső, a tényleges last-mile keresési sugarat NEM felfedő jelző, a
+  // konkrét méter-érték a kliens felé SOHA nem jut el ebből a mezőből.
+  // Hiányzik (undefined) a normál (fallback nélküli) találatoknál.
+  expandedAccessSearch?: boolean;
+  // Csak akkor van jelen, ha expandedAccessSearch === true — kulturált,
+  // konkrét távolságot NEM tartalmazó felhasználói figyelmeztetés (lásd a
+  // hotfix specifikáció 7. pontja). A kliens ezt közvetlenül megjelenítheti,
+  // nincs benne semmilyen belső azonosító vagy métert.
+  accessWarning?: string;
 }

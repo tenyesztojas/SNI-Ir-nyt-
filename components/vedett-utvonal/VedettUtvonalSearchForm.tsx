@@ -1621,6 +1621,16 @@ export default function VedettUtvonalSearchForm({
             {result.dataCoverage.motisImportedAt && ` · MOTIS adat frissessége: ${new Date(result.dataCoverage.motisImportedAt).toLocaleString("hu-HU")}`}
           </p>
 
+          {/* MOTIS LAST-MILE OFFSET FALLBACK (2026-09-11) — CSAK akkor
+              jelenik meg, ha az útvonal a kontrollált last-mile fallback
+              keresés miatt került elő (lásd orchestrator.ts). A szöveg
+              SZÁNDÉKOSAN nem tartalmaz konkrét métert/sugarat. */}
+          {result.expandedAccessSearch && result.accessWarning && (
+            <p className="rounded border border-sni-bluedark/30 bg-sni-bluedark/5 p-2 text-xs text-sni-bluedark">
+              {result.accessWarning}
+            </p>
+          )}
+
           {/* BKK Realtime integráció, 10. pont: a riasztásokat SZÁNDÉKOSAN
               nem egyes útvonalakhoz rendelve, hanem keresés-szinten, valós
               BKK Alerts.pb adatból jelenítjük meg (lásd types.ts
