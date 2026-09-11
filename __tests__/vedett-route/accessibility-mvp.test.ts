@@ -355,7 +355,7 @@ describe("route.ts — a stepFreeRequired preferencia a cache-kulcs RÉSZE", () 
 // 4) UI — VedettUtvonalSearchForm.tsx
 // -----------------------------------------------------------------------
 
-describe("UI toggle — '♿ Lépcsőmentes útvonal BÉTA' (spec 4. pont)", () => {
+describe("UI toggle — '♿ Lépcsőmentes útvonal' (spec 4. pont; UI/szövegezési korrekció, 2026-09-11: a BÉTA jelvény ETTŐL a kapcsolótól eltávolítva, a disclaimer easy-language szövegre frissítve — a kapcsoló FUNKCIÓJA VÁLTOZATLAN)", () => {
   test("stepFreeRequired UI-state alapértéke false", () => {
     assert.match(formSrc, /const \[stepFreeRequired, setStepFreeRequired\] = useState\(false\);/);
   });
@@ -365,11 +365,19 @@ describe("UI toggle — '♿ Lépcsőmentes útvonal BÉTA' (spec 4. pont)", () 
     assert.match(formSrc, /onChange=\{\(e\) => setStepFreeRequired\(e\.target\.checked\)\}/);
   });
 
-  test("a felirat pontosan '♿ Lépcsőmentes útvonal' + 'BÉTA' jelvény, a kért magyarázó szöveggel", () => {
-    assert.match(formSrc, /Lépcsőmentes útvonal/);
-    assert.match(formSrc, />\s*BÉTA\s*</);
-    assert.match(formSrc, /Az ismert akadálymentességi adatok alapján keressük a lépcsőmentesebb lehetőségeket\./);
-    assert.match(formSrc, /Az akadálymentességi adatok nem minden megállónál és útvonalszakasznál teljesek\./);
+  test("a felirat pontosan '♿ Lépcsőmentes útvonal' — BÉTA jelvény NÉLKÜL —, a specifikáció szó szerinti easy-language disclaimer szövegével", () => {
+    const toggleBlock =
+      formSrc.match(
+        /<div className="rounded border border-sni-primary\/30 bg-sni-primary\/5 p-3">[\s\S]*?<\/div>\s*\n\s*\n\s*\{formError/
+      )?.[0] ?? "";
+    assert.ok(toggleBlock.length > 0, "meg kell találni a lépcsőmentes útvonal kapcsoló teljes blokkját");
+    assert.match(toggleBlock, /Lépcsőmentes útvonal/);
+    // A BÉTA jelvény ETTŐL a kapcsolótól TELJESEN eltávolítva (2026-09-11).
+    assert.doesNotMatch(toggleBlock, /BÉTA/);
+    assert.match(
+      toggleBlock,
+      /Az ismert akadálymentességi adatok alapján keresünk\. Nem minden megállóról, járműről és útvonalszakaszról\s*\n\s*van teljes adat, és a liftek aktuális működését sem látjuk\. Ezért nem tudjuk garantálni, hogy az egész út\s*\n\s*lépcsőmentes\./
+    );
   });
 
   test("a szöveg SOHA nem ígér garanciát ('garantáltan akadálymentes'/'biztosan használható kerekesszékkel' TILOS)", () => {

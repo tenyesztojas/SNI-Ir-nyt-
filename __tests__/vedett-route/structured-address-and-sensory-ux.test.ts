@@ -213,15 +213,27 @@ describe("TASK — Validáció (6. pont) — kulturált magyar hibaüzenet, NEM 
     assert.ok(!/setFormError\(\s*(err|error|issue)/i.test(formSrc), "formError sosem tölthető fel nyers hibaobjektum/Zod-issue szövegével");
   });
 
-  test("a Város / Irányítószám vagy kerület / Utca, házszám mezők mindegyik strukturált blokkban (origin ÉS destination MANUAL) megjelennek, a specifikáció szerinti placeholderekkel", () => {
+  test("a Város / Irányítószám vagy kerület / Cím vagy hely mezők mindegyik strukturált blokkban (origin ÉS destination MANUAL) megjelennek, a specifikáció szerinti placeholderekkel", () => {
+    // UI/SZÖVEGEZÉSI KORREKCIÓ (2026-09-11, "utolsó, kizárólag UI/
+    // szövegezési módosítás" kör, 1. pont) — a harmadik mező felirata
+    // "Utca, házszám"-ról "Cím vagy hely"-re változott, a placeholder és
+    // egy easy-language segítő szöveg is bővült — ez a mögötte álló
+    // state-et/logikát (origin.street/destination.street,
+    // buildStructuredAddress, isManualAddressComplete) NEM érinti.
     const cityLabelCount = (formSrc.match(/<label className="block text-xs text-gray-500">Város<\/label>/g) ?? []).length;
     const districtLabelCount = (formSrc.match(/<label className="block text-xs text-gray-500">Irányítószám vagy kerület<\/label>/g) ?? []).length;
-    const streetLabelCount = (formSrc.match(/<label className="block text-xs text-gray-500">Utca, házszám<\/label>/g) ?? []).length;
+    const streetLabelCount = (formSrc.match(/<label className="block text-xs text-gray-500">Cím vagy hely<\/label>/g) ?? []).length;
     assert.equal(cityLabelCount, 2, "két strukturált cím-blokk van (origin + MANUAL destination), mindkettőnek Város mezője van");
     assert.equal(districtLabelCount, 2);
     assert.equal(streetLabelCount, 2);
     assert.match(formSrc, /placeholder="pl\. 1136 vagy XIII\. kerület"/);
-    assert.match(formSrc, /placeholder="pl\. Kossuth Lajos utca 12\."/);
+    const streetPlaceholderCount = (formSrc.match(/placeholder="pl\. Váci utca 12, Astoria vagy Déli pályaudvar"/g) ?? []).length;
+    assert.equal(streetPlaceholderCount, 2);
+    // A korábbi, klasszikus-cím-only placeholder ("pl. Kossuth Lajos utca
+    // 12.") TELJESEN lecserélve — sehol nem maradhat a régi szöveg.
+    assert.doesNotMatch(formSrc, /placeholder="pl\. Kossuth Lajos utca 12\."/);
+    const helperTextCount = (formSrc.match(/Írhatsz címet vagy egy hely nevét is\./g) ?? []).length;
+    assert.equal(helperTextCount, 2, "az easy-language segítő szövegnek mindkét (origin+destination) blokkban meg kell jelennie");
   });
 });
 

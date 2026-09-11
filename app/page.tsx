@@ -102,13 +102,19 @@ export default async function HomePage() {
       {vedettRouteEnabled && (
         <section className="mx-auto max-w-5xl px-4 pb-4 sm:px-6">
           <div className="relative overflow-hidden rounded-3xl border border-sni-brand-teal/20 bg-gradient-to-br from-sni-brand-teal/5 via-white to-sni-brand-navy/5 p-6 sm:p-8">
+            {/* UI/SZÖVEGEZÉSI KORREKCIÓ (2026-09-11, "utolsó, kizárólag
+                UI/szövegezési módosítás" kör, 3. pont) — a badge/cím/leírás
+                szöveg cseréje, a meglévő tipográfia/tördelés/osztályok
+                VÁLTOZATLANOK (csak a szöveg-tartalom és a felsorolás egy
+                újabb eleme változott) — a kártya funkciója (feature flag,
+                link cél) érintetlen. */}
             <div className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-sni-brand-teal/15 px-3 py-1 text-xs font-bold uppercase tracking-wide text-sni-brand-teal">
-              ÚJ · BÉTA
+              Védett Útvonal - BÉTA
             </div>
 
             <h2 className="text-xl font-bold text-gray-900 sm:text-2xl">
               Ne csak azt nézd, merre gyorsabb.
-              <br className="hidden sm:block" /> Nézd azt is, merre könnyebb.
+              <br className="hidden sm:block" /> Nézd azt is, merre könnyebb az út.
             </h2>
 
             <p className="mt-3 max-w-2xl text-sm leading-relaxed text-gray-600 sm:text-base">
@@ -126,6 +132,8 @@ export default async function HomePage() {
               <span>valós idejű BKK-adatok</span>
               <span aria-hidden="true">·</span>
               <span>pihenőpontok</span>
+              <span aria-hidden="true">·</span>
+              <span>lépcsőmentes útvonal</span>
             </div>
 
             <Link

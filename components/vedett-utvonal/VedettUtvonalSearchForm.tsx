@@ -1610,15 +1610,25 @@ export default function VedettUtvonalSearchForm({
               />
             </div>
             <div>
-              <label className="block text-xs text-gray-500">Utca, házszám</label>
+              {/* UI/SZÖVEGEZÉSI KORREKCIÓ (2026-09-11, "utolsó, kizárólag
+                  UI/szövegezési módosítás" kör, 1. pont) — a mező neve/
+                  placeholdere/segítő szövege KIZÁRÓLAG szöveg, NEM érinti a
+                  geokódolási/routing logikát: a mögötte álló state
+                  (origin.street) és a szerver felé küldött adat VÁLTOZATLAN
+                  (lásd updateOriginManualField/buildStructuredAddress). A
+                  cél, hogy a felhasználó easy-language módon értse, hogy a
+                  mezőbe cím ÉS hely/POI név is beírható, ne csak "utca,
+                  házszám". */}
+              <label className="block text-xs text-gray-500">Cím vagy hely</label>
               <input
                 type="text"
                 value={origin.type === "MANUAL" ? origin.street : ""}
                 onChange={(e) => updateOriginManualField("street", e.target.value)}
-                placeholder="pl. Kossuth Lajos utca 12."
+                placeholder="pl. Váci utca 12, Astoria vagy Déli pályaudvar"
                 disabled={disabled}
                 className="mt-0.5 w-full rounded border border-gray-300 px-2 py-1.5 text-sm disabled:bg-gray-100"
               />
+              <p className="mt-0.5 text-[11px] text-gray-400">Írhatsz címet vagy egy hely nevét is.</p>
             </div>
           </div>
           {/* 7. pont — Budapest BÉTA korlát: diszkrét jelzés a mezők
@@ -1683,15 +1693,19 @@ export default function VedettUtvonalSearchForm({
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-500">Utca, házszám</label>
+                  {/* UI/SZÖVEGEZÉSI KORREKCIÓ (2026-09-11) — az origin
+                      blokkal szimmetrikus szöveg-változás, lásd ott a
+                      komment. */}
+                  <label className="block text-xs text-gray-500">Cím vagy hely</label>
                   <input
                     type="text"
                     value={destination.street}
                     onChange={(e) => updateDestinationManualField("street", e.target.value)}
-                    placeholder="pl. Kossuth Lajos utca 12."
+                    placeholder="pl. Váci utca 12, Astoria vagy Déli pályaudvar"
                     disabled={disabled}
                     className="mt-0.5 w-full rounded border border-gray-300 px-2 py-1.5 text-sm disabled:bg-gray-100"
                   />
+                  <p className="mt-0.5 text-[11px] text-gray-400">Írhatsz címet vagy egy hely nevét is.</p>
                 </div>
               </div>
               <p className="mt-1 text-[11px] text-gray-400">Jelenleg Budapesten tesztelhető.</p>
@@ -1822,17 +1836,24 @@ export default function VedettUtvonalSearchForm({
             <span>
               <span className="flex flex-wrap items-center gap-1.5 text-sm font-semibold text-sni-text">
                 <span aria-hidden="true">♿</span> Lépcsőmentes útvonal
-                <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-800">
-                  BÉTA
-                </span>
-              </span>
-              <span className="mt-0.5 block text-xs text-gray-600">
-                Az ismert akadálymentességi adatok alapján keressük a lépcsőmentesebb lehetőségeket.
               </span>
             </span>
           </label>
+          {/* UI/SZÖVEGEZÉSI KORREKCIÓ (2026-09-11, "utolsó, kizárólag
+              UI/szövegezési módosítás" kör, 2. pont) — a korábbi, a
+              kapcsoló felirata mellett megjelenő kis kiemelt jelvény
+              (a "teszt/előzetes verzió" jelölés) ETTŐL a kapcsolótól
+              teljesen eltávolítva (a kapcsoló FUNKCIÓJA, a
+              stepFreeRequired state és a routing logika VÁLTOZATLAN); a
+              korábbi, két külön mondatra bontott disclaimer helyett EGY,
+              easy-language, a specifikáció szó szerinti szövegét adó
+              figyelmeztetés — SZÁNDÉKOSAN nem ígér garantált
+              akadálymentességet, és nem állítja, hogy a liftek aktuális
+              működését valós időben ismerjük. */}
           <p id="vedett-step-free-help" className="mt-2 text-xs text-gray-500">
-            Az akadálymentességi adatok nem minden megállónál és útvonalszakasznál teljesek.
+            Az ismert akadálymentességi adatok alapján keresünk. Nem minden megállóról, járműről és útvonalszakaszról
+            van teljes adat, és a liftek aktuális működését sem látjuk. Ezért nem tudjuk garantálni, hogy az egész út
+            lépcsőmentes.
           </p>
         </div>
 
