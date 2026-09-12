@@ -29,6 +29,8 @@ const RATE_RULES: Array<{
   // OAuth, bejelentkezés: 20/perc
   { pattern: /^\/api\/auth/,              limit: 20, windowMs: 60_000, label: "auth-api"      },
   { pattern: /^\/belepes/,                limit: 20, windowMs: 60_000, label: "login-page"    },
+  // Jelszó-visszaállítás: 5/perc – abuse és tömeges reset kérés ellen
+  { pattern: /^\/elfelejtett-jelszo/,     limit:  5, windowMs: 60_000, label: "pw-reset"      },
   // Magic link landing: 30/perc – token brute-force ellen
   { pattern: /^\/akademia\/meghivo\//,    limit: 30, windowMs: 60_000, label: "magic-link"    },
   // Share-token lookup: 30/perc – token enumeration ellen

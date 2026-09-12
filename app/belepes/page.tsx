@@ -83,6 +83,11 @@ export default function LoginPage() {
                 </div>
                 {state?.error && <p className="text-sm text-red-600">{state.error}</p>}
                 <SubmitButton label="Belépés" />
+                <p className="text-center text-xs text-gray-400">
+                  <a href="/elfelejtett-jelszo" className="text-sni-brand-teal hover:underline focus:outline-none focus:ring-2 focus:ring-sni-brand-teal rounded">
+                    Elfelejtetted a jelszavad?
+                  </a>
+                </p>
               </form>
             ) : (
               <form action={signUpFormAction} className="flex flex-col gap-4">
