@@ -54,8 +54,8 @@ describe("1) Alap felfedezhetőség — restPanelVisible state + Bezárás gomb 
     assert.match(cardSrc, /const \[restPanelVisible, setRestPanelVisible\] = useState\(false\);/);
   });
 
-  test("a Bezárás gomb aria-label='Pihenőpontok bezárása', legalább 44x44 px, és a restPanelVisible-t false-ra állítja", () => {
-    const closeButtonMatch = cardSrc.match(/<button[\s\S]{0,300}?setRestPanelVisible\(false\)[\s\S]{0,300}?<\/button>/);
+  test("a Bezárás gomb aria-label='Pihenőpontok bezárása', legalább 44x44 px, és a handleCloseRestPanel()-t hívja (ötödik kör: a korábbi inline setRestPanelVisible(false) helyett, ami MOST a restPanelMode resetet is elvégzi)", () => {
+    const closeButtonMatch = cardSrc.match(/<button[\s\S]{0,300}?onClick=\{handleCloseRestPanel\}[\s\S]{0,300}?<\/button>/);
     assert.ok(closeButtonMatch, "meg kell találni a Bezárás gombot");
     assert.match(closeButtonMatch![0], /aria-label="Pihenőpontok bezárása"/);
     assert.match(closeButtonMatch![0], /min-h-\[44px\]/);
@@ -65,7 +65,7 @@ describe("1) Alap felfedezhetőség — restPanelVisible state + Bezárás gomb 
   test("a panel fejléce sticky, hogy hosszú lista görgetése után is elérhető maradjon", () => {
     const headerMatch = cardSrc.match(/<div className="sticky top-0[\s\S]{0,700}?<\/div>/);
     assert.ok(headerMatch, "meg kell találni a sticky fejléc <div>-et");
-    assert.match(headerMatch![0], /setRestPanelVisible\(false\)/);
+    assert.match(headerMatch![0], /onClick=\{handleCloseRestPanel\}/);
   });
 
   test("startNavigation() UTÁN a panel ZÁRT — a startNavigation() törzse explicit setRestPanelVisible(false)-t hív, nem true-t", () => {
@@ -76,53 +76,62 @@ describe("1) Alap felfedezhetőség — restPanelVisible state + Bezárás gomb 
   });
 
   test("fullscreenben a kompakt 'Pihenőpont hozzáadása' gomb elérhető, amíg a panel zárva van — a friss navigáció (restPanelVisible alapértéke false) UTÁN rögtön látható, mivel a gomb feltétele KIZÁRÓLAG mapFullscreen && !restPanelVisible", () => {
+    // Desktop UX korrekció (2026-09-13) — a korábbi EGYETLEN <button> helyett
+    // a `{mapFullscreen && !restPanelVisible && (...)}` blokk mostantól egy
+    // <div> wrappert tartalmaz KÉT gombbal ("Pihenőre van szükségem" és
+    // "Pihenőpont hozzáadása") — a horgony ezért a wrapper <div> záró
+    // </div>-jéig tart, nem az első </button>-ig (lásd
+    // fullscreen-rest-point-integration.test.ts az "M-P" desktop CTA
+    // teszteket a teljes lefedettséghez).
     assert.match(cardSrc, /\{mapFullscreen && !restPanelVisible && \(/);
-    const reopenButtonMatch = cardSrc.match(/\{mapFullscreen && !restPanelVisible && \([\s\S]{0,500}?<\/button>\s*\)\}/);
-    assert.ok(reopenButtonMatch, "meg kell találni a kompakt 'Pihenőpont hozzáadása' gombot");
+    const reopenButtonMatch = cardSrc.match(/\{mapFullscreen && !restPanelVisible && \([\s\S]{0,1200}?<\/div>\s*\)\}/);
+    assert.ok(reopenButtonMatch, "meg kell találni a kompakt gombokat tartalmazó wrapper <div>-et");
     assert.match(reopenButtonMatch![0], />\s*Pihenőpont hozzáadása\s*</);
   });
 });
 
-describe("2) A Bezárás gomb handlere KIZÁRÓLAG restPanelVisible-t állít — semmi mást nem hív", () => {
-  test("a Bezárás gomb onClick-je egyetlen, inline arrow function, ami KIZÁRÓLAG setRestPanelVisible(false)-t hívja", () => {
-    // Az onClick={() => setRestPanelVisible(false)} egy egysoros, KIZÁRÓLAG
-    // ezt az egy hívást tartalmazó arrow function — ha bármi mást is
-        // hívna (dispatch, setNavigationMode, geo.stopWatching, stb.), az
-    // onClick body-nak több utasítást kellene tartalmaznia zárójelek
-    // között, ami itt strukturálisan kizárt (nincs `{ ... }` blokk-test,
-    // csak egyetlen kifejezés).
-    assert.match(cardSrc, /onClick=\{\(\) => setRestPanelVisible\(false\)\}/);
+describe("2) A Bezárás gomb handlere (handleCloseRestPanel) KIZÁRÓLAG restPanelVisible-t és restPanelMode-ot állít — semmi mást nem hív", () => {
+  test("a Bezárás gomb onClick-je a handleCloseRestPanel referenciát adja át (ötödik kör: már nem egy inline, egysoros arrow function, mert a resetnek KÉT state-et — restPanelVisible ÉS restPanelMode — kell biztonságosan visszaállítania)", () => {
+    assert.match(cardSrc, /onClick=\{handleCloseRestPanel\}/);
+    const closeHandlerMatch = cardSrc.match(/const handleCloseRestPanel = \(\) => \{[\s\S]*?\n {2}\};/);
+    assert.ok(closeHandlerMatch, "meg kell találni a handleCloseRestPanel függvényt");
+    assert.match(closeHandlerMatch![0], /setRestPanelVisible\(false\)/);
+    assert.match(closeHandlerMatch![0], /setRestPanelMode\("ADD"\)/);
   });
 
-  test("a Bezárás gomb NEM hívja a stateMachine.ts semelyik eseményét (nincs dispatch/CANCEL_REST_STOP/RESET_TO_ROUTE_ACTIVE a Bezárás gomb környékén)", () => {
-    const closeButtonBlock = cardSrc.match(/<button[\s\S]{0,300}?setRestPanelVisible\(false\)[\s\S]{0,300}?<\/button>/)?.[0] ?? "";
-    assert.ok(closeButtonBlock.length > 0);
-    assert.doesNotMatch(closeButtonBlock, /dispatch\(/);
-    assert.doesNotMatch(closeButtonBlock, /CANCEL_REST_STOP/);
-    assert.doesNotMatch(closeButtonBlock, /RESET_TO_ROUTE_ACTIVE/);
+  test("a handleCloseRestPanel NEM hívja a stateMachine.ts semelyik eseményét (nincs dispatch/CANCEL_REST_STOP/RESET_TO_ROUTE_ACTIVE a handler törzsében)", () => {
+    const closeHandlerMatch = cardSrc.match(/const handleCloseRestPanel = \(\) => \{[\s\S]*?\n {2}\};/);
+    assert.ok(closeHandlerMatch);
+    assert.doesNotMatch(closeHandlerMatch![0], /dispatch\(/);
+    assert.doesNotMatch(closeHandlerMatch![0], /CANCEL_REST_STOP/);
+    assert.doesNotMatch(closeHandlerMatch![0], /RESET_TO_ROUTE_ACTIVE/);
   });
 
-  test("2. teszt: Bezárás után GPS watch NEM áll le — a Bezárás gomb környékén nincs geo.stopWatching()/clearWatch hívás", () => {
-    const closeButtonBlock = cardSrc.match(/<button[\s\S]{0,300}?setRestPanelVisible\(false\)[\s\S]{0,300}?<\/button>/)?.[0] ?? "";
-    assert.doesNotMatch(closeButtonBlock, /geo\.stopWatching/);
+  test("2. teszt: Bezárás után GPS watch NEM áll le — a handleCloseRestPanel törzsében nincs geo.stopWatching()/clearWatch hívás", () => {
+    const closeHandlerMatch = cardSrc.match(/const handleCloseRestPanel = \(\) => \{[\s\S]*?\n {2}\};/);
+    assert.ok(closeHandlerMatch);
+    assert.doesNotMatch(closeHandlerMatch![0], /geo\.stopWatching/);
   });
 
-  test("3. teszt: Bezárás után route/journey megmarad — a Bezárás gomb környékén nincs setDisplayedJourney/setRestStopMapState hívás", () => {
-    const closeButtonBlock = cardSrc.match(/<button[\s\S]{0,300}?setRestPanelVisible\(false\)[\s\S]{0,300}?<\/button>/)?.[0] ?? "";
-    assert.doesNotMatch(closeButtonBlock, /setDisplayedJourney/);
-    assert.doesNotMatch(closeButtonBlock, /setRestStopMapState/);
+  test("3. teszt: Bezárás után route/journey megmarad — a handleCloseRestPanel törzsében nincs setDisplayedJourney/setRestStopMapState hívás", () => {
+    const closeHandlerMatch = cardSrc.match(/const handleCloseRestPanel = \(\) => \{[\s\S]*?\n {2}\};/);
+    assert.ok(closeHandlerMatch);
+    assert.doesNotMatch(closeHandlerMatch![0], /setDisplayedJourney/);
+    assert.doesNotMatch(closeHandlerMatch![0], /setRestStopMapState/);
   });
 
-  test("4. teszt: Bezárás után followMode NEM resetelődik — a Bezárás gomb környékén nincs setFollowMode/setNavigationMode hívás", () => {
-    const closeButtonBlock = cardSrc.match(/<button[\s\S]{0,300}?setRestPanelVisible\(false\)[\s\S]{0,300}?<\/button>/)?.[0] ?? "";
-    assert.doesNotMatch(closeButtonBlock, /setFollowMode/);
-    assert.doesNotMatch(closeButtonBlock, /setNavigationMode/);
+  test("4. teszt: Bezárás után followMode NEM resetelődik — a handleCloseRestPanel törzsében nincs setFollowMode/setNavigationMode hívás", () => {
+    const closeHandlerMatch = cardSrc.match(/const handleCloseRestPanel = \(\) => \{[\s\S]*?\n {2}\};/);
+    assert.ok(closeHandlerMatch);
+    assert.doesNotMatch(closeHandlerMatch![0], /setFollowMode/);
+    assert.doesNotMatch(closeHandlerMatch![0], /setNavigationMode/);
   });
 
-  test("a Bezárás gomb környékén nincs új keresést indító hívás (fetch/nearby)", () => {
-    const closeButtonBlock = cardSrc.match(/<button[\s\S]{0,300}?setRestPanelVisible\(false\)[\s\S]{0,300}?<\/button>/)?.[0] ?? "";
-    assert.doesNotMatch(closeButtonBlock, /fetch\(/);
-    assert.doesNotMatch(closeButtonBlock, /rest-stops\/nearby/);
+  test("a handleCloseRestPanel törzsében nincs új keresést indító hívás (fetch/nearby)", () => {
+    const closeHandlerMatch = cardSrc.match(/const handleCloseRestPanel = \(\) => \{[\s\S]*?\n {2}\};/);
+    assert.ok(closeHandlerMatch);
+    assert.doesNotMatch(closeHandlerMatch![0], /fetch\(/);
+    assert.doesNotMatch(closeHandlerMatch![0], /rest-stops\/nearby/);
   });
 });
 
@@ -143,21 +152,31 @@ describe("3) A bottom sheet TARTALMA (RestPointQuickAdd + RestStopFlowPanel) SOS
 });
 
 describe("5) Visszanyitás — a MEGLÉVŐ 'Pihenőpont hozzáadása' funkcióval bármikor újranyitható, új nearby request nélkül", () => {
-  test("bezárt állapotban (mapFullscreen && !restPanelVisible) egy 'Pihenőpont hozzáadása' feliratú, min. 44px gomb jelenik meg, ami restPanelVisible-t true-ra állítja", () => {
-    const reopenButtonMatch = cardSrc.match(/\{mapFullscreen && !restPanelVisible && \([\s\S]{0,500}?<\/button>\s*\)\}/);
-    assert.ok(reopenButtonMatch, "meg kell találni a visszanyitó gombot");
-    assert.match(reopenButtonMatch![0], /onClick=\{\(\) => setRestPanelVisible\(true\)\}/);
+  test("bezárt állapotban (mapFullscreen && !restPanelVisible) egy 'Pihenőpont hozzáadása' feliratú, min. 44px gomb jelenik meg, ami a handleAddRestPointCta()-n keresztül nyitja meg a panelt ADD módban (ötödik kör)", () => {
+    // Desktop UX korrekció (2026-09-13) — a wrapper <div> mostantól KÉT
+    // gombot tartalmaz; ez a teszt KIFEJEZETTEN a "Pihenőpont hozzáadása"
+    // gombra szűkít (a `handleAddRestPointCta` horgonyra), a másik
+    // ("Pihenőre van szükségem") gombot a
+    // fullscreen-rest-point-integration.test.ts fedi le.
+    const reopenWrapperMatch = cardSrc.match(/\{mapFullscreen && !restPanelVisible && \([\s\S]{0,1200}?<\/div>\s*\)\}/);
+    assert.ok(reopenWrapperMatch, "meg kell találni a visszanyitó gombokat tartalmazó wrapper <div>-et");
+    const reopenButtonMatch = reopenWrapperMatch![0].match(/<button[\s\S]{0,300}?onClick=\{handleAddRestPointCta\}[\s\S]{0,300}?<\/button>/);
+    assert.ok(reopenButtonMatch, "meg kell találni a 'Pihenőpont hozzáadása' gombot a wrapperen belül");
+    assert.match(reopenButtonMatch![0], /onClick=\{handleAddRestPointCta\}/);
     assert.match(reopenButtonMatch![0], /aria-label="Pihenőpont hozzáadása"/);
     assert.match(reopenButtonMatch![0], /min-h-\[44px\]/);
     assert.match(reopenButtonMatch![0], />\s*Pihenőpont hozzáadása\s*</);
   });
 
-  test("a visszanyitó gomb handlere KIZÁRÓLAG setRestPanelVisible(true)-t hívja — nem indít dispatch-et/REQUEST_REST-et/fetch-et", () => {
-    assert.match(cardSrc, /onClick=\{\(\) => setRestPanelVisible\(true\)\}/);
-    const reopenBlock = cardSrc.match(/<button[\s\S]{0,300}?setRestPanelVisible\(true\)[\s\S]{0,300}?<\/button>/)?.[0] ?? "";
-    assert.doesNotMatch(reopenBlock, /dispatch\(/);
-    assert.doesNotMatch(reopenBlock, /REQUEST_REST/);
-    assert.doesNotMatch(reopenBlock, /fetch\(/);
+  test("a visszanyitó gomb handlere (handleAddRestPointCta) KIZÁRÓLAG setRestPanelMode(\"ADD\")-ot és setRestPanelVisible(true)-t hívja — nem indít dispatch-et/REQUEST_REST-et/fetch-et", () => {
+    assert.match(cardSrc, /onClick=\{handleAddRestPointCta\}/);
+    const addHandlerMatch = cardSrc.match(/const handleAddRestPointCta = \(\) => \{[\s\S]*?\n {2}\};/);
+    assert.ok(addHandlerMatch, "meg kell találni a handleAddRestPointCta függvényt");
+    assert.match(addHandlerMatch![0], /setRestPanelMode\("ADD"\)/);
+    assert.match(addHandlerMatch![0], /setRestPanelVisible\(true\)/);
+    assert.doesNotMatch(addHandlerMatch![0], /dispatch\(/);
+    assert.doesNotMatch(addHandlerMatch![0], /REQUEST_REST/);
+    assert.doesNotMatch(addHandlerMatch![0], /fetch\(/);
   });
 
   test("a meglévő explicit REST_REQUESTED szabály (a keresés KIZÁRÓLAG a 'Pihenőre van szükségem' gomb onClick-jéből indul) érintetlen marad", () => {
@@ -167,14 +186,20 @@ describe("5) Visszanyitás — a MEGLÉVŐ 'Pihenőpont hozzáadása' funkcióva
 });
 
 describe("6) Keresés közben Bezárás — async válasz SOSEM nyitja vissza automatikusan a panelt", () => {
-  test("setRestPanelVisible(...) KIZÁRÓLAG a deklarációban, startNavigation()-ben, a Bezárás gombban és a visszanyitó gombban hívódik — sehol egy async effekt/callback belsejében", () => {
+  test("setRestPanelVisible(...) KIZÁRÓLAG a deklarációban, startNavigation()-ben, a handleCloseRestPanel()-ben, a handleAddRestPointCta()-ban és a handleRequestRestCta()-ban hívódik — sehol egy async effekt/callback belsejében", () => {
+    // Ötödik kör (RestPanelMode bevezetése) — a korábban KÖZVETLENÜL a JSX
+    // onClick-jeiben élő inline setRestPanelVisible(...) hívások (Bezárás
+    // gomb, "Pihenőpont hozzáadása" visszanyitó gomb) mostantól a
+    // handleCloseRestPanel/handleAddRestPointCta NÉVVEL ELLÁTOTT
+    // handler-függvények TÖRZSÉBE költöztek (hogy a restPanelMode resetet/
+    // beállítást is el tudják végezni ugyanabban a helyen) — a TÉNYLEGES
+    // hívások SZÁMA nem változott: 1) startNavigation() reset (false),
+    // 2) handleCloseRestPanel() (false), 3) handleAddRestPointCta() (true),
+    // 4) handleRequestRestCta() (true) — összesen 4 TÉNYLEGES hívás (a
+    // deklaráció maga `useState(false)`, nem `setRestPanelVisible(...)`
+    // hívás, ezért nem szerepel ebben a listában).
     const allCalls = cardSrc.match(/setRestPanelVisible\((?:true|false)\)/g) ?? [];
-    // 1) useState kezdőérték melletti (nem hívás, csak deklaráció — nem
-    //    számít bele ebbe a regexbe), 2) startNavigation() reset, 3) Bezárás
-    //    gomb (false), 4) visszanyitó gomb (true) — összesen 3 TÉNYLEGES
-    //    hívás (a deklaráció maga `useState(true)`, nem `setRestPanelVisible(...)`
-    //    hívás, ezért nem szerepel ebben a listában).
-    assert.equal(allCalls.length, 3, `pontosan 3 setRestPanelVisible(...) hívásnak kell lennie a forrásban (talált: ${allCalls.length})`);
+    assert.equal(allCalls.length, 4, `pontosan 4 setRestPanelVisible(...) hívásnak kell lennie a forrásban (talált: ${allCalls.length})`);
   });
 
   test("a RestStopFlowPanel.tsx és RestPointQuickAdd.tsx SEHOL nem hivatkozik restPanelVisible-re — az async /nearby, /route-to-rest-point, /resume hívások eredménye nem érheti el és nem módosíthatja ezt a UI-state-et", () => {
@@ -210,12 +235,13 @@ describe("8) 'NAVIGÁCIÓ BEFEJEZÉSE' továbbra is külön, teljes funkció —
     assert.match(cardSrc, /onClick=\{stopNavigation\}[\s\S]{0,80}✕ Navigáció befejezése/);
   });
 
-  test("a stopNavigation() és a pihenőpont-panel Bezárás gombja (setRestPanelVisible(false)) EGYMÁSTÓL FÜGGETLEN — a stopNavigation() törzse nem hivatkozik restPanelVisible-re, a Bezárás gomb pedig nem hívja a stopNavigation()-t", () => {
+  test("a stopNavigation() és a pihenőpont-panel Bezárás handlere (handleCloseRestPanel) EGYMÁSTÓL FÜGGETLEN — a stopNavigation() törzse nem hivatkozik restPanelVisible-re, a handleCloseRestPanel pedig nem hívja a stopNavigation()-t", () => {
     const stopNavMatch = cardSrc.match(/const stopNavigation = \(\) => \{[\s\S]*?\n {2}\};/);
     assert.ok(stopNavMatch);
     assert.doesNotMatch(stopNavMatch![0], /restPanelVisible/);
-    const closeButtonBlock = cardSrc.match(/<button[\s\S]{0,300}?setRestPanelVisible\(false\)[\s\S]{0,300}?<\/button>/)?.[0] ?? "";
-    assert.doesNotMatch(closeButtonBlock, /stopNavigation/);
+    const closeHandlerMatch = cardSrc.match(/const handleCloseRestPanel = \(\) => \{[\s\S]*?\n {2}\};/);
+    assert.ok(closeHandlerMatch);
+    assert.doesNotMatch(closeHandlerMatch![0], /stopNavigation/);
   });
 
   test("a rest-stop-flow state machine (stateMachine.ts) forrása változatlanul SEM 'REST_PANEL_CLOSED', SEM restPanelVisible fogalmat nem ismer — a panel bezárása tudatosan NEM lett a state machine része (minimális módosítás elve)", () => {

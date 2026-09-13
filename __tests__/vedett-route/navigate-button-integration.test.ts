@@ -31,6 +31,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { journeySearchSchema, routeDestinationDeepLinkSchema } from "../../lib/vedett-route/schemas.ts";
+import { buildSearchRequestDestinationFields } from "../../lib/vedett-route/searchRequestBuilder.ts";
 
 const ROOT = join(import.meta.dirname, "..", "..");
 const NAVIGATE_BUTTON_PATH = join(ROOT, "components", "NavigateButton.tsx");
@@ -201,10 +202,53 @@ describe("I) deep link után a destination mező előre ki van töltve — Vedet
     assert.match(fnMatch![0], /setDestination\(\{ type: "MANUAL", city: "Budapest", districtOrPostalCode: "", street: value \}\);/);
   });
 
-  test("submit esetén KNOWN_PLACE destination toCoordinates+toName-t küld, MANUAL destination sima 'to' stringet — mindkettő a journeySearchSchema-val validált alakban", () => {
+  test("submit esetén KNOWN_PLACE destination toCoordinates+toName-t küld, MANUAL destination sima 'to' stringet — mindkettő a journeySearchSchema-val validált alakban (viselkedési teszt a pure buildSearchRequestDestinationFields-en keresztül)", () => {
+    // searchRequestBuilder REFAKTOR (2026-09-12/13) — a destinationFields
+    // összeállítás logikája (KNOWN_PLACE/MAP_PICKED -> toCoordinates+toName,
+    // MANUAL -> to string) 2026-09-12/13 óta a pure
+    // buildSearchRequestDestinationFields()-ben él (lib/vedett-route/
+    // searchRequestBuilder.ts), NEM egy inline objektum-literál a
+    // VedettUtvonalSearchForm.tsx-ben. A komponens csak importálja és
+    // meghívja (lásd searchFormSrc alábbi ellenőrzését) — a TÉNYLEGES
+    // mezőösszeállítást viselkedésileg, a valós függvényen keresztül
+    // teszteljük, majd a kimenetet a journeySearchSchema-val validáljuk,
+    // pontosan úgy, ahogy a szerver (route.ts) is tenné.
     assert.match(searchFormSrc, /destination\.type === "KNOWN_PLACE"/);
-    assert.match(searchFormSrc, /toCoordinates:\s*\{\s*latitude:\s*destination\.latitude,\s*longitude:\s*destination\.longitude\s*\}/);
-    assert.match(searchFormSrc, /toName:\s*destination\.name/);
+    assert.match(
+      searchFormSrc,
+      /import\s*\{[\s\S]*?buildSearchRequestDestinationFields[\s\S]*?\}\s*from\s*"@\/lib\/vedett-route\/searchRequestBuilder"/
+    );
+    assert.match(searchFormSrc, /buildSearchRequestDestinationFields\(destination\)/);
+
+    const knownPlaceFields = buildSearchRequestDestinationFields({
+      type: "KNOWN_PLACE",
+      name: "Astoria VédettSarok",
+      latitude: 47.4979,
+      longitude: 19.0625,
+    });
+    assert.deepEqual(knownPlaceFields, {
+      toCoordinates: { latitude: 47.4979, longitude: 19.0625 },
+      toName: "Astoria VédettSarok",
+    });
+    assert.ok(!("to" in knownPlaceFields), "KNOWN_PLACE ágon SOSEM szabad 'to' string kulcsnak lennie");
+
+    const manualFields = buildSearchRequestDestinationFields({
+      type: "MANUAL",
+      city: "Budapest",
+      districtOrPostalCode: "",
+      street: "Váci utca 12",
+    });
+    assert.deepEqual(manualFields, { to: "Budapest, Váci utca 12" });
+    assert.ok(!("toCoordinates" in manualFields), "MANUAL ágon SOSEM szabad toCoordinates kulcsnak lennie");
+
+    // Mindkét kimenetet a valódi, szerver oldali (route.ts-ben is
+    // használt) journeySearchSchema-val validáljuk — ez bizonyítja, hogy
+    // a wire-protokoll formája TELJESEN kompatibilis maradt a
+    // refaktor után.
+    const knownPlaceParsed = journeySearchSchema.safeParse({ ...knownPlaceFields, from: "Budapest, Teszt utca 1" });
+    assert.ok(knownPlaceParsed.success, "a KNOWN_PLACE mezőknek érvényesnek kell lenniük a journeySearchSchema szerint");
+    const manualParsed = journeySearchSchema.safeParse({ ...manualFields, from: "Budapest, Teszt utca 1" });
+    assert.ok(manualParsed.success, "a MANUAL mezőknek érvényesnek kell lenniük a journeySearchSchema szerint");
   });
 });
 

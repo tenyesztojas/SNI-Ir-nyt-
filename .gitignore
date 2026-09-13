@@ -17,3 +17,5 @@ plan_test_*.json
 
 vps-accessibility-sidecar/dist/
 vps-accessibility-sidecar/dist-test/
+.vercel
+.env*

@@ -41,6 +41,19 @@ import {
 const FORM_PATH = join(import.meta.dirname, "..", "..", "components", "vedett-utvonal", "VedettUtvonalSearchForm.tsx");
 const formSrc = readFileSync(FORM_PATH, "utf-8");
 
+// searchRequestBuilder REFAKTOR (2026-09-12/13) — a RouteOrigin discriminated
+// union KISZERVEZVE lib/vedett-route/searchRequestBuilder.ts-be; lásd az M)
+// blokk lenti kommentjét.
+const SEARCH_REQUEST_BUILDER_PATH = join(
+  import.meta.dirname,
+  "..",
+  "..",
+  "lib",
+  "vedett-route",
+  "searchRequestBuilder.ts"
+);
+const searchRequestBuilderSrc = readFileSync(SEARCH_REQUEST_BUILDER_PATH, "utf-8");
+
 const stripKnownTypeAnnotations = (src: string) =>
   src.replace(/\(addr: \{ city: string; districtOrPostalCode: string; street: string \}\)/, "(addr)").replace(/\): boolean \{/, ") {");
 
@@ -408,7 +421,17 @@ describe("M) CURRENT_LOCATION / MAP_PICKED (C4.1) — a fromName-alapú label-me
   });
 
   test("a RouteOrigin MAP_PICKED variánsa továbbra is 'name' mezőt hordoz — nincs regresszió a típusmodellben", () => {
-    assert.match(formSrc, /\| \{ type: "MAP_PICKED"; name: string; latitude: number; longitude: number \}/);
+    // searchRequestBuilder REFAKTOR — a RouteOrigin discriminated union
+    // (és vele a MAP_PICKED variáns) 2026-09-12/13 óta
+    // lib/vedett-route/searchRequestBuilder.ts-ben él, NEM a
+    // VedettUtvonalSearchForm.tsx-ben (ami csak importálja `type
+    // RouteOrigin`-ként) — lásd c41-ambiguous-and-origin-label.test.ts
+    // B) blokkjának azonos javítását, ugyanezzel az indoklással.
+    assert.match(
+      searchRequestBuilderSrc,
+      /export type RouteOriginMapPicked = \{\s*\n\s*type: "MAP_PICKED";\s*\n\s*name: string;\s*\n\s*latitude: number;\s*\n\s*longitude: number;\s*\n\s*\};/
+    );
+    assert.match(formSrc, /import\s*\{[\s\S]*?type RouteOrigin[\s\S]*?\}\s*from\s*"@\/lib\/vedett-route\/searchRequestBuilder"/);
   });
 });
 

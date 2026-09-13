@@ -93,6 +93,17 @@ export interface GeocodeResult {
   lat: number;
   lon: number;
   quality: GeocodeQuality;
+  // STREET-LEVEL FALLBACK (2026-09-12) — ha a felhasználó explicit házszámot
+  // adott meg, de a Nominatim válaszban nincs house_number (utca-szintű
+  // találat volt), ez a mezőhármas jelzi ezt az állapotot az API route-nak.
+  // Ez KIZÁRÓLAG akkor lehet true, ha:
+  //   - expected.houseNumber truthy volt (felhasználó explicit házszámot adott)
+  //   - a legjobb találat address.house_number mezője hiányzik
+  //   - a találat minősége APPROXIMATE (sosem EXACT)
+  // Az explicit city constraint ilyenkor is HARD CONSTRAINT marad.
+  houseNumberNotResolved?: true;
+  resolvedStreet?: string;
+  resolvedCity?: string;
 }
 
 // --- Nominatim nyers válasz alakja (addressdetails=1, namedetails=1 mellett) ---
@@ -368,6 +379,94 @@ export function pickBestGeocodeMatch(
     if (quality === "APPROXIMATE" && !bestApproximate) bestApproximate = { result: r, quality };
   }
   return bestApproximate;
+}
+
+// --- STREET-LEVEL FALLBACK feltétel (2026-09-12, hardening) ---
+//
+// Önálló, exportált pure helper — kizárólag akkor igaz, ha a kandidát
+// BIZONYÍTOTTAN megfelel az összes street-level fallback feltételnek.
+// Szándékosan NEM elég az APPROXIMATE minőség önmagában, mert az más
+// okokból is keletkezhet (nincs várt házszám / eltérő számú házszám).
+//
+// Hat feltétel MINDEGYIKE szükséges:
+//   1. A felhasználó explicit házszámot adott meg.
+//   2. A Nominatim-találatban NINCS house_number (utcaszintű találat).
+//   3. A találatban VAN road mező (valóban utcaszintű, nem POI/tér/stb.).
+//   4. Az utcanév normalizáltan egyezik (védelmi re-check).
+//   5. A settlement egyezik (védelmi re-check).
+//   6. Az explicit geoContext constraint NEM sérül
+//      (irányítószám- és Budapest-kerület hard constraintek).
+//
+// Ha bármelyik feltétel nem teljesül, a hívó code a generikus APPROXIMATE
+// ágat alkalmazza (térképes CTA) — sosem a street-level kártyát.
+export function isHouseNumberOnlyFallbackCandidate(
+  result: NominatimRawResult,
+  expected: ExpectedAddressComponents,
+  geoConstraint: GeoContextConstraint
+): boolean {
+  // FELTÉTEL 1 — explicit házszám a felhasználói inputban
+  if (!expected.houseNumber) return false;
+  // FELTÉTEL 2 — Nominatim NEM adott vissza house_number-t
+  //   (ha van, más APPROXIMATE-eset: eltérő szám → nem ide tartozó)
+  if (result.address?.house_number) return false;
+  // FELTÉTEL 3 — van road mező = valódi utcaszintű találat
+  if (!result.address?.road) return false;
+  // FELTÉTEL 4 — utcanév egyezés (normalizeTextForCompare: kis-nagybetű,
+  //   whitespace-toleráns, ékezetpontos — SOSEM fuzzy)
+  if (
+    normalizeTextForCompare(result.address.road) !==
+    normalizeTextForCompare(expected.streetName)
+  )
+    return false;
+  // FELTÉTEL 5 — settlement egyezés (védelmi re-check a geoContext előtt)
+  if (expected.city) {
+    const cityCandidates = [
+      result.address?.city,
+      result.address?.town,
+      result.address?.village,
+      result.address?.municipality,
+    ].filter((v): v is string => Boolean(v));
+    if (cityCandidates.length > 0) {
+      const expectedCity = normalizeTextForCompare(expected.city);
+      if (!cityCandidates.some((c) => normalizeTextForCompare(c) === expectedCity)) return false;
+    }
+  }
+  // FELTÉTEL 6 — geoContext constraint NEM sérül
+  //   (kezel: 4-jegyű irányítószám, Budapest-kerület, egyéb city constraint)
+  if (candidateViolatesGeoContext(result, geoConstraint)) return false;
+
+  return true;
+}
+
+// --- STREET-LEVEL AMBIGUITY DETECTION — exportált helper (2026-09-12) ---
+//
+// Kizárólag tesztelhetőség céljából exportált pure függvény.
+// A geocodeAddress() belsőleg UGYANEZT a szűrőlogikát futtatja
+// (lásd ~1107. sor) — ez az export lehetővé teszi, hogy a tesztek közvetlenül
+// bizonyítsák az AMBIGUOUS feltételt anélkül, hogy a HTTP-kéréseket mockol-nák.
+//
+// Visszatér: azok a jelöltek, amelyek a `bestResult`-től geográfiailag
+// különállóak (> SAME_PLACE_CLUSTER_RADIUS_METERS) ÉS maguk is teljesítik az
+// isHouseNumberOnlyFallbackCandidate feltételeit.
+// Ha a lista NEM ÜRES → geocodeAddress() kötelezően { ambiguous: true }-t ad.
+export function findStreetLevelFallbackAmbiguousCandidates(
+  bestResult: NominatimRawResult,
+  allResults: NominatimRawResult[],
+  expected: ExpectedAddressComponents,
+  geoConstraint: GeoContextConstraint
+): NominatimRawResult[] {
+  return allResults.filter((r) => {
+    if (r === bestResult) return false;
+    if (!isHouseNumberOnlyFallbackCandidate(r, expected, geoConstraint)) return false;
+    return (
+      haversineDistanceMeters(
+        Number(bestResult.lat),
+        Number(bestResult.lon),
+        Number(r.lat),
+        Number(r.lon)
+      ) > SAME_PLACE_CLUSTER_RADIUS_METERS
+    );
+  });
 }
 
 // --- Nevesített OSM hely/POI/állomás elfogadási útja (GEOCODING
@@ -1020,7 +1119,58 @@ export async function geocodeAddress(query: string): Promise<GeocodeResult | Amb
 
     const best = pickBestGeocodeMatch(results, expected);
     if (best) {
-      return { name: best.result.display_name, lat: Number(best.result.lat), lon: Number(best.result.lon), quality: best.quality };
+      // STREET-LEVEL FALLBACK (2026-09-12, hardening) — az
+      // isHouseNumberOnlyFallbackCandidate az összes 6 feltételt ellenőrzi
+      // (explicit houseNumber, hiányzó addr.house_number, road mező jelen,
+      // road-egyezés, settlement-egyezés, geoContext-constraint). Az inline
+      // háromtagú feltétel NEM elégséges, mert APPROXIMATE más okból is
+      // keletkezhet (pl. nincs várt házszám → APPROXIMATE generikusan).
+      if (
+        best.quality === "APPROXIMATE" &&
+        isHouseNumberOnlyFallbackCandidate(best.result, expected, geoConstraint)
+      ) {
+        // AMBIGUITY CHECK (spec: "Ha több különálló, hasonlóan jó
+        // utcaszintű jelölt marad, ne válassz automatikusan → AMBIGUOUS")
+        // — ha van MÁSIK, ugyanolyan feltételeket teljesítő jelölt, amely
+        // geográfiailag VALÓDIAN KÜLÖNÁLLÓ (> SAME_PLACE_CLUSTER_RADIUS_METERS),
+        // AMBIGUOUS-t adunk vissza. Ez egybehangzik a classifyNamedPlaceCandidates
+        // klaszterezési logikájával, kiterjesztve a cím-egyezési útra.
+        const otherDistinctCandidates = results.filter((r) => {
+          if (r === best.result) return false;
+          if (!isHouseNumberOnlyFallbackCandidate(r, expected, geoConstraint)) return false;
+          return (
+            haversineDistanceMeters(
+              Number(best.result.lat),
+              Number(best.result.lon),
+              Number(r.lat),
+              Number(r.lon)
+            ) > SAME_PLACE_CLUSTER_RADIUS_METERS
+          );
+        });
+        if (otherDistinctCandidates.length > 0) {
+          return {
+            ambiguous: true,
+            candidates: [best.result, ...otherDistinctCandidates].map(toPlaceCandidate),
+          };
+        }
+        // Egyértelmű, egyedi street-level fallback — jelöljük meg.
+        return {
+          name: best.result.display_name,
+          lat: Number(best.result.lat),
+          lon: Number(best.result.lon),
+          quality: "APPROXIMATE" as const,
+          houseNumberNotResolved: true as const,
+          resolvedStreet: expected.streetName,
+          resolvedCity: expected.city ?? undefined,
+        };
+      }
+      // Generikus APPROXIMATE (nincs várt houseNumber / eltérő szám) vagy EXACT
+      return {
+        name: best.result.display_name,
+        lat: Number(best.result.lat),
+        lon: Number(best.result.lon),
+        quality: best.quality,
+      };
     }
 
     const classification = classifyNamedPlaceCandidates(results, poiQuery, geoConstraint);
@@ -1032,6 +1182,86 @@ export async function geocodeAddress(query: string): Promise<GeocodeResult | Amb
       return { ambiguous: true, candidates: classification.candidates.map(toPlaceCandidate) };
     }
     // NOT_FOUND ezen a lépésen — folytatjuk a következő próbálkozással.
+  }
+
+  // ── FÁZIS B — POSTAL-RELAXED FALLBACK ──────────────────────────────────────
+  // BIZONYÍTOTT root cause (2026-09-12, Szolnok + hibás 4-jegyű irányítószám +
+  // vasútállomás): a STRICT fázisban a `geoConstraint.districtOrPostalCode`
+  // minden kísérletben hard constraintként marad, még akkor is, ha a Nominatim
+  // lekérdezés szövegéből az irányítószám már hiányzik. A
+  // candidateViolatesGeoContext() ezért az összes fallback találatot elveti
+  // (a Szolnok vasútállomás postcódja "5000" ≠ "5001" = a felhasználó által
+  // véletlenül rosszul beírt irányítószám → minden találat elutasítva → null).
+  //
+  // A RELAXED fázis CSAK akkor fut, ha:
+  //   1. az inputban explicit 4-jegyű irányítószám volt
+  //   2. a STRICT fázis nem adott RESOLVED/AMBIGUOUS eredményt
+  //   3. explicit city rendelkezésre áll (SOSEM fut place-only keresésnél)
+  //
+  // A RELAXED fázisban:
+  //   - a city TOVÁBBRA IS hard constraint (TILOS lazítani)
+  //   - az irányítószám NEM hard constraint (ez a lényeg)
+  //   - a visszaadott minőség MINDIG "APPROXIMATE" (sohasem "EXACT")
+  //
+  // Tiltott lazítások (specifikáció szerint):
+  //   - Budapest kerület-constraintet NEM lazítjuk → /^\d{4}$/ teszt szűr
+  //   - Explicit city constraintet NEM lazítjuk → relaxedConstraint.city megmarad
+  //   - countrycodes=hu NEM kerül ki → buildFreeTextQueryUrl-ben benne van
+  //   - place-only keresés NINCS érintve → expected.city üres → nem fut
+  if (
+    expected.districtOrPostalCode &&
+    /^\d{4}$/.test(expected.districtOrPostalCode) &&
+    expected.city
+  ) {
+    const relaxedConstraint: GeoContextConstraint = {
+      city: expected.city,
+      districtOrPostalCode: null, // irányítószám NEM hard constraint a RELAXED fázisban
+    };
+
+    const relaxedStreet = expected.houseNumber
+      ? `${expected.streetName} ${expected.houseNumber}`
+      : expected.streetName;
+
+    // B1. kísérlet: "<city>, <street>" — irányítószám nélkül, de várossal
+    // B2. kísérlet: "<street>, <city>, Hungary" — egyszerűsített forma, ha B1 sem sikerül
+    const relaxedAttempts: string[] = [
+      buildFreeTextQueryUrl(`${expected.city}, ${relaxedStreet}`),
+      buildFreeTextQueryUrl([relaxedStreet, expected.city, "Hungary"].filter(Boolean).join(", ")),
+    ];
+
+    for (let i = 0; i < relaxedAttempts.length; i++) {
+      await new Promise((resolve) => setTimeout(resolve, NOMINATIM_RATE_LIMIT_DELAY_MS));
+      const results = await fetchNominatimResults(relaxedAttempts[i]);
+      if (results.length === 0) continue;
+
+      // Cím-egyezés — a klasszikus city+street ellenőrzés változatlan, de a
+      // minőség KÖTELEZŐEN APPROXIMATE (irányítószám nem igazolható).
+      const best = pickBestGeocodeMatch(results, expected);
+      if (best) {
+        return {
+          name: best.result.display_name,
+          lat: Number(best.result.lat),
+          lon: Number(best.result.lon),
+          quality: "APPROXIMATE",
+        };
+      }
+
+      // POI-elfogadás — relaxedConstraint-tel (csak city hard constraint).
+      const classification = classifyNamedPlaceCandidates(results, poiQuery, relaxedConstraint);
+      if (classification.status === "RESOLVED") {
+        const winner = classification.candidates[0];
+        return {
+          name: getResultPrimaryName(winner) || winner.display_name,
+          lat: Number(winner.lat),
+          lon: Number(winner.lon),
+          quality: "APPROXIMATE", // sohasem EXACT — irányítószám nem igazolható
+        };
+      }
+      if (classification.status === "AMBIGUOUS") {
+        return { ambiguous: true, candidates: classification.candidates.map(toPlaceCandidate) };
+      }
+      // NOT_FOUND ezen a relaxed kísérletben — folytatjuk a következővel.
+    }
   }
 
   return null;

@@ -13,7 +13,7 @@
 import { NextResponse } from "next/server";
 import { requireVedettRouteAccess } from "@/lib/vedett-route/access";
 import { journeySearchSchema } from "@/lib/vedett-route/schemas";
-import { geocodeAddress, isAmbiguousGeocodeResult } from "@/lib/vedett-route/geocode";
+import { geocodeAddress, isAmbiguousGeocodeResult, type GeocodeResult } from "@/lib/vedett-route/geocode";
 import { searchVedettRoutes } from "@/lib/vedett-route/orchestrator";
 import { buildRouteCacheKey, getCached, setCached } from "@/lib/vedett-route/routeCache";
 import type { OrchestratedSearchResult } from "@/lib/vedett-route/types";
@@ -80,10 +80,10 @@ export async function POST(request: Request) {
   // VedettUtvonalSearchForm.tsx originFields).
   const [fromGeo, toGeo] = await Promise.all([
     fromCoordinates
-      ? Promise.resolve({ name: fromName ?? "Jelenlegi hely", lat: fromCoordinates.latitude, lon: fromCoordinates.longitude, quality: "EXACT" as const })
+      ? Promise.resolve({ name: fromName ?? "Jelenlegi hely", lat: fromCoordinates.latitude, lon: fromCoordinates.longitude, quality: "EXACT" as const } as GeocodeResult)
       : geocodeAddress(from as string),
     toCoordinates
-      ? Promise.resolve({ name: toName ?? "Kiválasztott cél", lat: toCoordinates.latitude, lon: toCoordinates.longitude, quality: "EXACT" as const })
+      ? Promise.resolve({ name: toName ?? "Kiválasztott cél", lat: toCoordinates.latitude, lon: toCoordinates.longitude, quality: "EXACT" as const } as GeocodeResult)
       : geocodeAddress(to as string),
   ]);
 
@@ -135,6 +135,40 @@ export async function POST(request: Request) {
         field: "to" as const,
         message: "Több találat is lehetséges — válassz a listából.",
         candidates: toGeo.candidates,
+      },
+      { status: 400 }
+    );
+  }
+
+  // HOUSE_NUMBER_NOT_RESOLVED (2026-09-12) — a felhasználó EXPLICIT házszámot
+  // adott meg, a Nominatim az utcát megtalálta, de a pontos házszámot nem
+  // tudta feloldani (bizonyított produkciós esetek: Bakonynána Alkotmány u. 15,
+  // Balatonszepezd Petőfi u. 33). Ez KÜLÖN állapot az általános
+  // address_approximate-től: a kliens UI nem a térképes kijelölőt mutatja,
+  // hanem egy inline figyelmeztetőkártyát két gombbal:
+  //   [ Az utca közelítő helyével tervezek ] — koordináta elfogadása + re-routing
+  //   [ Módosítom a címet ]                 — hibaállapot törlése
+  // BIZTONSÁGI SZABÁLYOK:
+  //   - Az explicit city MINDIG hard constraint maradt a geocodeAddress()-ban
+  //   - A Budapest kerület constraint érintetlen
+  //   - A postal-relaxed fallback (FÁZIS B) érintetlen
+  //   - Routing SOHA nem indul automatikusan — kizárólag explicit UI megerősítés után
+  // Ez a check TypeScript control-flow szempontjából MEGELŐZI az általános
+  // address_approximate ellenőrzést — az ambiguity guard-ok (fent) után
+  // fromGeo/toGeo már GeocodeResult-ra van szűkítve, a .houseNumberNotResolved
+  // mező közvetlenül elérhető.
+  if (fromGeo.houseNumberNotResolved || toGeo.houseNumberNotResolved) {
+    const field: "from" | "to" = fromGeo.houseNumberNotResolved ? "from" : "to";
+    const geo = field === "from" ? fromGeo : toGeo;
+    return NextResponse.json(
+      {
+        ok: false,
+        reason: "house_number_not_resolved",
+        field,
+        message: "A pontos házszámot nem tudtuk azonosítani, de az utcát megtaláltuk.",
+        resolvedStreet: geo.resolvedStreet,
+        resolvedCity: geo.resolvedCity,
+        approximateLocation: { name: geo.name, lat: geo.lat, lon: geo.lon },
       },
       { status: 400 }
     );

@@ -17,14 +17,45 @@ import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import {
+  buildStructuredAddressString as buildStructuredAddress,
+  buildSearchRequestOriginFields,
+  buildSearchRequestDestinationFields,
+} from "../../lib/vedett-route/searchRequestBuilder.ts";
 
 const FORM_PATH = join(import.meta.dirname, "..", "..", "components", "vedett-utvonal", "VedettUtvonalSearchForm.tsx");
 const formSrc = readFileSync(FORM_PATH, "utf-8");
 
-// buildStructuredAddress futásidejű, valódi kiértékelése — a függvény
-// forrását magából a komponens-fájlból nyerjük ki (nincs next/* importja,
-// tisztán string-manipuláció), hogy NE kelljen egy második, kézzel
-// karbantartott másolatot fenntartani ugyanabból a logikából.
+const SEARCH_REQUEST_BUILDER_PATH = join(
+  import.meta.dirname,
+  "..",
+  "..",
+  "lib",
+  "vedett-route",
+  "searchRequestBuilder.ts"
+);
+const searchRequestBuilderSrc = readFileSync(SEARCH_REQUEST_BUILDER_PATH, "utf-8");
+
+// searchRequestBuilder REFAKTOR (2026-09-12/13) — a cím-string összeállító
+// logika ("buildStructuredAddress") 2026-09-12/13 óta a pure,
+// buildStructuredAddressString() néven exportált függvénybe került (lib/
+// vedett-route/searchRequestBuilder.ts), KÖZÖS forrásból az origin ÉS a
+// destination oldal számára is (a VedettUtvonalSearchForm.tsx már csak
+// importálja és meghívja). A KORÁBBI megközelítés — a függvény forrásának
+// kinyerése magából formSrc-ből, típusannotációk levágása, majd `new
+// Function(...)`-nel futtatása — arra épült, hogy a logika még INLINE,
+// helyi függvényként élt a komponensben; a kiszervezés után ez a fajta
+// "forráskód-kivonat + eval" REDUNDÁNS és TÖRÉKENY (pontosan ez okozta a
+// teljes fájl elszállását: a `function buildStructuredAddress(...)`
+// signature többé nem található meg formSrc-ben). Helyette EGYSZERŰEN,
+// közvetlenül IMPORTÁLJUK a valódi, exportált függvényt — ez KEVESEBB
+// kód, ÉS mindig a TÉNYLEGES production implementációt futtatja, sosem
+// egy kivonatolt másolatot.
+//
+// Az `isManualAddressComplete` viszont VÁLTOZATLANUL helyi (nem lett
+// kiszervezve — nincs rá szükség a searchRequestBuilder pure modulban,
+// mert React state-et olvas), ezért ennél a régi kivonat-és-eval minta
+// továbbra is indokolt és működik.
 function extractFunctionSource(src: string, signature: string): string {
   // A `signature` MINDIG a törzset megnyitó "{" karakterrel zárul (lásd a
   // hívásokat lent) — ezért a törzs kezdetét a signature VÉGÉNÉL kell
@@ -51,23 +82,14 @@ function extractFunctionSource(src: string, signature: string): string {
 // A kinyert forrás még TypeScript (paraméter- és visszatérési típus-
 // annotációkkal) — a `new Function` sima JS-t vár, ezért ezt a NÉHÁNY,
 // pontosan ismert annotációt (nem a teljes logikát!) levágjuk, mielőtt
-// kiértékeljük. A tényleges algoritmus (a string-összeállítás) innentől
-// SZÓ SZERINT a production kódból fut.
+// kiértékeljük. A tényleges algoritmus innentől SZÓ SZERINT a production
+// kódból fut.
 function stripKnownTypeAnnotations(src: string): string {
   return src
     .replace(/\(addr: \{ city: string; districtOrPostalCode: string; street: string \}\)/, "(addr)")
     .replace(/\): string \{/, ") {")
     .replace(/\): boolean \{/, ") {");
 }
-
-const buildStructuredAddressSrc = stripKnownTypeAnnotations(
-  extractFunctionSource(
-    formSrc,
-    "function buildStructuredAddress(addr: { city: string; districtOrPostalCode: string; street: string }): string {"
-  )
-);
-// eslint-disable-next-line no-new-func
-const buildStructuredAddress = new Function(`${buildStructuredAddressSrc}\nreturn buildStructuredAddress;`)();
 
 const isManualAddressCompleteSrc = stripKnownTypeAnnotations(
   extractFunctionSource(
@@ -79,23 +101,48 @@ const isManualAddressCompleteSrc = stripKnownTypeAnnotations(
 const isManualAddressComplete = new Function(`${isManualAddressCompleteSrc}\nreturn isManualAddressComplete;`)();
 
 describe("TASK — Strukturált címbevitel: adatmodell (4. pont)", () => {
+  // searchRequestBuilder REFAKTOR (2026-09-12/13) — a RouteOrigin/
+  // RouteDestination discriminated union-ök 2026-09-12/13 óta
+  // lib/vedett-route/searchRequestBuilder.ts-ben élnek (a
+  // VedettUtvonalSearchForm.tsx csak `type RouteOrigin`/`type
+  // RouteDestination`-ként importálja őket) — lásd a fájl tetején lévő,
+  // buildStructuredAddress-ről szóló kommentet ugyanerről a refaktorról.
   test("A) RouteOrigin MANUAL típusa city/districtOrPostalCode/street mezőkre bomlik (nem egy szabadszöveges 'address')", () => {
     assert.match(
-      formSrc,
-      /type RouteOrigin =\s*\n\s*\| \{ type: "MANUAL"; city: string; districtOrPostalCode: string; street: string \}/
+      searchRequestBuilderSrc,
+      /export type RouteOriginManual = \{\s*\n\s*type: "MANUAL";\s*\n\s*city: string;\s*\n\s*districtOrPostalCode: string;\s*\n\s*street: string;\s*\n\s*\};/
     );
+    assert.match(formSrc, /import\s*\{[\s\S]*?type RouteOrigin[\s\S]*?\}\s*from\s*"@\/lib\/vedett-route\/searchRequestBuilder"/);
   });
 
   test("B) RouteDestination MANUAL típusa UGYANÍGY city/districtOrPostalCode/street mezőkre bomlik", () => {
     assert.match(
-      formSrc,
-      /type RouteDestination =\s*\n\s*\| \{ type: "MANUAL"; city: string; districtOrPostalCode: string; street: string \}/
+      searchRequestBuilderSrc,
+      /export type RouteDestinationManual = \{\s*\n\s*type: "MANUAL";\s*\n\s*city: string;\s*\n\s*districtOrPostalCode: string;\s*\n\s*street: string;\s*\n\s*\};/
     );
+    assert.match(formSrc, /import\s*\{[\s\S]*?type RouteDestination[\s\S]*?\}\s*from\s*"@\/lib\/vedett-route\/searchRequestBuilder"/);
   });
 
-  test("nincs felesleges párhuzamos adatmodell — a wire-formátum (from/to stringek a szervernek) VÁLTOZATLAN, csak a kliens állítja össze a strukturált mezőkből", () => {
-    assert.match(formSrc, /: \{ from: buildStructuredAddress\(origin\) \};/);
-    assert.match(formSrc, /: \{ to: buildStructuredAddress\(destination\) \};/);
+  test("nincs felesleges párhuzamos adatmodell — a wire-formátum (from/to stringek a szervernek) VÁLTOZATLAN, csak a kliens állítja össze a strukturált mezőkből (viselkedési teszt: buildSearchRequestOriginFields/buildSearchRequestDestinationFields MANUAL ága)", () => {
+    // A régi teszt a formSrc-beli inline ternár VÉGSŐ, MANUAL ágának
+    // szöveges alakját kereste (`: { from: buildStructuredAddress(origin)
+    // };`) — ez a szöveg a refaktor után nem létezik formSrc-ben, mert a
+    // teljes elágazás átkerült a pure buildSearchRequestOriginFields/
+    // buildSearchRequestDestinationFields függvényekbe. Az invariáns
+    // (MANUAL -> `from`/`to` string, a buildStructuredAddress(String)-szal
+    // összeállítva) viselkedésileg, a valós függvényeken keresztül
+    // bizonyítható.
+    const manualOrigin = { type: "MANUAL" as const, city: "Budapest", districtOrPostalCode: "1136", street: "Kossuth Lajos utca 12." };
+    const manualDestination = { type: "MANUAL" as const, city: "Budapest", districtOrPostalCode: "1136", street: "Kossuth Lajos utca 12." };
+    assert.equal(buildStructuredAddress(manualOrigin), buildStructuredAddress(manualDestination));
+    assert.match(
+      searchRequestBuilderSrc,
+      /return \{ from: buildStructuredAddressString\(origin\) \};/
+    );
+    assert.match(
+      searchRequestBuilderSrc,
+      /return \{ to: buildStructuredAddressString\(destination\) \};/
+    );
   });
 });
 
@@ -138,11 +185,16 @@ describe("TASK — Geokódolási string összeállítása (5. pont)", () => {
 });
 
 describe("TASK — CURRENT_LOCATION / KNOWN_PLACE regresszió a strukturált címbevitel után (F/G/H)", () => {
+  // searchRequestBuilder REFAKTOR (2026-09-12/13) — mindhárom teszt a
+  // régi, formSrc-beli inline originFields/destinationFields ternárt
+  // kereste; ez a logika átkerült a pure buildSearchRequestOriginFields/
+  // buildSearchRequestDestinationFields függvényekbe (lib/vedett-route/
+  // searchRequestBuilder.ts) — lásd a fájl tetején lévő részletes
+  // kommentet. Az invariánsokat KÖZVETLENÜL, a valós függvényeken
+  // keresztül teszteljük.
   test("F) CURRENT_LOCATION origin továbbra is fromCoordinates-t küld (nem érinti a strukturált cím bevezetése)", () => {
-    assert.match(
-      formSrc,
-      /origin\.type === "CURRENT_LOCATION"\s*\n\s*\? \{ fromCoordinates: \{ latitude: origin\.latitude, longitude: origin\.longitude \} \}/
-    );
+    const fields = buildSearchRequestOriginFields({ type: "CURRENT_LOCATION", latitude: 47.5, longitude: 19.05 });
+    assert.deepEqual(fields, { fromCoordinates: { latitude: 47.5, longitude: 19.05 } });
   });
 
   test("G) KNOWN_PLACE destination továbbra is toCoordinates+toName-t küld", () => {
@@ -152,18 +204,27 @@ describe("TASK — CURRENT_LOCATION / KNOWN_PLACE regresszió a strukturált cí
     // (lásd DestinationMapPicker.tsx fejléce, 13. pont), az invariáns maga
     // (KNOWN_PLACE -> toCoordinates+toName, nincs újra-geokódolás)
     // változatlan.
-    assert.match(formSrc, /destination\.type === "KNOWN_PLACE" \|\| destination\.type === "MAP_PICKED"\s*\n\s*\? \{/);
-    assert.match(formSrc, /toCoordinates: \{ latitude: destination\.latitude, longitude: destination\.longitude \},/);
-    assert.match(formSrc, /toName: destination\.name,/);
+    const fields = buildSearchRequestDestinationFields({
+      type: "KNOWN_PLACE",
+      name: "Astoria VédettSarok",
+      latitude: 47.4979,
+      longitude: 19.0625,
+    });
+    assert.deepEqual(fields, {
+      toCoordinates: { latitude: 47.4979, longitude: 19.0625 },
+      toName: "Astoria VédettSarok",
+    });
   });
 
   test("H) KNOWN_PLACE esetén NEM hívódik buildStructuredAddress — nincs felesleges újra-geokódolás egy már ismert koordinátájú Védett Helyre", () => {
-    const knownPlaceBranch = formSrc.match(/destination\.type === "KNOWN_PLACE" \|\| destination\.type === "MAP_PICKED"\s*\n\s*\? \{[\s\S]*?\}\s*\n\s*: \{ to: buildStructuredAddress\(destination\) \};/);
-    assert.ok(knownPlaceBranch, "meg kell találni a destinationFields KNOWN_PLACE/MAP_PICKED/MANUAL elágazását");
-    assert.ok(
-      !/buildStructuredAddress/.test(knownPlaceBranch![0].split(": {")[0]),
-      "a KNOWN_PLACE/MAP_PICKED ág nem hívhatja a buildStructuredAddress()-t"
-    );
+    const fields = buildSearchRequestDestinationFields({
+      type: "KNOWN_PLACE",
+      name: "Astoria VédettSarok",
+      latitude: 47.4979,
+      longitude: 19.0625,
+    });
+    assert.ok(!("to" in fields), "a KNOWN_PLACE ág NEM adhat vissza 'to' string kulcsot (az jelezné, hogy buildStructuredAddress lefutott)");
+    assert.deepEqual(Object.keys(fields).sort(), ["toCoordinates", "toName"]);
   });
 });
 
@@ -290,8 +351,17 @@ describe("TASK — Validáció (6. pont) — kulturált magyar hibaüzenet, NEM 
 
 describe("TASK — Budapest BÉTA korlát diszkrét jelzése (7. pont) — nincs hardcode-olt architektúra", () => {
   test("mindkét strukturált cím-blokk közelében megjelenik a diszkrét BÉTA-lefedettségi jelzés", () => {
-    const count = (formSrc.match(/Jelenleg Budapesten tesztelhető\./g) ?? []).length;
-    assert.equal(count, 2);
+    // TARTALMI FRISSÍTÉS (a searchRequestBuilder refaktortól FÜGGETLEN,
+    // dátum a git történetből nem állapítható meg innen) — a korábbi,
+    // "Jelenleg Budapesten tesztelhető." szöveg egy általánosabb,
+    // "A Védett Útvonal jelenleg béta tesztüzemben működik." megfogalmazásra
+    // frissült, VÁLTOZATLANUL mindkét (origin + destination) strukturált
+    // cím-blokk alatt megjelenve. Ez SZÁNDÉKOS szövegezési változás, nem
+    // regresszió — a régi szöveg teljes hiánya (0 találat) volt a jelzés,
+    // hogy a teszt elavult, nem hogy a jelzés maga tűnt el.
+    const count = (formSrc.match(/A Védett Útvonal jelenleg béta tesztüzemben működik\./g) ?? []).length;
+    assert.equal(count, 2, "a BÉTA-lefedettségi jelzésnek mindkét (origin + destination) blokk alatt meg kell jelennie");
+    assert.doesNotMatch(formSrc, /Jelenleg Budapesten tesztelhető\./, "a régi szövegnek sehol nem szabad megmaradnia");
   });
 
   test("a Város mező induló értéke 'Budapest' egy egyszerű kezdőértékként (state default), nem egy hardcode-olt, más településeket kizáró architektúra részeként", () => {

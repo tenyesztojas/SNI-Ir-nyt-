@@ -30,6 +30,10 @@ import {
   pickBestGeocodeMatch,
   type NominatimRawResult,
 } from "../../lib/vedett-route/geocode.ts";
+import {
+  buildSearchRequestOriginFields,
+  buildSearchRequestDestinationFields,
+} from "../../lib/vedett-route/searchRequestBuilder.ts";
 
 const ROUTE_PATH = join(import.meta.dirname, "..", "..", "app", "api", "admin", "vedett-utvonal", "search", "route.ts");
 const routeSrc = readFileSync(ROUTE_PATH, "utf-8");
@@ -272,11 +276,29 @@ describe("11-13. eset — térképes célpont-kijelölő: MapLibre/OpenFreeMap, 
     assert.match(pickerSrc, /onConfirm\(selectedPoint\.lat, selectedPoint\.lon\)/);
   });
 
-  test("13b) a form oldalon a MAP_PICKED cél UGYANAZON toCoordinates/toName ágon megy a szerver felé, mint a KNOWN_PLACE (nincs re-geokódolás, nincs saveFavorite auto-persist)", () => {
-    assert.match(
-      formSrc,
-      /destination\.type === "KNOWN_PLACE" \|\| destination\.type === "MAP_PICKED"\s*\n\s*\? \{\s*\n\s*toCoordinates:/
-    );
+  test("13b) MAP_PICKED és KNOWN_PLACE UGYANAZON toCoordinates ágon megy a szerver felé — viselkedési teszt", () => {
+    // ÁTÍRVA (2026-09-12): a destinationFields összeállítás
+    // buildSearchRequestDestinationFields()-ba lett kiszervezve
+    // (searchRequestBuilder.ts) — az inline forráskód-regex stale lenne.
+    // Viselkedési assert: mindkét típus → { toCoordinates } (nincs re-geokódolás).
+    const fieldsKnownPlace = buildSearchRequestDestinationFields({
+      type: "KNOWN_PLACE",
+      name: "Arena Plaza",
+      latitude: 47.5,
+      longitude: 19.1,
+    });
+    const fieldsMapPicked = buildSearchRequestDestinationFields({
+      type: "MAP_PICKED",
+      name: "Térkép pontja",
+      latitude: 47.5,
+      longitude: 19.1,
+    });
+    assert.ok("toCoordinates" in fieldsKnownPlace, "KNOWN_PLACE → toCoordinates jelen van");
+    assert.ok("toCoordinates" in fieldsMapPicked, "MAP_PICKED → toCoordinates jelen van");
+    assert.ok(!("to" in fieldsKnownPlace), "KNOWN_PLACE → 'to' string NEM szerepel");
+    assert.ok(!("to" in fieldsMapPicked), "MAP_PICKED → 'to' string NEM szerepel");
+    // A form továbbra is importálja a buildSearchRequestDestinationFields-t (strukturális)
+    assert.match(formSrc, /buildSearchRequestDestinationFields/);
   });
 
   test("14) handleMapPickerConfirm KIZÁRÓLAG React state-et (setDestination) állít, nincs benne fetch/localStorage/adatbázis-hívás (nincs auto-persist, nincs analytics)", () => {
@@ -330,9 +352,12 @@ describe("17. eset — regresszióvédelem: meglévő ágak (CURRENT_LOCATION, K
     // CURRENT_LOCATION invariáns (nincs geocodeAddress()-hívás, quality
     // EXACT, a statikus "Jelenlegi hely" a `fromName` HIÁNYÁBAN jelenik
     // meg) itt a `fromName ?? "Jelenlegi hely"` alakon ellenőrzött.
+    // FRISSÍTVE (2026-09-12): a regex nem kötelezi a `})` lezárót — a
+    // TypeScript típus-annotáció (`as GeocodeResult`) a lezáró `}` után
+    // is megjelenhet, így a regex rugalmasabb végfeltételt alkalmaz.
     assert.match(
       routeSrc,
-      /fromCoordinates\s*\n\s*\? Promise\.resolve\(\{ name: fromName \?\? "Jelenlegi hely", lat: fromCoordinates\.latitude, lon: fromCoordinates\.longitude, quality: "EXACT" as const \}\)/
+      /fromCoordinates\s*\n\s*\? Promise\.resolve\(\{ name: fromName \?\? "Jelenlegi hely", lat: fromCoordinates\.latitude, lon: fromCoordinates\.longitude, quality: "EXACT" as const/
     );
   });
 
@@ -346,9 +371,11 @@ describe("17. eset — regresszióvédelem: meglévő ágak (CURRENT_LOCATION, K
   });
 
   test("KNOWN_PLACE (toCoordinates) továbbra is KIHAGYJA a geocodeAddress()-t, quality: EXACT-tal", () => {
+    // FRISSÍTVE (2026-09-12): regex nem kötelezi a `})` lezárót — TypeScript
+    // típus-annotáció (`as GeocodeResult`) megjelenhet a `}` után.
     assert.match(
       routeSrc,
-      /toCoordinates\s*\n\s*\? Promise\.resolve\(\{ name: toName \?\? "Kiválasztott cél", lat: toCoordinates\.latitude, lon: toCoordinates\.longitude, quality: "EXACT" as const \}\)/
+      /toCoordinates\s*\n\s*\? Promise\.resolve\(\{ name: toName \?\? "Kiválasztott cél", lat: toCoordinates\.latitude, lon: toCoordinates\.longitude, quality: "EXACT" as const/
     );
   });
 
@@ -385,7 +412,22 @@ describe("17. eset — regresszióvédelem: meglévő ágak (CURRENT_LOCATION, K
 
 describe("18-19. eset — privacy invariant + nincs kliens-oldali re-geokódolás a MAP_PICKED célra", () => {
   test("a MAP_PICKED destination típus name/latitude/longitude mezőkre bomlik, nincs benne nyers GPS-jelzésű mező vagy reverse-geocode eredmény", () => {
-    assert.match(formSrc, /\| \{ type: "MAP_PICKED"; name: string; latitude: number; longitude: number \}/);
+    // ÁTÍRVA (2026-09-12): a RouteDestination típus (MAP_PICKED shape)
+    // searchRequestBuilder.ts-be lett kiszervezve — a formSrc-ben már
+    // csak az import szerepel, nem az inline típusdefiníció.
+    // Viselkedési assert: MAP_PICKED → toCoordinates + toName (no reverse-geocode fields).
+    const fields = buildSearchRequestDestinationFields({
+      type: "MAP_PICKED",
+      name: "Pontos hely",
+      latitude: 47.497,
+      longitude: 19.040,
+    });
+    // Kizárólag name/latitude/longitude mezők mapelődnek wire-ra (toName/toCoordinates)
+    assert.ok("toCoordinates" in fields, "MAP_PICKED → toCoordinates (koordináta-alapú, nincs re-geocode)");
+    assert.ok("toName" in fields, "MAP_PICKED → toName (megjelenítési label)");
+    assert.ok(!("to" in fields), "MAP_PICKED: 'to' string NEM szerepel (nincs reverse-geocode szöveg)");
+    // A form importálja a RouteDestination típust searchRequestBuilder-ből
+    assert.match(formSrc, /from "@\/lib\/vedett-route\/searchRequestBuilder"/);
   });
 
   test("a form nem hív reverse-geocode-ot a MAP_PICKED kiválasztás után (nincs 'reverse' kulcsszó, nincs extra Nominatim-hívás a kliensben)", () => {
@@ -478,18 +520,46 @@ describe("RUNTIME UX HOTFIX — DestinationMapPicker footer mindig látható, se
   });
 
   test("7) MAP_PICKED destination a toCoordinates ágon megy a szerver felé (ugyanúgy, mint KNOWN_PLACE)", () => {
-    assert.match(
-      formSrc,
-      /destination\.type === "KNOWN_PLACE" \|\| destination\.type === "MAP_PICKED"\s*\n\s*\? \{\s*\n\s*toCoordinates:/
-    );
+    // ÁTÍRVA (2026-09-12): az inline KNOWN_PLACE || MAP_PICKED ternary
+    // buildSearchRequestDestinationFields()-ba lett kiszervezve
+    // (searchRequestBuilder.ts) — a forráskód-regex stale lenne.
+    // Viselkedési assert: mindkét típus → { toCoordinates } (nincs re-geokódolás).
+    const fieldsMapPicked = buildSearchRequestDestinationFields({
+      type: "MAP_PICKED",
+      name: "Valamely hely",
+      latitude: 47.5,
+      longitude: 19.05,
+    });
+    const fieldsKnownPlace = buildSearchRequestDestinationFields({
+      type: "KNOWN_PLACE",
+      name: "Arena Plaza",
+      latitude: 47.5,
+      longitude: 19.1,
+    });
+    assert.ok("toCoordinates" in fieldsMapPicked, "MAP_PICKED → toCoordinates jelen van");
+    assert.ok("toCoordinates" in fieldsKnownPlace, "KNOWN_PLACE → toCoordinates jelen van");
+    assert.ok(!("to" in fieldsMapPicked), "MAP_PICKED: 'to' string NEM szerepel");
+    assert.ok(!("to" in fieldsKnownPlace), "KNOWN_PLACE: 'to' string NEM szerepel");
+    // A form importálja a buildSearchRequestDestinationFields-t (strukturális)
+    assert.match(formSrc, /buildSearchRequestDestinationFields/);
   });
 
-  test("8) a MAP_PICKED cél SOHA nem geokódolódik újra — a picker kódjában nincs fetch/Nominatim-hívás, a form MAP_PICKED ágában nincs geocodeAddress/buildStructuredAddress hívás", () => {
+  test("8) a MAP_PICKED cél SOHA nem geokódolódik újra — a picker kódjában nincs fetch/Nominatim-hívás, a buildSearchRequestDestinationFields MAP_PICKED ága sem hív geocodeAddress-t", () => {
+    // Picker kód: nincs fetch/Nominatim (invariáns — változatlan)
     assert.doesNotMatch(pickerCode, /fetch\(/);
     assert.doesNotMatch(pickerCode, /nominatim/i);
-    const destinationFieldsBlock = formSrc.match(/destination\.type === "KNOWN_PLACE" \|\| destination\.type === "MAP_PICKED"\s*\n\s*\? \{[\s\S]*?\}\s*\n\s*: \{ to: buildStructuredAddress\(destination\) \};/)?.[0] ?? "";
-    assert.ok(destinationFieldsBlock.length > 0, "meg kell találni a destinationFields KNOWN_PLACE/MAP_PICKED elágazását");
-    assert.doesNotMatch(destinationFieldsBlock.split(": {")[0], /buildStructuredAddress|geocodeAddress/);
+    // ÁTÍRVA (2026-09-12): az inline destinationFields ternary
+    // buildSearchRequestDestinationFields()-ba lett kiszervezve —
+    // az inline `buildStructuredAddress(destination)` regex stale lenne.
+    // Viselkedési assert: MAP_PICKED → toCoordinates (nem geocodeAddress, nem buildStructuredAddress hívás)
+    const mapPickedFields = buildSearchRequestDestinationFields({
+      type: "MAP_PICKED",
+      name: "Valami hely",
+      latitude: 47.5,
+      longitude: 19.05,
+    });
+    assert.ok("toCoordinates" in mapPickedFields, "MAP_PICKED → toCoordinates (nincs re-geocoding)");
+    assert.ok(!("to" in mapPickedFields), "MAP_PICKED: 'to' string NEM szerepel (nincs geocodeAddress hívás)");
   });
 
   test("9) cancel (handleMapPickerCancel) NEM módosítja a destinationt — csak a picker bezárását végzi", () => {

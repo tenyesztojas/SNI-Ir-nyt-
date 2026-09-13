@@ -24,6 +24,7 @@ import {
   type GeocodeResult,
   type AmbiguousGeocodeResult,
 } from "../../lib/vedett-route/geocode.ts";
+import { buildSearchRequestOriginFields } from "../../lib/vedett-route/searchRequestBuilder.ts";
 
 const ROUTE_PATH = join(import.meta.dirname, "..", "..", "app", "api", "admin", "vedett-utvonal", "search", "route.ts");
 const routeSrc = readFileSync(ROUTE_PATH, "utf-8");
@@ -33,6 +34,27 @@ const formSrc = readFileSync(FORM_PATH, "utf-8");
 
 const SCHEMAS_PATH = join(import.meta.dirname, "..", "..", "lib", "vedett-route", "schemas.ts");
 const schemasSrc = readFileSync(SCHEMAS_PATH, "utf-8");
+
+// searchRequestBuilder REFAKTOR (2026-09-12/13) — a RouteOrigin/RouteDestination
+// típusok és a buildSearchRequestOriginFields/buildSearchRequestDestinationFields
+// pure függvények KISZERVEZVE lib/vedett-route/searchRequestBuilder.ts-be (a cél
+// a React-független tesztelhetőség). Az alábbi tesztek egy része EZT a fájlt
+// forráskód-szinten olvasva ellenőrzi a típusalakot; a viselkedést pedig
+// KÖZVETLENÜL a pure függvényeken keresztül, NEM a VedettUtvonalSearchForm.tsx-
+// ben már nem létező, régi inline ternáron keresztül (lásd
+// street-level-fallback-state.test.ts "Teszt F" blokkját is, ami ugyanezeket
+// az invariánsokat teljes körűen lefedi — ez a fájl a saját, C4.1-es
+// narratívájában tartja meg a lefedettséget, hogy önmagában is olvasható
+// maradjon).
+const SEARCH_REQUEST_BUILDER_PATH = join(
+  import.meta.dirname,
+  "..",
+  "..",
+  "lib",
+  "vedett-route",
+  "searchRequestBuilder.ts"
+);
+const searchRequestBuilderSrc = readFileSync(SEARCH_REQUEST_BUILDER_PATH, "utf-8");
 
 function makeNamedPlace(overrides: Partial<NominatimRawResult> = {}): NominatimRawResult {
   return {
@@ -60,13 +82,19 @@ describe("A) CURRENT_LOCATION origin — a fromCoordinates ág fromName NÉLKÜL
     assert.match(routeSrc, /fromCoordinates\s*\n\s*\? Promise\.resolve\(\{ name: fromName \?\? "Jelenlegi hely"/);
   });
 
-  test("a CURRENT_LOCATION kliens-ág (originFields) NEM küld fromName-et — a szerver ilyenkor a statikus névre esik vissza", () => {
-    const originFieldsBlock =
-      formSrc.match(
-        /origin\.type === "CURRENT_LOCATION"\s*\n\s*\? \{ fromCoordinates:[\s\S]*?\}\s*\n\s*: origin\.type === "MAP_PICKED"/
-      )?.[0] ?? "";
-    assert.ok(originFieldsBlock.length > 0, "meg kell találni a CURRENT_LOCATION ágat");
-    assert.doesNotMatch(originFieldsBlock.split(": origin.type ===")[0], /fromName/);
+  test("a CURRENT_LOCATION kliens-ág (buildSearchRequestOriginFields) NEM küld fromName-et — a szerver ilyenkor a statikus névre esik vissza", () => {
+    // searchRequestBuilder REFAKTOR — ez korábban a VedettUtvonalSearchForm.tsx
+    // inline ternárját (formSrc) olvasta regex-szel; az a kód mára a pure
+    // buildSearchRequestOriginFields()-be került (lib/vedett-route/
+    // searchRequestBuilder.ts). Viselkedésileg, KÖZVETLENÜL a függvényen
+    // keresztül teszteljük ugyanazt az invariánst.
+    const fields = buildSearchRequestOriginFields({
+      type: "CURRENT_LOCATION",
+      latitude: 47.5,
+      longitude: 19.05,
+    });
+    assert.ok(!("fromName" in fields), "CURRENT_LOCATION: fromName NEM szerepelhet a mezők között");
+    assert.deepEqual(fields, { fromCoordinates: { latitude: 47.5, longitude: 19.05 } });
   });
 });
 
@@ -74,20 +102,42 @@ describe("A) CURRENT_LOCATION origin — a fromCoordinates ág fromName NÉLKÜL
 // B) MAP_PICKED origin -> a label NEM "Jelenlegi hely"
 // ---------------------------------------------------------------------------
 describe("B) MAP_PICKED origin — a fromName MINDIG küldött, a label SOSEM 'Jelenlegi hely'", () => {
-  test("a kliens MAP_PICKED origin ága fromName: origin.name-et küld a fromCoordinates mellé", () => {
-    const mapPickedBlock =
-      formSrc.match(
-        /origin\.type === "MAP_PICKED"\s*\n\s*\? \{ fromCoordinates: \{ latitude: origin\.latitude, longitude: origin\.longitude \}, fromName: origin\.name \}/
-      )?.[0] ?? "";
-    assert.ok(mapPickedBlock.length > 0, "a MAP_PICKED originFields ágnak fromName: origin.name-et kell küldenie");
+  test("a kliens MAP_PICKED origin ága fromName: origin.name-et küld a fromCoordinates mellé (buildSearchRequestOriginFields, viselkedési teszt)", () => {
+    // searchRequestBuilder REFAKTOR — lásd a fenti kommentet: a régi inline
+    // ternár formSrc-ből eltűnt, a pure függvényen keresztül teszteljük.
+    const fields = buildSearchRequestOriginFields({
+      type: "MAP_PICKED",
+      name: "Térképen kijelölt induló hely",
+      latitude: 47.5,
+      longitude: 19.05,
+    });
+    assert.deepEqual(fields, {
+      fromCoordinates: { latitude: 47.5, longitude: 19.05 },
+      fromName: "Térképen kijelölt induló hely",
+    });
   });
 
   test("a RouteOrigin MAP_PICKED variánsnak van 'name' mezője (nem string-hack — típusszintű megkülönböztetés CURRENT_LOCATION-től)", () => {
-    assert.match(formSrc, /\| \{ type: "MAP_PICKED"; name: string; latitude: number; longitude: number \}/);
+    // searchRequestBuilder REFAKTOR — a RouteOrigin discriminated union
+    // KISZERVEZVE lib/vedett-route/searchRequestBuilder.ts-be; a típusalak
+    // most OTT él (nem a VedettUtvonalSearchForm.tsx-ben, ami csak importálja
+    // `type RouteOrigin`-ként).
+    assert.match(
+      searchRequestBuilderSrc,
+      /export type RouteOriginMapPicked = \{\s*\n\s*type: "MAP_PICKED";\s*\n\s*name: string;\s*\n\s*latitude: number;\s*\n\s*longitude: number;\s*\n\s*\};/
+    );
     // A CURRENT_LOCATION variánsnak NINCS name mezője — a két eset a
     // discriminated union `type` tagján és a MAP_PICKED-only `name` mezőn
     // keresztül különül el, nem egy futásidejű string-összehasonlításon.
-    assert.match(formSrc, /\| \{ type: "CURRENT_LOCATION"; latitude: number; longitude: number \}/);
+    assert.match(
+      searchRequestBuilderSrc,
+      /export type RouteOriginCurrentLocation = \{\s*\n\s*type: "CURRENT_LOCATION";\s*\n\s*latitude: number;\s*\n\s*longitude: number;\s*\n\s*\};/
+    );
+    assert.doesNotMatch(searchRequestBuilderSrc, /RouteOriginCurrentLocation = \{[^}]*name:/);
+    // A VedettUtvonalSearchForm.tsx-nek a típust IMPORTÁLNIA kell (nem
+    // önállóan újradefiniálnia) — ez bizonyítja, hogy a komponens a
+    // KÖZÖS, egyetlen forrású típust használja.
+    assert.match(formSrc, /import\s*\{[\s\S]*?type RouteOrigin[\s\S]*?\}\s*from\s*"@\/lib\/vedett-route\/searchRequestBuilder"/);
   });
 
   test("a handleOriginMapPickerConfirm a MAP_PICKED origin 'name' mezőjét NEM 'Jelenlegi hely'-re állítja", () => {
@@ -110,18 +160,35 @@ describe("B) MAP_PICKED origin — a fromName MINDIG küldött, a label SOSEM 'J
 // C) MAP_PICKED origin koordináta — SOSEM megy új geocode-ra
 // ---------------------------------------------------------------------------
 describe("C) MAP_PICKED origin — a koordináta autoritatív marad, NINCS buildStructuredAddress/geocodeAddress hívás ezen az ágon", () => {
-  test("az originFields MAP_PICKED ága KIZÁRÓLAG fromCoordinates+fromName-et küld, nincs geocodeAddress/buildStructuredAddress hívás benne", () => {
-    const originFieldsBlock =
-      formSrc.match(
-        /origin\.type === "CURRENT_LOCATION"\s*\n\s*\? \{ fromCoordinates:[\s\S]*?\}\s*\n\s*: \{ from: buildStructuredAddress\(origin\) \};/
-      )?.[0] ?? "";
-    assert.ok(originFieldsBlock.length > 0);
-    const beforeFinalElse = originFieldsBlock.split(": { from: buildStructuredAddress(origin) };")[0];
-    assert.doesNotMatch(beforeFinalElse, /buildStructuredAddress|geocodeAddress/);
+  test("a buildSearchRequestOriginFields MAP_PICKED ága KIZÁRÓLAG fromCoordinates+fromName kulcsokat ad vissza, nincs geocodeAddress/buildStructuredAddress hívás benne (viselkedési teszt, a kimenet ALAKJÁN keresztül)", () => {
+    // searchRequestBuilder REFAKTOR — a régi teszt a formSrc inline
+    // ternárjának forráskód-szövegét vizsgálta ("nincs buildStructuredAddress/
+    // geocodeAddress SZÓ a blokkban"). A pure függvényre ez sokkal
+    // egyszerűbben, viselkedésileg bizonyítható: a visszaadott objektum
+    // KULCSAI önmagukban igazolják, hogy nem történt cím-string-építés
+    // (nincs `from` kulcs) — buildStructuredAddress/geocodeAddress csak a
+    // MANUAL ágon fut le, ahhoz `from` kulcs kellene.
+    const fields = buildSearchRequestOriginFields({
+      type: "MAP_PICKED",
+      name: "Utca közelítő helye",
+      latitude: 47.5,
+      longitude: 19.05,
+    });
+    assert.deepEqual(Object.keys(fields).sort(), ["fromCoordinates", "fromName"]);
+    assert.ok(!("from" in fields), "MAP_PICKED ágon SOSEM szabad 'from' string kulcsnak lennie (az indítaná a szerver oldali geocodeAddress-t)");
   });
 
-  test("route.ts fromCoordinates ága sosem hívja meg geocodeAddress-t (ternary: fromCoordinates ? Promise.resolve(...) : geocodeAddress(...))", () => {
-    assert.match(routeSrc, /fromCoordinates\s*\n\s*\? Promise\.resolve\(\{[\s\S]*?\}\)\s*\n\s*: geocodeAddress\(from as string\),/);
+  test("route.ts fromCoordinates ága sosem hívja meg geocodeAddress-t (ternary: fromCoordinates ? Promise.resolve(...) : geocodeAddress(...)) — a regex toleráns az 'as GeocodeResult' cast-ra", () => {
+    // A cast (`} as GeocodeResult)`) egy 2026-09-12 körüli típusszigorítás
+    // (lásd geocode.ts GeocodeResult exportja) — a korábbi, `\}\)` (a záró
+    // kapcsos zárójel KÖZVETLENÜL a záró zárójel előtt) mintát törékennyé
+    // tette. Az invariáns MAGA (fromCoordinates esetén SOSEM fut le
+    // geocodeAddress) változatlan — a regexet ehhez igazítottuk, nem a
+    // forráskódot a regexhez.
+    assert.match(
+      routeSrc,
+      /fromCoordinates\s*\n\s*\? Promise\.resolve\(\{[\s\S]*?\}(?:\s*as\s*GeocodeResult)?\)\s*\n\s*: geocodeAddress\(from as string\),/
+    );
   });
 });
 

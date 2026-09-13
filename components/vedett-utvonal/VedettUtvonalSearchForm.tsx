@@ -6,10 +6,21 @@ import type { AccessibilityResultStatus } from "@/lib/vedett-route/accessibility
 import dynamic from "next/dynamic";
 import { useGeolocation } from "@/lib/hooks/useGeolocation";
 import RestPointQuickAdd, { type RestPointCreatedPayload } from "./RestPointQuickAdd";
-import RestStopFlowPanel, { type RestStopMapState } from "./RestStopFlowPanel";
+import RestStopFlowPanel, { type RestStopMapState, type RestPanelMode } from "./RestStopFlowPanel";
 import type { RestPointMarker } from "./VedettUtvonalMap";
 import { setNavigationModeActive } from "@/lib/pwa/navigationModeSignal";
 import type { GeocodePlaceCandidate } from "@/lib/vedett-route/geocode";
+// STREET-LEVEL FALLBACK (2026-09-12) — a request-body-összeállítás pure
+// függvényekbe kiszervezve (lib/vedett-route/searchRequestBuilder.ts), hogy
+// Node.js tesztekben React-függőség nélkül ellenőrizhetők legyenek az
+// invariánsok (MAP_PICKED → toCoordinates, MANUAL → to string, stb.).
+import {
+  buildSearchRequestOriginFields,
+  buildSearchRequestDestinationFields,
+  type RouteOrigin,
+  type RouteDestination,
+} from "@/lib/vedett-route/searchRequestBuilder";
+import { formatDurationMinutes } from "@/lib/vedett-route/formatDurationMinutes";
 
 // „Aktuális helyzetem" mint indulási pont (UX módosítás, 2026-09-09) — a
 // keresési form induló-mezője mostantól két, egymást KIZÁRÓ móddal
@@ -35,10 +46,9 @@ import type { GeocodePlaceCandidate } from "@/lib/vedett-route/geocode";
 // harmadik, önálló wire-mezőn (a `name` megjelenítési label itt még
 // mindig a rögzített "Jelenlegi hely"-t adja — lásd a részletes
 // magyarázatot a végső riportban, "ismert korlátozás" pont).
-type RouteOrigin =
-  | { type: "MANUAL"; city: string; districtOrPostalCode: string; street: string }
-  | { type: "CURRENT_LOCATION"; latitude: number; longitude: number }
-  | { type: "MAP_PICKED"; name: string; latitude: number; longitude: number };
+// RouteOrigin importálva: lib/vedett-route/searchRequestBuilder.ts
+// (MANUAL | CURRENT_LOCATION | MAP_PICKED — wire-invariáns: MAP_PICKED és
+// CURRENT_LOCATION → fromCoordinates, MANUAL → from: string)
 
 // Védett Hely "Navigálj oda" -> Védett Útvonal integráció (2026-09-09).
 //
@@ -63,33 +73,16 @@ type RouteOrigin =
 // "ne geokódold újra") — külön típusként tartjuk, hogy a UI-szöveg
 // ("Térképen kijelölt célpont") és a jövőbeli logika ne keveredjen össze a
 // Védett Hely deep link KNOWN_PLACE jelentésével.
-type RouteDestination =
-  | { type: "MANUAL"; city: string; districtOrPostalCode: string; street: string }
-  | { type: "KNOWN_PLACE"; name: string; latitude: number; longitude: number }
-  | { type: "MAP_PICKED"; name: string; latitude: number; longitude: number };
+// RouteDestination importálva: lib/vedett-route/searchRequestBuilder.ts
+// (MANUAL | KNOWN_PLACE | MAP_PICKED — wire-invariáns: KNOWN_PLACE és
+// MAP_PICKED → toCoordinates, MANUAL → to: string)
 
-// Strukturált címbevitel (UX feladat, 2026-09-XX) — a Város / Irányítószám
-// vagy kerület / Utca, házszám mezőket a KLIENS külön kezeli (kevesebb
-// utcanév-ütközés Budapesten, pl. több "Kossuth utca" is létezik), de a
-// szerver felé — és a MEGLÉVŐ geocodeAddress() Nominatim-hívás felé — végül
-// EGYETLEN, jól formázott cím-stringet küldünk. NEM hozunk létre új
-// wire-formátumot/schemát: lib/vedett-route/schemas.ts `from`/`to` mezői
-// VÁLTOZATLANOK maradnak, továbbra is egyszerű stringek — csak a KLIENS
-// állítja össze ezt a stringet a strukturált mezőkből, mielőtt elküldi.
-// Irányítószám esetén (4 számjegy) a szokásos magyar postai formátumot
-// követjük ("1136 Budapest, ..."), kerület esetén a kerület is bekerül a
-// stringbe ("Budapest, XIII. kerület, ..."), hogy a geokódolás elé SOHA ne
-// kerüljön kevesebb infó, mint amit a felhasználó megadott.
-function buildStructuredAddress(addr: { city: string; districtOrPostalCode: string; street: string }): string {
-  const city = addr.city.trim();
-  const districtOrPostalCode = addr.districtOrPostalCode.trim();
-  const street = addr.street.trim();
-  const isPostalCode = /^\d{4}$/.test(districtOrPostalCode);
-  const cityLine = isPostalCode
-    ? [districtOrPostalCode, city].filter(Boolean).join(" ")
-    : [city, districtOrPostalCode].filter(Boolean).join(", ");
-  return [cityLine, street].filter(Boolean).join(", ");
-}
+// buildStructuredAddress kiszervezve: lib/vedett-route/searchRequestBuilder.ts
+// → buildStructuredAddressString(). A handleSubmit-ben mostantól az ott
+// importált buildSearchRequestOriginFields / buildSearchRequestDestinationFields
+// hívódik, amelyek belsőleg a buildStructuredAddressString-et használják.
+// Ez a csere SEMMILYEN wire-viselkedést nem változtat: az összeállított
+// cím-string formátuma byte-azonos marad.
 
 // GEOCODING KORREKCIÓ (2026-09-11, C4.2, "3. PLACE-ONLY INPUT LEGYEN
 // ÉRVÉNYES" pont) — BIZONYÍTOTT root cause: a City mező ALAPÉRTELMEZETTEN
@@ -151,6 +144,11 @@ type SearchApiResponse =
       // GeocodePlaceCandidate) — SOHA nem nyers Nominatim objektumot. A régi
       // (routing-szintű) hibaágak ezt sosem küldik, ezért opcionális.
       candidates?: GeocodePlaceCandidate[];
+      // STREET-LEVEL FALLBACK (2026-09-12) — "house_number_not_resolved"
+      // reason esetén a szerver visszaadja a biztosan feloldott utcát és
+      // települést, hogy az inline figyelmeztetőkártya megmutathassa.
+      resolvedStreet?: string;
+      resolvedCity?: string;
     };
 
 const LABEL_META: Record<RankingLabel, { text: string; className: string }> = {
@@ -454,11 +452,82 @@ function RankedJourneyCard({
   // teljes képernyős térkép legyen az elsődleges nézet navigáció indításakor.
   const [restPanelVisible, setRestPanelVisible] = useState(false);
 
+  // Desktop UX korrekció (2026-09-13) — a fullscreen navigáció alatt
+  // desktopon (>= md) KÉT KÜLÖN, közvetlenül elérhető gomb van a
+  // "Pihenőpont hozzáadása" lebegő CTA mellett: "Pihenőre van szükségem".
+  // Ez a token KIZÁRÓLAG UI-wiring: a RestStopFlowPanel-nek küldött
+  // `externalRequestRestToken` prop minden increment-je a panel BELSŐ,
+  // meglévő REQUEST_REST eseményét dispatch-eli (lásd RestStopFlowPanel.tsx
+  // "Desktop UX korrekció" kommentjeit) — nem hoz létre új
+  // routing/state-machine logikát, csak elkerüli, hogy a felhasználónak
+  // előbb meg kelljen nyitnia a panelt ahhoz, hogy ezt a MEGLÉVŐ funkciót
+  // elérje.
+  const [restRequestToken, setRestRequestToken] = useState(0);
+
+  // UX HOTFIX (2026-09-13, ötödik kör) — "Rest Search és Rest Point Add mód
+  // teljes szétválasztása". A negyedik kör `restRequestPending` flagje
+  // CSAK a köztes, klikk→REQUEST_REST ablakig élt — ahogy a keresés
+  // állapotgépe továbblépett (REST_POINTS_LOADING/READY), a flag visszaállt
+  // false-ra, és a RestPointQuickAdd trigger (és vele a "Pihenőpont
+  // hozzáadása" funkció) ÚJRA megjelent a már megnyílt találati lista
+  // ALATT — ez volt a jelentett hiba ("miközben alatta már a megtalált
+  // közeli pihenőhelyek láthatók"). A javítás: egy STABIL, a panel TELJES
+  // megnyitott session-jére érvényes belépési mód, ami a panel megnyílásának
+  // OKÁT rögzíti, nem csak egy átmeneti pillanatot.
+  //
+  // - Külső "Pihenőre van szükségem" → restPanelMode = "SEARCH": a panel
+  //   KIZÁRÓLAG a pihenőpont-keresés UI-ját mutatja (RestStopFlowPanel saját
+  //   belső állapotai szerint: keresés/betöltés/találati lista/"Ide megyek"
+  //   stb.) — a RestPointQuickAdd (és a "Pihenőpont hozzáadása" cím/CTA)
+  //   EGYÁLTALÁN nem jelenik meg, a session teljes hossza alatt, függetlenül
+  //   attól, hogy a keresés melyik lépésénél tart.
+  // - Külső "Pihenőpont hozzáadása" → restPanelMode = "ADD": változatlanul a
+  //   jelenlegi hozzáadás-UI (RestPointQuickAdd) jelenik meg.
+  //
+  // Ez a mód UI-szintű elágazás — nem érinti a rest-stop-flow state
+  // machine-t (lib/vedett-route/restStopFlow/stateMachine.ts), nem hoz
+  // létre új eseményt/hálózati hívást. Bezáráskor és friss navigáció-
+  // indításkor a mód mindig biztonságos alapállapotba ("ADD") áll vissza —
+  // lásd handleCloseRestPanel/startNavigation lent.
+  //
+  // UX HOTFIX (2026-09-13, hatodik kör) — "ADD módból is tűnjön el a másik
+  // funkció CTA-ja". Az ötödik kör verziójában restPanelMode-ot a
+  // RestStopFlowPanel EGYÁLTALÁN nem ismerte — az KIZÁRÓLAG a RestPointQuickAdd
+  // megjelenítését/rejtését és a sticky fejléc címét vezérelte ebben a
+  // szülőben. Emiatt a RestStopFlowPanel SAJÁT belső idle-chooser gombja
+  // ("Pihenőre van szükségem") ADD módban (külső "Pihenőpont hozzáadása")
+  // is tovább látszott az add UI ALATT — ez volt a hatodik kör jelentett
+  // hibája. A javítás: a `RestPanelMode` típus mostantól a
+  // RestStopFlowPanel.tsx-ből van importálva (egyetlen forrás), és a
+  // panel egy KÖTELEZŐ `mode` propként kapja meg — a saját belső
+  // idle-chooser UI-ját (lásd RestStopFlowPanel.tsx render törzse) ez
+  // alapján rendereli, MINDKÉT explicit módban elrejtve azt (a döntés
+  // MINDIG a szülőben, a két külső CTA valamelyikének megnyomásával
+  // történik).
+  const [restPanelMode, setRestPanelMode] = useState<RestPanelMode>("ADD");
+
+  const handleRequestRestCta = () => {
+    setRestPanelMode("SEARCH");
+    setRestPanelVisible(true);
+    setRestRequestToken((token) => token + 1);
+  };
+
+  const handleAddRestPointCta = () => {
+    setRestPanelMode("ADD");
+    setRestPanelVisible(true);
+  };
+
+  const handleCloseRestPanel = () => {
+    setRestPanelVisible(false);
+    setRestPanelMode("ADD"); // bezáráskor mindig biztonságos alapállapotba áll vissza — a J. teszt szerint egyik mód sem "ragadhat be".
+  };
+
   const startNavigation = () => {
     setNavigationMode(true);
     setFollowMode(true);
     setManualFullscreen(false); // navigationMode már magában fullscreen — nincs szükség a külön manuális flagre is.
     setRestPanelVisible(false); // friss navigációs session mindig ZÁRT pihenőpont-panellel indul — a teljes képernyős térkép az elsődleges nézet.
+    setRestPanelMode("ADD"); // friss navigációs session mindig alap ("ADD") pihenőpont-módból indul.
     geo.startWatching();
   };
 
@@ -553,7 +622,7 @@ function RankedJourneyCard({
       </div>
 
       <div className="mt-2 flex items-baseline justify-between">
-        <p className="text-xl font-bold text-sni-text">{journey.totalDurationMinutes} perc</p>
+        <p className="text-xl font-bold text-sni-text">{formatDurationMinutes(journey.totalDurationMinutes)}</p>
         <p className="text-sm text-gray-500">
           {new Date(journey.departureTime).toLocaleTimeString("hu-HU", { hour: "2-digit", minute: "2-digit" })}
           {" → "}
@@ -588,7 +657,7 @@ function RankedJourneyCard({
               {" → "}
               {leg.mode === "WALK" ? walkEndpointLabel(leg.toName, journey.legs[i + 1]) : leg.toName}
               {" ("}
-              {leg.durationMinutes} perc
+              {formatDurationMinutes(leg.durationMinutes)}
               {leg.mode === "WALK" && leg.distanceMeters !== undefined ? `, ${leg.distanceMeters} m` : ""}
               {")"}
             </span>
@@ -598,8 +667,8 @@ function RankedJourneyCard({
       </div>
 
       <p className="mt-2 text-xs text-gray-500">
-        {journey.transfers} átszállás · {journey.walkingMinutes} perc gyaloglás
-        {journey.walkingDistanceMeters !== undefined ? ` (${journey.walkingDistanceMeters} m)` : ""} · {journey.waitingMinutes} perc várakozás
+        {journey.transfers} átszállás · {formatDurationMinutes(journey.walkingMinutes)} gyaloglás
+        {journey.walkingDistanceMeters !== undefined ? ` (${journey.walkingDistanceMeters} m)` : ""} · {formatDurationMinutes(journey.waitingMinutes)} várakozás
       </p>
 
       {sensory && (
@@ -806,10 +875,12 @@ function RankedJourneyCard({
           >
             {mapFullscreen && (
               <div className="sticky top-0 z-10 flex flex-shrink-0 items-center justify-between rounded-t-2xl border-b border-gray-100 bg-white px-3 py-1">
-                <span className="text-sm font-semibold text-sni-text">Pihenőpont hozzáadása</span>
+                <span className="text-sm font-semibold text-sni-text">
+                  {restPanelMode === "SEARCH" ? "Közeli pihenőhelyek" : "Pihenőpont hozzáadása"}
+                </span>
                 <button
                   type="button"
-                  onClick={() => setRestPanelVisible(false)}
+                  onClick={handleCloseRestPanel}
                   aria-label="Pihenőpontok bezárása"
                   className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full text-lg text-gray-600"
                 >
@@ -821,7 +892,21 @@ function RankedJourneyCard({
               className={mapFullscreen ? "space-y-3 overflow-y-auto px-3 pt-3" : "space-y-3"}
               style={mapFullscreen ? { paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 12px)" } : undefined}
             >
-              <RestPointQuickAdd onCreated={(rp) => setSessionRestPoints((points) => [...points, rp])} />
+              {/* UX HOTFIX (2026-09-13, ötödik kör) — "Rest Search és Rest
+                  Point Add mód teljes szétválasztása". A RestPointQuickAdd
+                  trigger/UI KIZÁRÓLAG restPanelMode === "ADD" esetén
+                  rendereződik — SEARCH módban (külső "Pihenőre van
+                  szükségem") a teljes session alatt, a keresés MINDEN
+                  fázisában (loading/results/kiválasztás/stb.) egyáltalán
+                  nem jelenik meg, nem csak egy rövid, köztes ablakban (ez
+                  a negyedik kör `restRequestPending` megoldásának
+                  hiányossága volt). A komponens MAGA nem unmountol
+                  ismételten mode-váltáskor sem a saját belső logikáját nem
+                  módosítottuk — csak a szülő dönt arról, hogy a JSX-fába
+                  egyáltalán belekerüljön-e. */}
+              {restPanelMode === "ADD" && (
+                <RestPointQuickAdd onCreated={(rp) => setSessionRestPoints((points) => [...points, rp])} />
+              )}
 
               {/* Sprint E — "Pihenőre van szükségem": az eredeti célt a
                 MEGJELENÍTETT (nem feltétlenül az eredeti) itinerary utolsó
@@ -848,32 +933,96 @@ function RankedJourneyCard({
                 geo={geo}
                 onRouteResumed={(nextJourney) => setDisplayedJourney(nextJourney)}
                 onMapStateChange={setRestStopMapState}
+                externalRequestRestToken={restRequestToken}
+                mode={restPanelMode}
               />
             </div>
           </div>
 
-          {/* Bezárt pihenőpont-panel újranyitása (2026-09-11) — csak
-              fullscreen alatt, amíg restPanelVisible === false, jelenik meg.
-              Legalább 44x44 px, a meglévő "Pihenőpont hozzáadása" felirattal
-              (spec 5. pont: a MEGLÉVŐ funkcióval nyitható vissza) — a
-              kattintás KIZÁRÓLAG a `restPanelVisible` UI-state-et állítja
-              true-ra, nem indít semmilyen új keresést/state-machine
-              eseményt (a REST_REQUESTED-et továbbra is csak a
-              RestStopFlowPanel saját, explicit "Pihenőre van szükségem"
-              gombja indítja, lásd stateMachine.ts CANCELLABLE_STATES fenti
-              kommentje). Jobb alsó sarok, a biztonsági (safe-area) sáv
-              figyelembevételével, hogy notch/browser chrome alá sose
-              kerüljön. */}
+          {/* Bezárt pihenőpont-panel újranyitása (2026-09-11, majd desktop UX
+              korrekció 2026-09-13) — csak fullscreen alatt, amíg
+              restPanelVisible === false, jelenik meg. Jobb alsó sarok, a
+              biztonsági (safe-area) sáv figyelembevételével, hogy
+              notch/browser chrome alá sose kerüljön.
+
+              MOBIL + PWA KIBŐVÍTÉS (2026-09-13, második kör) — a korábbi
+              kör a "Pihenőre van szükségem" desktop CTA-t `hidden md:flex`-
+              fel < md alatt elrejtette, így mobilon/telepített PWA-ban
+              továbbra is csak a "Pihenőpont hozzáadása" volt elérhető (a
+              másik funkciót csak a panel megnyitása UTÁN, a RestStopFlowPanel
+              saját belső gombjával lehetett elérni — pontosan az az extra
+              lépés, amit a desktop-kör megszüntetett, de mobilon addig
+              megmaradt). A `hidden`/`md:flex` ELTÁVOLÍTVA: EGYETLEN, közös
+              JSX-blokk (nincs külön duplikált mobil/desktop <button> pár)
+              MINDEN viewporton megjeleníti mindkét gombot, KIZÁRÓLAG a
+              wrapper flex-irányát váltja md-nél (`flex-col` mobilon —
+              egymás alatt, a felhasználó explicit "egymás fölött" kérése
+              szerint —, `md:flex-row` desktopon — egymás mellett,
+              VÁLTOZATLANUL). Egyik gomb sem függ a másiktól egyik
+              viewporton sem: mindkettő önállóan, közvetlenül elérhető és
+              önállóan hívja a saját (MEGLÉVŐ) handlerét.
+
+              VIZUÁLIS PRIORITÁS — "Pihenőre van szükségem" az elsődleges
+              action. KONTRASZT-HOTFIX (2026-09-13, harmadik kör): az
+              EREDETI .btn-primary színpár (bg-sni-brand-teal + fehér
+              szöveg) auditálva ~1.8:1 kontrasztarányt ad normál méretű
+              gombszövegre — ez NEM felel meg a WCAG AA 4.5:1 minimumnak.
+              A javítás bg-sni-brand-navy (#123A5C, sötét navy) + fehér
+              szöveget használ — ez jóval sötétebb, mint a teal, a fehér
+              szöveggel messze a 4.5:1 fölötti kontrasztot ad. Hover/focus
+              állapot a projekt meglévő, valós tokenjeire épül
+              (hover:bg-sni-brand-blue, focus-visible:ring-sni-brand-teal —
+              ugyanaz a minta, mint a .btn-primary/.btn-secondary
+              osztályokban, lásd app/globals.css). "Pihenőpont hozzáadása"
+              a másodlagos action, VÁLTOZATLAN (fehér háttér + sni-brand-
+              teal szegély + sni-brand-blue szöveg, a .btn-secondary
+              színpárja). MINDKÉT szín valós, a tailwind.config.ts-ben
+              ténylegesen definiált token (sni.brand.navy/teal/blue) — NEM
+              használ "sni-primary"-t (az soha nem létezett token volt).
+
+              PWA/FULLSCREEN + SAFE-AREA — a wrapper továbbra is
+              `position: fixed`, a fullscreen map (z-50) FÖLÖTT (z-[60]),
+              az ALSÓ pozíciója a MÁR MEGLÉVŐ `env(safe-area-inset-bottom,
+              0px)` mintát használja (ugyanaz, mint a "Bezárás" utáni
+              content-padding és a bottom sheet — lásd feljebb —, nincs
+              párhuzamos safe-area rendszer bevezetve). Ez a minta
+              standalone (telepített) PWA módban IS működik: a
+              `env(safe-area-inset-bottom)` a PWA manifest
+              display:"standalone" módjában is érvényes CSS env()
+              változó, nem böngésző-specifikus API. A `100dvh` a fullscreen
+              map wrapper-én (feljebb, `style={mapFullscreen ? { height:
+              "100dvh" } : undefined}`) SZINTÉN változatlan — ez a blokk
+              csak a rá épülő overlay-t bővíti.
+
+              MÉRET/OLVASHATÓSÁG — mindkét gomb legalább 44px magas
+              (min-h-[44px]), teljes felirattal (nincs csak-ikon gomb),
+              elég vízszintes paddinggel (px-4) ahhoz, hogy keskeny (~360px)
+              mobil viewporton se törjön/lógjon ki — a `right-3`
+              jobbra-igazítás (`items-end` mobilon) a leghosszabb feliratú
+              gomb szélességéhez igazodik, sosem feszíti túl a viewport
+              szélességét. */}
           {mapFullscreen && !restPanelVisible && (
-            <button
-              type="button"
-              onClick={() => setRestPanelVisible(true)}
-              aria-label="Pihenőpont hozzáadása"
-              className="fixed right-3 z-[60] flex min-h-[44px] items-center rounded-full bg-white px-4 text-sm font-medium text-sni-text shadow-2xl"
+            <div
+              className="fixed right-3 z-[60] flex flex-col items-end gap-2 md:flex-row md:items-center"
               style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 12px)" }}
             >
-              Pihenőpont hozzáadása
-            </button>
+              <button
+                type="button"
+                onClick={handleRequestRestCta}
+                aria-label="Pihenőpontok keresése a közelemben"
+                className="flex min-h-[44px] items-center rounded-full bg-sni-brand-navy px-4 text-sm font-semibold text-white shadow-2xl transition-colors duration-200 hover:bg-sni-brand-blue focus:outline-none focus-visible:ring-2 focus-visible:ring-sni-brand-teal focus-visible:ring-offset-2"
+              >
+                Pihenőre van szükségem
+              </button>
+              <button
+                type="button"
+                onClick={handleAddRestPointCta}
+                aria-label="Pihenőpont hozzáadása"
+                className="flex min-h-[44px] items-center rounded-full border-2 border-sni-brand-teal bg-white px-4 text-sm font-semibold text-sni-brand-blue shadow-2xl"
+              >
+                Pihenőpont hozzáadása
+              </button>
+            </div>
           )}
         </div>
       )}
@@ -1080,6 +1229,25 @@ export default function VedettUtvonalSearchForm({
   // pár. Amíg null, nincs választólista megjelenítve.
   const [ambiguousOriginCandidates, setAmbiguousOriginCandidates] = useState<GeocodePlaceCandidate[] | null>(null);
   const [ambiguousDestinationCandidates, setAmbiguousDestinationCandidates] = useState<GeocodePlaceCandidate[] | null>(null);
+  // STREET-LEVEL FALLBACK (2026-09-12) — "house_number_not_resolved" API
+  // válasz esetén a biztosan feloldott utca közelítő koordinátáját tároljuk
+  // (szimmetrikusan, origin/destination oldalon). Az inline kártya ezekből
+  // olvas; amíg null, nincs kártya megjelenítve. A routing KIZÁRÓLAG
+  // explicit felhasználói jóváhagyás után indul (lásd handleStreetLevel*).
+  const [streetLevelFrom, setStreetLevelFrom] = useState<{
+    name: string; lat: number; lon: number; resolvedStreet?: string; resolvedCity?: string;
+  } | null>(null);
+  const [streetLevelTo, setStreetLevelTo] = useState<{
+    name: string; lat: number; lon: number; resolvedStreet?: string; resolvedCity?: string;
+  } | null>(null);
+  // STREET-LEVEL FALLBACK — re-submit flag: mikor a felhasználó az
+  // "Az utca közelítő helyével tervezek" gombot nyomja, az origin/destination
+  // state-et MAP_PICKED-re frissítjük, majd EZZEL a flag-gel jelezzük, hogy
+  // a form-ot a React render után újra kell küldeni — a useEffect kezeli
+  // (lásd lent), azután a flag-et nullázzuk.
+  const [pendingStreetLevelResubmit, setPendingStreetLevelResubmit] = useState(false);
+  // formRef — a street-level re-submit useEffect-ből hívja requestSubmit()-ot
+  const formRef = useRef<HTMLFormElement>(null);
   const [weights, setWeights] = useState<PersonalizationWeights>(
     initialFavoritePreset?.weights ?? {
       transfers: 1,
@@ -1136,6 +1304,19 @@ export default function VedettUtvonalSearchForm({
     }
     // "requesting" közben nincs teendő — a gomb loading state-et mutat.
   }, [originGeo.status, originGeo.latitude, originGeo.longitude]);
+
+  // STREET-LEVEL FALLBACK (2026-09-12) — re-submit useEffect: miután a
+  // felhasználó az "Az utca közelítő helyével tervezek" gombot nyomta,
+  // az origin/destination state már MAP_PICKED-re frissült. Ez az effect
+  // az állapotfrissítés UTÁNI renderben fut le (React guarantee), ezért
+  // a formRef.current.requestSubmit() már az ÚJ state-et olvasó
+  // handleSubmit-et hívja. A pendingStreetLevelResubmit flag egyszeri
+  // elsütés — azonnal nullázzuk, hogy ne induljon végtelen loop.
+  useEffect(() => {
+    if (!pendingStreetLevelResubmit) return;
+    setPendingStreetLevelResubmit(false);
+    formRef.current?.requestSubmit();
+  }, [pendingStreetLevelResubmit]);
 
   function handleUseCurrentLocation() {
     // B5 — ha már fut egy kérés, egy újabb kattintás nem indít párhuzamos
@@ -1232,6 +1413,44 @@ export default function VedettUtvonalSearchForm({
 
   function handleOriginMapPickerCancel() {
     setOriginMapPickerOpen(false);
+  }
+
+  // STREET-LEVEL FALLBACK (2026-09-12) — "Az utca közelítő helyével tervezek"
+  // gomb handlerei (destination + origin szimmetrikusan):
+  //   1. A már feloldott koordinátával MAP_PICKED-re állítjuk az origin/dest state-et.
+  //   2. A street-level state-et töröljük (kártya eltűnik).
+  //   3. A pendingStreetLevelResubmit flag-et igazra állítjuk → useEffect
+  //      a következő render után requestSubmit()-ot hív.
+  // BIZTONSÁGI garantia: NEM geokódoljuk újra a hibás házszámos input-ot.
+  // A koordináta a szerver által visszaadott, már validált utca-koordináta.
+  function handleStreetLevelAcceptTo() {
+    if (!streetLevelTo) return;
+    const label = [streetLevelTo.resolvedStreet, streetLevelTo.resolvedCity]
+      .filter(Boolean)
+      .join(", ") || "Utca közelítő helye";
+    setDestination({ type: "MAP_PICKED", name: label, latitude: streetLevelTo.lat, longitude: streetLevelTo.lon });
+    setStreetLevelTo(null);
+    setPendingStreetLevelResubmit(true);
+  }
+
+  function handleStreetLevelModifyTo() {
+    setStreetLevelTo(null);
+    setResult(null);
+  }
+
+  function handleStreetLevelAcceptFrom() {
+    if (!streetLevelFrom) return;
+    const label = [streetLevelFrom.resolvedStreet, streetLevelFrom.resolvedCity]
+      .filter(Boolean)
+      .join(", ") || "Utca közelítő helye";
+    setOrigin({ type: "MAP_PICKED", name: label, latitude: streetLevelFrom.lat, longitude: streetLevelFrom.lon });
+    setStreetLevelFrom(null);
+    setPendingStreetLevelResubmit(true);
+  }
+
+  function handleStreetLevelModifyFrom() {
+    setStreetLevelFrom(null);
+    setResult(null);
   }
 
   // GEOCODING KORREKCIÓ (2026-09-11, C4.1, "többértelmű találatok" pont) —
@@ -1445,24 +1664,13 @@ export default function VedettUtvonalSearchForm({
       // MAP_PICKED induló pontra — a CURRENT_LOCATION ág (fentebb)
       // SZÁNDÉKOSAN nem küld fromName-et, ott marad a régi, VÁLTOZATLAN
       // "Jelenlegi hely" alapérték.
-      const originFields =
-        origin.type === "CURRENT_LOCATION"
-          ? { fromCoordinates: { latitude: origin.latitude, longitude: origin.longitude } }
-          : origin.type === "MAP_PICKED"
-            ? { fromCoordinates: { latitude: origin.latitude, longitude: origin.longitude }, fromName: origin.name }
-            : { from: buildStructuredAddress(origin) };
-      // Geocoding hardening (2026-09-10) — a MAP_PICKED cél (a felhasználó
-      // a térképen jelölte ki, egy APPROXIMATE geokódolási találat után,
-      // lásd DestinationMapPicker.tsx) UGYANÚGY toCoordinates/toName-en
-      // megy, mint a KNOWN_PLACE (Védett Hely deep link) cél — 13. pont:
-      // "ne geokódold újra". Csak a MANUAL ág épít cím-stringet.
-      const destinationFields =
-        destination.type === "KNOWN_PLACE" || destination.type === "MAP_PICKED"
-          ? {
-              toCoordinates: { latitude: destination.latitude, longitude: destination.longitude },
-              toName: destination.name,
-            }
-          : { to: buildStructuredAddress(destination) };
+      // STREET-LEVEL FALLBACK (2026-09-12) — a request-body mezőit
+      // searchRequestBuilder.ts pure függvényei állítják össze.
+      // Wire-invariáns: MAP_PICKED/CURRENT_LOCATION → fromCoordinates,
+      // MANUAL → from: string; KNOWN_PLACE/MAP_PICKED → toCoordinates,
+      // MANUAL → to: string. Ez tesztelhetővé vált React nélkül.
+      const originFields = buildSearchRequestOriginFields(origin);
+      const destinationFields = buildSearchRequestDestinationFields(destination);
       const body = {
         ...originFields,
         ...destinationFields,
@@ -1524,6 +1732,22 @@ export default function VedettUtvonalSearchForm({
       } else {
         setAmbiguousDestinationCandidates(null);
       }
+      // STREET-LEVEL FALLBACK (2026-09-12) — "house_number_not_resolved"
+      // válasz esetén elmentjük az utca közelítő koordinátáját. Pontosan
+      // egy ág lehet aktív (origin VAGY destination), szimmetrikusan.
+      // A routing SOSEM indul automatikusan — kizárólag explicit UI gomb
+      // (handleStreetLevelAccept*) váltja ki a pendingStreetLevelResubmit
+      // flag-et, ami az useEffect-en keresztül requestSubmit()-ot hív.
+      if (!data.ok && data.reason === "house_number_not_resolved" && data.field === "to" && data.approximateLocation) {
+        setStreetLevelTo({ ...data.approximateLocation, resolvedStreet: data.resolvedStreet, resolvedCity: data.resolvedCity });
+      } else {
+        setStreetLevelTo(null);
+      }
+      if (!data.ok && data.reason === "house_number_not_resolved" && data.field === "from" && data.approximateLocation) {
+        setStreetLevelFrom({ ...data.approximateLocation, resolvedStreet: data.resolvedStreet, resolvedCity: data.resolvedCity });
+      } else {
+        setStreetLevelFrom(null);
+      }
     } catch {
       setResult({ ok: false, reason: "routing_engine_unavailable", message: "Az útvonaltervezés átmenetileg nem érhető el." });
     } finally {
@@ -1535,7 +1759,7 @@ export default function VedettUtvonalSearchForm({
     <div className="card">
       <h2 className="text-lg font-semibold text-sni-text">Útvonalkeresés</h2>
 
-      <form onSubmit={handleSubmit} className="mt-3 space-y-3">
+      <form ref={formRef} onSubmit={handleSubmit} className="mt-3 space-y-3">
         <div>
           <label className="block text-sm font-medium text-gray-700">Indulási hely</label>
           {/* Task B — „Aktuális helyzetem" mint indulási pont: jól látható,
@@ -1650,7 +1874,7 @@ export default function VedettUtvonalSearchForm({
           {/* 7. pont — Budapest BÉTA korlát: diszkrét jelzés a mezők
               közelében, nincs hardcode-olt architektúra (csak egy induló
               mezőérték és egy szöveges megjegyzés). */}
-          <p className="mt-1 text-[11px] text-gray-400">Jelenleg Budapesten tesztelhető.</p>
+          <p className="mt-1 text-[11px] text-gray-400">A Védett Útvonal jelenleg béta tesztüzemben működik.</p>
         </div>
 
         <div>
@@ -1732,7 +1956,7 @@ export default function VedettUtvonalSearchForm({
                   </p>
                 </div>
               </div>
-              <p className="mt-1 text-[11px] text-gray-400">Jelenleg Budapesten tesztelhető.</p>
+              <p className="mt-1 text-[11px] text-gray-400">A Védett Útvonal jelenleg béta tesztüzemben működik.</p>
             </>
           )}
         </div>
@@ -1985,6 +2209,111 @@ export default function VedettUtvonalSearchForm({
               `field`-et ad vissza válaszonként, ezért a két CTA SOHA nem
               jelenik meg egyszerre. Touch target: min. 44px magas (mobil/
               PWA first, 12. pont). */}
+          {/* STREET-LEVEL FALLBACK (2026-09-12) — HOUSE_NUMBER_NOT_RESOLVED
+              inline figyelmeztetőkártya. NE használ modal ablakot — az
+              inline kártya természetesebben illeszkedik a jelenlegi UX-be.
+              Két egyértelmű művelet: megerősítés (koordináta elfogadása +
+              automatikus re-submit) VAGY módosítás (hibaállapot törlése).
+              A routing SOHA nem indul automatikusan — kizárólag a
+              "Az utca közelítő helyével tervezek" gomb váltja ki.
+              Touch target: min. 44px magas (mobil/PWA first).
+              UI/KONTRASZT HOTFIX (2026-09-13) — Preview acceptance során
+              jelzett hiba: az elfogadó CTA a `border-sni-primary
+              bg-sni-primary ... hover:bg-sni-primary/90` osztályokat
+              használta. A `sni-primary` szín NINCS definiálva sehol
+              (tailwind.config.ts theme.extend.colors.sni csak bg/blue/
+              bluedark/green/greendark/beige/text/warn/brand.teal/
+              brand.blue/brand.navy kulcsokat ismer) — Tailwind ezért
+              EGYETLEN szabályt sem generált hozzá, a gomb háttere
+              transzparens maradt, a `text-white` felirat pedig fehér
+              szövegként fehér/átlátszó alapon majdnem láthatatlanná vált
+              (UGYANAZ a root cause, mint a DestinationMapPicker.tsx
+              tetején dokumentált korábbi "Ez legyen a cél" hibánál — lásd
+              ott a részletes elemzést). A gomb SOHA nem volt ténylegesen
+              `disabled` (nem volt rajta `disabled` prop) — kizárólag
+              vizuálisan tűnt annak.
+              Javítás: a `sni-primary` helyett a MEGLÉVŐ, tailwind.config.ts-
+              ben már definiált `sni-brand-navy` (#123A5C) valós token,
+              fehér szöveggel — SZÁMOLT kontraszt kb. 11.8:1 (WCAG AAA
+              szintet is túlteljesíti 14px félkövér szövegen, jóval a
+              normál szöveghez előírt 4.5:1 felett). Megfontoltuk a
+              megosztott `.btn-primary` osztály (globals.css) újrahasznosítását
+              is — ezt használja pl. lejjebb a fő "Tervezem az útvonalat"
+              submit gomb is, és a `sni-brand-teal` háttéren valóban
+              LÁTHATÓ, nem-transzparens gombot adna —, DE a `.btn-primary`
+              ALAP (nem hover) állapotának SZÁMOLT kontrasztja
+              (sni-brand-teal #34D8C3 háttéren fehér szöveg) mindössze
+              kb. 1.8:1, ami messze a WCAG AA 4.5:1 minimuma alatt marad
+              (a 14px, font-semibold szöveg NEM minősül WCAG "nagy
+              szövegnek", ahhoz legalább 700-as, azaz explicit "bold"
+              súly kellene) — vagyis a `.btn-primary` egy MÁSIK,
+              szélesebb körű (az egész appot érintő, ezért a jelenlegi,
+              "kizárólag a street-level fallback CTA" hatókörön kívül eső)
+              kontraszt-kérdés, amit ez a hotfix explicit NEM módosít
+              (lásd a végső riport "root cause" pontját). A most választott
+              `sni-brand-navy` megoldás ugyanakkor MEGTARTJA a kártya
+              eredeti, "rounded-lg"/"px-4 py-2.5"/"text-sm font-semibold"
+              méretezését (vizuálisan illeszkedik a mellette lévő
+              "Módosítom a címet" másodlagos gombhoz), és KIZÁRÓLAG ezt a
+              két gombot érinti. Emellett MOSTANTÓL explicit
+              `disabled={disabled || loading}` a gombon — genuine disabled
+              állapot KIZÁRÓLAG akkor, ha a feature-flag (`disabled` prop)
+              vagy a ténylegesen folyamatban lévő submit (`loading` state,
+              lásd handleSubmit) aktív; a `disabled:opacity-50
+              disabled:cursor-not-allowed` KIZÁRÓLAG a natív `disabled`
+              attribútum jelenlétekor fut le (Tailwind `disabled:`
+              variáns), tehát a normál, elfogadható állapotban a gomb
+              100%-ban enabled és teljes kontrasztú marad. */}
+          {result.reason === "house_number_not_resolved" && (
+            <div className="mt-2 rounded-lg border border-amber-300 bg-amber-50 p-3">
+              <p className="text-sm font-semibold text-amber-900">
+                A pontos házszámot nem tudtuk azonosítani, de az utcát megtaláltuk.
+              </p>
+              <p className="mt-1 text-sm text-amber-800">
+                Az útvonal ezért az utca közelítő helyéhez vezethet, nem feltétlenül a megadott házszámhoz.
+              </p>
+              {(result.resolvedStreet || result.resolvedCity) && (
+                <p className="mt-1 text-xs text-amber-700">
+                  Feloldott utca:{" "}
+                  <span className="font-medium">
+                    {[result.resolvedStreet, result.resolvedCity].filter(Boolean).join(", ")}
+                  </span>
+                </p>
+              )}
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                {result.field === "to" && streetLevelTo && (
+                  <button
+                    type="button"
+                    onClick={handleStreetLevelAcceptTo}
+                    disabled={disabled || loading}
+                    aria-label="Útvonaltervezés az utca közelítő helyével"
+                    className="flex min-h-[44px] w-full items-center justify-center rounded-lg border border-sni-brand-navy bg-sni-brand-navy px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-sni-brand-navy/90 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+                  >
+                    Az utca közelítő helyével tervezek
+                  </button>
+                )}
+                {result.field === "from" && streetLevelFrom && (
+                  <button
+                    type="button"
+                    onClick={handleStreetLevelAcceptFrom}
+                    disabled={disabled || loading}
+                    aria-label="Útvonaltervezés az utca közelítő helyével"
+                    className="flex min-h-[44px] w-full items-center justify-center rounded-lg border border-sni-brand-navy bg-sni-brand-navy px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-sni-brand-navy/90 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+                  >
+                    Az utca közelítő helyével tervezek
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={result.field === "to" ? handleStreetLevelModifyTo : handleStreetLevelModifyFrom}
+                  aria-label="Cím módosítása"
+                  className="flex min-h-[44px] w-full items-center justify-center rounded-lg border border-amber-400 bg-white px-4 py-2.5 text-sm font-semibold text-amber-900 shadow-sm hover:bg-amber-100 sm:w-auto"
+                >
+                  Módosítom a címet
+                </button>
+              </div>
+            </div>
+          )}
           {result.reason === "address_approximate" && (
             <>
               {result.helperMessage && <p className="mt-1 text-gray-600">{result.helperMessage}</p>}

@@ -34,6 +34,9 @@ import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import {
+  buildSearchRequestOriginFields,
+} from "../../lib/vedett-route/searchRequestBuilder.ts";
 
 const PANEL_PATH = join(import.meta.dirname, "..", "..", "components", "vedett-utvonal", "RestStopFlowPanel.tsx");
 const FORM_PATH = join(import.meta.dirname, "..", "..", "components", "vedett-utvonal", "VedettUtvonalSearchForm.tsx");
@@ -111,35 +114,45 @@ describe("TASK A — Egyetlen Megosztott Térkép (RestStopFlowPanel NEM hoz lé
 
 describe("TASK B — „Aktuális helyzetem” mint indulási pont", () => {
   test("H) CURRENT_LOCATION módban a form fromCoordinates-t küld a routing kérésben", () => {
-    assert.match(formSrc, /fromCoordinates:\s*\{\s*latitude:\s*origin\.latitude,\s*longitude:\s*origin\.longitude\s*\}/);
+    // ÁTÍRVA (2026-09-12): az inline fromCoordinates összeállítás
+    // buildSearchRequestOriginFields()-ba lett kiszervezve (searchRequestBuilder.ts)
+    // — az inline regex stale lenne. Viselkedési assert: CURRENT_LOCATION →
+    // { fromCoordinates } (nincs geokódolás, nincs 'from' string).
+    const fields = buildSearchRequestOriginFields({
+      type: "CURRENT_LOCATION",
+      latitude: 47.497,
+      longitude: 19.040,
+    });
+    assert.ok("fromCoordinates" in fields, "CURRENT_LOCATION → fromCoordinates jelen van");
+    assert.ok(!("from" in fields), "CURRENT_LOCATION: 'from' string NEM szerepel (nem kerül geokódolásra)");
+    // A form importálja a buildSearchRequestOriginFields-t (strukturális)
+    assert.match(formSrc, /buildSearchRequestOriginFields/);
   });
 
   test("I) a form SOHA nem küldi az 'Aktuális helyzetem' feliratot geokódolandó 'from' mezőként — a CURRENT_LOCATION ág nem tartalmaz 'from:' kulcsot", () => {
-    // A destination/deep-link integráció (2026-09-09) miatt a régi
-    // "const body = origin.type === ... ? { ... } : { ... }" szerkezet
-    // helyét egy szétbontott originFields/destinationFields architektúra
-    // vette át (lásd VedettUtvonalSearchForm.tsx). Az invariáns pontosan
-    // ugyanaz marad — CURRENT_LOCATION esetén fromCoordinates VAN, 'from:'
-    // NINCS —, csak az új szerkezethez illesztve ellenőrizzük.
-    const currentLocationIdx = formSrc.indexOf('origin.type === "CURRENT_LOCATION"');
-    assert.ok(currentLocationIdx !== -1, "meg kell találni az origin.type === \"CURRENT_LOCATION\" elágazást");
+    // ÁTÍRVA (2026-09-12): az originFields összeállítás buildSearchRequestOriginFields()-ba
+    // lett kiszervezve (searchRequestBuilder.ts) — az inline { from: buildStructuredAddress(origin) }
+    // regex és a string.indexOf stale lenne. Viselkedési assert:
+    // CURRENT_LOCATION → fromCoordinates VAN, 'from' NINCS;
+    // MANUAL → 'from' VAN, fromCoordinates NINCS.
+    const clFields = buildSearchRequestOriginFields({
+      type: "CURRENT_LOCATION",
+      latitude: 47.497,
+      longitude: 19.040,
+    });
+    assert.ok("fromCoordinates" in clFields, "CURRENT_LOCATION → fromCoordinates jelen van");
+    assert.ok(!("from" in clFields), "CURRENT_LOCATION: 'from' string NEM szerepel (nem geokódolandó)");
 
-    const manualBranchIdx = formSrc.indexOf(": { from: buildStructuredAddress(origin) };", currentLocationIdx);
-    assert.ok(manualBranchIdx !== -1, "meg kell találni a MANUAL ág { from: buildStructuredAddress(origin) } visszatérését (strukturált címbevitel, 2026-09-XX)");
+    const manualFields = buildSearchRequestOriginFields({
+      type: "MANUAL",
+      city: "Budapest",
+      districtOrPostalCode: "VIII. kerület",
+      street: "Baross utca 1",
+    });
+    assert.ok("from" in manualFields, "MANUAL → 'from' string jelen van (geokódolandó)");
+    assert.ok(!("fromCoordinates" in manualFields), "MANUAL: 'fromCoordinates' NEM szerepel");
 
-    const currentLocationBranch = formSrc.slice(currentLocationIdx, manualBranchIdx);
-
-    assert.match(
-      currentLocationBranch,
-      /fromCoordinates:\s*\{\s*latitude:\s*origin\.latitude,\s*longitude:\s*origin\.longitude\s*\}/,
-      "a CURRENT_LOCATION ágnak fromCoordinates-t kell tartalmaznia"
-    );
-
-    assert.ok(
-      !/\bfrom\s*:/.test(currentLocationBranch),
-      "a CURRENT_LOCATION ág nem tartalmazhat 'from' mezőt — a kliens sosem küldi geokódolandó stringként az 'Aktuális helyzetem' feliratot"
-    );
-
+    // Strukturális assert: a form body az originFields/destinationFields szétbontott szerkezetét használja
     assert.match(
       formSrc,
       /const body\s*=\s*\{\s*\.\.\.originFields,\s*\.\.\.destinationFields,/,
@@ -150,24 +163,19 @@ describe("TASK B — „Aktuális helyzetem” mint indulási pont", () => {
   test("I) app/api/admin/vedett-utvonal/search/route.ts fromCoordinates jelenlétekor NEM hívja meg a geocodeAddress()-t az induló pontra", () => {
     const routePath = join(import.meta.dirname, "..", "..", "app", "api", "admin", "vedett-utvonal", "search", "route.ts");
     const routeSrc = readFileSync(routePath, "utf-8");
-    // Geocoding hardening (2026-09-10) óta az objektum egy explicit
-    // `quality: "EXACT" as const` mezőt is kap (lásd geocode.ts — minden
-    // geokódolt eredményhez EXACT/APPROXIMATE minőség tartozik; a
-    // fromCoordinates/toCoordinates ág MÁR ISMERT, megbízható koordináta,
-    // ezért mindig EXACT-nak jelöljük) — az invariáns változatlan: a
-    // geocodeAddress() hívást ez az ág TELJESEN kihagyja.
-    //
-    // GEOCODING KORREKCIÓ (2026-09-11, C4.1) — a statikus "Jelenlegi hely"
-    // mostantól a `fromName` mező HIÁNYÁBAN jelenik meg (lásd
-    // VedettUtvonalSearchForm.tsx originFields: CURRENT_LOCATION SOSEM küld
-    // fromName-et, ezért itt a régi, VÁLTOZATLAN felirat marad — a
-    // MAP_PICKED/jelölt-választás ág viszont MINDIG küld fromName-et, lásd
-    // a geocoding-poi-generalization.test.ts "B) MAP_PICKED origin" tesztjét).
+    // Geocoding hardening (2026-09-10) óta az objektum explicit
+    // `quality: "EXACT" as const` mezőt kap — az invariáns változatlan:
+    // a geocodeAddress() hívást ez az ág TELJESEN kihagyja.
+    // FRISSÍTVE (2026-09-12): regex nem kötelezi `})` lezárót — TypeScript
+    // típus-annotáció (`as GeocodeResult`) megjelenhet a `}` után.
+    // Két részben ellenőrizzük: (1) a fromCoordinates ág alakja, (2) az ELSE ág.
     assert.match(
       routeSrc,
-      /fromCoordinates\s*\n\s*\?\s*Promise\.resolve\(\{ name: fromName \?\? "Jelenlegi hely", lat: fromCoordinates\.latitude, lon: fromCoordinates\.longitude, quality: "EXACT" as const \}\)\s*\n\s*:\s*geocodeAddress\(from as string\),/,
+      /fromCoordinates\s*\n\s*\?\s*Promise\.resolve\(\{ name: fromName \?\? "Jelenlegi hely", lat: fromCoordinates\.latitude, lon: fromCoordinates\.longitude, quality: "EXACT" as const/,
       "fromCoordinates esetén a geocodeAddress() hívást teljesen ki kell hagyni, a fromName hiányában statikus 'Jelenlegi hely' névvel kell helyettesíteni"
     );
+    // Az ELSE (MANUAL) ágon geocodeAddress fut:
+    assert.match(routeSrc, /:\s*geocodeAddress\(from as string\)/);
   });
 
   test("J) kézi gépelés BÁRMELYIK induló címmezőbe MANUAL módra állítja vissza az origin-t", () => {

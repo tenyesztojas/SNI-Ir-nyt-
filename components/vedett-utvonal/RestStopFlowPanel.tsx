@@ -21,7 +21,7 @@
 // használja — nem hoz létre második GPS-watch-ot, nem logolja/perzisztálja
 // a koordinátákat semmilyen hívásban.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { UseGeolocationResult } from "@/lib/hooks/useGeolocation";
 import type { Journey } from "@/lib/vedett-route/types";
 import type { JourneyLegForGeometry } from "@/lib/vedett-route/geometry";
@@ -182,6 +182,18 @@ function isKnownReason(reason: string | undefined): reason is RestStopFlowErrorR
   return Boolean(reason && reason in ERROR_COPY);
 }
 
+// UX HOTFIX (2026-09-13, hatodik kör) — "ADD módból is tűnjön el a másik
+// funkció CTA-ja". Az ötödik kör CSAK a szülőben (VedettUtvonalSearchForm)
+// vezette be a stabil restPanelMode-ot, és azzal KIZÁRÓLAG a RestPointQuickAdd
+// (és a sticky fejléc cím) láthatóságát döntötte el — ez a RestStopFlowPanel
+// SAJÁT belső idle-chooser gombját ("Pihenőre van szükségem") NEM érintette,
+// ezért az ADD módban (külső "Pihenőpont hozzáadása") megnyitott panelben is
+// tovább látszott ez a gomb az add UI ALATT — ez volt a jelentett duplikáció.
+// A javítás: a panel MOST MÁR explicit propként megkapja a módot, és a SAJÁT
+// belső idle-chooser gombját (és az ahhoz tartozó "keresés folyamatban"
+// köztes szöveget) ez alapján rendereli — lásd lent a render törzsében.
+export type RestPanelMode = "SEARCH" | "ADD";
+
 export interface RestStopFlowPanelProps {
   originalDestination: OriginalDestination | null;
   originalDepartAt: string;
@@ -191,9 +203,46 @@ export interface RestStopFlowPanelProps {
   // RestStopMapState kommentjét. Opcionális, hogy a régi (map nélküli)
   // használat is triviálisan kompatibilis maradjon egy jövőbeli tesztben.
   onMapStateChange?: (state: RestStopMapState) => void;
+  // Desktop UX korrekció (2026-09-13) — lehetővé teszi, hogy a szülő
+  // (VedettUtvonalSearchForm) egy KÜLÖN, közvetlenül elérhető desktop CTA-ból
+  // ("Pihenőre van szükségem", a fullscreen térkép fölötti lebegő gombsorban)
+  // UGYANAZT a REQUEST_REST eseményt indítsa, amit korábban (ötödik körig)
+  // ennek a panelnek egy saját belső gombja dispatch-elt. SZÁNDÉKOSAN egy
+  // számláló/token, nem egy boolean flag: minden increment egyetlen,
+  // egyszeri "kérést" jelent — az idempotens hatás a token VÁLTOZÁSÁRA
+  // reagál (lásd lent), így ugyanaz az érték kétszeri átadása nem indít
+  // duplikált eseményt. Ez KIZÁRÓLAG UI-wiring — nem ad hozzá új
+  // routing/state logikát, nem hoz létre új eseményt/átmenetet a
+  // stateMachine.ts-ben, és nem érinti a GPS-snapshot/nearby-discovery
+  // logikát (lásd a REST_REQUESTED effektet lent — az továbbra is
+  // változatlanul fut).
+  externalRequestRestToken?: number;
+  // UX HOTFIX (2026-09-13, hatodik kör) — a panel MOST MÁR explicit,
+  // KÖTELEZŐ propként kapja meg a szülő (VedettUtvonalSearchForm) stabil
+  // restPanelMode állapotát. Ez KIZÁRÓLAG azt dönti el, hogy a panel SAJÁT
+  // belső idle-chooser UI-ja (a korábbi "Pihenőre van szükségem" belső gomb
+  // és a hozzá tartozó köztes "keresés folyamatban" szöveg) megjelenjen-e —
+  // SEMMILYEN más belső logikát (state machine, GPS-snapshot, nearby-
+  // discovery, route-to-rest-point, resume) nem érint, azok a mode-tól
+  // FÜGGETLENÜL, a saját ctx.state-ük szerint futnak/renderelődnek tovább,
+  // hogy egy már folyamatban lévő flow a panel bezárása/mód-váltása után is
+  // zavartalanul folytatódhasson a háttérben (lásd a korábbi körök "Bezárás"
+  // dokumentációját). Mindkét explicit módban ("SEARCH" ÉS "ADD") a saját
+  // belső döntő-gomb NEM jelenik meg — a döntés MINDIG a szülőben, a két
+  // külső CTA (handleRequestRestCta/handleAddRestPointCta) valamelyikének
+  // megnyomásával történik, mielőtt ez a panel egyáltalán látható lenne.
+  mode: RestPanelMode;
 }
 
-export default function RestStopFlowPanel({ originalDestination, originalDepartAt, geo, onRouteResumed, onMapStateChange }: RestStopFlowPanelProps) {
+export default function RestStopFlowPanel({
+  originalDestination,
+  originalDepartAt,
+  geo,
+  onRouteResumed,
+  onMapStateChange,
+  externalRequestRestToken,
+  mode,
+}: RestStopFlowPanelProps) {
   const [ctx, setCtx] = useState<RestStopFlowContext | null>(null);
   const [restPointJourney, setRestPointJourney] = useState<Journey | null>(null);
   const [resumeJourney, setResumeJourney] = useState<Journey | null>(null);
@@ -225,6 +274,19 @@ export default function RestStopFlowPanel({ originalDestination, originalDepartA
       const result = transitionRestStopFlow(prev, event);
       return result.context;
     });
+  }
+
+  // Desktop UX korrekció (2026-09-13), a hatodik körben pontosítva — a
+  // MEGLÉVŐ REQUEST_REST eseményt egyetlen, megosztott függvényen keresztül
+  // indítjuk, hogy a tényleges dispatch-hívás a forrásban PONTOSAN EGYSZER
+  // szerepeljen (lásd fullscreen-rest-point-integration.test.ts "C" tesztje).
+  // A hatodik kör óta ennek EGYETLEN belépési pontja van: a fenti
+  // externalRequestRestToken-effekt, amit a szülő "Pihenőre van szükségem"
+  // KÜLSŐ CTA-ja indít (handleRequestRestCta -> restRequestToken increment).
+  // A panel korábbi (ötödik körig létező) SAJÁT belső idle-chooser gombja
+  // megszűnt — lásd lent a render törzsét és a "mode" prop dokumentációját.
+  function triggerRequestRest() {
+    dispatch({ type: "REQUEST_REST" });
   }
 
   // REST_REQUESTED: szükségünk van egy ismert pozícióra a rangsoroláshoz.
@@ -528,22 +590,86 @@ export default function RestStopFlowPanel({ originalDestination, originalDepartA
     onMapStateChange,
   ]);
 
+  // Desktop UX korrekció (2026-09-13) — a külső "Pihenőre van szükségem"
+  // CTA (externalRequestRestToken) a megosztott triggerRequestRest
+  // függvényen keresztül ugyanazt a REQUEST_REST eseményt indítja, mint a
+  // lenti belső gomb.
+  //
+  // UX HOTFIX (2026-09-13, negyedik kör) — "duplikált CTA/idle-flash"
+  // javítás. ROOT CAUSE: a külső gomb handlere (handleRequestRestCta a
+  // szülőben) ugyanabban a React-batch-ben nyitja meg a bottom sheetet ÉS
+  // increment-eli az externalRequestRestToken-t — de a triggerRequestRest()
+  // hívás korábban egy `useEffect`-ben (a commit/festés UTÁN futó
+  // effektben) történt, ezért a panel ELŐSZÖR a régi
+  // ctx.state === "ROUTE_ACTIVE" (idle) állapotával festődött ki — ekkor
+  // MÉG látszott a lenti "Pihenőre van szükségem" belső gomb (a szülőben
+  // pedig a MINDIG jelen lévő RestPointQuickAdd trigger gomb) —, és csak
+  // EGY React-effektciklussal KÉSŐBB váltott át REST_REQUESTED-re. Ez adta
+  // a felhasználó által észlelt "villanó" kétgombos idle/menü nézetet.
+  //
+  // JAVÍTÁS: `awaitingExternalRequestRest` egy VALÓDI (nem ref-alapú) React
+  // state, amit egy `useLayoutEffect` állít be — ez a DOM-commit UTÁN, de a
+  // böngésző FESTÉSE ELŐTT, SZINKRON módon fut le, így a React még a
+  // festés előtt újra-renderel az "awaiting" flaggel, a felhasználó SOSEM
+  // lát egy köztes, kifestett idle keretet. Amíg awaitingExternalRequestRest
+  // igaz: (1) a lenti belső "Pihenőre van szükségem" gomb NEM renderelődik,
+  // (2) a "Pihenőpontok keresése…" loading szöveg MÁR megjelenik. A TÉNYLEGES
+  // dispatch — a triggerRequestRest() hívás, ami a MEGLÉVŐ REQUEST_REST
+  // eseményt indítja — VÁLTOZATLANUL egy külön (nem layout-) effektben fut,
+  // amint ctx.state === "ROUTE_ACTIVE": nincs új állapotgép-esemény, nincs
+  // duplikált GPS/nearby-logika, csak a RENDER-idle elrejtve, amíg a
+  // MEGLÉVŐ effekt-lánc át nem veszi az irányítást.
+  //
+  // UX HOTFIX (2026-09-13, ötödik kör) — a korábbi, transzens "pending"
+  // callback (ami ezt az átmeneti állapotot jelentette a szülőnek, hogy a
+  // RestPointQuickAdd triggert elrejtse) NYUGDÍJAZVA: a szülő immár a STABIL `restPanelMode`
+  // state-tel, a kattintás PILLANATÁBAN dönt a RestPointQuickAdd
+  // láthatóságáról (lásd VedettUtvonalSearchForm.tsx), így erre a
+  // transzens, csak eddig a pillanatig élő jelzésre nincs többé szükség.
+  // Az `awaitingExternalRequestRest` mechanizmus MAGA (a panel SAJÁT idle
+  // gombjának villanás-mentesítése) továbbra is változatlanul szükséges és
+  // aktív marad.
+  const lastExternalRequestRestTokenRef = useRef<number | undefined>(externalRequestRestToken);
+  const [awaitingExternalRequestRest, setAwaitingExternalRequestRest] = useState(false);
+
+  useLayoutEffect(() => {
+    if (externalRequestRestToken === undefined) return;
+    if (lastExternalRequestRestTokenRef.current === externalRequestRestToken) return;
+    lastExternalRequestRestTokenRef.current = externalRequestRestToken;
+    setAwaitingExternalRequestRest(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [externalRequestRestToken]);
+
+  useEffect(() => {
+    if (!awaitingExternalRequestRest) return;
+    if (ctx?.state !== "ROUTE_ACTIVE") return;
+    setAwaitingExternalRequestRest(false);
+    triggerRequestRest();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [awaitingExternalRequestRest, ctx?.state]);
+
   if (!ctx) return null;
 
   return (
     <div className="mt-4 rounded border border-sni-primary/30 bg-sni-primary/5 p-3">
-      {ctx.state === "ROUTE_ACTIVE" && (
-        <button
-          type="button"
-          onClick={() => dispatch({ type: "REQUEST_REST" })}
-          className="btn-secondary flex min-h-[44px] items-center text-sm"
-          aria-label="Pihenőpontok keresése a közelemben"
-        >
-          Pihenőre van szükségem
-        </button>
-      )}
+      {/* UX HOTFIX (2026-09-13, hatodik kör) — "ADD módból is tűnjön el a
+          másik funkció CTA-ja". A panel SAJÁT belső idle-chooser gombja
+          ("Pihenőre van szükségem", korábban ctx.state === "ROUTE_ACTIVE" &&
+          !awaitingExternalRequestRest alatt renderelődött) TELJESEN
+          ELTÁVOLÍTVA — mindkét explicit módban (SEARCH ÉS ADD) a döntés MÁR
+          a szülőben, a két külső CTA valamelyikének megnyomásával
+          megtörtént, mielőtt ez a panel egyáltalán látható lenne, ezért
+          egy MÁSODIK, redundáns belső döntő-gomb (ami korábban az ADD-módú
+          add UI ALATT is megjelent, duplikálva a funkciót) feleslegessé
+          vált. Ez NEM egy state-machine-eseményt vagy GPS/nearby-logikát
+          távolít el — a triggerRequestRest() megosztott függvény (és az
+          ÁLTALA indított, egyetlen MEGLÉVŐ REQUEST_REST esemény) VÁLTOZATLANUL
+          megvan, és változatlanul KIZÁRÓLAG a lenti externalRequestRestToken-
+          effektből fut, amint a szülő SEARCH módra vált. */}
 
-      {(ctx.state === "REST_REQUESTED" || ctx.state === "REST_POINTS_LOADING") && (
+      {(ctx.state === "REST_REQUESTED" ||
+        ctx.state === "REST_POINTS_LOADING" ||
+        (mode === "SEARCH" && ctx.state === "ROUTE_ACTIVE" && awaitingExternalRequestRest)) && (
         <p className="text-sm text-gray-600">Pihenőpontok keresése a közeledben…</p>
       )}
 
