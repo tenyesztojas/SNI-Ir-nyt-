@@ -77,8 +77,38 @@ export interface TransitProvider {
 // --- Routing engine felé néző típusok (Route Normalizer kimenete) ---
 
 export interface JourneyLeg {
-  mode: "WALK" | "TRANSIT";
+  // MOL BUBI FRONTEND/ROUTING INTEGRÁCIÓ, PHASE 1 (2026-09-13) — "RENTAL"
+  // hozzáadva a korábbi WALK/TRANSIT bináris felosztáshoz. KIZÁRÓLAG akkor
+  // jelenik meg, ha a keresés request.molBubiEnabled === true volt (lásd
+  // orchestrator.ts mapLeg()) — molBubiEnabled hiányában/false esetén ez az
+  // érték SOHA nem fordul elő, a mode mező viselkedése byte-ra a korábbival
+  // egyezik.
+  mode: "WALK" | "TRANSIT" | "RENTAL";
   transitMode?: string; // a MOTIS nyers módja, pl. SUBWAY/TRAM/BUS/RAIL (Sensory Engine ehhez nyúl)
+  // MOL BUBI FRONTEND/ROUTING INTEGRÁCIÓ, PHASE 1.1 HARDENING (2026-09-13)
+  // — KORÁBBI KÖR KORREKCIÓJA: a Round 8 még azt az invariánst
+  // dokumentálta, hogy "minden RENTAL leg = mol-bubi". Ez FÉLREVEZETŐ
+  // globális szabály volt — a domain normalizer (orchestrator.ts mapLeg())
+  // MOSTANTÓL KIZÁRÓLAG akkor jelöli rentalProvider-t "mol-bubi"-ként, ha a
+  // leg egy TÉNYLEGESEN Bubi-enabled (request.molBubiEnabled === true)
+  // keresésből származik — ez a kontextus, NEM a RENTAL mode önmagában,
+  // adja a "mol-bubi" jelentést (lásd orchestrator.ts mapLeg()
+  // molBubiRequestActive paramétere). Egy jövőbeli, más rental providerrel
+  // bővülő fázisban egy RENTAL leg emiatt SOHA nem kap automatikusan
+  // "mol-bubi" címkét, ha nem Bubi-kontextusból jött.
+  //
+  // rentalPropulsionType KIZÁRÓLAG akkor kerül kitöltésre, ha a nyers MOTIS
+  // RENTAL leg ténylegesen tartalmazta a megfelelő (jelenleg spekulatív,
+  // lásd motisTypes.ts) mezőt — soha nem becslés/kitalált érték.
+  //
+  // FONTOS (Phase 1.1 hardening) — a korábbi rentalVehiclesAvailable mező
+  // (aktuális kerékpár-darabszám) SZÁNDÉKOSAN eltávolítva: a MOTIS
+  // /api/v6/plan válaszban NINCS bizonyított mező, amiből ez megbízhatóan
+  // származna (lásd motisTypes.ts MotisPlace kommentje). A bizonyított
+  // forrás egy KÜLÖN GET /api/v1/rentals végpont — ennek bekötése Phase 2
+  // feladat, amíg nincs bekötve, SEMMILYEN darabszám nem jelenik meg.
+  rentalProvider?: "mol-bubi";
+  rentalPropulsionType?: "HUMAN" | "ELECTRIC_ASSIST";
   routeShortName?: string;
   routeLongName?: string;
   fromName: string;
@@ -185,6 +215,20 @@ export interface JourneySearchRequest {
   // klasszifikáció/szűrés egyetlen `if (request.stepFreeRequired)` ág
   // mögé van zárva.
   stepFreeRequired?: boolean;
+  // MOL BUBI FRONTEND/ROUTING INTEGRÁCIÓ, PHASE 1 (2026-09-13) — explicit,
+  // opcionális felhasználói preferencia, UGYANOLYAN "alapérték false,
+  // hiányában/false esetén a routing működés BYTE-RA változatlan" mintázat,
+  // mint a fenti stepFreeRequired-nál. Ha false/hiányzó: az orchestrator.ts
+  // searchVedettRoutes() SOHA nem állítja be a preTransitModes/
+  // preTransitRentalProviders/preTransitRentalFormFactors/
+  // preTransitRentalPropulsionTypes MOTIS paramétereket egyik hívásban sem
+  // (lásd orchestrator.ts BUBI_MOTIS_PARAMS és a feltételes szétterítés).
+  molBubiEnabled?: boolean;
+  // Csak akkor van bármilyen hatása, ha molBubiEnabled === true. "ANY"
+  // esetén a Phase 1 NEM küld propulsion-szűrőt a MOTIS felé (lásd
+  // orchestrator.ts BUBI_MOTIS_PARAMS kommentje a döntésről) — mindkét
+  // (HUMAN + ELECTRIC_ASSIST) jármű megjelenhet a találatokban.
+  bikePropulsion?: "ANY" | "HUMAN" | "ELECTRIC_ASSIST";
 }
 
 export type JourneySearchResult =

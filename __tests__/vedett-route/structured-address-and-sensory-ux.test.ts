@@ -287,10 +287,31 @@ describe("TASK — Validáció (6. pont) — kulturált magyar hibaüzenet, NEM 
     // helper text tovább rövidült/tördelhetővé vált, hogy ne lógjon ki a
     // keskenyebb (tablet/mobil) konténerből; ez is KIZÁRÓLAG szöveg/CSS,
     // nem érinti a fenti state-et/logikát.
-    const cityLabelCount = (formSrc.match(/<label className="block text-xs text-gray-500">Város<\/label>/g) ?? []).length;
+    // FRISSÍTVE (Round 9, "UX-fejlesztés..." kör, A) rész — TELEPÜLÉS-
+    // AUTOCOMPLETE): a "Város" mező mindkét (origin + destination) blokkban
+    // a KÖZÖS SettlementAutocomplete komponensre lett kiszervezve (nincs
+    // duplikált keresési/billentyűzet-kezelési logika a két mező között),
+    // ezért a "Város" felirat literál szövege MÁR NEM a
+    // VedettUtvonalSearchForm.tsx forrásában él, hanem a
+    // SettlementAutocomplete-nek átadott label="Város" propban — a régi,
+    // <label>Város</label> literál-alapú számlálás emiatt SZÁNDÉKOSAN NEM
+    // futtatható tovább ebben a fájlban (ez a spec kötelező, dokumentált
+    // architektúra-változása, nem regresszió — lásd a végső riport 6-7.
+    // pontját). Helyette azt ellenőrizzük, hogy a SettlementAutocomplete
+    // komponens mindkét helyen, label="Város"-szal van meghívva, ÉS hogy a
+    // komponens saját forrása tartalmazza a "Város" feliratot.
+    const settlementAutocompleteUsageCount = (formSrc.match(/<SettlementAutocomplete\b/g) ?? []).length;
+    assert.equal(settlementAutocompleteUsageCount, 2, "két strukturált cím-blokk van (origin + MANUAL destination), mindkettőnek Város mezője van, a közös SettlementAutocomplete komponensen keresztül");
+    assert.match(formSrc, /<SettlementAutocomplete\s+id="vedett-route-origin-city"\s*\n\s*label="Város"/, "az origin Város mezőnek a közös komponensre kell mutatnia");
+    assert.match(formSrc, /<SettlementAutocomplete\s+id="vedett-route-destination-city"\s*\n\s*label="Város"/, "a destination Város mezőnek a közös komponensre kell mutatnia");
+    const settlementAutocompleteSrc = readFileSync(
+      join(import.meta.dirname, "..", "..", "components", "vedett-utvonal", "SettlementAutocomplete.tsx"),
+      "utf-8"
+    );
+    assert.match(settlementAutocompleteSrc, /\{label\}/, "a SettlementAutocomplete-nek a kapott label propot (pl. 'Város') kell megjelenítenie");
+
     const districtLabelCount = (formSrc.match(/<label className="block text-xs text-gray-500">Irányítószám vagy kerület<\/label>/g) ?? []).length;
     const streetLabelCount = (formSrc.match(/<label className="block text-xs text-gray-500">Cím vagy hely<\/label>/g) ?? []).length;
-    assert.equal(cityLabelCount, 2, "két strukturált cím-blokk van (origin + MANUAL destination), mindkettőnek Város mezője van");
     assert.equal(districtLabelCount, 2);
     assert.equal(streetLabelCount, 2);
     assert.match(formSrc, /placeholder="pl\. 1136 vagy XIII\. kerület"/);
@@ -349,18 +370,21 @@ describe("TASK — Validáció (6. pont) — kulturált magyar hibaüzenet, NEM 
   });
 });
 
-describe("TASK — Budapest BÉTA korlát diszkrét jelzése (7. pont) — nincs hardcode-olt architektúra", () => {
-  test("mindkét strukturált cím-blokk közelében megjelenik a diszkrét BÉTA-lefedettségi jelzés", () => {
-    // TARTALMI FRISSÍTÉS (a searchRequestBuilder refaktortól FÜGGETLEN,
-    // dátum a git történetből nem állapítható meg innen) — a korábbi,
-    // "Jelenleg Budapesten tesztelhető." szöveg egy általánosabb,
-    // "A Védett Útvonal jelenleg béta tesztüzemben működik." megfogalmazásra
-    // frissült, VÁLTOZATLANUL mindkét (origin + destination) strukturált
-    // cím-blokk alatt megjelenve. Ez SZÁNDÉKOS szövegezési változás, nem
-    // regresszió — a régi szöveg teljes hiánya (0 találat) volt a jelzés,
-    // hogy a teszt elavult, nem hogy a jelzés maga tűnt el.
+describe("TASK — 'Béta' megjelölés teljes eltávolítása (Round 9, C) rész) — a korábbi Budapest-korlát diszkrét jelzése MEGSZŰNT", () => {
+  // FRISSÍTVE (Round 9, "Védett Útvonal UX-fejlesztés, főoldali kiemelés és
+  // a Béta megjelölés eltávolítása" kör, C) rész) — ez a teszt korábban azt
+  // várta, hogy mindkét strukturált cím-blokk alatt megjelenjen "A Védett
+  // Útvonal jelenleg béta tesztüzemben működik." szöveg. A specifikáció
+  // SZÁNDÉKOSAN megkövetelte a "Béta"/"Beta"/"BÉTA" felirat teljes
+  // eltávolítását a Védett Útvonal felhasználói felületéről — ez a szöveg
+  // pontosan egy ilyen user-facing "béta" jelzés volt, ezért MEGSZŰNT (lásd
+  // VedettUtvonalSearchForm.tsx, a két "Város" mező alatti korábbi <p>
+  // elemek törölve). Ez SZÁNDÉKOS, dokumentált spec-változás, NEM
+  // regresszió — a teszt ezért az ÚJ, elvárt állapotot (a szöveg TELJES
+  // hiánya) ellenőrzi, nem a régi jelenlétét.
+  test("a korábbi 'A Védett Útvonal jelenleg béta tesztüzemben működik.' szöveg SEHOL nem jelenik meg többé (0 találat)", () => {
     const count = (formSrc.match(/A Védett Útvonal jelenleg béta tesztüzemben működik\./g) ?? []).length;
-    assert.equal(count, 2, "a BÉTA-lefedettségi jelzésnek mindkét (origin + destination) blokk alatt meg kell jelennie");
+    assert.equal(count, 0, "a Béta-jelzés szövegének teljesen el kellett tűnnie a Round 9 C) rész szerint");
     assert.doesNotMatch(formSrc, /Jelenleg Budapesten tesztelhető\./, "a régi szövegnek sehol nem szabad megmaradnia");
   });
 
@@ -373,10 +397,15 @@ describe("TASK — Budapest BÉTA korlát diszkrét jelzése (7. pont) — nincs
     // ternary "else" oldala.
     assert.match(formSrc, /useState<RouteOrigin>\(/);
     assert.match(formSrc, /: \{ type: "MANUAL", city: "Budapest", districtOrPostalCode: "", street: "" \}/);
-    // A city mező egy sima, szabadon szerkeszthető szöveges input — nem
-    // egy zárt, Budapestre korlátozott enum/select.
+    // A city mező szabadon szerkeszthető szöveges érték — nem egy zárt,
+    // Budapestre korlátozott enum/select. FRISSÍTVE (Round 9, A) rész): a
+    // mező mostantól a közös SettlementAutocomplete komponensen keresztül
+    // kapja a value/onChange-et (nem egy sima <input onChange={(e) =>
+    // ...e.target.value}> már), de a mögötte álló value-kifejezés és az
+    // updateOriginManualField("city", ...) hívás VÁLTOZATLAN — lásd
+    // settlement-autocomplete.test.ts a komponens saját tesztjeiért.
     assert.match(formSrc, /value=\{origin\.type === "MANUAL" \? origin\.city : ""\}/);
-    assert.match(formSrc, /onChange=\{\(e\) => updateOriginManualField\("city", e\.target\.value\)\}/);
+    assert.match(formSrc, /onChange=\{\(value\) => updateOriginManualField\("city", value\)\}/);
   });
 });
 

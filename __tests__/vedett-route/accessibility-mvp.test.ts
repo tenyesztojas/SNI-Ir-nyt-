@@ -344,7 +344,12 @@ describe("journeySearchSchema — stepFreeRequired elfogadása", () => {
 
 describe("route.ts — a stepFreeRequired preferencia a cache-kulcs RÉSZE", () => {
   test("buildRouteCacheKey hívás tartalmazza a stepFreeRequired mezőt", () => {
-    assert.match(routeSrc, /buildRouteCacheKey\(\{[\s\S]{0,300}?stepFreeRequired: stepFree,?[\s\S]{0,20}?\}\)/);
+    // MOL BUBI FRONTEND/ROUTING INTEGRÁCIÓ, PHASE 1 (2026-09-13) — a záró
+    // "})" utáni ablak kibővítve, hogy a stepFreeRequired UTÁN felvett
+    // további cache-kulcs mezők (molBubiEnabled/bikePropulsion) ne törjék
+    // meg ezt a struktúrateszt — a lényeg, hogy stepFreeRequired MAGA
+    // jelen legyen a buildRouteCacheKey() hívásban.
+    assert.match(routeSrc, /buildRouteCacheKey\(\{[\s\S]{0,300}?stepFreeRequired: stepFree,?[\s\S]{0,300}?\}\)/);
   });
   test("a searchVedettRoutes() hívás továbbadja a stepFreeRequired-et a JourneySearchRequest-ben", () => {
     assert.match(routeSrc, /departAt,\s*\n\s*stepFreeRequired: stepFree,/);
@@ -386,7 +391,12 @@ describe("UI toggle — '♿ Lépcsőmentes útvonal' (spec 4. pont; UI/szövege
   });
 
   test("a submit body tartalmazza a stepFreeRequired mezőt (mindig explicit boolean-ként megy)", () => {
-    assert.match(formSrc, /\n\s*stepFreeRequired,\s*\n\s*\};/);
+    // MOL BUBI FRONTEND/ROUTING INTEGRÁCIÓ, PHASE 1 (2026-09-13) — a regex
+    // MOSTANTÓL megengedi, hogy stepFreeRequired UTÁN további mezők (pl. a
+    // Bubi molBubiEnabled/bikePropulsion) következzenek a submit body-ban a
+    // záró "};" előtt — a lényeg, hogy stepFreeRequired MAGA jelen legyen a
+    // body-ban, nem az, hogy ő az UTOLSÓ mező.
+    assert.match(formSrc, /\n\s*stepFreeRequired,\s*\n[\s\S]{0,200}?\};/);
   });
 
   test("a checkbox legalább 44px magas érintési terület (min-h-[44px] a label-en)", () => {

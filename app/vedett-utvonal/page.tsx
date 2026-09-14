@@ -112,7 +112,7 @@ export default async function VedettUtvonalPage({
       <div className="mx-auto max-w-2xl px-4 py-16 text-center sm:px-6">
         <h1 className="text-xl font-bold text-sni-text">A Védett Útvonal funkció jelenleg ki van kapcsolva.</h1>
         <p className="mt-3 text-gray-600">
-          A Védett Útvonal (BÉTA) funkció jelenleg nem elérhető. Nézz vissza később.
+          A Védett Útvonal funkció jelenleg nem elérhető. Nézz vissza később.
         </p>
         <Link href="/" className="mt-6 inline-block text-sm font-semibold text-sni-brand-blue hover:underline">
           ← Vissza a főoldalra
@@ -125,9 +125,6 @@ export default async function VedettUtvonalPage({
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-2xl font-bold text-sni-text">Védett Útvonal</h1>
-        <span className="rounded bg-sni-brand-teal/15 px-2 py-1 text-xs font-semibold text-sni-brand-teal">
-          BÉTA
-        </span>
       </div>
       <p className="mt-1 text-sm text-gray-600">
         A Védett Útvonal jelenleg tesztelés alatt áll. Az útvonal- és pihenőpont-adatok

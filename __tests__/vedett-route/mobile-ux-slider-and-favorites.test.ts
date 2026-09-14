@@ -162,9 +162,19 @@ describe("B2) Slider focus-release — fizikailag bizonyított Android PWA scrol
     assert.ok(!/KeyboardEvent|onKeyDown|e\.key/.test(focusReleaseFnMatch![0]));
   });
 
-  test("N) a címmezők (strukturált MANUAL city/districtOrPostalCode/street) onChange kezelése változatlan — a javítás nem módosítja a beviteli mezők működését", () => {
-    assert.match(formSrc, /onChange=\{\(e\) => updateOriginManualField\("city", e\.target\.value\)\}/);
-    assert.match(formSrc, /value=\{origin\.type === "MANUAL" \? origin\.city : ""\}/);
+  test("N) a városmező (MANUAL city) a SettlementAutocomplete komponensre kötve — a value és onChange wiring VÁLTOZATLANUL az origin MANUAL city state-hez kapcsolódik (Round 9 óta natív input helyett SettlementAutocomplete; a districtOrPostalCode/street natív mezők onChange-e nem módosult)", () => {
+    // Az origin városmező a KÖZÖS SettlementAutocomplete komponenst
+    // használja (nem natív <input>-ot), és annak value/onChange propja
+    // a MEGLÉVŐ origin MANUAL city state-hez van kötve — ez a konkrét
+    // state-wiring bizonyítéka, nem csak a komponensnév jelenléte.
+    assert.match(
+      formSrc,
+      /<SettlementAutocomplete\s*\n\s*id="vedett-route-origin-city"[\s\S]{0,250}value=\{origin\.type === "MANUAL" \? origin\.city : ""\}[\s\S]{0,120}onChange=\{\(value\) => updateOriginManualField\("city", value\)\}/
+    );
+    // A districtOrPostalCode/street mezők TOVÁBBRA IS natív inputok — ezek
+    // onChange-e VÁLTOZATLAN.
+    assert.match(formSrc, /onChange=\{\(e\) => updateOriginManualField\("districtOrPostalCode", e\.target\.value\)\}/);
+    assert.match(formSrc, /onChange=\{\(e\) => updateOriginManualField\("street", e\.target\.value\)\}/);
     // A releasePreviousTextInputFocus SEHOL nincs bekötve a cím-mezők
     // onChange/onBlur/onFocus eseményeibe — kizárólag a range input
     // onPointerDownCapture-jéhez kötött.

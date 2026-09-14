@@ -66,9 +66,6 @@ export default function NavigateButton({ lat, lng, placeName, vedettUtvonalHref 
                   <span className="flex flex-col">
                     <span className="flex items-center gap-1.5 font-semibold">
                       Védett Útvonal
-                      <span className="rounded bg-sni-brand-teal/15 px-1.5 py-0.5 text-[10px] font-bold uppercase leading-none text-sni-brand-teal">
-                        BÉTA
-                      </span>
                     </span>
                     <span className="text-xs font-normal text-gray-500">
                       Útvonaltervezés szenzoros szempontokkal

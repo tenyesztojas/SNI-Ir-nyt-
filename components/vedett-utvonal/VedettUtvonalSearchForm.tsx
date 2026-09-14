@@ -6,6 +6,11 @@ import type { AccessibilityResultStatus } from "@/lib/vedett-route/accessibility
 import dynamic from "next/dynamic";
 import { useGeolocation } from "@/lib/hooks/useGeolocation";
 import RestPointQuickAdd, { type RestPointCreatedPayload } from "./RestPointQuickAdd";
+// TELEPÜLÉS-AUTOCOMPLETE ("UX-fejlesztés..." kör, A) rész) — EGYETLEN közös
+// komponens/logika a "Város" mezőkhöz (induló + célhely), nincs duplikált
+// keresési/billentyűzet-kezelési kód. Lásd SettlementAutocomplete.tsx
+// fejlécét: kizárólag településnév-azonosítás, a geokódolás VÁLTOZATLAN.
+import SettlementAutocomplete from "./SettlementAutocomplete";
 import RestStopFlowPanel, { type RestStopMapState, type RestPanelMode } from "./RestStopFlowPanel";
 import type { RestPointMarker } from "./VedettUtvonalMap";
 import { setNavigationModeActive } from "@/lib/pwa/navigationModeSignal";
@@ -225,6 +230,31 @@ function stopTypeSuffix(mode?: string): string {
   if (!mode) return "";
   return STOP_TYPE_SUFFIX[mode] ?? "megálló";
 }
+
+// MOL BUBI FRONTEND/ROUTING INTEGRÁCIÓ, PHASE 1 (2026-09-13) — a
+// leg.rentalPropulsionType KIZÁRÓLAG akkor van jelen, ha a nyers MOTIS
+// válasz ténylegesen tartalmazta (lásd orchestrator.ts mapLeg() és
+// motisTypes.ts kommentje — jelenleg spekulatív mező). Hiányában a UI
+// SOHA nem találgat/jelenít meg "electric"/"human" nyers stringet — egy
+// semleges "MOL Bubi kerékpár" jelenik meg helyette (lásd lent a leg-kártya
+// fejlécében). A két megnevezés KIZÁRÓLAG ez a két, felhasználó által kért
+// szöveg lehet.
+function bikePropulsionLabel(type?: "HUMAN" | "ELECTRIC_ASSIST"): string | undefined {
+  if (type === "ELECTRIC_ASSIST") return "Elektromos kerékpár";
+  if (type === "HUMAN") return "Hagyományos kerékpár";
+  return undefined;
+}
+
+// MOL BUBI FRONTEND/ROUTING INTEGRÁCIÓ, PHASE 1.1 HARDENING (2026-09-13) —
+// KORÁBBI KÖR KORREKCIÓJA: a Round 8-ban itt egy "rentalAvailabilityText()"
+// segédfüggvény jelenítette meg az aktuális kerékpár-darabszámot
+// (a leg egy elérhetőségi darabszám-mezője alapján). A felhasználó explicit javította:
+// a MOTIS /api/v6/plan válaszban NINCS bizonyított forrás erre a számra
+// (lásd motisTypes.ts MotisPlace kommentje) — a ténylegesen bizonyított
+// forrás a KÜLÖN GET /api/v1/rentals végpont, aminek bekötése Phase 2
+// feladat. Ezért ez a függvény és minden darabszám-megjelenítés
+// SZÁNDÉKOSAN eltávolítva — a Bubi leg-kártya csak a fix disclaimer
+// mondatot mutatja, SOHA nem konkrét számot.
 
 // Egyetlen megosztott térkép (UX módosítás, 2026-09-09) — a kártya saját,
 // a session alatt ("Pihenőpont hozzáadása" gombbal) hozzáadott markereit ÉS a
@@ -637,33 +667,74 @@ function RankedJourneyCard({
       </button>
 
       <div className="mt-2 space-y-1">
-        {journey.legs.map((leg, i) => (
-          <div key={i} className="flex flex-wrap items-center gap-2 text-sm">
-            {leg.mode === "WALK" ? (
-              <span className="font-medium">Gyaloglás</span>
-            ) : (
-              <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 font-medium ${transitModeBadge(leg.transitMode).className}`}>
-                <span aria-hidden>{transitModeBadge(leg.transitMode).emoji}</span>
-                {`${transitModeLabel(leg.transitMode)} ${leg.routeShortName ?? leg.routeLongName ?? "Járat"}`.trim()}
+        {journey.legs.map((leg, i) =>
+          // MOL BUBI FRONTEND/ROUTING INTEGRÁCIÓ, PHASE 1 (2026-09-13, spec
+          // 4. pont) — SZÁNDÉKOSAN külön, vizuálisan megkülönböztetett
+          // kártya-blokk a MOL Bubi lábaknak (nem az alábbi, WALK/TRANSIT
+          // bináris egysoros formátumba erőltetve). Raw "RENTAL"/"GBFS"/
+          // providerId/propulsionType string SOHA nem jelenik meg — csak a
+          // felhasználóbarát "MOL Bubi" címke és a bikePropulsionLabel()
+          // szerinti magyar megnevezés.
+          leg.mode === "RENTAL" ? (
+            <div key={i} className="flex flex-col gap-0.5 rounded border border-pink-200 bg-pink-50 px-2.5 py-2 text-sm">
+              <span className="inline-flex items-center gap-1.5 font-semibold text-pink-800">
+                <span aria-hidden>🚲</span>
+                {/* MOL BUBI FRONTEND/ROUTING INTEGRÁCIÓ, PHASE 1.1 HARDENING
+                    (2026-09-13) — a "MOL Bubi" felirat KIZÁRÓLAG akkor
+                    jelenik meg, ha leg.rentalProvider ténylegesen "mol-bubi"
+                    (vagyis a normalizer ezt a leget egy Bubi-enabled
+                    kérés-kontextusból jelölte meg így, lásd orchestrator.ts
+                    mapLeg()) — SOHA nem pusztán a leg.mode === "RENTAL"
+                    alapján. Egy (Phase 1-ben elméleti) kontextus nélküli
+                    RENTAL leg egy semleges, nem-provider-specifikus feliratot
+                    kap — de raw "RENTAL"/"GBFS" string ekkor sem jelenik meg. */}
+                {leg.rentalProvider === "mol-bubi" ? "MOL Bubi" : "Bérelt kerékpár"}
+                {bikePropulsionLabel(leg.rentalPropulsionType) ? ` — ${bikePropulsionLabel(leg.rentalPropulsionType)}` : ""}
               </span>
-            )}
-            {leg.mode === "TRANSIT" && formatClockTime(leg.departureTime) ? (
-              <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-700">
-                indul: {formatClockTime(leg.departureTime)}
+              <span className="text-gray-700">
+                {leg.fromName} – {leg.toName}
               </span>
-            ) : null}
-            <span className="text-gray-500">
-              {leg.mode === "WALK" ? walkEndpointLabel(leg.fromName, journey.legs[i - 1]) : leg.fromName}
-              {" → "}
-              {leg.mode === "WALK" ? walkEndpointLabel(leg.toName, journey.legs[i + 1]) : leg.toName}
-              {" ("}
-              {formatDurationMinutes(leg.durationMinutes)}
-              {leg.mode === "WALK" && leg.distanceMeters !== undefined ? `, ${leg.distanceMeters} m` : ""}
-              {")"}
-            </span>
-            {leg.mode === "TRANSIT" ? <TransitLegRealtimeNote leg={leg} /> : null}
-          </div>
-        ))}
+              <span className="text-gray-500">
+                {formatDurationMinutes(leg.durationMinutes)}
+                {leg.distanceMeters !== undefined
+                  ? ` • ${(leg.distanceMeters / 1000).toLocaleString("hu-HU", { maximumFractionDigits: 1 })} km`
+                  : ""}
+              </span>
+              {/* MOL BUBI FRONTEND/ROUTING INTEGRÁCIÓ, PHASE 1.1 HARDENING —
+                  SZÁNDÉKOSAN NINCS itt semmilyen elérhető-darabszám sor: a
+                  MOTIS /api/v6/plan válaszban nincs erre bizonyított
+                  adatforrás (lásd motisTypes.ts). Phase 2 feladat egy külön
+                  GET /api/v1/rentals adapter bekötése után. */}
+              <span className="text-xs text-gray-400">A kerékpárok elérhetősége folyamatosan változhat.</span>
+            </div>
+          ) : (
+            <div key={i} className="flex flex-wrap items-center gap-2 text-sm">
+              {leg.mode === "WALK" ? (
+                <span className="font-medium">Gyaloglás</span>
+              ) : (
+                <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 font-medium ${transitModeBadge(leg.transitMode).className}`}>
+                  <span aria-hidden>{transitModeBadge(leg.transitMode).emoji}</span>
+                  {`${transitModeLabel(leg.transitMode)} ${leg.routeShortName ?? leg.routeLongName ?? "Járat"}`.trim()}
+                </span>
+              )}
+              {leg.mode === "TRANSIT" && formatClockTime(leg.departureTime) ? (
+                <span className="rounded bg-gray-100 px-1.5 py-0.5 text-xs font-medium text-gray-700">
+                  indul: {formatClockTime(leg.departureTime)}
+                </span>
+              ) : null}
+              <span className="text-gray-500">
+                {leg.mode === "WALK" ? walkEndpointLabel(leg.fromName, journey.legs[i - 1]) : leg.fromName}
+                {" → "}
+                {leg.mode === "WALK" ? walkEndpointLabel(leg.toName, journey.legs[i + 1]) : leg.toName}
+                {" ("}
+                {formatDurationMinutes(leg.durationMinutes)}
+                {leg.mode === "WALK" && leg.distanceMeters !== undefined ? `, ${leg.distanceMeters} m` : ""}
+                {")"}
+              </span>
+              {leg.mode === "TRANSIT" ? <TransitLegRealtimeNote leg={leg} /> : null}
+            </div>
+          )
+        )}
       </div>
 
       <p className="mt-2 text-xs text-gray-500">
@@ -1265,6 +1336,13 @@ export default function VedettUtvonalSearchForm({
   // (Sensory Engine) állapottól — ez EGY DIMENZIÓ, nem egy szenzoros
   // szempont (spec 10. pont).
   const [stepFreeRequired, setStepFreeRequired] = useState(false);
+  // MOL BUBI FRONTEND/ROUTING INTEGRÁCIÓ, PHASE 1 (2026-09-13) — UGYANAZ a
+  // "tisztán UI-szintű preferencia-kapcsoló, alapérték false, hiányában a
+  // jelenlegi routing működés SEMMILYEN módon nem változik" mintázat, mint
+  // a fenti stepFreeRequired-nál. bikePropulsion csak akkor kap bármilyen
+  // hatást, ha molBubiEnabled === true (lásd handleSubmit body-ja lent).
+  const [molBubiEnabled, setMolBubiEnabled] = useState(false);
+  const [bikePropulsion, setBikePropulsion] = useState<"ANY" | "HUMAN" | "ELECTRIC_ASSIST">("ANY");
   // Part B (2026-09-08) — melyik kártya térképe van éppen nyitva (index a
   // result.journeys tömben, vagy null, ha egyik sincs nyitva). Ez az
   // EGYETLEN helye annak, hogy "melyik kártya aktív" — nincs másik,
@@ -1682,6 +1760,9 @@ export default function VedettUtvonalSearchForm({
         // legyen; alapértéke false, ami a jelenlegi routing viselkedést
         // változatlanul hagyja.
         stepFreeRequired,
+        // MOL BUBI PHASE 1 — mindig explicit érték megy, mint stepFreeRequired-nél.
+        molBubiEnabled,
+        bikePropulsion,
       };
       const res = await fetch("/api/admin/vedett-utvonal/search", {
         method: "POST",
@@ -1823,17 +1904,14 @@ export default function VedettUtvonalSearchForm({
               Cím vagy hely), a lg:col-span-1 visszaállítja az egyenlő
               oszlopszélességet. */}
           <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            <div className="min-w-0">
-              <label className="block text-xs text-gray-500">Város</label>
-              <input
-                type="text"
-                value={origin.type === "MANUAL" ? origin.city : ""}
-                onChange={(e) => updateOriginManualField("city", e.target.value)}
-                placeholder="Budapest"
-                disabled={disabled}
-                className="mt-0.5 w-full min-w-0 rounded border border-gray-300 px-2 py-1.5 text-sm disabled:bg-gray-100"
-              />
-            </div>
+            <SettlementAutocomplete
+              id="vedett-route-origin-city"
+              label="Város"
+              value={origin.type === "MANUAL" ? origin.city : ""}
+              onChange={(value) => updateOriginManualField("city", value)}
+              placeholder="Budapest"
+              disabled={disabled}
+            />
             <div className="min-w-0">
               <label className="block text-xs text-gray-500">Irányítószám vagy kerület</label>
               <input
@@ -1871,10 +1949,10 @@ export default function VedettUtvonalSearchForm({
               </p>
             </div>
           </div>
-          {/* 7. pont — Budapest BÉTA korlát: diszkrét jelzés a mezők
-              közelében, nincs hardcode-olt architektúra (csak egy induló
-              mezőérték és egy szöveges megjegyzés). */}
-          <p className="mt-1 text-[11px] text-gray-400">A Védett Útvonal jelenleg béta tesztüzemben működik.</p>
+          {/* A korábbi, Budapest-korlátra utaló diszkrét szöveges
+              tesztüzem-jelzés a "Béta" megjelölés teljes eltávolítása kör
+              keretében MEGSZŰNT (lásd a végső riport 6. pontját) — a mezők
+              funkciója/state-je ettől VÁLTOZATLAN. */}
         </div>
 
         <div>
@@ -1915,17 +1993,14 @@ export default function VedettUtvonalSearchForm({
                   sorban, "Cím vagy hely" saját teljes sorban; desktop lg:
                   visszaáll a hárommezős, egy soros elrendezés). */}
               <div className="mt-1 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                <div className="min-w-0">
-                  <label className="block text-xs text-gray-500">Város</label>
-                  <input
-                    type="text"
-                    value={destination.city}
-                    onChange={(e) => updateDestinationManualField("city", e.target.value)}
-                    placeholder="Budapest"
-                    disabled={disabled}
-                    className="mt-0.5 w-full min-w-0 rounded border border-gray-300 px-2 py-1.5 text-sm disabled:bg-gray-100"
-                  />
-                </div>
+                <SettlementAutocomplete
+                  id="vedett-route-destination-city"
+                  label="Város"
+                  value={destination.city}
+                  onChange={(value) => updateDestinationManualField("city", value)}
+                  placeholder="Budapest"
+                  disabled={disabled}
+                />
                 <div className="min-w-0">
                   <label className="block text-xs text-gray-500">Irányítószám vagy kerület</label>
                   <input
@@ -1956,7 +2031,6 @@ export default function VedettUtvonalSearchForm({
                   </p>
                 </div>
               </div>
-              <p className="mt-1 text-[11px] text-gray-400">A Védett Útvonal jelenleg béta tesztüzemben működik.</p>
             </>
           )}
         </div>
@@ -2103,6 +2177,57 @@ export default function VedettUtvonalSearchForm({
             van teljes adat, és a liftek aktuális működését sem látjuk. Ezért nem tudjuk garantálni, hogy az egész út
             lépcsőmentes.
           </p>
+        </div>
+
+        {/* MOL BUBI FRONTEND/ROUTING INTEGRÁCIÓ, PHASE 1 (2026-09-13) —
+            SZÁNDÉKOSAN KÜLÖN kártya, ugyanazt a vizuális/interakciós
+            mintázatot követve, mint a fenti "Lépcsőmentes útvonal" kapcsoló
+            (min-h-[44px], aria-describedby, mt-0.5 h-5 w-5 checkbox).
+            Alapértéke false (nem bejelölt) — a jelenlegi routing viselkedés
+            csak akkor változik, ha a felhasználó EXPLICIT bejelöli. A
+            kerékpár-típus <select> KIZÁRÓLAG akkor jelenik meg, ha a
+            checkbox be van jelölve — ez az ELSŐ enum-select beállítási
+            lehetőség ebben a kódbázisban, nincs korábbi minta rá, ezért a
+            meglévő checkbox-kártya vizuális nyelvét (border/label/help-szöveg)
+            követi, natív <select>-tel. */}
+        <div className="rounded border border-sni-primary/30 bg-sni-primary/5 p-3">
+          <label className="flex min-h-[44px] cursor-pointer items-start gap-2.5">
+            <input
+              type="checkbox"
+              checked={molBubiEnabled}
+              disabled={disabled}
+              onChange={(e) => setMolBubiEnabled(e.target.checked)}
+              className="mt-0.5 h-5 w-5 flex-shrink-0"
+              aria-describedby="vedett-mol-bubi-help"
+            />
+            <span>
+              <span className="flex flex-wrap items-center gap-1.5 text-sm font-semibold text-sni-text">
+                <span aria-hidden="true">🚲</span> MOL Bubi használata
+              </span>
+            </span>
+          </label>
+          <p id="vedett-mol-bubi-help" className="mt-2 text-xs text-gray-500">
+            Az útvonaltervezés MOL Bubi kerékpárt is felajánlhat egyes szakaszokra. A kerékpárok elérhetősége
+            folyamatosan változhat.
+          </p>
+          {molBubiEnabled && (
+            <div className="mt-3">
+              <label htmlFor="vedett-bike-propulsion" className="block text-sm font-medium text-sni-text">
+                Kerékpár típusa
+              </label>
+              <select
+                id="vedett-bike-propulsion"
+                value={bikePropulsion}
+                disabled={disabled}
+                onChange={(e) => setBikePropulsion(e.target.value as "ANY" | "HUMAN" | "ELECTRIC_ASSIST")}
+                className="mt-1 w-full rounded border border-gray-300 p-2 text-sm"
+              >
+                <option value="ANY">Mindegy</option>
+                <option value="HUMAN">Hagyományos kerékpár</option>
+                <option value="ELECTRIC_ASSIST">Elektromos kerékpár</option>
+              </select>
+            </div>
+          )}
         </div>
 
         {formError && <p className="text-sm text-red-600">{formError}</p>}

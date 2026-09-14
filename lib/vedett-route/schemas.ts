@@ -66,6 +66,15 @@ export const journeySearchSchema = z
     // .default()-je, hogy a hiányzó érték és az explicit `false` egyaránt
     // tisztán "false"-ként legyen kezelve, változatlan viselkedéssel.
     stepFreeRequired: z.boolean().optional(),
+    // MOL BUBI FRONTEND/ROUTING INTEGRÁCIÓ, PHASE 1 (2026-09-13) — explicit,
+    // opcionális felhasználói preferencia (lásd lib/vedett-route/types.ts
+    // JourneySearchRequest.molBubiEnabled/bikePropulsion kommentje).
+    // Hiányzó/undefined esetén a route.ts `?? false`-t alkalmaz —
+    // UGYANOLYAN mintázat, mint a fenti stepFreeRequired-nál: nincs zod
+    // .default(), hogy a hiányzó érték és az explicit `false` egyaránt
+    // tisztán "false"-ként legyen kezelve, változatlan viselkedéssel.
+    molBubiEnabled: z.boolean().optional(),
+    bikePropulsion: z.enum(["ANY", "HUMAN", "ELECTRIC_ASSIST"]).optional(),
   })
   .superRefine((data, ctx) => {
     const hasFrom = typeof data.from === "string" && data.from.trim().length >= 2;

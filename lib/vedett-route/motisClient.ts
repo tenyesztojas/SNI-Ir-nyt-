@@ -80,6 +80,25 @@ function buildQuery(params: MotisPlanParams): URLSearchParams {
   if (params.pedestrianProfile !== undefined) q.set("pedestrianProfile", params.pedestrianProfile);
   if (params.useRoutedTransfers !== undefined) q.set("useRoutedTransfers", String(params.useRoutedTransfers));
   if (params.timetableView !== undefined) q.set("timetableView", String(params.timetableView));
+  // MOL BUBI FRONTEND/ROUTING INTEGRÁCIÓ, PHASE 1 (2026-09-13) — VPS
+  // staging-en bizonyított paraméterek (lásd motisTypes.ts MotisPlanParams
+  // kommentje) — KIZÁRÓLAG akkor jelennek meg, ha az orchestrator.ts
+  // ténylegesen beállítja őket (request.molBubiEnabled === true esetén).
+  // Normál kérésben egyik sem szerepel, mert a params objektumban sincs
+  // jelen — ugyanaz a "csak akkor .append, ha ténylegesen adott" mintázat,
+  // mint a fenti transitModes-nál.
+  if (params.preTransitModes && params.preTransitModes.length > 0) {
+    for (const m of params.preTransitModes) q.append("preTransitModes", m);
+  }
+  if (params.preTransitRentalProviders && params.preTransitRentalProviders.length > 0) {
+    for (const p of params.preTransitRentalProviders) q.append("preTransitRentalProviders", p);
+  }
+  if (params.preTransitRentalFormFactors && params.preTransitRentalFormFactors.length > 0) {
+    for (const f of params.preTransitRentalFormFactors) q.append("preTransitRentalFormFactors", f);
+  }
+  if (params.preTransitRentalPropulsionTypes && params.preTransitRentalPropulsionTypes.length > 0) {
+    for (const p of params.preTransitRentalPropulsionTypes) q.append("preTransitRentalPropulsionTypes", p);
+  }
   return q;
 }
 

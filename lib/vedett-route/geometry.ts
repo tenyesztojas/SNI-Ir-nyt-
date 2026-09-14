@@ -103,7 +103,12 @@ export function normalizeRouteColor(raw: string | undefined | null): string | un
 }
 
 export interface JourneyLegForGeometry {
-  mode: "WALK" | "TRANSIT";
+  // MOL BUBI FRONTEND/ROUTING INTEGRÁCIÓ, PHASE 1 (2026-09-13) — "RENTAL"
+  // hozzáadva, hogy a VedettUtvonalMap.tsx a MOL Bubi lábakat is meg tudja
+  // rajzolni (lásd ott az új, "mode === RENTAL" szerinti szín/vonal-réteg).
+  // A geometria FORRÁSA VÁLTOZATLAN — ugyanaz a legGeometry/fromLat-fromLon
+  // fallback minden módnál, RENTAL esetén sincs második útvonal-forrás.
+  mode: "WALK" | "TRANSIT" | "RENTAL";
   transitMode?: string;
   routeColor?: string;
   fromLat?: number;

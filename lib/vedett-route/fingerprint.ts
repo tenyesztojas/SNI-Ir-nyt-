@@ -14,7 +14,18 @@ export function computeJourneyFingerprint(journey: Journey): string {
     .filter((leg) => leg.mode === "TRANSIT")
     .map((leg) => [leg.transitMode ?? "TRANSIT", leg.routeShortName ?? "", leg.fromName, leg.toName].join("|"))
     .join(">>");
-  return `${roundedDeparture}::${transitLegsKey}`;
+  // MOL BUBI FRONTEND/ROUTING INTEGRÁCIÓ, PHASE 1 (2026-09-13) — a RENTAL
+  // lábakat KÜLÖN, a fenti transzit-kulcstól elválasztva vesszük fel a
+  // fingerprintbe (nem "TRANSIT"-ként), hogy két, csak a kölcsönző
+  // állomáspárban különböző MOL Bubi itinerary NE olvadjon egybe hibásan
+  // dedupolt duplikátumként. Amikor a keresésben nincs RENTAL láb (Bubi
+  // kikapcsolva/nem érintett), ez a szegmens mindig üres string marad —
+  // a fingerprint format BYTE-RA a korábbival egyezik ilyen esetben.
+  const rentalLegsKey = journey.legs
+    .filter((leg) => leg.mode === "RENTAL")
+    .map((leg) => [leg.fromName, leg.toName].join("|"))
+    .join(">>");
+  return `${roundedDeparture}::${transitLegsKey}::${rentalLegsKey}`;
 }
 
 /** Az első előfordulást tartja meg minden fingerprint-hez, sorrendhelyesen. */

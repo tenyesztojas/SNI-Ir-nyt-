@@ -263,9 +263,23 @@ describe("H/I/J) menü gating — HeaderClient.tsx", () => {
     assert.match(headerClientSrc, /return isAdmin \|\| pilotAccess\.includes\(l\.key\);/);
   });
 
-  test("a 'vedett_route_beta' bejegyzésnek szerepelnie kell a PILOT_LINKS tömbben, a helyes href-fel, és BÉTA badge-dzsel", () => {
+  // FRISSÍTVE (Round 9, "Béta megjelölés teljes eltávolítása" kör, C)
+  // rész) — a "vedett_route_beta" menüpont korábban badge: "BÉTA" mezővel
+  // rendelkezett a PILOT_LINKS tömbben. A specifikáció SZÁNDÉKOSAN
+  // megkövetelte a "Béta"/"BÉTA" felirat teljes eltávolítását a Védett
+  // Útvonal felhasználói felületéről (főmenü + mobilmenü is), ezért a
+  // badge mező TÖRÖLVE lett ebből az egy bejegyzésből (a `key:
+  // "vedett_route_beta"` technikai/belső azonosító marad, ahogy a
+  // `badge`-et támogató generikus rendering-kód is a másik három pilot
+  // modul jövőbeli használatára). Ez SZÁNDÉKOS, dokumentált spec-változás,
+  // NEM regresszió — lásd a végső riport 6. pontját.
+  test("a 'vedett_route_beta' bejegyzésnek szerepelnie kell a PILOT_LINKS tömbben, a helyes href-fel, badge NÉLKÜL (a 'Béta' felirat eltávolítva)", () => {
     assert.match(headerClientSrc, /key:\s*"vedett_route_beta",\s*href:\s*"\/vedett-utvonal"/);
-    assert.match(headerClientSrc, /key:\s*"vedett_route_beta"[^\n]*badge:\s*"BÉTA"/);
+    assert.doesNotMatch(
+      headerClientSrc,
+      /key:\s*"vedett_route_beta"[^\n]*badge:/,
+      "a 'vedett_route_beta' menüpontnak TÖBBÉ nem szabad badge mezővel rendelkeznie — a 'Béta' felirat teljesen eltávolítva"
+    );
   });
 
   test("a BÉTA badge mindkét (desktop + mobil) renderelési helyen megjelenik, ha a link objektumnak van badge mezője — nem sugall kész/garantált szolgáltatást, csak jelöl", () => {

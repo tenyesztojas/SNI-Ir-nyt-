@@ -35,6 +35,10 @@ const MODE_COLOR: Record<string, string> = {
   BUS: "#3b82f6",
   RAIL: "#6366f1",
   COACH: "#6366f1",
+  // MOL BUBI FRONTEND/ROUTING INTEGRÁCIÓ, PHASE 1 (2026-09-13) — vizuálisan
+  // megkülönböztetett szín a MOL Bubi (RENTAL) lábaknak, hogy ne olvadjon
+  // egybe sem a szürke gyaloglással, sem a többi tömegközlekedési móddal.
+  RENTAL: "#ec4899",
 };
 
 export interface RestPointMarker {
@@ -302,11 +306,21 @@ export default function VedettUtvonalMap({ legs, fromName, toName, currentPositi
 
       // Tömegközlekedési lábak — folytonos vonal (nincs line-dasharray
       // tulajdonság megadva, ami a MapLibre alapértelmezése: folytonos).
+      // MOL BUBI FRONTEND/ROUTING INTEGRÁCIÓ, PHASE 1 (2026-09-13) — a
+      // RENTAL lábak KIZÁRVA ebből a szűrőből (lásd külön "-lines-rental"
+      // réteg lent), hogy saját, megkülönböztetett színt/vonalstílust
+      // kapjanak, ne olvadjanak egybe a "minden ami nem WALK" transit
+      // színezéssel.
       map.addLayer({
         id: `${sourceId}-lines-transit`,
         type: "line",
         source: sourceId,
-        filter: ["all", ["==", ["geometry-type"], "LineString"], ["!=", ["get", "mode"], "WALK"]],
+        filter: [
+          "all",
+          ["==", ["geometry-type"], "LineString"],
+          ["!=", ["get", "mode"], "WALK"],
+          ["!=", ["get", "mode"], "RENTAL"],
+        ],
         layout: { "line-join": "round", "line-cap": "round" },
         paint: {
           "line-color": [
@@ -316,6 +330,23 @@ export default function VedettUtvonalMap({ legs, fromName, toName, currentPositi
             ["match", ["get", "transitMode"], "SUBWAY", MODE_COLOR.SUBWAY, "TRAM", MODE_COLOR.TRAM, "BUS", MODE_COLOR.BUS, MODE_COLOR.RAIL],
           ],
           "line-width": 5,
+        },
+      });
+
+      // MOL BUBI FRONTEND/ROUTING INTEGRÁCIÓ, PHASE 1 (2026-09-13) — saját
+      // réteg a MOL Bubi (RENTAL) lábaknak: szaggatott vonal (megkülönböztetve
+      // a folytonos tömegközlekedéstől), de VASTAGABB/eltérő mintázatú, mint
+      // a gyaloglás, hogy a három módozat mindegyike vizuálisan elkülönüljön.
+      map.addLayer({
+        id: `${sourceId}-lines-rental`,
+        type: "line",
+        source: sourceId,
+        filter: ["all", ["==", ["geometry-type"], "LineString"], ["==", ["get", "mode"], "RENTAL"]],
+        layout: { "line-join": "round", "line-cap": "round" },
+        paint: {
+          "line-color": ["case", ["has", "routeColor"], ["get", "routeColor"], MODE_COLOR.RENTAL],
+          "line-width": 4,
+          "line-dasharray": [1, 1],
         },
       });
 

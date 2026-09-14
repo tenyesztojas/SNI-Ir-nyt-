@@ -26,6 +26,21 @@ export interface MotisPlace {
   scheduledArrival?: string;
 }
 
+// MOL BUBI FRONTEND/ROUTING INTEGRÁCIÓ, PHASE 1.1 HARDENING (2026-09-13) —
+// KORÁBBI KÖR KORREKCIÓJA: a Round 8-ban itt spekulatív, MOTIS
+// /api/v6/plan válaszban SOHA nem bizonyított "vehiclesAvailable"/
+// "vehicleDocksAvailable" mezőket vezettünk be a MotisPlace-en. A
+// felhasználó explicit javította: a /api/v6/plan RENTAL leg from/to
+// MotisPlace-e ilyen mezőt NEM bizonyítottan tartalmaz, ezért ezt
+// SZÁNDÉKOSAN eltávolítottuk — production type-ban nem modellezünk
+// spekulatív MOTIS mezőt. A ténylegesen BIZONYÍTOTT elérhetőségi adatforrás
+// a KÜLÖN GET /api/v1/rentals végpont (station name, isRenting,
+// isReturning, numVehiclesAvailable, vehicleTypesAvailable.bike/ebike) —
+// ennek bekötése (külön hívás/polling/cache-stratégia) EXPLICIT Phase 2
+// feladat, ebben a körben NEM valósítjuk meg. Lásd orchestrator.ts mapLeg()
+// és a UI (VedettUtvonalSearchForm.tsx) — egyik sem jelenít meg semmilyen
+// darabszámot RENTAL lábon, amíg ez nincs bekötve.
+
 export type MotisLegMode =
   | "WALK"
   | "BIKE"
@@ -40,6 +55,19 @@ export type MotisLegMode =
   | "AIRPLANE"
   | "ODM"
   | "FLEX"
+  // MOL BUBI FRONTEND/ROUTING INTEGRÁCIÓ, PHASE 1 (2026-09-13) — a
+  // felhasználó saját, éles VPS MOTIS v2.11.2 + GBFS "mol-bubi" provider
+  // ellen futtatott staging integrációja BIZONYÍTOTTA a RENTAL mód
+  // elfogadását/visszaadását (health check rt=true/gbfs=true, station
+  // inventory, direct RENTAL routing, teljes intermodális WALK→RENTAL→
+  // WALK→BUS/REGIONAL_RAIL/SUBWAY→WALK). Ez a projekt ELSŐ RENTAL-módú
+  // MOTIS integrációja — nincs helyi fixture/korábbi audit-jegyzet a
+  // PONTOS leg JSON-alakról, ezért a mapLeg() (orchestrator.ts) a
+  // meglévő, más módoknál is bizonyítottan jelen lévő generikus mezőkből
+  // (from/to name, duration, distance, legGeometry) építi fel a "MOL Bubi"
+  // megjelenítést, SOHA nem feltételezve RENTAL-specifikus mezőt, amit nem
+  // láttunk (lásd lent MotisLeg spekulatív mezői).
+  | "RENTAL"
   | string;
 
 // Map/GPS/Rest Points sprint (2026-09-07): a legGeometry mezőt egy VALÓS,
@@ -98,6 +126,14 @@ export interface MotisLeg {
   intermediateStops?: MotisPlace[];
   routeColor?: string;
   routeTextColor?: string;
+  // MOL BUBI FRONTEND/ROUTING INTEGRÁCIÓ, PHASE 1 (2026-09-13) — SPEKULATÍV,
+  // MÉG NEM VERIFIKÁLT mező: a bérelt jármű hajtás-típusa (GBFS
+  // "propulsion_type"-szerű mező) egy RENTAL legen. NEM feltételezzük a
+  // jelenlétét — ha a MOTIS válasz nem tartalmazza, a UI egy semleges
+  // "MOL Bubi kerékpár" feliratra esik vissza (SOHA nem hibás/kitalált
+  // "elektromos"/"hagyományos" cimkét). Élő VPS válasz-audit Phase 2
+  // feladat a pontos mezőnév/alak megerősítésére.
+  rentalVehiclePropulsionType?: "HUMAN" | "ELECTRIC_ASSIST" | string;
 }
 
 // VPS → Staging Integration Gate (2026-09-07): a scheduledStartTime,
@@ -179,6 +215,24 @@ export interface MotisPlanParams {
   pedestrianProfile?: "WHEELCHAIR" | string;
   useRoutedTransfers?: boolean;
   timetableView?: boolean;
+  // MOL BUBI FRONTEND/ROUTING INTEGRÁCIÓ, PHASE 1 (2026-09-13, spec 2. pont)
+  // — a felhasználó saját, éles VPS MOTIS v2.11.2 + GBFS "mol-bubi" provider
+  // ellen futtatott staging integrációja BIZONYÍTOTTA ezeket a paramétereket
+  // (health check rt=true/gbfs=true, station inventory, HUMAN/
+  // ELECTRIC_ASSIST propulsion típusok, direct RENTAL routing, teljes
+  // intermodális WALK→RENTAL→WALK→BUS/REGIONAL_RAIL/SUBWAY→WALK). KIZÁRÓLAG
+  // az orchestrator.ts állítja be, KIZÁRÓLAG amikor
+  // request.molBubiEnabled === true (lásd searchVedettRoutes()) — normál
+  // (Bubi nélküli) keresésben EGYIK sem szerepel, a kérés BYTE-RA
+  // változatlan marad (ugyanaz a mintázat, mint a STEP_FREE_MOTIS_PARAMS-nál
+  // fent). Phase 1 KIZÁRÓLAG a "pre-transit" (indulási oldali) rental utat
+  // engedélyezi — a directModes=RENTAL/postTransitModes=RENTAL (célállomás
+  // oldali vagy tisztán bicikli-only útvonal) SZÁNDÉKOSAN NINCS bekötve
+  // ebben a körben, egy későbbi fázis feladata.
+  preTransitModes?: string[];
+  preTransitRentalProviders?: string[];
+  preTransitRentalFormFactors?: string[];
+  preTransitRentalPropulsionTypes?: string[];
 }
 
 export type MotisPlanResult =

@@ -33,7 +33,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const { from, fromCoordinates, fromName, to, toCoordinates, toName, weights, stepFreeRequired } = parsed.data;
+  const { from, fromCoordinates, fromName, to, toCoordinates, toName, weights, stepFreeRequired, molBubiEnabled, bikePropulsion } = parsed.data;
   const departAt = parsed.data.departAt ?? new Date().toISOString();
 
   // Múltbeli időpont ellenőrzése (31. pont: routing tesztek).
@@ -225,6 +225,11 @@ export async function POST(request: Request) {
   // válasz téves eredményt adna vissza. `?? false`, hogy a hiányzó mező és
   // az explicit `false` UGYANAZT a cache-kulcsot (és viselkedést) adja.
   const stepFree = stepFreeRequired ?? false;
+  // MOL BUBI FRONTEND/ROUTING INTEGRÁCIÓ, PHASE 1 (2026-09-13) — UGYANAZ a
+  // "?? false, hogy hiányzó és explicit false egyformán viselkedjen"
+  // mintázat, mint a fenti stepFree-nél.
+  const molBubi = molBubiEnabled ?? false;
+  const propulsion = bikePropulsion ?? "ANY";
 
   const cacheKey = buildRouteCacheKey({
     fromLat: fromGeo.lat,
@@ -234,6 +239,11 @@ export async function POST(request: Request) {
     departAtMinute: departAt.slice(0, 16),
     weights: weights ?? null,
     stepFreeRequired: stepFree,
+    // MOL BUBI PHASE 1 — Bubi preferencia is a cache-kulcs része (lásd
+    // routeCache.ts), különben egy más Bubi-preferenciával cache-elt válasz
+    // téves eredményt adna vissza.
+    molBubiEnabled: molBubi,
+    bikePropulsion: molBubi ? propulsion : null,
   });
 
   const cached = getCached<OrchestratedSearchResult | OrchestratorErrorResult>(cacheKey);
@@ -247,6 +257,8 @@ export async function POST(request: Request) {
       to: { name: toGeo.name, lat: toGeo.lat, lon: toGeo.lon },
       departAt,
       stepFreeRequired: stepFree,
+      molBubiEnabled: molBubi,
+      bikePropulsion: propulsion,
     },
     weights
   );

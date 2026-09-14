@@ -76,7 +76,72 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* CATEGORIES */}
+      {/* VÉDETT ÚTVONAL HERO (2026-09-09; Round 9 B) rész: előrébb
+          helyezve a kategória-szekció ELÉ, lásd riport 4. pont; a "Béta"
+          megjelölés a C) rész szerint eltávolítva, lásd riport 6. pont) —
+          a globális VEDETT_ROUTE_ENABLED flag mögött. */}
+      {vedettRouteEnabled && (
+        <section className="mx-auto max-w-5xl px-4 pb-4 pt-8 sm:px-6 sm:pt-12">
+          <div className="relative overflow-hidden rounded-3xl border border-sni-brand-teal/20 bg-gradient-to-br from-sni-brand-teal/5 via-white to-sni-brand-navy/5 p-6 sm:p-8">
+            {/* Round 9, B) rész — cím: "Védett Útvonal" (BÉTA badge nélkül). */}
+            <div className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-sni-brand-teal/15 px-3 py-1 text-xs font-bold uppercase tracking-wide text-sni-brand-teal">
+              Védett Útvonal
+            </div>
+
+            <h2 className="text-xl font-bold text-gray-900 sm:text-2xl">
+              Ne csak azt nézd, merre gyorsabb.
+              <br className="hidden sm:block" /> Nézd azt is, merre könnyebb az út.
+            </h2>
+
+            <p className="mt-3 max-w-2xl text-sm leading-relaxed text-gray-600 sm:text-base">
+              A Védett Útvonal autista és ADHD-s embereknek, valamint érintett családoknak
+              segít olyan budapesti útvonalat választani, amelynél nem csak az érkezési idő számít.
+            </p>
+
+            {/* Round 9, B) rész — a képességlista desktopon " · "
+                elválasztással, mobilon tördelhetően (flex-wrap, gap-y),
+                "valós idejű forgalmi adatok" a korábbi "valós idejű
+                BKK-adatok" helyett (a szövegezés általánosabb lett, hiszen
+                a Bubi/Volán/MÁV adatok is idetartoznak — a mögötte álló
+                logika/adatforrás VÁLTOZATLAN). */}
+            <div className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-xs font-medium text-gray-500 sm:text-sm">
+              <span>Szenzoros terhelés</span>
+              <span aria-hidden="true">·</span>
+              <span>kevesebb átszállás</span>
+              <span aria-hidden="true">·</span>
+              <span>kevesebb gyaloglás</span>
+              <span aria-hidden="true">·</span>
+              <span>valós idejű forgalmi adatok</span>
+              <span aria-hidden="true">·</span>
+              <span>pihenőpontok</span>
+              <span aria-hidden="true">·</span>
+              <span>lépcsőmentes útvonal</span>
+            </div>
+
+            <Link
+              href="/vedett-utvonal"
+              className="mt-5 inline-flex items-center gap-2 rounded-full bg-sni-brand-teal px-5 py-2.5 text-sm font-bold text-white shadow-md transition-all hover:bg-sni-brand-blue hover:shadow-lg"
+            >
+              <Compass size={16} />
+              Megtervezem az útvonalam
+              <ArrowRight size={16} />
+            </Link>
+
+            {/* Round 9, B) rész — a lábsor a specifikáció szerinti pontos
+                szöveg ("BKK, MÁV, Volánbusz és MOL Bubi – Próbáld ki, és
+                segíts a visszajelzéseddel még jobbá tenni."), a korábbi
+                "Budapest · BKK · nyilvános béta" szöveg helyett (a "béta"
+                szó is ezzel eltűnt innen). */}
+            <p className="mt-4 text-xs text-gray-400">
+              BKK, MÁV, Volánbusz és MOL Bubi – Próbáld ki, és segíts a visszajelzéseddel még jobbá tenni.
+            </p>
+          </div>
+        </section>
+      )}
+
+      {/* CATEGORIES — Round 9, B) rész: ELŐZŐLEG ez volt a Védett Útvonal
+          blokk ELŐTT, most UTÁNA (lásd fentebb és a végső riport 4.
+          pontját). A blokk saját tartalma/logikája VÁLTOZATLAN. */}
       <section className="mx-auto max-w-5xl px-4 py-12 sm:px-6">
         <h2 className="text-xl font-bold text-gray-900">Böngéssz kategória szerint</h2>
         <p className="mt-1 text-sm text-gray-500">Válassz egy kategóriát a szűrt találatokhoz</p>
@@ -93,66 +158,6 @@ export default async function HomePage() {
           ))}
         </div>
       </section>
-
-      {/* VÉDETT ÚTVONAL HERO (2026-09-09) — közvetlenül a kategóriaválasztó
-          alatt, a globális VEDETT_ROUTE_ENABLED flag mögött (lásd fentebb),
-          hogy a funkció kikapcsolt állapotában ne hirdessünk el nem érhető
-          dolgot. A badge/leírás szándékosan NEM sugall kész, garantált vagy
-          hivatalos közlekedési szolgáltatást (nyilvános BÉTA). */}
-      {vedettRouteEnabled && (
-        <section className="mx-auto max-w-5xl px-4 pb-4 sm:px-6">
-          <div className="relative overflow-hidden rounded-3xl border border-sni-brand-teal/20 bg-gradient-to-br from-sni-brand-teal/5 via-white to-sni-brand-navy/5 p-6 sm:p-8">
-            {/* UI/SZÖVEGEZÉSI KORREKCIÓ (2026-09-11, "utolsó, kizárólag
-                UI/szövegezési módosítás" kör, 3. pont) — a badge/cím/leírás
-                szöveg cseréje, a meglévő tipográfia/tördelés/osztályok
-                VÁLTOZATLANOK (csak a szöveg-tartalom és a felsorolás egy
-                újabb eleme változott) — a kártya funkciója (feature flag,
-                link cél) érintetlen. */}
-            <div className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-sni-brand-teal/15 px-3 py-1 text-xs font-bold uppercase tracking-wide text-sni-brand-teal">
-              Védett Útvonal - BÉTA
-            </div>
-
-            <h2 className="text-xl font-bold text-gray-900 sm:text-2xl">
-              Ne csak azt nézd, merre gyorsabb.
-              <br className="hidden sm:block" /> Nézd azt is, merre könnyebb az út.
-            </h2>
-
-            <p className="mt-3 max-w-2xl text-sm leading-relaxed text-gray-600 sm:text-base">
-              A Védett Útvonal autista és ADHD-s embereknek, valamint érintett családoknak
-              segít olyan budapesti útvonalat választani, amelynél nem csak az érkezési idő számít.
-            </p>
-
-            <div className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-xs font-medium text-gray-500 sm:text-sm">
-              <span>Szenzoros terhelés</span>
-              <span aria-hidden="true">·</span>
-              <span>kevesebb átszállás</span>
-              <span aria-hidden="true">·</span>
-              <span>kevesebb gyaloglás</span>
-              <span aria-hidden="true">·</span>
-              <span>valós idejű BKK-adatok</span>
-              <span aria-hidden="true">·</span>
-              <span>pihenőpontok</span>
-              <span aria-hidden="true">·</span>
-              <span>lépcsőmentes útvonal</span>
-            </div>
-
-            <Link
-              href="/vedett-utvonal"
-              className="mt-5 inline-flex items-center gap-2 rounded-full bg-sni-brand-teal px-5 py-2.5 text-sm font-bold text-white shadow-md transition-all hover:bg-sni-brand-blue hover:shadow-lg"
-            >
-              <Compass size={16} />
-              Megtervezem az útvonalam
-              <ArrowRight size={16} />
-            </Link>
-
-            <p className="mt-4 text-xs text-gray-400">
-              Budapest · BKK · nyilvános béta
-              <br className="sm:hidden" />
-              <span className="sm:before:content-['_—_']">Próbáld ki, és segíts a visszajelzéseddel még jobbá tenni.</span>
-            </p>
-          </div>
-        </section>
-      )}
 
       {/* PROGRAMAJÁNLÓ */}
       {programs && programs.length > 0 && (

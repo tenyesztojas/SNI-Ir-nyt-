@@ -45,11 +45,27 @@ const TOP_LINKS = [
 // mechanizmus és a `badge` mező a másik pilot modulokra és a jövőbeli
 // visszaállásra (rollback) miatt megmarad. A menüpont sosem csak CSS-sel
 // van elrejtve — a link elem maga nem is renderelődik le, ha nem látható.
-const PILOT_LINKS = [
+// Round 9, "Béta megjelölés eltávolítása" kör: a `badge` mező mostantól
+// EXPLICIT, opcionális típusként van deklarálva (nem a tömb-literálból
+// inferáltan) — miután a "vedett_route_beta" bejegyzés badge: "BÉTA" mezője
+// megszűnt, a négy bejegyzés shape-je azonossá vált, és TypeScript emiatt
+// már NEM inferálna `badge?: string`-et a tömb elem-típusára (structural
+// widening csak akkor ad opcionális mezőt, ha legalább egy elemen tényleg
+// szerepel a mező) — a lenti `{ link.badge && (...) }` renderelő kód viszont
+// VÁLTOZATLANUL hivatkozik rá a másik három pilot modul jövőbeli/esetleges
+// badge-igénye miatt, ezért kell az explicit interfész.
+interface PilotLink {
+  key: string;
+  href: string;
+  label: string;
+  requiresFeatureFlag: boolean;
+  badge?: string;
+}
+const PILOT_LINKS: PilotLink[] = [
   { key: "vedett-jelzes",     href: "/vedett-jelzes",            label: "Védett Jelzés",  requiresFeatureFlag: false },
   { key: "vedett-partner",    href: "/szolgaltato/regisztracio", label: "Védett Partner", requiresFeatureFlag: false },
   { key: "vedettmunka",       href: "/vedett-karrier",           label: "VédettKarrier",  requiresFeatureFlag: false },
-  { key: "vedett_route_beta", href: "/vedett-utvonal",           label: "Védett Útvonal", requiresFeatureFlag: true, badge: "BÉTA" },
+  { key: "vedett_route_beta", href: "/vedett-utvonal",           label: "Védett Útvonal", requiresFeatureFlag: true },
 ];
 
 export default function HeaderClient({

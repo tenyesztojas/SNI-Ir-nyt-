@@ -65,12 +65,45 @@ function computeDelayMinutes(leg: MotisLeg): number | undefined {
   return Math.round((actualMs - scheduledMs) / 60000);
 }
 
-function mapLeg(leg: MotisLeg): JourneyLeg {
+// MOL BUBI FRONTEND/ROUTING INTEGRÁCIÓ, PHASE 1.1 HARDENING (2026-09-13) —
+// KORÁBBI KÖR KORREKCIÓJA: a Round 8 még azt a globális szabályt
+// dokumentálta, hogy "minden RENTAL leg = mol-bubi". A felhasználó explicit
+// javította ezt: RENTAL ≠ automatikusan MOL Bubi — egy jövőbeli fázisban
+// más rental providerek is megjelenhetnek MOTIS RENTAL módban, és a domain
+// normalizer NEM hardcode-olhatja ezt az invariánst globálisan. A "mol-bubi"
+// címke MOSTANTÓL KIZÁRÓLAG akkor kerül egy RENTAL legre, ha az adott leg
+// egy TÉNYLEGESEN Bubi-enabled (request.molBubiEnabled === true) keresésből
+// származik — lásd mapLeg() "molBubiRequestActive" paramétere és
+// searchVedettRoutes() hívása lent. Ez a Phase 1 kérés-builder (lásd
+// BUBI_MOTIS_PARAMS lent) MINDIG a "mol-bubi" GBFS providert küldi a
+// MOTIS-nak, SOHA mást — tehát Bubi-enabled kontextusban egy RENTAL leg
+// providere BIZTOSAN ez, DE ez a kontextusfüggés, NEM egy globális
+// "RENTAL === mol-bubi" szabály.
+export const BUBI_RENTAL_PROVIDER = "mol-bubi" as const;
+
+function mapLeg(leg: MotisLeg, molBubiRequestActive: boolean): JourneyLeg {
   const isWalk = leg.mode === "WALK";
+  const isRental = leg.mode === "RENTAL";
+  const mode: JourneyLeg["mode"] = isWalk ? "WALK" : isRental ? "RENTAL" : "TRANSIT";
   const durationMinutes = leg.duration !== undefined ? leg.duration / 60 : minutesBetween(leg.startTime, leg.endTime);
   return {
-    mode: isWalk ? "WALK" : "TRANSIT",
-    transitMode: isWalk ? undefined : leg.mode,
+    mode,
+    transitMode: mode === "TRANSIT" ? leg.mode : undefined,
+    // MOL BUBI FRONTEND/ROUTING INTEGRÁCIÓ, PHASE 1.1 HARDENING — lásd
+    // BUBI_RENTAL_PROVIDER fenti kommentje: rentalProvider KIZÁRÓLAG akkor
+    // "mol-bubi", ha EZ a leg egy Bubi-enabled kérésből származik (context),
+    // SOHA nem "bármely RENTAL leg automatikusan mol-bubi". Egy nem-Bubi
+    // kontextusból jövő (Phase 1-ben elméleti, jelenleg elő sem forduló)
+    // RENTAL leg esetén ez a mező undefined marad — a UI ekkor NEM írja ki
+    // a "MOL Bubi" feliratot. rentalPropulsionType KIZÁRÓLAG akkor kerül
+    // kitöltésre, ha a nyers MOTIS leg ténylegesen tartalmazta a
+    // (jelenleg spekulatív, lásd motisTypes.ts) mezőt — soha nem becslés.
+    rentalProvider: isRental && molBubiRequestActive ? BUBI_RENTAL_PROVIDER : undefined,
+    rentalPropulsionType: isRental
+      ? leg.rentalVehiclePropulsionType === "HUMAN" || leg.rentalVehiclePropulsionType === "ELECTRIC_ASSIST"
+        ? leg.rentalVehiclePropulsionType
+        : undefined
+      : undefined,
     routeShortName: leg.routeShortName,
     routeLongName: leg.routeLongName,
     fromName: leg.from?.name ?? "Ismeretlen hely",
@@ -97,9 +130,16 @@ function mapLeg(leg: MotisLeg): JourneyLeg {
 
 export function mapMotisItineraryToJourney(
   itinerary: MotisItinerary,
-  displayNames?: { from: string; to: string }
+  displayNames?: { from: string; to: string },
+  // MOL BUBI FRONTEND/ROUTING INTEGRÁCIÓ, PHASE 1.1 HARDENING (2026-09-13)
+  // — lásd mapLeg() fenti kommentje: ez a "context" mondja meg, hogy EZ a
+  // konkrét itinerary egy Bubi-enabled kérésből származik-e, tehát egy
+  // esetleges RENTAL leg kaphat-e "mol-bubi" címkét. Alapértéke false —
+  // meglévő hívók (pl. a régi orchestrator.test.ts fixture-ök), amik nem
+  // adják át, byte-ra a korábbi viselkedést kapják.
+  molBubiRequestActive: boolean = false
 ): Journey {
-  const legs = (itinerary.legs ?? []).map(mapLeg);
+  const legs = (itinerary.legs ?? []).map((leg) => mapLeg(leg, molBubiRequestActive));
 
   // A MOTIS a nyers koordinátaként megadott indulási/érkezési pontokat
   // gyakran "START"/"END" (vagy hasonló, nem felhasználóbarát) néven adja
@@ -111,6 +151,15 @@ export function mapMotisItineraryToJourney(
     legs[0] = { ...legs[0], fromName: displayNames.from };
     legs[legs.length - 1] = { ...legs[legs.length - 1], toName: displayNames.to };
   }
+  // MOL BUBI FRONTEND/ROUTING INTEGRÁCIÓ, PHASE 1 (2026-09-13, safety
+  // invariant "E" audit) — ez a szűrő SZÁNDÉKOSAN kizárólag "WALK" módra
+  // szűr, tehát egy RENTAL (MOL Bubi) láb SOHA nem számít bele a gyaloglási
+  // időbe/távolságba (helyesen, hiszen az biciklizés, nem gyaloglás) — de
+  // NEM is vész el: a teljes totalDurationMinutes (lásd lent, az
+  // itinerary.duration-ból) MINDEN lábat (WALK+TRANSIT+RENTAL) tartalmaz,
+  // csak a Sensory Engine "walking" faktorába nem kerül bele. Ez a
+  // meglévő, TRANSIT-legekre vonatkozó viselkedéssel analóg — a TRANSIT
+  // lábak sem "gyaloglás", de a teljes időbe beleszámítanak.
   const walkingMinutes = legs.filter((l) => l.mode === "WALK").reduce((sum, l) => sum + l.durationMinutes, 0);
   const totalDurationMinutes = Math.round((itinerary.duration / 60) * 10) / 10;
   const legsDurationSum = legs.reduce((sum, l) => sum + l.durationMinutes, 0);
@@ -219,6 +268,49 @@ const STEP_FREE_MOTIS_PARAMS = {
   timetableView: false,
 };
 
+// MOL BUBI FRONTEND/ROUTING INTEGRÁCIÓ, PHASE 1 (2026-09-13) — UGYANAZ a
+// "kizárólag feltételes spread" mintázat, mint a fenti STEP_FREE_MOTIS_PARAMS.
+// KIZÁRÓLAG akkor kerül a MOTIS kérésbe, amikor request.molBubiEnabled ===
+// true (lásd searchVedettRoutes() lent) — false/hiányzó esetén EGYIK
+// preTransit* paraméter SEM jelenik meg, a kérés BYTE-RA változatlan marad.
+//
+// Phase 1 KIZÁRÓLAG a "pre-transit" (indulási oldali, WALK→RENTAL→WALK→
+// transit) utat engedélyezi — ez az, amit a felhasználó saját VPS staging
+// diagnosztikája ténylegesen bizonyított (health check rt=true/gbfs=true,
+// station inventory, direct+intermodal RENTAL routing). A directModes=RENTAL
+// (tisztán bicikli-útvonal) és postTransitModes=RENTAL (célállomás oldali
+// rental) SZÁNDÉKOSAN NINCS bekötve ebben a körben — egy későbbi fázis
+// feladata, ha a felhasználó ezt is kéri.
+//
+// A "provider" mező MINDIG KIZÁRÓLAG "mol-bubi" — ez a Phase 1 legfontosabb
+// biztonsági invariánsa (safety invariant "C": "ON módban a provider MINDIG
+// kizárólag mol-bubi, SOHA más rental provider nem szivároghat be"), ezért
+// ez egy hardcode-olt konstans tömb, SOHA nem a felhasználói bemenetből
+// összeállított érték.
+//
+// A propulsion-szűrő "ANY" esetén SZÁNDÉKOSAN HIÁNYZIK (nincs
+// preTransitRentalPropulsionTypes paraméter egyáltalán) — ez a
+// konzervatívabb, kevésbé feltételező értelmezés a felhasználó saját
+// specifikációjának két megengedett opciója közül ("ANY: ne küldj
+// propulsion filtert VAGY a jelenlegi MOTIS-konvenciónak megfelelően
+// mindkettőt") — egy hiányzó szűrő biztosan sosem zár ki jogosan
+// visszaadható járművet egy esetlegesen eltérő MOTIS-konvenció miatt.
+export function buildBubiMotisParams(
+  bikePropulsion: JourneySearchRequest["bikePropulsion"]
+): Pick<
+  Parameters<typeof fetchMotisPlan>[0],
+  "preTransitModes" | "preTransitRentalProviders" | "preTransitRentalFormFactors" | "preTransitRentalPropulsionTypes"
+> {
+  const propulsionTypes: string[] | undefined =
+    bikePropulsion === "HUMAN" ? ["HUMAN"] : bikePropulsion === "ELECTRIC_ASSIST" ? ["ELECTRIC_ASSIST"] : undefined;
+  return {
+    preTransitModes: ["RENTAL"],
+    preTransitRentalProviders: [BUBI_RENTAL_PROVIDER],
+    preTransitRentalFormFactors: ["BICYCLE"],
+    ...(propulsionTypes ? { preTransitRentalPropulsionTypes: propulsionTypes } : {}),
+  };
+}
+
 // AKADÁLYMENTES / LÉPCSŐMENTES MVP — PRODUCTION DATA PLANE (2026-09-11,
 // Task C3): a fenti Task C2 megjegyzés (amely a getAccessibilityIndex("bkk")
 // local-cache-alapú, productionben nem működő útját dokumentálta) MOSTANTÓL
@@ -295,9 +387,15 @@ export async function searchVedettRoutes(
   // meg vagy hiúsíthatja meg a statikus routingot (lásd 4. és 16. pont). Ezért
   // itt sosem dobunk hibát tovább — sikertelenség esetén üres tömb.
   const stepFreeMotisParams = request.stepFreeRequired ? STEP_FREE_MOTIS_PARAMS : undefined;
+  // MOL BUBI FRONTEND/ROUTING INTEGRÁCIÓ, PHASE 1 (2026-09-13) — lásd
+  // buildBubiMotisParams() fejléc-kommentje. request.molBubiEnabled
+  // false/hiányzó esetén ez undefined, tehát a lenti 3 fetchMotisPlan()
+  // hívás EGYIKE sem kap egyetlen preTransit* paramétert sem — a normál
+  // (Bubi nélküli) kérés BYTE-RA változatlan marad.
+  const bubiMotisParams = request.molBubiEnabled ? buildBubiMotisParams(request.bikePropulsion) : undefined;
 
   const [defaultResult, calmerResult, serviceAlerts] = await Promise.all([
-    fetchMotisPlan({ fromPlace, toPlace, time: request.departAt, numItineraries: 6, ...stepFreeMotisParams }),
+    fetchMotisPlan({ fromPlace, toPlace, time: request.departAt, numItineraries: 6, ...stepFreeMotisParams, ...bubiMotisParams }),
     fetchMotisPlan({
       fromPlace,
       toPlace,
@@ -305,6 +403,7 @@ export async function searchVedettRoutes(
       numItineraries: 4,
       transitModes: ["BUS", "TRAM", "RAIL", "COACH"],
       ...stepFreeMotisParams,
+      ...bubiMotisParams,
     }),
     fetchServiceAlertsSafely(),
   ]);
@@ -349,7 +448,12 @@ export async function searchVedettRoutes(
       // Lásd a fenti "STEP_FREE_MOTIS_PARAMS" fejléc-komment — a fallback
       // SOHA nem eshet vissza csendben FOOT profilra: pontosan ugyanazt a
       // stepFreeMotisParams-ot kapja, mint a két normál kérés fentebb.
+      // Ugyanez az elv a Bubi paraméterekre is: a fallback SOHA nem eshet
+      // vissza csendben "Bubi nélküli" keresésre, ha a felhasználó
+      // molBubiEnabled=true-t kért (lásd buildBubiMotisParams() fenti
+      // kommentje).
       ...stepFreeMotisParams,
+      ...bubiMotisParams,
     });
 
     if (fallbackResult.ok) {
@@ -389,7 +493,11 @@ export async function searchVedettRoutes(
     from: shortPlaceName(request.from.name),
     to: shortPlaceName(request.to.name),
   };
-  const journeys = rawItineraries.map((it) => mapMotisItineraryToJourney(it, displayNames));
+  // MOL BUBI FRONTEND/ROUTING INTEGRÁCIÓ, PHASE 1.1 HARDENING — a
+  // molBubiRequestActive context EBBŐL a keresésből (request.molBubiEnabled)
+  // származik, SOHA nem a visszakapott legekből találgatva.
+  const molBubiRequestActive = Boolean(request.molBubiEnabled);
+  const journeys = rawItineraries.map((it) => mapMotisItineraryToJourney(it, displayNames, molBubiRequestActive));
 
   // AKADÁLYMENTES / LÉPCSŐMENTES MVP (2026-09-11, Task C2) — a lentebbi
   // klasszifikáció a NYERS MOTIS legs-eket igényli (stopId/tripId/
