@@ -1367,13 +1367,29 @@ export default function VedettUtvonalSearchForm({
   // /api/admin/vedett-utvonal/address-search végpontot (és a MEGLÉVŐ
   // geocodert) hívja. A geokódolás/routing logika VÁLTOZATLAN — ez
   // KIZÁRÓLAG a "Cím vagy hely" input UX-ét bővíti.
+  //
+  // EXPLICIT VÁROS/KERÜLET (2026-09-14, "transit külön Város mező"
+  // hardening) — a transit UI-nak KÜLÖN Város és Irányítószám/kerület
+  // mezője van a "Cím vagy hely" mellett; ezeket KÖTELEZŐEN átadjuk a
+  // hooknak, hogy a Nominatim-keresés MAGÁBAN a kérésben a megadott
+  // településre korlátozódjon (ne csak utólag rangsoroljon) — pl.
+  // Város="Budaörs" + Cím="Szabadság út" -> budaörsi találatok, nem
+  // Csömör/Pécs.
   const [originStreetSuggestions, setOriginStreetSuggestions] = useAddressAutocomplete(
     origin.type === "MANUAL" ? origin.street : "",
-    disabled
+    disabled,
+    {
+      city: origin.type === "MANUAL" ? origin.city : undefined,
+      postalOrDistrict: origin.type === "MANUAL" ? origin.districtOrPostalCode : undefined,
+    }
   );
   const [destinationStreetSuggestions, setDestinationStreetSuggestions] = useAddressAutocomplete(
     destination.type === "MANUAL" ? destination.street : "",
-    disabled
+    disabled,
+    {
+      city: destination.type === "MANUAL" ? destination.city : undefined,
+      postalOrDistrict: destination.type === "MANUAL" ? destination.districtOrPostalCode : undefined,
+    }
   );
   const [showOriginStreetSuggestions, setShowOriginStreetSuggestions] = useState(false);
   const [showDestinationStreetSuggestions, setShowDestinationStreetSuggestions] = useState(false);

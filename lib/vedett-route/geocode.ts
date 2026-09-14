@@ -1010,22 +1010,72 @@ export function extractCityContextFromQuery(query: string, results: NominatimRaw
 //   2. minden más település.
 // A csoportokon BELÜL a Nominatim eredeti sorrendje marad (stabil rendezés
 // — nincs másodlagos, kitalált pontszám).
-export function rankSearchResultsByCity(results: NominatimRawResult[], query: string): NominatimRawResult[] {
-  const cityContext = extractCityContextFromQuery(query, results);
+// EXPLICIT VÁROS/KERÜLET PARAMÉTER (2026-09-14, "transit külön Város mező"
+// hardening) — a transit UI-nak KÜLÖN Város és Irányítószám/kerület mezője
+// van (lásd VedettUtvonalSearchForm.tsx), ezért a hívó (searchPlaceCandidates)
+// ezt EXPLICIT adja át, nem a query-szöveg első szavából kell kitalálni —
+// az explicit érték MINDIG elsőbbséget kap az extractCityContextFromQuery()
+// (query-alapú, csak akkor releváns, ha nincs külön Város mező — pl. autós
+// ág) heurisztikájával szemben.
+export function rankSearchResultsByCity(
+  results: NominatimRawResult[],
+  query: string,
+  explicitCity?: string,
+  explicitPostalOrDistrict?: string
+): NominatimRawResult[] {
+  const trimmedExplicitCity = explicitCity?.trim();
+  const cityContext = trimmedExplicitCity && trimmedExplicitCity.length > 0
+    ? trimmedExplicitCity
+    : extractCityContextFromQuery(query, results);
   const normalizedCityContext = cityContext ? normalizeTextForCompare(cityContext) : null;
+
+  const trimmedDistrict = explicitPostalOrDistrict?.trim();
+  const isDistrictPostcode = !!trimmedDistrict && /^\d{4}$/.test(trimmedDistrict);
+  // A kerület-jelölést (pl. "V", "5", "V. kerület") a MÁR MEGLÉVŐ
+  // normalizeDistrictOrPostalCode()-on átfuttatva kanonizáljuk, hogy
+  // ugyanúgy "V. kerület" alakra álljon, mint amit extractCandidateDistrictIdentity()
+  // a Nominatim address mezőiből kinyer — így a két oldal összehasonlítható.
+  const normalizedDistrictContext =
+    trimmedDistrict && !isDistrictPostcode ? normalizeTextForCompare(normalizeDistrictOrPostalCode(trimmedDistrict)) : null;
 
   const priorityOf = (result: NominatimRawResult): number => {
     const cityName = resultCityName(result);
     const normalizedCity = cityName ? normalizeTextForCompare(cityName) : null;
-    if (normalizedCityContext && normalizedCity === normalizedCityContext) return 0;
-    if (normalizedCity === "budapest") return 1;
-    return 2;
+    const cityMatches = !!normalizedCityContext && normalizedCity === normalizedCityContext;
+
+    if (cityMatches && (normalizedDistrictContext || isDistrictPostcode)) {
+      const districtIdentity = extractCandidateDistrictIdentity(result.address);
+      const districtMatches = districtIdentity
+        ? normalizedDistrictContext !== null && normalizeTextForCompare(districtIdentity) === normalizedDistrictContext
+        : false;
+      const postcodeMatches = isDistrictPostcode && result.address?.postcode?.trim() === trimmedDistrict;
+      if (districtMatches || postcodeMatches) return 0;
+      return 1; // város egyezik, de nem a kért kerület/irányítószám
+    }
+    if (cityMatches) return 0;
+    if (normalizedCity === "budapest") return 2;
+    return 3;
   };
 
   return results
     .map((result, index) => ({ result, index, priority: priorityOf(result) }))
     .sort((a, b) => (a.priority !== b.priority ? a.priority - b.priority : a.index - b.index))
     .map((entry) => entry.result);
+}
+
+// EXPLICIT VÁROS-SZŰRÉS (2026-09-14) — ha a hívó (a transit UI külön Város
+// mezője révén) explicit várost ad meg, ÉS van legalább egy egyező találat,
+// a NEM egyező települések találatai KIESNEK (nem csak hátrébb sorolódnak) —
+// "más városok találatai NE kerüljenek az első 5-be". Ha a megadott
+// településen NINCS használható találat, a teljes (szűrés előtti) lista
+// marad — ez a fallback, hogy sose maradjon üres az autocomplete csak azért,
+// mert a Város mező eltér a Nominatim által ismert névtől.
+export function filterByExplicitCity(results: NominatimRawResult[], city: string): NominatimRawResult[] {
+  const normalizedCity = normalizeTextForCompare(city);
+  return results.filter((result) => {
+    const cityName = resultCityName(result);
+    return cityName ? normalizeTextForCompare(cityName) === normalizedCity : false;
+  });
 }
 
 // LABEL FELÉPÍTÉS (2026-09-14) — a nyers `display_name` helyett a Nominatim
@@ -1043,12 +1093,17 @@ export function toAddressAutocompleteCandidate(result: NominatimRawResult): Addr
   const district = isBudapest ? extractCandidateDistrictIdentity(addr) ?? undefined : undefined;
   const road = addr?.road ?? addr?.pedestrian ?? addr?.residential;
   const roadOrName = road ?? getResultPrimaryName(result) ?? "";
+  // Ha a találatban van konkrét házszám, azt a label VÉGÉHEZ fűzzük (pl.
+  // "2040 Budaörs, Szabadság út 27") — csak akkor, ha `road` (nem a
+  // getResultPrimaryName() fallback) az utca forrása, mert egy POI saját
+  // nevéhez nem illik "házszámot" ragasztani.
+  const roadWithHouseNumber = road && addr?.house_number ? `${roadOrName} ${addr.house_number}` : roadOrName;
 
   let label: string;
   if (postcode && city) {
-    label = `${postcode} ${city}${district ? ` ${district}` : ""}, ${roadOrName}`;
+    label = `${postcode} ${city}${district ? ` ${district}` : ""}, ${roadWithHouseNumber}`;
   } else if (city) {
-    label = `${city}, ${roadOrName}`;
+    label = `${city}, ${roadWithHouseNumber}`;
   } else {
     label = getResultPrimaryName(result) || result.display_name;
   }
@@ -1063,13 +1118,88 @@ export function toAddressAutocompleteCandidate(result: NominatimRawResult): Addr
   };
 }
 
-export async function searchPlaceCandidates(query: string, limit = 5): Promise<AddressAutocompleteCandidate[]> {
+// DUPLIKÁTUM-SZŰRÉS (2026-09-14) — a strukturált (város+utca) és az esetleges
+// free-text fallback lekérdezés elméletileg átfedő találatokat is adhat;
+// az azonos, MÁR felépített `label` szövegű jelöltek közül csak az elsőt
+// tartjuk meg (sorrend-megtartó szűrés).
+export function dedupeCandidatesByLabel(candidates: AddressAutocompleteCandidate[]): AddressAutocompleteCandidate[] {
+  const seen = new Set<string>();
+  return candidates.filter((c) => {
+    if (seen.has(c.label)) return false;
+    seen.add(c.label);
+    return true;
+  });
+}
+
+// STRUKTURÁLT AUTOCOMPLETE-LEKÉRDEZÉS (2026-09-14) — ha a hívó explicit
+// várost ad meg (a transit UI külön Város mezője), a Nominatimot ne csak
+// utólag rangsoroljuk, hanem MAGÁBAN A KÉRÉSBEN is a városra korlátozzuk
+// (street=<q>&city=<city>), a MEGLÉVŐ buildStructuredQueryUrl()-hoz hasonló
+// strukturált paraméterekkel (format=jsonv2, addressdetails=1,
+// countrycodes=hu). Ha az Irányítószám/kerület mező egy 4 jegyű
+// irányítószám, azt postalcode=-ként is átadjuk (a Nominatim ezt támogatja).
+// SOHA nem kombinálunk structured (street=/city=) paramétert egy `q=`
+// free-text paraméterrel EGY kérésben — a kettő a Nominatim API-ban
+// kölcsönösen kizárja egymást.
+function buildStructuredAutocompleteQueryUrl(query: string, city: string, postalOrDistrict: string | undefined, limit: number): string {
+  const params = new URLSearchParams();
+  params.set("format", "jsonv2");
+  params.set("addressdetails", "1");
+  params.set("namedetails", "1");
+  params.set("limit", String(limit));
+  params.set("countrycodes", "hu");
+  params.set("street", query);
+  params.set("city", city);
+  const trimmedDistrict = postalOrDistrict?.trim();
+  if (trimmedDistrict && /^\d{4}$/.test(trimmedDistrict)) {
+    params.set("postalcode", trimmedDistrict);
+  }
+  return `${NOMINATIM_URL}?${params.toString()}`;
+}
+
+export interface AddressAutocompleteQueryOptions {
+  city?: string;
+  postalOrDistrict?: string;
+}
+
+export async function searchPlaceCandidates(
+  query: string,
+  options: AddressAutocompleteQueryOptions = {},
+  limit = 5
+): Promise<AddressAutocompleteCandidate[]> {
   const trimmed = query.trim();
   if (trimmed.length < 3) return [];
-  const url = buildFreeTextQueryUrl(trimmed);
-  const results = await fetchNominatimResults(url).catch(() => []);
-  const ranked = rankSearchResultsByCity(results, trimmed);
-  return ranked.slice(0, limit).map(toAddressAutocompleteCandidate);
+
+  const city = options.city?.trim();
+
+  let results: NominatimRawResult[];
+  if (city) {
+    const structuredUrl = buildStructuredAutocompleteQueryUrl(trimmed, city, options.postalOrDistrict, limit);
+    results = await fetchNominatimResults(structuredUrl).catch(() => []);
+    // Fallback — ha a strukturált (város+utca) keresés nem ad találatot
+    // (pl. a Nominatim saját address-parsere nem illik rá), essünk vissza a
+    // MEGLÉVŐ free-text keresésre, hogy a mai viselkedés sosem romoljon.
+    if (results.length === 0) {
+      const freeTextUrl = buildFreeTextQueryUrl(trimmed);
+      results = await fetchNominatimResults(freeTextUrl).catch(() => []);
+    }
+  } else {
+    const url = buildFreeTextQueryUrl(trimmed);
+    results = await fetchNominatimResults(url).catch(() => []);
+  }
+
+  // Explicit város esetén: ha van legalább egy egyező találat, a más
+  // települések találatai KIESNEK, MIELŐTT a max. `limit`-re vágnánk —
+  // "más városok találatai NE kerüljenek az első 5-be".
+  let candidateResults = results;
+  if (city) {
+    const matching = filterByExplicitCity(results, city);
+    if (matching.length > 0) candidateResults = matching;
+  }
+
+  const ranked = rankSearchResultsByCity(candidateResults, trimmed, city, options.postalOrDistrict);
+  const candidates = dedupeCandidatesByLabel(ranked.map(toAddressAutocompleteCandidate));
+  return candidates.slice(0, limit);
 }
 
 // A kanonikus (normalizált kerülettel összeállított) free-text lekérdezés —

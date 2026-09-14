@@ -13,12 +13,24 @@
 
 import { useEffect, useState } from "react";
 
-export type AddressSuggestion = { label: string; lat: number; lon: number };
+export type AddressSuggestion = { label: string; lat: number; lon: number; city?: string; postcode?: string; district?: string };
 
 export const ADDRESS_AUTOCOMPLETE_MIN_CHARS = 3;
 export const ADDRESS_AUTOCOMPLETE_DEBOUNCE_MS = 300;
 
-export function useAddressAutocomplete(value: string, disabled: boolean) {
+// EXPLICIT VÁROS/KERÜLET (2026-09-14, "transit külön Város mező" hardening)
+// — opcionális, a hívó adja át, ha van KÜLÖN Város/Irányítószám-vagy-kerület
+// mezője (a transit "Cím vagy hely" mező mellett, lásd
+// VedettUtvonalSearchForm.tsx). Az autós ág (VedettUtvonalWorkspace.tsx)
+// ezt nem adja át (nincs külön Város mezője) — ott VÁLTOZATLAN a régi,
+// csak-query viselkedés.
+export interface UseAddressAutocompleteOptions {
+  city?: string;
+  postalOrDistrict?: string;
+}
+
+export function useAddressAutocomplete(value: string, disabled: boolean, options: UseAddressAutocompleteOptions = {}) {
+  const { city, postalOrDistrict } = options;
   const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
 
   useEffect(() => {
@@ -32,7 +44,7 @@ export function useAddressAutocomplete(value: string, disabled: boolean) {
       fetch("/api/admin/vedett-utvonal/address-search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ q: query }),
+        body: JSON.stringify({ q: query, city, postalOrDistrict }),
       })
         .then((res) => (res.ok ? res.json() : []))
         .then((data) => {
@@ -48,7 +60,7 @@ export function useAddressAutocomplete(value: string, disabled: boolean) {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [value, disabled]);
+  }, [value, disabled, city, postalOrDistrict]);
 
   return [suggestions, setSuggestions] as const;
 }

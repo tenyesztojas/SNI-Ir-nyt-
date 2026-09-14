@@ -21,6 +21,15 @@
 // esetén is 200 OK + üres tömb — az autocomplete hibája SOSEM blokkolhatja
 // a normál, kézi címbevitelt/routingot.
 //
+// EXPLICIT VÁROS/KERÜLET (2026-09-14, "transit külön Város mező" hardening)
+// — a bemenet opcionálisan `city`/`postalOrDistrict`-et is hordozhat (a
+// transit UI külön Város és Irányítószám/kerület mezőjéből, lásd
+// VedettUtvonalSearchForm.tsx) — ezeket VÁLTOZATLANUL adjuk tovább a
+// searchPlaceCandidates()-nek, ami magában a Nominatim-kérésben (nem csak
+// utólagos rangsorolással) a megadott városra korlátozza a keresést. Az
+// autós ág (VedettUtvonalWorkspace.tsx) ezeket nem küldi — ott a régi,
+// csak-query viselkedés marad.
+//
 // KÖRÖN KÍVÜL (szándékosan nem része ennek a sprintnek): Mapbox Search SDK,
 // fuzzy matching, lokális címadatbázis, cache, analytics, keyboard
 // navigáció, teljes accessibility refaktor.
@@ -29,14 +38,21 @@ import { NextResponse } from "next/server";
 import { requireVedettRouteAccess } from "@/lib/vedett-route/access";
 import { searchPlaceCandidates } from "@/lib/vedett-route/geocode";
 
+function optionalStringField(body: unknown, field: string): string | undefined {
+  const value = (body as Record<string, unknown> | null)?.[field];
+  return typeof value === "string" ? value : undefined;
+}
+
 export async function POST(request: Request) {
   const auth = await requireVedettRouteAccess();
   if (!auth.ok) return auth.response;
 
   const body = await request.json().catch(() => null);
-  const q = typeof (body as { q?: unknown } | null)?.q === "string" ? ((body as { q: string }).q) : "";
+  const q = optionalStringField(body, "q") ?? "";
+  const city = optionalStringField(body, "city");
+  const postalOrDistrict = optionalStringField(body, "postalOrDistrict");
 
-  const candidates = await searchPlaceCandidates(q).catch(() => []);
+  const candidates = await searchPlaceCandidates(q, { city, postalOrDistrict }).catch(() => []);
 
   return NextResponse.json(candidates);
 }

@@ -39,6 +39,14 @@ import { useAddressAutocomplete } from "@/lib/vedett-route/useAddressAutocomplet
 // belseje nem módosul.
 type TravelMode = "transit" | "car";
 
+// AUTÓS MÓD IDEIGLENES KIKAPCSOLÁSA (2026-09-14) — a felhasználó kérésére a
+// "🚗 Autó" választó gomb és a car ág EGYELŐRE nem jelenik meg a
+// felületen. A MEGLÉVŐ car routing implementáció (Mapbox-hívás, route.ts,
+// car-route tesztek) VÁLTOZATLANUL a kódban marad — ez KIZÁRÓLAG egy UI-
+// szintű elrejtés, nincs törlés/refaktor. Visszakapcsoláshoz elég ezt
+// `true`-ra állítani.
+const CAR_ROUTING_ENABLED = false;
+
 // AUTÓS ÚTVONALTERVEZÉS MVP (2026-09-14) — a "car" ág egyszerű Honnan?/
 // Hová? cím-inputtal az ÚJ /api/admin/vedett-utvonal/car-route végpontot
 // hívja (geokódolás + Mapbox driving-traffic route, lásd a route.ts
@@ -129,16 +137,18 @@ export default function VedettUtvonalWorkspace({
         >
           🚌 Tömegközlekedés
         </button>
-        <button
-          type="button"
-          onClick={() => setTravelMode("car")}
-          className={travelMode === "car" ? "btn-primary text-sm" : "btn-secondary text-sm"}
-        >
-          🚗 Autó
-        </button>
+        {CAR_ROUTING_ENABLED && (
+          <button
+            type="button"
+            onClick={() => setTravelMode("car")}
+            className={travelMode === "car" ? "btn-primary text-sm" : "btn-secondary text-sm"}
+          >
+            🚗 Autó
+          </button>
+        )}
       </div>
 
-      {travelMode === "car" ? (
+      {CAR_ROUTING_ENABLED && travelMode === "car" ? (
         <div className="space-y-2">
           <div className="relative">
             <label className="block text-xs text-gray-500">Honnan?</label>
