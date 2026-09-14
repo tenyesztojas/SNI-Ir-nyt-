@@ -49,3 +49,47 @@ export type CarRestStopSearchResult = {
     filteredCandidateCount: number;
   };
 };
+
+export type CarRestStopDetour = {
+  baselineDurationSeconds: number;
+  baselineDistanceMeters: number;
+  viaDurationSeconds: number;
+  viaDistanceMeters: number;
+  signedDurationDeltaSeconds: number;
+  signedDistanceDeltaMeters: number;
+  detourDurationSeconds: number;
+  detourDistanceMeters: number;
+};
+
+export type CarRestStopWithDetour = CarRestStopOnRoute & {
+  detour: CarRestStopDetour;
+};
+
+export type CarRestStopDetourOptions = {
+  /** Maximum number of paid Directions requests for one ranking pass. */
+  maxCandidates?: number;
+  /** Per-request timeout. */
+  timeoutMs?: number;
+};
+
+export type CarRestStopDetourResult = {
+  candidates: CarRestStopWithDetour[];
+  unpricedCandidateIds: string[];
+  diagnostics: {
+    provider: "MAPBOX_DIRECTIONS";
+    profile: "driving-traffic";
+    attemptedCount: number;
+    pricedCount: number;
+    failedCount: number;
+    maxCandidates: number;
+  };
+};
+
+export type CarRestStopSearchWithDetourResult = {
+  candidates: CarRestStopWithDetour[];
+  unpricedCandidateIds: string[];
+  diagnostics: {
+    search: CarRestStopSearchResult["diagnostics"];
+    detour: CarRestStopDetourResult["diagnostics"];
+  };
+};
