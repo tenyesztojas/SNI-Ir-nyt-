@@ -1,33 +1,24 @@
 // POST /api/admin/vedett-utvonal/car-route
 //
-// AUTÓS ÚTVONALTERVEZÉS MVP (2026-09-14, "VédettÚtvonal autós ág" sprint).
-// Admin ÉS feature flag védett (requireVedettRouteAccess — UGYANAZ a gate,
-// mint a meglévő /search végponton). Bemenet: indulási cím és célcím
-// (szöveg) — a cím -> koordináta geokódolást a MEGLÉVŐ geocodeAddress()-
-// szel végezzük (lib/vedett-route/geocode.ts), NEM duplikáljuk. A
-// koordinátákkal ezután a Mapbox Directions API-t hívjuk (mapbox/driving-
-// traffic profil, steps=false — NINCS turn-by-turn). GEOMETRIA (2026-09-14):
-// overview=full + geometries=geojson, hogy a meglévő térkép ki tudja
-// rajzolni az útvonalat. ALTERNATÍVÁK (2026-09-14, "választható autós
-// útvonalak" sprint): alternatives=true — a Mapbox akár 3 útvonalat adhat
-// vissza, ezeket a `routes` tömbben normalizáljuk, MAX 3 elemre vágva (ha a
-// Mapbox kevesebbet ad, az rendben van).
+// AUTÓS ÚTVONALTERVEZÉS — BACKGROUND NAVIGATION SPRINT 1.
+// A kliens jelenlegi mezői (durationSeconds, distanceMeters, geometry)
+// változatlanul megmaradnak. Emellett háttérben felépül:
+// - turn-by-turn legs/steps/maneuver modell,
+// - magyar voice/banner instruction adat,
+// - driving-traffic annotation,
+// - kísérleti autós sensory feature/score.
 //
-// A Mapbox access tokent a MAPBOX_ACCESS_TOKEN szerveroldali env
-// variable-ből olvassuk — SOSEM küldjük vissza a kliensnek, SOSEM
-// hardcode-oljuk. A válaszban route-onként KIZÁRÓLAG a menetidő
-// (durationSeconds), a távolság (distanceMeters) és a GeoJSON LineString
-// geometria megy vissza — a teljes Mapbox response NEM.
-//
-// KÖRÖN KÍVÜL (szándékosan nem része ennek a sprintnek): VédettScore,
-// sensory routing, turn-by-turn, GPS, rerouting, közösségi jelentések,
-// saját újrarendezés/elnevezés ("leggyorsabb"/"legnyugodtabb") — a routes
-// tömb sorrendje PONTOSAN a Mapbox válaszának sorrendje.
+// NINCS UI-aktiválás, NINCS GPS tracking, NINCS rerouting.
+// A CAR_ROUTING_ENABLED frontend flaghez ez a sprint NEM nyúl.
 
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireVedettRouteAccess } from "@/lib/vedett-route/access";
 import { geocodeAddress, isAmbiguousGeocodeResult } from "@/lib/vedett-route/geocode";
+import {
+  normalizeCarRoute as normalizeCarRouteData,
+} from "@/lib/vedett-route/car/normalizeDirections";
+import type { RawMapboxRoute } from "@/lib/vedett-route/car/types";
 
 const MAX_CAR_ROUTES = 3;
 
@@ -43,26 +34,9 @@ async function geocodeToCoordinates(address: string): Promise<{ lat: number; lon
   return { lat: result.lat, lon: result.lon };
 }
 
-type RawMapboxRoute = { duration?: unknown; distance?: unknown; geometry?: { type?: unknown; coordinates?: unknown } };
-
-// EGY Mapbox route normalizálása — null, ha a route hiányos/hibás (nincs
-// duration/distance, vagy a geometry nem valódi LineString+coordinates).
+// A régi függvénynév szándékosan megmarad a regressziós kompatibilitás miatt.
 function normalizeCarRoute(route: RawMapboxRoute) {
-  const geometry = route.geometry;
-  if (
-    typeof route.duration !== "number" ||
-    typeof route.distance !== "number" ||
-    !geometry ||
-    geometry.type !== "LineString" ||
-    !Array.isArray(geometry.coordinates)
-  ) {
-    return null;
-  }
-  return {
-    durationSeconds: Math.round(route.duration),
-    distanceMeters: Math.round(route.distance),
-    geometry: { type: "LineString" as const, coordinates: geometry.coordinates as [number, number][] },
-  };
+  return normalizeCarRouteData(route);
 }
 
 export async function POST(request: Request) {
@@ -73,8 +47,12 @@ export async function POST(request: Request) {
   const parsed = carRouteRequestSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
-      { ok: false, reason: "invalid_request", message: parsed.error.errors[0]?.message ?? "Érvénytelen kérés." },
-      { status: 400 }
+      {
+        ok: false,
+        reason: "invalid_request",
+        message: parsed.error.errors[0]?.message ?? "Érvénytelen kérés.",
+      },
+      { status: 400 },
     );
   }
 
@@ -85,49 +63,84 @@ export async function POST(request: Request) {
 
   if (!origin || !destination) {
     return NextResponse.json(
-      { ok: false, reason: "geocoding_failed", message: "Nem sikerült beazonosítani a megadott cím(ek)et." },
-      { status: 400 }
+      {
+        ok: false,
+        reason: "geocoding_failed",
+        message: "Nem sikerült beazonosítani a megadott cím(ek)et.",
+      },
+      { status: 400 },
     );
   }
 
   const accessToken = process.env.MAPBOX_ACCESS_TOKEN;
   if (!accessToken) {
     return NextResponse.json(
-      { ok: false, reason: "car_routing_unavailable", message: "Az autós útvonaltervezés jelenleg nem elérhető." },
-      { status: 503 }
+      {
+        ok: false,
+        reason: "car_routing_unavailable",
+        message: "Az autós útvonaltervezés jelenleg nem elérhető.",
+      },
+      { status: 503 },
     );
   }
 
   const coordinates = `${origin.lon},${origin.lat};${destination.lon},${destination.lat}`;
-  // GEOMETRIA (2026-09-14, "autós útvonal a térképen" sprint) — overview=full
-  // + geometries=geojson kéri a teljes útvonal-geometriát, közvetlenül
-  // GeoJSON LineString formátumban (nincs szerveroldali polyline-dekódolás/
-  // konverzió, a MapLibre GeoJSON forrás ezt közvetlenül elfogadja).
-  // ALTERNATÍVÁK — alternatives=true, hogy a Mapbox (legfeljebb 3) útvonalat
-  // adjon vissza.
+
+  const params = new URLSearchParams();
+  params.set("alternatives", "true");
+  params.set("steps", "true");
+  params.set("overview", "full");
+  params.set("geometries", "geojson");
+
+  // Turn-by-turn: háttérben már teljes guidance adatot kérünk.
+  params.set("language", "hu");
+  params.set("voice_instructions", "true");
+  params.set("banner_instructions", "true");
+  params.set("roundabout_exits", "true");
+  params.set("voice_units", "metric");
+
+  // Sensory feature extraction alapadatai.
+  params.set(
+    "annotations",
+    "distance,duration,speed,congestion,congestion_numeric,maxspeed",
+  );
+
+  params.set("access_token", accessToken);
+
   const url =
     `https://api.mapbox.com/directions/v5/mapbox/driving-traffic/${coordinates}` +
-    `?alternatives=true&steps=false&overview=full&geometries=geojson&access_token=${accessToken}`;
+    `?${params.toString()}`;
 
   let mapboxResponse: Response;
   try {
-    mapboxResponse = await fetch(url);
+    mapboxResponse = await fetch(url, {
+      signal: AbortSignal.timeout(8000),
+    });
   } catch {
     return NextResponse.json(
-      { ok: false, reason: "car_routing_error", message: "Az autós útvonaltervező szolgáltatás nem érhető el." },
-      { status: 502 }
+      {
+        ok: false,
+        reason: "car_routing_error",
+        message: "Az autós útvonaltervező szolgáltatás nem érhető el.",
+      },
+      { status: 502 },
     );
   }
 
   if (!mapboxResponse.ok) {
     return NextResponse.json(
-      { ok: false, reason: "car_routing_error", message: "Az autós útvonaltervező szolgáltatás hibát adott." },
-      { status: 502 }
+      {
+        ok: false,
+        reason: "car_routing_error",
+        message: "Az autós útvonaltervező szolgáltatás hibát adott.",
+      },
+      { status: 502 },
     );
   }
 
   const data: unknown = await mapboxResponse.json().catch(() => null);
   const rawRoutes = (data as { routes?: RawMapboxRoute[] } | null)?.routes ?? [];
+
   const routes = rawRoutes
     .slice(0, MAX_CAR_ROUTES)
     .map(normalizeCarRoute)
@@ -135,8 +148,12 @@ export async function POST(request: Request) {
 
   if (routes.length === 0) {
     return NextResponse.json(
-      { ok: false, reason: "no_route", message: "Nem található autós útvonal a megadott címek között." },
-      { status: 404 }
+      {
+        ok: false,
+        reason: "no_route",
+        message: "Nem található autós útvonal a megadott címek között.",
+      },
+      { status: 404 },
     );
   }
 
