@@ -1157,6 +1157,26 @@ function buildStructuredAutocompleteQueryUrl(query: string, city: string, postal
   return `${NOMINATIM_URL}?${params.toString()}`;
 }
 
+// RÉSZLEGES UTCANÉV (2026-09-14, "valódi autocomplete UX" javítás) —
+// autocomplete-specifikus szabad-szöveges lekérdezés, a várost A QUERY
+// SZÖVEGÉBE fűzve (pl. "szab, Budaörs"), NEM a `city=` strukturált
+// paraméterként. Ez engedékenyebb a Nominatim oldalán RÉSZLEGES
+// utcanévnél (pl. "szab", "szabadsá"), mint a street=+city= strukturált
+// keresés, ami a saját address-parserével gyakran csak egy teljes/majdnem
+// teljes utcanévre ad találatot. A `q=` és a `street=`/`city=` paraméterek
+// SOHA nem kerülnek egy kérésbe (Nominatim API korlát) — ez a függvény
+// TISZTÁN a `q=` utat építi.
+function buildFreeTextAutocompleteQueryUrl(query: string, city: string, limit: number): string {
+  const params = new URLSearchParams();
+  params.set("format", "jsonv2");
+  params.set("addressdetails", "1");
+  params.set("namedetails", "1");
+  params.set("limit", String(limit));
+  params.set("countrycodes", "hu");
+  params.set("q", `${query}, ${city}`);
+  return `${NOMINATIM_URL}?${params.toString()}`;
+}
+
 export interface AddressAutocompleteQueryOptions {
   city?: string;
   postalOrDistrict?: string;
@@ -1174,14 +1194,20 @@ export async function searchPlaceCandidates(
 
   let results: NominatimRawResult[];
   if (city) {
-    const structuredUrl = buildStructuredAutocompleteQueryUrl(trimmed, city, options.postalOrDistrict, limit);
-    results = await fetchNominatimResults(structuredUrl).catch(() => []);
-    // Fallback — ha a strukturált (város+utca) keresés nem ad találatot
-    // (pl. a Nominatim saját address-parsere nem illik rá), essünk vissza a
-    // MEGLÉVŐ free-text keresésre, hogy a mai viselkedés sosem romoljon.
-    if (results.length === 0) {
-      const freeTextUrl = buildFreeTextQueryUrl(trimmed);
-      results = await fetchNominatimResults(freeTextUrl).catch(() => []);
+    // ELSŐDLEGES: város a szövegbe fűzött free-text keresés — ez ad
+    // találatot MÁR RÉSZLEGES utcanévnél is (pl. "szab", "szabadsá"),
+    // amit a strukturált street=+city= keresés gyakran nem talál meg.
+    const freeTextWithCityUrl = buildFreeTextAutocompleteQueryUrl(trimmed, city, limit);
+    results = await fetchNominatimResults(freeTextWithCityUrl).catch(() => []);
+
+    // FALLBACK — ha ez nem adott a megadott településen HASZNÁLHATÓ
+    // találatot, essünk vissza a MEGLÉVŐ strukturált (street=+city=)
+    // keresésre, hogy a korábban már jól működő teljes-utcanév eset
+    // sosem romoljon.
+    if (filterByExplicitCity(results, city).length === 0) {
+      const structuredUrl = buildStructuredAutocompleteQueryUrl(trimmed, city, options.postalOrDistrict, limit);
+      const structuredResults = await fetchNominatimResults(structuredUrl).catch(() => []);
+      if (structuredResults.length > 0) results = structuredResults;
     }
   } else {
     const url = buildFreeTextQueryUrl(trimmed);

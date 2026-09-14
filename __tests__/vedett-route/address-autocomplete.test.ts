@@ -61,11 +61,27 @@ describe("cím autocomplete — searchPlaceCandidates() a MEGLÉVŐ geocoder ép
     assert.doesNotMatch(fn, /params\.set\("q",/);
   });
 
-  test("ha a strukturált (város-korlátos) keresés 0 találatot ad, a MEGLÉVŐ free-text keresésre esik vissza", () => {
+  test("RÉSZLEGES UTCANÉV (2026-09-14): explicit `city` esetén az ELSŐDLEGES kérés város-beépített free-text (q=<query>, <city>) — a strukturált street=/city= keresés csak FALLBACK, mert részleges utcanévnél túl szigorú", () => {
+    const fnMatch = geocodeSrc.match(/function buildFreeTextAutocompleteQueryUrl\([\s\S]*?\n\}/);
+    assert.ok(fnMatch, "meg kell találni a buildFreeTextAutocompleteQueryUrl() függvényt");
+    const fn = fnMatch![0];
+    assert.match(fn, /params\.set\("q", `\$\{query\}, \$\{city\}`\)/);
+    assert.match(fn, /params\.set\("format", "jsonv2"\)/);
+    assert.match(fn, /params\.set\("countrycodes", "hu"\)/);
+    assert.doesNotMatch(fn, /params\.set\("street",/);
+    assert.doesNotMatch(fn, /params\.set\("city",/);
+
+    const searchFnMatch = geocodeSrc.match(/export async function searchPlaceCandidates\([\s\S]*?\n\}/);
+    const searchFn = searchFnMatch![0];
+    assert.match(searchFn, /const freeTextWithCityUrl = buildFreeTextAutocompleteQueryUrl\(trimmed, city, limit\);/);
+    assert.match(searchFn, /if \(filterByExplicitCity\(results, city\)\.length === 0\) \{/);
+    assert.match(searchFn, /const structuredUrl = buildStructuredAutocompleteQueryUrl\(trimmed, city, options\.postalOrDistrict, limit\);/);
+  });
+
+  test("ha a strukturált (város-korlátos) keresés 0 találatot ad, a MEGLÉVŐ free-text keresésre esik vissza (city nélküli ág, változatlan)", () => {
     const fnMatch = geocodeSrc.match(/export async function searchPlaceCandidates\([\s\S]*?\n\}/);
     const fn = fnMatch![0];
-    assert.match(fn, /if \(results\.length === 0\) \{/);
-    assert.match(fn, /const freeTextUrl = buildFreeTextQueryUrl\(trimmed\);/);
+    assert.match(fn, /const url = buildFreeTextQueryUrl\(trimmed\);/);
   });
 
   test("3 karakternél rövidebb keresésnél NEM hívja a Nominatimot — üres listát ad", () => {
@@ -234,6 +250,38 @@ describe("cím autocomplete — TELEPÜLÉS-ÉRZÉKENY RANGSOROLÁS (rankSearchR
     assert.deepEqual(filtered, [soskut], "kizárólag a sóskúti találatnak kell megmaradnia");
   });
 
+  test("7) RÉSZLEGES UTCANÉV — city='Budaörs' + q='szab' — a filterByExplicitCity/rankSearchResultsByCity/dedupeCandidatesByLabel lánc a rövid, részleges query mellett is csak a budaörsi találatot adja (nem függ a query hosszától)", () => {
+    const csomor = mockResult({ address: { road: "Szabadság út", village: "Csömör", postcode: "2141" } });
+    const pecs = mockResult({ address: { road: "Szabadság út", city: "Pécs", postcode: "7621" } });
+    const budaors = mockResult({ address: { road: "Szabadság út", town: "Budaörs", postcode: "2040" } });
+    const filtered = filterByExplicitCity([csomor, pecs, budaors], "Budaörs");
+    const ranked = rankSearchResultsByCity(filtered, "szab", "Budaörs");
+    const candidates = dedupeCandidatesByLabel(ranked.map(toAddressAutocompleteCandidate));
+    assert.equal(candidates.length, 1);
+    assert.equal(candidates[0].label, "2040 Budaörs, Szabadság út");
+  });
+
+  test("7b) RÉSZLEGES UTCANÉV — city='Budaörs' + q='szabadsá' (majdnem teljes) — ugyanaz az eredmény, mint 'szab'-nál", () => {
+    const csomor = mockResult({ address: { road: "Szabadság út", village: "Csömör", postcode: "2141" } });
+    const budaors = mockResult({ address: { road: "Szabadság út", town: "Budaörs", postcode: "2040" } });
+    const filtered = filterByExplicitCity([csomor, budaors], "Budaörs");
+    const ranked = rankSearchResultsByCity(filtered, "szabadsá", "Budaörs");
+    const candidates = dedupeCandidatesByLabel(ranked.map(toAddressAutocompleteCandidate));
+    assert.equal(candidates.length, 1);
+    assert.equal(candidates[0].label, "2040 Budaörs, Szabadság út");
+  });
+
+  test("8) RÉSZLEGES UTCANÉV — city='Sóskút' + q='pet' — a budapesti XVI./XVII. kerületi Petőfi utcák NEM, csak a sóskúti marad", () => {
+    const bpXVI = mockResult({ address: { road: "Petőfi utca", city: "Budapest", postcode: "1163", city_district: "XVI. kerület" } });
+    const bpXVII = mockResult({ address: { road: "Petőfi utca", city: "Budapest", postcode: "1173", city_district: "XVII. kerület" } });
+    const soskut = mockResult({ address: { road: "Petőfi utca", village: "Sóskút", postcode: "2038" } });
+    const filtered = filterByExplicitCity([bpXVI, bpXVII, soskut], "Sóskút");
+    const ranked = rankSearchResultsByCity(filtered, "pet", "Sóskút");
+    const candidates = dedupeCandidatesByLabel(ranked.map(toAddressAutocompleteCandidate));
+    assert.equal(candidates.length, 1);
+    assert.equal(candidates[0].label, "2038 Sóskút, Petőfi utca");
+  });
+
   test("3) city='Budapest' + postalOrDistrict='V. kerület' + q='Kossuth Lajos utca' — a V. kerületi találat kap prioritást más budapesti kerületekkel szemben", () => {
     const bpXIII = mockResult({ address: { road: "Kossuth Lajos utca", city: "Budapest", postcode: "1136", city_district: "XIII. kerület" } });
     const bpV = mockResult({ address: { road: "Kossuth Lajos utca", city: "Budapest", postcode: "1053", city_district: "V. kerület" } });
@@ -300,11 +348,20 @@ describe("cím autocomplete — VedettUtvonalWorkspace (autós Honnan?/Hová?) t
 
   test("AUTÓS MÓD IDEIGLENES KIKAPCSOLÁSA — CAR_ROUTING_ENABLED = false, a 🚗 Autó gomb és a car ág feltételesen (a konstanstól függően) jelenik meg, a car kód NEM törölve", () => {
     assert.match(workspaceSrc, /const CAR_ROUTING_ENABLED = false;/);
-    assert.match(workspaceSrc, /\{CAR_ROUTING_ENABLED && \(\s*\n\s*<button/);
     assert.match(workspaceSrc, /\{CAR_ROUTING_ENABLED && travelMode === "car" \? \(/);
     // A car routing kód (handleCarRouteSubmit, /car-route hívás) VÁLTOZATLANUL a fájlban marad.
     assert.match(workspaceSrc, /function handleCarRouteSubmit/);
     assert.match(workspaceSrc, /fetch\("\/api\/admin\/vedett-utvonal\/car-route"/);
+  });
+
+  test("MÓDVÁLASZTÓ TELJES ELREJTÉSE (2026-09-14) — amíg CAR_ROUTING_ENABLED === false, SEM a 🚌 Tömegközlekedés, SEM a 🚗 Autó gomb nem jelenik meg (nincs mit választani) — a teljes selector UI a CAR_ROUTING_ENABLED feltételhez kötve, a módválasztó kódja NEM törölve", () => {
+    const selectorMatch = workspaceSrc.match(/\{CAR_ROUTING_ENABLED && \(\s*\n\s*<div className="flex gap-2">[\s\S]*?\n\s*\)\}/);
+    assert.ok(selectorMatch, "a teljes módválasztó div-nek CAR_ROUTING_ENABLED feltétel alá kell kerülnie");
+    const selector = selectorMatch![0];
+    assert.match(selector, /🚌 Tömegközlekedés/);
+    assert.match(selector, /🚗 Autó/);
+    assert.match(selector, /setTravelMode\("transit"\)/);
+    assert.match(selector, /setTravelMode\("car"\)/);
   });
 });
 

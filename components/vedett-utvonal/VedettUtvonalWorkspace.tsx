@@ -129,15 +129,15 @@ export default function VedettUtvonalWorkspace({
 
   return (
     <div className="space-y-4">
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={() => setTravelMode("transit")}
-          className={travelMode === "transit" ? "btn-primary text-sm" : "btn-secondary text-sm"}
-        >
-          🚌 Tömegközlekedés
-        </button>
-        {CAR_ROUTING_ENABLED && (
+      {CAR_ROUTING_ENABLED && (
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setTravelMode("transit")}
+            className={travelMode === "transit" ? "btn-primary text-sm" : "btn-secondary text-sm"}
+          >
+            🚌 Tömegközlekedés
+          </button>
           <button
             type="button"
             onClick={() => setTravelMode("car")}
@@ -145,8 +145,8 @@ export default function VedettUtvonalWorkspace({
           >
             🚗 Autó
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {CAR_ROUTING_ENABLED && travelMode === "car" ? (
         <div className="space-y-2">
