@@ -940,6 +940,25 @@ export function isAmbiguousGeocodeResult(
   return (value as AmbiguousGeocodeResult).ambiguous === true;
 }
 
+// --- CÍM AUTOCOMPLETE (2026-09-14, "cím-bevitel UX" sprint) ---
+//
+// A geocodeAddress() a TELJES cím feloldására szolgál (routing-hoz) — ehhez
+// pontos utca/házszám/település-egyezés kell, ezért gépelés közbeni
+// javaslatokra (pl. "Kossuth tér", ami önmagában egy PONTOS cím-egyeztetéshez
+// túl kevés) NEM alkalmas. Az alábbi searchPlaceCandidates() NEM egy
+// második geocoding szolgáltatás — a MÁR meglévő free-text Nominatim
+// lekérdezést (buildFreeTextQueryUrl), a MÁR meglévő hálózati hívást
+// (fetchNominatimResults/fetchWithRetry) és a MÁR meglévő, kliensnek adható
+// normalizálást (toPlaceCandidate) használja fel, csak "adj vissza több
+// nyers találatot" módban — nincs duplikált geokódoló logika.
+export async function searchPlaceCandidates(query: string, limit = 5): Promise<GeocodePlaceCandidate[]> {
+  const trimmed = query.trim();
+  if (trimmed.length < 3) return [];
+  const url = buildFreeTextQueryUrl(trimmed);
+  const results = await fetchNominatimResults(url).catch(() => []);
+  return results.slice(0, limit).map(toPlaceCandidate);
+}
+
 // A kanonikus (normalizált kerülettel összeállított) free-text lekérdezés —
 // ugyanazt a formázási szabályt követi, mint a kliens buildStructuredAddress()
 // függvénye, de a MÁR normalizált (normalizeDistrictOrPostalCode())

@@ -15,6 +15,7 @@ import RestStopFlowPanel, { type RestStopMapState, type RestPanelMode } from "./
 import type { RestPointMarker } from "./VedettUtvonalMap";
 import { setNavigationModeActive } from "@/lib/pwa/navigationModeSignal";
 import type { GeocodePlaceCandidate } from "@/lib/vedett-route/geocode";
+import { useAddressAutocomplete } from "@/lib/vedett-route/useAddressAutocomplete";
 // STREET-LEVEL FALLBACK (2026-09-12) — a request-body-összeállítás pure
 // függvényekbe kiszervezve (lib/vedett-route/searchRequestBuilder.ts), hogy
 // Node.js tesztekben React-függőség nélkül ellenőrizhetők legyenek az
@@ -1359,6 +1360,23 @@ export default function VedettUtvonalSearchForm({
   // él (lásd useGeolocation.ts fejléce), NEM perzisztálódik/logolódik.
   const originGeo = useGeolocation();
   const [originError, setOriginError] = useState<string | null>(null);
+
+  // CÍM AUTOCOMPLETE (2026-09-14, kiterjesztve a transit "Cím vagy hely"
+  // mezőkre) — a MEGLÉVŐ, autós ágon már bevezetett közös hookot használja
+  // (lib/vedett-route/useAddressAutocomplete.ts), amely a MEGLÉVŐ
+  // /api/admin/vedett-utvonal/address-search végpontot (és a MEGLÉVŐ
+  // geocodert) hívja. A geokódolás/routing logika VÁLTOZATLAN — ez
+  // KIZÁRÓLAG a "Cím vagy hely" input UX-ét bővíti.
+  const [originStreetSuggestions, setOriginStreetSuggestions] = useAddressAutocomplete(
+    origin.type === "MANUAL" ? origin.street : "",
+    disabled
+  );
+  const [destinationStreetSuggestions, setDestinationStreetSuggestions] = useAddressAutocomplete(
+    destination.type === "MANUAL" ? destination.street : "",
+    disabled
+  );
+  const [showOriginStreetSuggestions, setShowOriginStreetSuggestions] = useState(false);
+  const [showDestinationStreetSuggestions, setShowDestinationStreetSuggestions] = useState(false);
   // B5 — "nem indítható el ugyanaz a kérés párhuzamosan": ez a ref jelzi,
   // hogy EZ a form ténylegesen kezdeményezett-e egy "Aktuális helyzetem"
   // kérést (megkülönböztetve attól, ha originGeo valamiért más okból
@@ -1923,7 +1941,7 @@ export default function VedettUtvonalSearchForm({
                 className="mt-0.5 w-full min-w-0 rounded border border-gray-300 px-2 py-1.5 text-sm disabled:bg-gray-100"
               />
             </div>
-            <div className="min-w-0 sm:col-span-2 lg:col-span-1">
+            <div className="relative min-w-0 sm:col-span-2 lg:col-span-1">
               {/* UI/SZÖVEGEZÉSI KORREKCIÓ (2026-09-11, "utolsó, kizárólag
                   UI/szövegezési módosítás" kör, 1. pont) — a mező neve/
                   placeholdere/segítő szövege KIZÁRÓLAG szöveg, NEM érinti a
@@ -1940,10 +1958,34 @@ export default function VedettUtvonalSearchForm({
                 type="text"
                 value={origin.type === "MANUAL" ? origin.street : ""}
                 onChange={(e) => updateOriginManualField("street", e.target.value)}
+                onFocus={() => setShowOriginStreetSuggestions(true)}
+                onBlur={() => setTimeout(() => setShowOriginStreetSuggestions(false), 150)}
                 placeholder="pl. Astoria vagy Váci utca 12"
                 disabled={disabled}
                 className="mt-0.5 w-full min-w-0 rounded border border-gray-300 px-2 py-1.5 text-sm disabled:bg-gray-100"
               />
+              {/* CÍM AUTOCOMPLETE (2026-09-14) — a MEGLÉVŐ address-search
+                  végpontból kapott javaslatok, kattintásra a teljes cím
+                  kerül a mezőbe (updateOriginManualField). */}
+              {showOriginStreetSuggestions && originStreetSuggestions.length > 0 && (
+                <ul className="absolute z-10 mt-0.5 w-full rounded border border-gray-200 bg-white text-sm shadow-sm">
+                  {originStreetSuggestions.map((s, i) => (
+                    <li key={i}>
+                      <button
+                        type="button"
+                        onMouseDown={() => {
+                          updateOriginManualField("street", s.label);
+                          setOriginStreetSuggestions([]);
+                          setShowOriginStreetSuggestions(false);
+                        }}
+                        className="block w-full px-2 py-1 text-left hover:bg-gray-50"
+                      >
+                        {s.label}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
               <p className="mt-0.5 w-full whitespace-normal break-words text-[11px] text-gray-400">
                 Írhatsz címet vagy helyet is, pl. Déli pályaudvar.
               </p>
@@ -2012,7 +2054,7 @@ export default function VedettUtvonalSearchForm({
                     className="mt-0.5 w-full min-w-0 rounded border border-gray-300 px-2 py-1.5 text-sm disabled:bg-gray-100"
                   />
                 </div>
-                <div className="min-w-0 sm:col-span-2 lg:col-span-1">
+                <div className="relative min-w-0 sm:col-span-2 lg:col-span-1">
                   {/* UI/SZÖVEGEZÉSI KORREKCIÓ (2026-09-11) — az origin
                       blokkal szimmetrikus szöveg-változás, lásd ott a
                       komment. A placeholder és a helper text a reszponzív
@@ -2022,10 +2064,34 @@ export default function VedettUtvonalSearchForm({
                     type="text"
                     value={destination.street}
                     onChange={(e) => updateDestinationManualField("street", e.target.value)}
+                    onFocus={() => setShowDestinationStreetSuggestions(true)}
+                    onBlur={() => setTimeout(() => setShowDestinationStreetSuggestions(false), 150)}
                     placeholder="pl. Astoria vagy Váci utca 12"
                     disabled={disabled}
                     className="mt-0.5 w-full min-w-0 rounded border border-gray-300 px-2 py-1.5 text-sm disabled:bg-gray-100"
                   />
+                  {/* CÍM AUTOCOMPLETE (2026-09-14) — lásd az origin mezőnél
+                      lévő komment, ugyanaz a MEGLÉVŐ address-search
+                      végpont/hook, csak a célcím mezőre. */}
+                  {showDestinationStreetSuggestions && destinationStreetSuggestions.length > 0 && (
+                    <ul className="absolute z-10 mt-0.5 w-full rounded border border-gray-200 bg-white text-sm shadow-sm">
+                      {destinationStreetSuggestions.map((s, i) => (
+                        <li key={i}>
+                          <button
+                            type="button"
+                            onMouseDown={() => {
+                              updateDestinationManualField("street", s.label);
+                              setDestinationStreetSuggestions([]);
+                              setShowDestinationStreetSuggestions(false);
+                            }}
+                            className="block w-full px-2 py-1 text-left hover:bg-gray-50"
+                          >
+                            {s.label}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                   <p className="mt-0.5 w-full whitespace-normal break-words text-[11px] text-gray-400">
                     Írhatsz címet vagy helyet is, pl. Déli pályaudvar.
                   </p>

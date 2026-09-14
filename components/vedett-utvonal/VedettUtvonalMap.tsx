@@ -55,6 +55,15 @@ export interface RestPointMarker {
 
 export interface VedettUtvonalMapProps {
   legs: JourneyLegForGeometry[];
+  // AUTÓS ÚTVONAL MVP (2026-09-14) — a car-route API válaszából érkező,
+  // KÉSZ GeoJSON LineString ([longitude, latitude] koordinátákkal, a
+  // Mapbox Directions geometries=geojson válaszával megegyező alakban).
+  // Szándékosan KÜLÖN prop/forrás a transit `legs`-től (ami encodeolt
+  // polyline-t vár egy mode-alapú, több-lábú struktúrában) — a car route
+  // egyetlen, már kész geometria, nincs mód/lábbontás, nincs konverziós
+  // igény. Autó módban `legs` mindig [], transit módban ez mindig null —
+  // a két útvonal SOSEM jelenik meg egyszerre (lásd VedettUtvonalWorkspace.tsx).
+  carRouteGeometry?: { type: "LineString"; coordinates: [number, number][] } | null;
   fromName?: string;
   toName?: string;
   currentPosition?: { latitude: number; longitude: number } | null;
@@ -141,7 +150,7 @@ class CurrentLocationControl implements maplibregl.IControl {
   }
 }
 
-export default function VedettUtvonalMap({ legs, fromName, toName, currentPosition, restPoints = [], selectedRestPointId = null, onSelectRestPoint, restPointFocusMode = false, className, followMode = false, navigationZoom = 16, onUserGestureCancelFollow }: VedettUtvonalMapProps) {
+export default function VedettUtvonalMap({ legs, carRouteGeometry = null, fromName, toName, currentPosition, restPoints = [], selectedRestPointId = null, onSelectRestPoint, restPointFocusMode = false, className, followMode = false, navigationZoom = 16, onUserGestureCancelFollow }: VedettUtvonalMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const currentPosMarkerRef = useRef<maplibregl.Marker | null>(null);
@@ -399,6 +408,44 @@ export default function VedettUtvonalMap({ legs, fromName, toName, currentPositi
       map.fitBounds(bounds, { padding: 48, maxZoom: 17, duration: 300 });
     }
   }, [legs, mapReady, restPointFocusMode, followMode]);
+
+  // AUTÓS ÚTVONAL MVP (2026-09-14) — a carRouteGeometry rajzolása/frissítése.
+  // Szándékosan KÜLÖN forrás/réteg ("vedett-car-route"), a fenti transit
+  // effekttől függetlenül — nincs beavatkozás a meglévő legs-alapú
+  // rajzolásba/fitBounds-ba. Autó módban legs mindig [], így a transit
+  // rétegek üresek maradnak; transit módban carRouteGeometry mindig null,
+  // így ez a forrás üres LineString-et kap — a két útvonal SOSEM jelenik
+  // meg egyszerre.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapReady) return;
+
+    const sourceId = "vedett-car-route";
+    const geojson: GeoJSON.Feature = {
+      type: "Feature",
+      properties: {},
+      geometry: carRouteGeometry ?? { type: "LineString", coordinates: [] },
+    };
+
+    if (map.getSource(sourceId)) {
+      (map.getSource(sourceId) as maplibregl.GeoJSONSource).setData(geojson);
+    } else {
+      map.addSource(sourceId, { type: "geojson", data: geojson });
+      map.addLayer({
+        id: `${sourceId}-line`,
+        type: "line",
+        source: sourceId,
+        layout: { "line-join": "round", "line-cap": "round" },
+        paint: { "line-color": "#2563eb", "line-width": 4 },
+      });
+    }
+
+    if (carRouteGeometry && carRouteGeometry.coordinates.length > 0) {
+      const bounds = new maplibregl.LngLatBounds();
+      for (const coord of carRouteGeometry.coordinates) bounds.extend(coord);
+      map.fitBounds(bounds, { padding: 48, maxZoom: 17, duration: 300 });
+    }
+  }, [carRouteGeometry, mapReady]);
 
   // Sprint E.1 hotfix (2026-09-08), frissítve az Egyetlen Megosztott Térkép
   // UX módosításnál (2026-09-09) — pihenőpont-jelölt nézet fitBounds/zoom
