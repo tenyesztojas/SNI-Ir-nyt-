@@ -1,6 +1,6 @@
 // POST /api/admin/vedett-utvonal/address-search
-// TEMPORARY DIAGNOSTIC VERSION.
-// IMPORTANT: never exposes MAPBOX_ACCESS_TOKEN itself.
+// Mapbox Geocoding v6 autocomplete. This endpoint intentionally returns
+// coordinates directly, so selecting a suggestion can bypass a second geocode.
 
 import { NextResponse } from "next/server";
 import { requireVedettRouteAccess } from "@/lib/vedett-route/access";
@@ -9,13 +9,9 @@ import {
   type MapboxGeocodingFeature,
 } from "@/lib/vedett-route/addressAutocompleteMapbox";
 
-const MAPBOX_GEOCODING_URL =
-  "https://api.mapbox.com/search/geocode/v6/forward";
+const MAPBOX_GEOCODING_URL = "https://api.mapbox.com/search/geocode/v6/forward";
 
-function optionalStringField(
-  body: unknown,
-  field: string,
-): string | undefined {
+function optionalStringField(body: unknown, field: string): string | undefined {
   const value = (body as Record<string, unknown> | null)?.[field];
   return typeof value === "string" ? value : undefined;
 }
@@ -25,36 +21,16 @@ export async function POST(request: Request) {
   if (!auth.ok) return auth.response;
 
   const body = await request.json().catch(() => null);
-
   const q = (optionalStringField(body, "q") ?? "").trim();
   const city = optionalStringField(body, "city")?.trim();
-  const postalOrDistrict =
-    optionalStringField(body, "postalOrDistrict")?.trim();
+  const postalOrDistrict = optionalStringField(body, "postalOrDistrict")?.trim();
 
-  if (q.length < 3) {
-    return NextResponse.json({
-      diagnostic: true,
-      stage: "validation",
-      reason: "query_too_short",
-      queryLength: q.length,
-      suggestions: [],
-    });
-  }
+  if (q.length < 3) return NextResponse.json([]);
 
   const accessToken = process.env.MAPBOX_ACCESS_TOKEN;
-
-  if (!accessToken) {
-    return NextResponse.json({
-      diagnostic: true,
-      stage: "configuration",
-      reason: "missing_mapbox_access_token",
-      tokenPresent: false,
-      suggestions: [],
-    });
-  }
+  if (!accessToken) return NextResponse.json([]);
 
   const params = new URLSearchParams();
-
   params.set("q", city ? `${q}, ${city}` : q);
   params.set("access_token", accessToken);
   params.set("autocomplete", "true");
@@ -63,10 +39,9 @@ export async function POST(request: Request) {
   params.set("types", "street,address");
   params.set("limit", "10");
 
-  if (
-    postalOrDistrict &&
-    /^\d{4}$/.test(postalOrDistrict)
-  ) {
+  // A 4-digit postcode is useful as hard-ish query context. District text is
+  // kept for local filtering/ranking rather than appended to the street prefix.
+  if (postalOrDistrict && /^\d{4}$/.test(postalOrDistrict)) {
     params.set(
       "q",
       `${q}, ${city ?? ""}, ${postalOrDistrict}`
@@ -75,117 +50,25 @@ export async function POST(request: Request) {
     );
   }
 
-  const safeQuery = {
-    q: params.get("q"),
-    autocomplete: params.get("autocomplete"),
-    country: params.get("country"),
-    language: params.get("language"),
-    types: params.get("types"),
-    limit: params.get("limit"),
-  };
-
   let mapboxResponse: Response;
 
   try {
-    mapboxResponse = await fetch(
-      `${MAPBOX_GEOCODING_URL}?${params.toString()}`,
-      {
-        signal: AbortSignal.timeout(5000),
-      },
-    );
-  } catch (error) {
-    return NextResponse.json({
-      diagnostic: true,
-      stage: "mapbox_fetch",
-      reason: "fetch_failed",
-      tokenPresent: true,
-      query: safeQuery,
-      error:
-        error instanceof Error
-          ? error.message
-          : String(error),
-      suggestions: [],
+    mapboxResponse = await fetch(`${MAPBOX_GEOCODING_URL}?${params.toString()}`, {
+      signal: AbortSignal.timeout(5000),
     });
+  } catch {
+    return NextResponse.json([]);
   }
 
   if (!mapboxResponse.ok) {
-    const errorBody = await mapboxResponse
-      .text()
-      .catch(() => "");
-
-    return NextResponse.json({
-      diagnostic: true,
-      stage: "mapbox_response",
-      reason: "mapbox_http_error",
-      tokenPresent: true,
-      mapboxStatus: mapboxResponse.status,
-      mapboxStatusText: mapboxResponse.statusText,
-      query: safeQuery,
-      mapboxErrorBody: errorBody.slice(0, 1000),
-      suggestions: [],
-    });
+    return NextResponse.json([]);
   }
 
-  const data: unknown = await mapboxResponse
-    .json()
-    .catch(() => null);
-
-  if (!data) {
-    return NextResponse.json({
-      diagnostic: true,
-      stage: "mapbox_parse",
-      reason: "invalid_json",
-      tokenPresent: true,
-      mapboxStatus: mapboxResponse.status,
-      query: safeQuery,
-      suggestions: [],
-    });
-  }
-
+  const data: unknown = await mapboxResponse.json().catch(() => null);
   const features =
-    (
-      data as {
-        features?: MapboxGeocodingFeature[];
-      } | null
-    )?.features ?? [];
+    (data as { features?: MapboxGeocodingFeature[] } | null)?.features ?? [];
 
-  const suggestions =
-    processMapboxGeocodingFeatures(
-      features,
-      q,
-      city,
-      postalOrDistrict,
-      5,
-    );
-
-  return NextResponse.json({
-    diagnostic: true,
-    stage: "complete",
-    reason:
-      suggestions.length > 0
-        ? "suggestions_found"
-        : features.length > 0
-          ? "features_filtered_out"
-          : "mapbox_returned_zero_features",
-    tokenPresent: true,
-    mapboxStatus: mapboxResponse.status,
-    query: safeQuery,
-    rawFeatureCount: features.length,
-    filteredSuggestionCount: suggestions.length,
-    rawFeatures: features.slice(0, 5).map((feature) => {
-      const f = feature as unknown as Record<string, unknown>;
-
-      return {
-        type: f.type,
-        id: f.id,
-        name: f.name,
-        name_preferred: f.name_preferred,
-        place_name: f.place_name,
-        full_address: f.full_address,
-        feature_type: f.feature_type,
-        properties: f.properties,
-      };
-    }),
-    suggestions,
-  });
+  return NextResponse.json(
+    processMapboxGeocodingFeatures(features, q, city, postalOrDistrict, 5),
+  );
 }
