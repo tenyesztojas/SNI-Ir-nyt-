@@ -44,16 +44,16 @@ function mockFeature(overrides: Partial<MapboxSuggestFeature>): MapboxSuggestFea
   return { mapbox_id: "mock-id", name: "mock", ...overrides };
 }
 
-describe("cím autocomplete — /api/admin/vedett-utvonal/address-search Mapbox Geocoding v6 autocomplete", () => {
+describe("cím autocomplete — /api/admin/vedett-utvonal/address-search Search Box first + Geocoding v6 fallback", () => {
   test("a végpont admin/feature-flag gate-et használ", () => {
-    assert.match(routeSrc, /const auth = await requireVedettRouteAccess\(\);/);
-    assert.match(routeSrc, /if \(!auth\.ok\) return auth\.response;/);
+    assert.match(routeSrc, /const\s+auth\s*=\s*await\s+requireVedettRouteAccess\(\);/);
+    assert.match(routeSrc, /if\s*\(!auth\.ok\)\s*return\s+auth\.response;/);
   });
 
-  test("a Mapbox Geocoding v6 /forward végpontot hívja, nem a régi Nominatim searchPlaceCandidates()-et és nem Search Box /suggest-et", () => {
+  test("elsődlegesen Mapbox Search Box /suggest-et használ, Geocoding v6 /forward fallbackkal", () => {
+    assert.match(routeSrc, /https:\/\/api\.mapbox\.com\/search\/searchbox\/v1\/suggest/);
     assert.match(routeSrc, /https:\/\/api\.mapbox\.com\/search\/geocode\/v6\/forward/);
     assert.doesNotMatch(routeSrc, /searchPlaceCandidates\(/);
-    assert.doesNotMatch(routeSrc, /searchbox\/v1\/suggest/);
   });
 
   test("a meglévő MAPBOX_ACCESS_TOKEN env variable-t használja, nincs hardcode-olt token", () => {
@@ -61,26 +61,34 @@ describe("cím autocomplete — /api/admin/vedett-utvonal/address-search Mapbox 
     assert.doesNotMatch(routeSrc, /pk\.[A-Za-z0-9._-]{20,}/);
   });
 
-  test("autocomplete=true, country=hu, language=hu, street/address típusok és legfeljebb 10 nyers Mapbox találat", () => {
-    assert.match(routeSrc, /params\.set\("autocomplete", "true"\)/);
-    assert.match(routeSrc, /params\.set\("country", "hu"\)/);
-    assert.match(routeSrc, /params\.set\("language", "hu"\)/);
-    assert.match(routeSrc, /params\.set\("types", "street,address"\)/);
-    assert.match(routeSrc, /params\.set\("limit", "10"\)/);
+  test("Search Box ugyanazt a session tokent kapja, és hu/HU street-address max 10 találatra korlátoz", () => {
+    assert.match(routeSrc, /searchParams\.set\("session_token",\s*sessionToken\)/);
+    assert.match(routeSrc, /searchParams\.set\("country",\s*"hu"\)/);
+    assert.match(routeSrc, /searchParams\.set\("language",\s*"hu"\)/);
+    assert.match(routeSrc, /searchParams\.set\("types",\s*"street,address"\)/);
+    assert.match(routeSrc, /searchParams\.set\("limit",\s*"10"\)/);
+    assert.match(routeSrc, /searchParams\.set\("q",\s*city\s*\?\s*`\$\{q\}, \$\{city\}`\s*:\s*q\)/);
   });
 
   test("minimum 3 karakter alatt nincs Mapbox-hívás, üres listát ad", () => {
-    assert.match(routeSrc, /if \(q\.length < 3\) return NextResponse\.json\(\[\]\);/);
+    assert.match(routeSrc, /if\s*\(q\.length\s*<\s*3\)\s*return\s+NextResponse\.json\(\[\]\);/);
   });
 
-  test("hiba/timeout/hiányzó token esetén 200 OK + üres tömb marad, tehát a manuális címbevitel nem blokkolódik", () => {
-    assert.match(routeSrc, /if \(!accessToken\) return NextResponse\.json\(\[\]\);/);
+  test("hiányzó token és Geocoding fallback hiba/timeout esetén üres tömb marad", () => {
+    assert.match(routeSrc, /if\s*\(!accessToken\)\s*return\s+NextResponse\.json\(\[\]\);/);
     assert.match(routeSrc, /AbortSignal\.timeout\(5000\)/);
-    assert.match(routeSrc, /\} catch \{\s*\n\s*return NextResponse\.json\(\[\]\);/);
-    assert.match(routeSrc, /if \(!mapboxResponse\.ok\) \{\s*\n\s*return NextResponse\.json\(\[\]\);/);
+    assert.match(routeSrc, /let\s+mapboxResponse:\s*Response;/);
+    assert.match(routeSrc, /catch\s*\{\s*return\s+NextResponse\.json\(\[\]\);\s*\}/);
+    assert.match(routeSrc, /if\s*\(!mapboxResponse\.ok\)\s*\{\s*return\s+NextResponse\.json\(\[\]\);\s*\}/);
   });
 
-  test("a route a tiszta processMapboxGeocodingFeatures helperrel szűr és maximum 5 suggestiont ad vissza", () => {
+  test("Search Box maximum 5 használható suggestiont ad, város/irányítószám utószűréssel", () => {
+    assert.match(routeSrc, /processSearchBoxSuggestions\(\s*rawSuggestions,\s*city,\s*postalOrDistrict,\s*5,?\s*\)/);
+    assert.match(routeSrc, /normalizedCity/);
+    assert.match(routeSrc, /normalizedPostcode/);
+  });
+
+  test("a Geocoding v6 fallback a tiszta processMapboxGeocodingFeatures helperrel maximum 5 suggestiont ad vissza", () => {
     assert.match(routeSrc, /processMapboxGeocodingFeatures\(features, q, city, postalOrDistrict, 5\)/);
   });
 
