@@ -22,7 +22,9 @@ import {
   matchesQueryPrefix,
   normalizeForPrefixMatch,
   processMapboxGeocodingFeatures,
+  processMapboxSearchBoxSuggestions,
   type MapboxGeocodingFeature,
+  type MapboxSearchBoxSuggestion,
 } from "../../lib/vedett-route/addressAutocompleteMapbox.ts";
 
 const ROUTE_PATH = join(import.meta.dirname, "..", "..", "app", "api", "admin", "vedett-utvonal", "address-search", "route.ts");
@@ -40,14 +42,11 @@ const hookSrc = readFileSync(HOOK_PATH, "utf-8");
 const SEARCH_FORM_PATH = join(import.meta.dirname, "..", "..", "components", "vedett-utvonal", "VedettUtvonalSearchForm.tsx");
 const searchFormSrc = readFileSync(SEARCH_FORM_PATH, "utf-8");
 
-function mockFeature(overrides: Partial<MapboxSuggestFeature>): MapboxSuggestFeature {
-  return { mapbox_id: "mock-id", name: "mock", ...overrides };
-}
 
 describe("cím autocomplete — /api/admin/vedett-utvonal/address-search Search Box first + Geocoding v6 fallback", () => {
   test("a végpont admin/feature-flag gate-et használ", () => {
-    assert.match(routeSrc, /const\s+auth\s*=\s*await\s+requireVedettRouteAccess\(\);/);
-    assert.match(routeSrc, /if\s*\(!auth\.ok\)\s*return\s+auth\.response;/);
+    assert.match(routeSrc, /const auth = await requireVedettRouteAccess\(\);/);
+    assert.match(routeSrc, /if \(!auth\.ok\) return auth\.response;/);
   });
 
   test("elsődlegesen Mapbox Search Box /suggest-et használ, Geocoding v6 /forward fallbackkal", () => {
@@ -61,35 +60,44 @@ describe("cím autocomplete — /api/admin/vedett-utvonal/address-search Search 
     assert.doesNotMatch(routeSrc, /pk\.[A-Za-z0-9._-]{20,}/);
   });
 
+  test("Search Box q-ja CSAK a begépelt prefix; a kiválasztott város külön near paraméterként megy", () => {
+    assert.match(routeSrc, /searchParams\.set\("q", q\);/);
+    assert.match(routeSrc, /if \(city\) \{\s*searchParams\.set\("near", city\);\s*\}/);
+    assert.doesNotMatch(routeSrc, /searchParams\.set\("q", city \? `\$\{q\}, \$\{city\}` : q\)/);
+  });
+
   test("Search Box ugyanazt a session tokent kapja, és hu/HU street-address max 10 találatra korlátoz", () => {
-    assert.match(routeSrc, /searchParams\.set\("session_token",\s*sessionToken\)/);
-    assert.match(routeSrc, /searchParams\.set\("country",\s*"hu"\)/);
-    assert.match(routeSrc, /searchParams\.set\("language",\s*"hu"\)/);
-    assert.match(routeSrc, /searchParams\.set\("types",\s*"street,address"\)/);
-    assert.match(routeSrc, /searchParams\.set\("limit",\s*"10"\)/);
-    assert.match(routeSrc, /searchParams\.set\("q",\s*city\s*\?\s*`\$\{q\}, \$\{city\}`\s*:\s*q\)/);
+    assert.match(routeSrc, /searchParams\.set\("session_token", sessionToken\)/);
+    assert.match(routeSrc, /searchParams\.set\("country", "hu"\)/);
+    assert.match(routeSrc, /searchParams\.set\("language", "hu"\)/);
+    assert.match(routeSrc, /searchParams\.set\("types", "street,address"\)/);
+    assert.match(routeSrc, /searchParams\.set\("limit", "10"\)/);
   });
 
   test("minimum 3 karakter alatt nincs Mapbox-hívás, üres listát ad", () => {
-    assert.match(routeSrc, /if\s*\(q\.length\s*<\s*3\)\s*return\s+NextResponse\.json\(\[\]\);/);
+    assert.match(routeSrc, /if \(q\.length < 3\) return NextResponse\.json\(\[\]\);/);
   });
 
   test("hiányzó token és Geocoding fallback hiba/timeout esetén üres tömb marad", () => {
-    assert.match(routeSrc, /if\s*\(!accessToken\)\s*return\s+NextResponse\.json\(\[\]\);/);
+    assert.match(routeSrc, /if \(!accessToken\) return NextResponse\.json\(\[\]\);/);
     assert.match(routeSrc, /AbortSignal\.timeout\(5000\)/);
-    assert.match(routeSrc, /let\s+mapboxResponse:\s*Response;/);
-    assert.match(routeSrc, /catch\s*\{\s*return\s+NextResponse\.json\(\[\]\);\s*\}/);
-    assert.match(routeSrc, /if\s*\(!mapboxResponse\.ok\)\s*\{\s*return\s+NextResponse\.json\(\[\]\);\s*\}/);
+    assert.match(routeSrc, /let mapboxResponse: Response;/);
+    assert.match(routeSrc, /\} catch \{\s*return NextResponse\.json\(\[\]\);/);
+    assert.match(routeSrc, /if \(!mapboxResponse\.ok\) \{\s*return NextResponse\.json\(\[\]\);\s*\}/);
   });
 
-  test("Search Box maximum 5 használható suggestiont ad, város/irányítószám utószűréssel", () => {
-    assert.match(routeSrc, /processSearchBoxSuggestions\(\s*rawSuggestions,\s*city,\s*postalOrDistrict,\s*5,?\s*\)/);
-    assert.match(routeSrc, /normalizedCity/);
-    assert.match(routeSrc, /normalizedPostcode/);
+  test("Search Box maximum 5 használható suggestiont ad a tiszta helperrel", () => {
+    assert.match(
+      routeSrc,
+      /processMapboxSearchBoxSuggestions\(\s*rawSuggestions,\s*q,\s*city,\s*postalOrDistrict,\s*5,?\s*\)/,
+    );
   });
 
   test("a Geocoding v6 fallback a tiszta processMapboxGeocodingFeatures helperrel maximum 5 suggestiont ad vissza", () => {
-    assert.match(routeSrc, /processMapboxGeocodingFeatures\(features, q, city, postalOrDistrict, 5\)/);
+    assert.match(
+      routeSrc,
+      /processMapboxGeocodingFeatures\(features, q, city, postalOrDistrict, 5\)/,
+    );
   });
 
   test("a Nominatim geocoder kódja változatlanul megmarad fallback routinghoz", () => {
@@ -133,6 +141,186 @@ function mockGeocodingFeature(overrides: Partial<MapboxGeocodingFeature>): Mapbo
     ...overrides,
   };
 }
+
+
+function mockSearchBoxSuggestion(
+  overrides: Partial<MapboxSearchBoxSuggestion>,
+): MapboxSearchBoxSuggestion {
+  return {
+    mapbox_id: "searchbox.mock",
+    feature_type: "street",
+    name: "Mock utca",
+    context: { place: { name: "Budapest" } },
+    ...overrides,
+  };
+}
+
+describe("cím autocomplete — Search Box strukturált település- és prefix-szűrés", () => {
+  test("Budapest + 'tigr' kizárja a Gyulán lévő Budapest körutat akkor is, ha a teljes cím tartalmazza a Budapest szót", () => {
+    const wrong = mockSearchBoxSuggestion({
+      mapbox_id: "wrong-gyula",
+      name: "Budapest körút",
+      full_address: "Budapest körút, Gyula, 5700, Békés vármegye, Magyarország",
+      place_formatted: "Gyula, 5700, Békés vármegye, Magyarország",
+      context: {
+        place: { name: "Gyula" },
+        postcode: { name: "5700" },
+      },
+    });
+
+    const right = mockSearchBoxSuggestion({
+      mapbox_id: "right-budapest",
+      name: "Tigris utca",
+      full_address: "Tigris utca, Budapest, Magyarország",
+      place_formatted: "Budapest, Magyarország",
+      context: {
+        place: { name: "Budapest" },
+      },
+    });
+
+    const result = processMapboxSearchBoxSuggestions(
+      [wrong, right],
+      "tigr",
+      "Budapest",
+      undefined,
+      5,
+    );
+
+    assert.deepEqual(result.map((x) => x.name), ["Tigris utca"]);
+  });
+
+  test("Budaörs + 'sza' kizárja a Budapest/Budakeszi/Biatorbágy Budaörsi út találatokat", () => {
+    const wrongCities = ["Budapest", "Budakeszi", "Biatorbágy"].map((city, index) =>
+      mockSearchBoxSuggestion({
+        mapbox_id: `wrong-budaorsi-${index}`,
+        name: "Budaörsi út",
+        full_address: `Budaörsi út, ${city}, Magyarország`,
+        context: { place: { name: city } },
+      }),
+    );
+
+    const right = mockSearchBoxSuggestion({
+      mapbox_id: "right-szabadsag",
+      name: "Szabadság út",
+      full_address: "Szabadság út, Budaörs, 2040, Pest vármegye, Magyarország",
+      context: {
+        place: { name: "Budaörs" },
+        postcode: { name: "2040" },
+      },
+    });
+
+    const result = processMapboxSearchBoxSuggestions(
+      [...wrongCities, right],
+      "sza",
+      "Budaörs",
+      undefined,
+      5,
+    );
+
+    assert.deepEqual(result.map((x) => x.name), ["Szabadság út"]);
+  });
+
+  test("Sóskút + 'kős' kizárja a más településeken lévő Sóskút/Sóskúti nevű utcákat", () => {
+    const wrongCities = ["Nyírtelek", "Nagyrábé", "Gyöngyössolymos", "Tárnok", "Érd"].map(
+      (city, index) =>
+        mockSearchBoxSuggestion({
+          mapbox_id: `wrong-soskut-${index}`,
+          name: index < 2 ? "Sóskút utca" : "Sóskúti út",
+          full_address: `Sóskúti út, ${city}, Magyarország`,
+          context: { place: { name: city } },
+        }),
+    );
+
+    const right = mockSearchBoxSuggestion({
+      mapbox_id: "right-koszikla",
+      name: "Kőszikla utca",
+      full_address: "Kőszikla utca, Sóskút, 2038, Pest vármegye, Magyarország",
+      context: {
+        place: { name: "Sóskút" },
+        postcode: { name: "2038" },
+      },
+    });
+
+    const result = processMapboxSearchBoxSuggestions(
+      [...wrongCities, right],
+      "kős",
+      "Sóskút",
+      undefined,
+      5,
+    );
+
+    assert.deepEqual(result.map((x) => x.name), ["Kőszikla utca"]);
+  });
+
+  test("a városnév az utcanévben nem számít településegyezésnek", () => {
+    const wrong = mockSearchBoxSuggestion({
+      mapbox_id: "wrong-name-city",
+      name: "Budaörsi út",
+      full_address: "Budaörsi út, Budapest, Magyarország",
+      context: { place: { name: "Budapest" } },
+    });
+
+    const result = processMapboxSearchBoxSuggestions(
+      [wrong],
+      "bud",
+      "Budaörs",
+      undefined,
+      5,
+    );
+
+    assert.equal(result.length, 0);
+  });
+
+  test("prefix hard filter miatt 'szaba' nem fogad el Száva közt", () => {
+    const wrong = mockSearchBoxSuggestion({
+      mapbox_id: "wrong-szava",
+      name: "Száva köz",
+      full_address: "Száva köz, Budaörs, 2040, Pest vármegye, Magyarország",
+      context: { place: { name: "Budaörs" } },
+    });
+
+    const result = processMapboxSearchBoxSuggestions(
+      [wrong],
+      "szaba",
+      "Budaörs",
+      undefined,
+      5,
+    );
+
+    assert.equal(result.length, 0);
+  });
+
+  test("4 jegyű irányítószám Search Boxnál is hard filter", () => {
+    const right = mockSearchBoxSuggestion({
+      mapbox_id: "right-2040",
+      name: "Szabadság út",
+      context: {
+        place: { name: "Budaörs" },
+        postcode: { name: "2040" },
+      },
+    });
+
+    const wrong = mockSearchBoxSuggestion({
+      mapbox_id: "wrong-postcode",
+      name: "Szabadság út",
+      context: {
+        place: { name: "Budaörs" },
+        postcode: { name: "9999" },
+      },
+    });
+
+    const result = processMapboxSearchBoxSuggestions(
+      [wrong, right],
+      "sza",
+      "Budaörs",
+      "2040",
+      5,
+    );
+
+    assert.equal(result.length, 1);
+    assert.equal(result[0].postcode, "2040");
+  });
+});
 
 describe("cím autocomplete — addressAutocompleteMapbox.ts Geocoding v6 feldolgozás", () => {
   test("Budaörs + 'szab' esetén Szabadság út megjelenik és koordinátát is ad", () => {

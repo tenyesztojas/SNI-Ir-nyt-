@@ -30,6 +30,22 @@ export type MapboxGeocodingFeature = {
   };
 };
 
+export type MapboxSearchBoxSuggestion = {
+  name?: string;
+  name_preferred?: string;
+  mapbox_id?: string;
+  feature_type?: string;
+  address?: string;
+  full_address?: string;
+  place_formatted?: string;
+  context?: {
+    postcode?: { name?: string };
+    place?: { name?: string };
+    district?: { name?: string };
+    locality?: { name?: string };
+  };
+};
+
 export function normalizeForPrefixMatch(value: string): string {
   return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
 }
@@ -47,9 +63,34 @@ function sameNormalized(a: string | undefined, b: string | undefined): boolean {
   return normalizeForPrefixMatch(a) === normalizeForPrefixMatch(b);
 }
 
+function structuredCityFromContext(
+  context:
+    | {
+        place?: { name?: string };
+        locality?: { name?: string };
+      }
+    | undefined,
+): string | undefined {
+  return context?.place?.name ?? context?.locality?.name;
+}
+
+function contextHasExactCity(
+  context:
+    | {
+        place?: { name?: string };
+        locality?: { name?: string };
+      }
+    | undefined,
+  wantedCity: string,
+): boolean {
+  return (
+    sameNormalized(context?.place?.name, wantedCity) ||
+    sameNormalized(context?.locality?.name, wantedCity)
+  );
+}
+
 function featureCity(feature: MapboxGeocodingFeature): string | undefined {
-  const c = feature.properties?.context;
-  return c?.place?.name ?? c?.locality?.name;
+  return structuredCityFromContext(feature.properties?.context);
 }
 
 function featurePostcode(feature: MapboxGeocodingFeature): string | undefined {
@@ -65,11 +106,88 @@ function featureCoordinates(feature: MapboxGeocodingFeature): { lat: number; lon
   if (typeof p?.latitude === "number" && typeof p?.longitude === "number") {
     return { lat: p.latitude, lon: p.longitude };
   }
+
   const coords = feature.geometry?.coordinates;
   if (Array.isArray(coords) && typeof coords[0] === "number" && typeof coords[1] === "number") {
     return { lon: coords[0], lat: coords[1] };
   }
+
   return null;
+}
+
+export function processMapboxSearchBoxSuggestions(
+  suggestions: MapboxSearchBoxSuggestion[],
+  query: string,
+  city?: string,
+  postalOrDistrict?: string,
+  limit = 5,
+): AddressAutocompleteSuggestion[] {
+  const wantedCity = city?.trim();
+  const wantedPostcode = postalOrDistrict?.trim();
+
+  let candidates = suggestions.filter((suggestion) => {
+    if (suggestion.feature_type !== "street" && suggestion.feature_type !== "address") return false;
+    if (!suggestion.mapbox_id) return false;
+
+    const name = suggestion.name_preferred ?? suggestion.name ?? suggestion.address;
+    if (!matchesQueryPrefix(query, name)) return false;
+
+    // KRITIKUS: a várost KIZÁRÓLAG strukturált place/locality contextből
+    // ellenőrizzük. full_address/place_formatted soha nem számít városmatchnek.
+    if (wantedCity && !contextHasExactCity(suggestion.context, wantedCity)) return false;
+
+    if (
+      wantedPostcode &&
+      /^\d{4}$/.test(wantedPostcode) &&
+      suggestion.context?.postcode?.name !== wantedPostcode
+    ) {
+      return false;
+    }
+
+    return true;
+  });
+
+  if (wantedPostcode && !/^\d{4}$/.test(wantedPostcode)) {
+    candidates = candidates.sort((a, b) => {
+      const am = sameNormalized(a.context?.district?.name, wantedPostcode) ? 0 : 1;
+      const bm = sameNormalized(b.context?.district?.name, wantedPostcode) ? 0 : 1;
+      return am - bm;
+    });
+  }
+
+  const seen = new Set<string>();
+  const out: AddressAutocompleteSuggestion[] = [];
+
+  for (const suggestion of candidates) {
+    const name =
+      suggestion.name_preferred?.trim() ||
+      suggestion.name?.trim() ||
+      suggestion.address?.trim() ||
+      "";
+
+    const label =
+      suggestion.full_address?.trim() ||
+      [name, suggestion.place_formatted?.trim()].filter(Boolean).join(", ");
+
+    if (!name || !label) continue;
+
+    const key = normalizeForPrefixMatch(`${suggestion.mapbox_id}|${label}`);
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    out.push({
+      id: suggestion.mapbox_id,
+      label,
+      name,
+      city: structuredCityFromContext(suggestion.context),
+      postcode: suggestion.context?.postcode?.name,
+      district: suggestion.context?.district?.name,
+    });
+
+    if (out.length >= limit) break;
+  }
+
+  return out;
 }
 
 export function processMapboxGeocodingFeatures(
@@ -85,15 +203,23 @@ export function processMapboxGeocodingFeatures(
   let candidates = features.filter((feature) => {
     const p = feature.properties;
     if (!p || (p.feature_type !== "street" && p.feature_type !== "address")) return false;
+
     const name = p.name_preferred ?? p.name;
     if (!matchesQueryPrefix(query, name)) return false;
-    if (wantedCity && !sameNormalized(featureCity(feature), wantedCity)) return false;
-    if (wantedPostcode && /^\d{4}$/.test(wantedPostcode) && featurePostcode(feature) !== wantedPostcode) return false;
+
+    if (wantedCity && !contextHasExactCity(p.context, wantedCity)) return false;
+
+    if (
+      wantedPostcode &&
+      /^\d{4}$/.test(wantedPostcode) &&
+      featurePostcode(feature) !== wantedPostcode
+    ) {
+      return false;
+    }
+
     return featureCoordinates(feature) !== null;
   });
 
-  // If a district/borough text was provided, prefer matching results but do
-  // not throw away a valid city+street result when Mapbox omits district.
   if (wantedPostcode && !/^\d{4}$/.test(wantedPostcode)) {
     candidates = candidates.sort((a, b) => {
       const am = sameNormalized(featureDistrict(a), wantedPostcode) ? 0 : 1;
@@ -104,14 +230,20 @@ export function processMapboxGeocodingFeatures(
 
   const seen = new Set<string>();
   const out: AddressAutocompleteSuggestion[] = [];
+
   for (const feature of candidates) {
     const p = feature.properties!;
     const coordinates = featureCoordinates(feature)!;
-    const label = p.full_address ?? [p.name_preferred ?? p.name, p.place_formatted].filter(Boolean).join(", ");
+    const label =
+      p.full_address ??
+      [p.name_preferred ?? p.name, p.place_formatted].filter(Boolean).join(", ");
+
     if (!label) continue;
+
     const key = normalizeForPrefixMatch(label);
     if (seen.has(key)) continue;
     seen.add(key);
+
     out.push({
       id: p.mapbox_id ?? feature.id,
       label,
@@ -122,7 +254,9 @@ export function processMapboxGeocodingFeatures(
       lat: coordinates.lat,
       lon: coordinates.lon,
     });
+
     if (out.length >= limit) break;
   }
+
   return out;
 }
