@@ -15,7 +15,7 @@ import RestStopFlowPanel, { type RestStopMapState, type RestPanelMode } from "./
 import type { RestPointMarker } from "./VedettUtvonalMap";
 import { setNavigationModeActive } from "@/lib/pwa/navigationModeSignal";
 import type { GeocodePlaceCandidate } from "@/lib/vedett-route/geocode";
-import { useAddressAutocomplete } from "@/lib/vedett-route/useAddressAutocomplete";
+import { useAddressAutocomplete, retrieveAddressSuggestion } from "@/lib/vedett-route/useAddressAutocomplete";
 // STREET-LEVEL FALLBACK (2026-09-12) — a request-body-összeállítás pure
 // függvényekbe kiszervezve (lib/vedett-route/searchRequestBuilder.ts), hogy
 // Node.js tesztekben React-függőség nélkül ellenőrizhetők legyenek az
@@ -1375,7 +1375,13 @@ export default function VedettUtvonalSearchForm({
   // településre korlátozódjon (ne csak utólag rangsoroljon) — pl.
   // Város="Budaörs" + Cím="Szabadság út" -> budaörsi találatok, nem
   // Csömör/Pécs.
-  const [originStreetSuggestions, setOriginStreetSuggestions] = useAddressAutocomplete(
+  // KOORDINÁTA-ÁTADÁS (2026-09-14, "Mapbox autocomplete koordináta a
+  // routingnak" sprint) — a hook 3./4. visszatérési eleme (sessionToken,
+  // resetSession) a kiválasztott suggestion /retrieve hívásához kell:
+  // UGYANAZZAL a sessionTokennel kérjük le a pontos koordinátát, amivel a
+  // /suggest javaslat érkezett (lásd retrieveAddressSuggestion hívása
+  // lejjebb, a suggestion-választó onMouseDown-okban).
+  const [originStreetSuggestions, setOriginStreetSuggestions, originAutocompleteSessionToken, resetOriginAutocompleteSession] = useAddressAutocomplete(
     origin.type === "MANUAL" ? origin.street : "",
     disabled,
     {
@@ -1383,7 +1389,7 @@ export default function VedettUtvonalSearchForm({
       postalOrDistrict: origin.type === "MANUAL" ? origin.districtOrPostalCode : undefined,
     }
   );
-  const [destinationStreetSuggestions, setDestinationStreetSuggestions] = useAddressAutocomplete(
+  const [destinationStreetSuggestions, setDestinationStreetSuggestions, destinationAutocompleteSessionToken, resetDestinationAutocompleteSession] = useAddressAutocomplete(
     destination.type === "MANUAL" ? destination.street : "",
     disabled,
     {
@@ -1391,6 +1397,37 @@ export default function VedettUtvonalSearchForm({
       postalOrDistrict: destination.type === "MANUAL" ? destination.districtOrPostalCode : undefined,
     }
   );
+
+  // KOORDINÁTA-ÁTADÁS — suggestion kiválasztásakor a MEGLÉVŐ MAP_PICKED
+  // origin/destination módot használjuk (UGYANAZ a wire-invariáns, mint a
+  // "térképen kijelölt pont" flow-nál: MAP_PICKED → fromCoordinates/
+  // toCoordinates, a szerver SOSEM geokódolja újra — lásd
+  // searchRequestBuilder.ts). Ha a retrieve bármi okból (hiányzó id,
+  // hiányzó MAPBOX_ACCESS_TOKEN, hálózati hiba) nem ad koordinátát, a
+  // MEGLÉVŐ, VÁLTOZATLAN manuális-mező-kitöltés a fallback — a
+  // felhasználó ekkor is választhat, csak a cím szövegesen kerül a
+  // mezőbe, és a szerver a régi geocodeAddress()-t hívja rá.
+  async function selectOriginSuggestion(s: { id?: string; label: string }) {
+    const retrieved = s.id ? await retrieveAddressSuggestion(s.id, originAutocompleteSessionToken) : null;
+    if (retrieved) {
+      setOrigin({ type: "MAP_PICKED", name: s.label, latitude: retrieved.lat, longitude: retrieved.lon });
+    } else {
+      updateOriginManualField("street", s.label);
+    }
+    // Új session a KÖVETKEZŐ keresési interakcióhoz (Mapbox Search Box
+    // session-szabály — lásd useAddressAutocomplete.ts fejléce).
+    resetOriginAutocompleteSession();
+  }
+
+  async function selectDestinationSuggestion(s: { id?: string; label: string }) {
+    const retrieved = s.id ? await retrieveAddressSuggestion(s.id, destinationAutocompleteSessionToken) : null;
+    if (retrieved) {
+      setDestination({ type: "MAP_PICKED", name: s.label, latitude: retrieved.lat, longitude: retrieved.lon });
+    } else {
+      updateDestinationManualField("street", s.label);
+    }
+    resetDestinationAutocompleteSession();
+  }
   const [showOriginStreetSuggestions, setShowOriginStreetSuggestions] = useState(false);
   const [showDestinationStreetSuggestions, setShowDestinationStreetSuggestions] = useState(false);
   // B5 — "nem indítható el ugyanaz a kérés párhuzamosan": ez a ref jelzi,
@@ -1990,7 +2027,7 @@ export default function VedettUtvonalSearchForm({
                       <button
                         type="button"
                         onMouseDown={() => {
-                          updateOriginManualField("street", s.label);
+                          void selectOriginSuggestion(s);
                           setOriginStreetSuggestions([]);
                           setShowOriginStreetSuggestions(false);
                         }}
@@ -2096,7 +2133,7 @@ export default function VedettUtvonalSearchForm({
                           <button
                             type="button"
                             onMouseDown={() => {
-                              updateDestinationManualField("street", s.label);
+                              void selectDestinationSuggestion(s);
                               setDestinationStreetSuggestions([]);
                               setShowDestinationStreetSuggestions(false);
                             }}
