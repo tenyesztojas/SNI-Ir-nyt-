@@ -9,9 +9,17 @@
 // NEM egy második geocoding szolgáltatás, a MEGLÉVŐ Nominatim
 // free-text lekérdezést és normalizálást használja fel.
 //
-// A válasz KIZÁRÓLAG egy tömb, legfeljebb 5 elemmel: [{label, lat, lon}].
-// Hálózati/Nominatim hiba esetén is 200 OK + üres tömb — az autocomplete
-// hibája SOSEM blokkolhatja a normál, kézi címbevitelt/routingot.
+// A válasz KIZÁRÓLAG egy tömb, legfeljebb 5 elemmel:
+// [{label, lat, lon, city?, postcode?, district?}]. A `label` már a
+// searchPlaceCandidates()-ben felépített, megjelenítésre kész szöveg
+// (irányítószám + település[ + kerület] + utca — lásd
+// toAddressAutocompleteCandidate a geocode.ts-ben). TELEPÜLÉS-ÉRZÉKENY
+// RANGSOROLÁS (2026-09-14): a searchPlaceCandidates() a query-ből
+// felismert település-kontextussal egyező találatokat (és Budapestet,
+// alapértelmezett prioritásként) előre sorolja — ez a végpont csak
+// továbbadja a MÁR rangsorolt/normalizált listát. Hálózati/Nominatim hiba
+// esetén is 200 OK + üres tömb — az autocomplete hibája SOSEM blokkolhatja
+// a normál, kézi címbevitelt/routingot.
 //
 // KÖRÖN KÍVÜL (szándékosan nem része ennek a sprintnek): Mapbox Search SDK,
 // fuzzy matching, lokális címadatbázis, cache, analytics, keyboard
@@ -30,11 +38,5 @@ export async function POST(request: Request) {
 
   const candidates = await searchPlaceCandidates(q).catch(() => []);
 
-  return NextResponse.json(
-    candidates.map((c) => ({
-      label: c.secondary ? `${c.displayName}, ${c.secondary}` : c.displayName,
-      lat: c.lat,
-      lon: c.lon,
-    }))
-  );
+  return NextResponse.json(candidates);
 }

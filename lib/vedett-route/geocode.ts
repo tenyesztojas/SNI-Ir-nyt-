@@ -111,6 +111,12 @@ export interface GeocodeResult {
 export interface NominatimAddressDetails {
   house_number?: string;
   road?: string;
+  // CÍM AUTOCOMPLETE (2026-09-14, "település-érzékeny rangsorolás" sprint)
+  // — a Nominatim néhány útnak/térnek nem `road`, hanem `pedestrian`/
+  // `residential` mezőt ad (pl. gyalogos utca/lakóövezet) — az autocomplete
+  // label ezt is elfogadja utcanévként, ha a `road` hiányzik.
+  pedestrian?: string;
+  residential?: string;
   city?: string;
   town?: string;
   village?: string;
@@ -947,16 +953,123 @@ export function isAmbiguousGeocodeResult(
 // javaslatokra (pl. "Kossuth tér", ami önmagában egy PONTOS cím-egyeztetéshez
 // túl kevés) NEM alkalmas. Az alábbi searchPlaceCandidates() NEM egy
 // második geocoding szolgáltatás — a MÁR meglévő free-text Nominatim
-// lekérdezést (buildFreeTextQueryUrl), a MÁR meglévő hálózati hívást
-// (fetchNominatimResults/fetchWithRetry) és a MÁR meglévő, kliensnek adható
-// normalizálást (toPlaceCandidate) használja fel, csak "adj vissza több
-// nyers találatot" módban — nincs duplikált geokódoló logika.
-export async function searchPlaceCandidates(query: string, limit = 5): Promise<GeocodePlaceCandidate[]> {
+// lekérdezést (buildFreeTextQueryUrl, MÁR eddig is addressdetails=1 +
+// countrycodes=hu-val) és a MÁR meglévő hálózati hívást
+// (fetchNominatimResults/fetchWithRetry) használja fel, csak "adj vissza
+// több nyers találatot" módban — nincs duplikált geokódoló logika.
+
+// A kliensnek adható autocomplete-jelölt — a `label` már felépített,
+// megjelenítésre kész szöveg (irányítószám + település[ + kerület] + utca),
+// a city/postcode/district mezők pedig a hívó számára is elérhetők, ha a
+// jövőben külön kellene megjeleníteni őket (jelenleg a UI csak a `label`-t
+// használja). Ez SOHA nem a nyers Nominatim address objektum — csak ez a
+// néhány, ember-olvasható mező.
+export interface AddressAutocompleteCandidate {
+  label: string;
+  lat: number;
+  lon: number;
+  city?: string;
+  postcode?: string;
+  district?: string;
+}
+
+function resultCityName(result: NominatimRawResult): string | null {
+  const addr = result.address;
+  return addr?.city ?? addr?.town ?? addr?.village ?? addr?.municipality ?? null;
+}
+
+// TELEPÜLÉS-KONTEXTUS FELISMERÉS (2026-09-14, HARDENING — 2026-09-14) —
+// SZÁNDÉKOSAN NEM egy általános NLP parser: a beírt szöveg ELSŐ szava a
+// JELÖLT település (pl. "Budaörs Szabadság út" -> "Budaörs"). A jelölt
+// azonban CSAK akkor válik valódi city-contextté, ha legalább egy tényleges
+// Nominatim találat address.city/town/village/municipality mezője
+// (normalizáltan) EGYEZIK vele — különben `null` (nincs hatás). Ez a
+// validáció zárja ki azt a hibás esetet, amikor a mondat első szava
+// egyszerűen egy utcanév/köznév eleje (pl. "Kossuth Lajos utca" ->
+// "Kossuth" NEM település, "Szabadság út" -> "Szabadság" NEM település) —
+// mivel semelyik találat városa sem "Kossuth"/"Szabadság", a jelölt
+// elvetődik, és a rangsorolás a Budapest-alapértelmezésre esik vissza.
+export function extractCityContextFromQuery(query: string, results: NominatimRawResult[]): string | null {
+  const firstWord = query.trim().split(/\s+/)[0];
+  if (!firstWord) return null;
+  const normalizedCandidate = normalizeTextForCompare(firstWord);
+  const hasMatchingResult = results.some((result) => {
+    const cityName = resultCityName(result);
+    return cityName ? normalizeTextForCompare(cityName) === normalizedCandidate : false;
+  });
+  return hasMatchingResult ? firstWord : null;
+}
+
+// TELEPÜLÉS-ÉRZÉKENY RANGSOROLÁS (2026-09-14) — a Nominatim SAJÁT
+// relevancia-sorrendjét egy stabil rendezéssel korrigáljuk:
+//   0. a query-ből felismert, ÉS legalább egy találattal igazolt
+//      település-kontextussal EGYEZŐ találatok (pl. "Budaörs Szabadság út"
+//      esetén a budaörsi Szabadság út);
+//   1. Budapest (alapértelmezett prioritás akkor is, ha a query nem
+//      explicit Budapestre vonatkozik — az app fő célközönsége miatt);
+//   2. minden más település.
+// A csoportokon BELÜL a Nominatim eredeti sorrendje marad (stabil rendezés
+// — nincs másodlagos, kitalált pontszám).
+export function rankSearchResultsByCity(results: NominatimRawResult[], query: string): NominatimRawResult[] {
+  const cityContext = extractCityContextFromQuery(query, results);
+  const normalizedCityContext = cityContext ? normalizeTextForCompare(cityContext) : null;
+
+  const priorityOf = (result: NominatimRawResult): number => {
+    const cityName = resultCityName(result);
+    const normalizedCity = cityName ? normalizeTextForCompare(cityName) : null;
+    if (normalizedCityContext && normalizedCity === normalizedCityContext) return 0;
+    if (normalizedCity === "budapest") return 1;
+    return 2;
+  };
+
+  return results
+    .map((result, index) => ({ result, index, priority: priorityOf(result) }))
+    .sort((a, b) => (a.priority !== b.priority ? a.priority - b.priority : a.index - b.index))
+    .map((entry) => entry.result);
+}
+
+// LABEL FELÉPÍTÉS (2026-09-14) — a nyers `display_name` helyett a Nominatim
+// address.* mezőiből (postcode, city/town/village/municipality,
+// city_district/borough/quarter Budapesten, road/pedestrian/residential)
+// állítjuk össze: "<irányítószám> <település>[ <kerület>], <utca>", vagy
+// irányítószám nélkül "<település>, <utca>". Ha egyik mező sem elérhető
+// (pl. egy nevesített POI, aminek nincs saját road-ja), a találat SAJÁT
+// neve (getResultPrimaryName) a fallback — VÁLTOZATLANUL, mint korábban.
+export function toAddressAutocompleteCandidate(result: NominatimRawResult): AddressAutocompleteCandidate {
+  const addr = result.address;
+  const city = resultCityName(result) ?? undefined;
+  const postcode = addr?.postcode;
+  const isBudapest = city ? normalizeTextForCompare(city) === "budapest" : false;
+  const district = isBudapest ? extractCandidateDistrictIdentity(addr) ?? undefined : undefined;
+  const road = addr?.road ?? addr?.pedestrian ?? addr?.residential;
+  const roadOrName = road ?? getResultPrimaryName(result) ?? "";
+
+  let label: string;
+  if (postcode && city) {
+    label = `${postcode} ${city}${district ? ` ${district}` : ""}, ${roadOrName}`;
+  } else if (city) {
+    label = `${city}, ${roadOrName}`;
+  } else {
+    label = getResultPrimaryName(result) || result.display_name;
+  }
+
+  return {
+    label,
+    lat: Number(result.lat),
+    lon: Number(result.lon),
+    city,
+    postcode,
+    district,
+  };
+}
+
+export async function searchPlaceCandidates(query: string, limit = 5): Promise<AddressAutocompleteCandidate[]> {
   const trimmed = query.trim();
   if (trimmed.length < 3) return [];
   const url = buildFreeTextQueryUrl(trimmed);
   const results = await fetchNominatimResults(url).catch(() => []);
-  return results.slice(0, limit).map(toPlaceCandidate);
+  const ranked = rankSearchResultsByCity(results, trimmed);
+  return ranked.slice(0, limit).map(toAddressAutocompleteCandidate);
 }
 
 // A kanonikus (normalizált kerülettel összeállított) free-text lekérdezés —

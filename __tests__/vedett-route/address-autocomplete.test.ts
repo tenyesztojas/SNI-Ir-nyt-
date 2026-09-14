@@ -16,6 +16,12 @@ import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import {
+  extractCityContextFromQuery,
+  rankSearchResultsByCity,
+  toAddressAutocompleteCandidate,
+  type NominatimRawResult,
+} from "../../lib/vedett-route/geocode.ts";
 
 const GEOCODE_PATH = join(import.meta.dirname, "..", "..", "lib", "vedett-route", "geocode.ts");
 const geocodeSrc = readFileSync(GEOCODE_PATH, "utf-8");
@@ -33,13 +39,14 @@ const SEARCH_FORM_PATH = join(import.meta.dirname, "..", "..", "components", "ve
 const searchFormSrc = readFileSync(SEARCH_FORM_PATH, "utf-8");
 
 describe("cím autocomplete — searchPlaceCandidates() a MEGLÉVŐ geocoder építőelemeit használja", () => {
-  test("searchPlaceCandidates a MEGLÉVŐ buildFreeTextQueryUrl/fetchNominatimResults/toPlaceCandidate-et hívja — nincs duplikált geokódoló logika", () => {
+  test("searchPlaceCandidates a MEGLÉVŐ buildFreeTextQueryUrl/fetchNominatimResults-t hívja, majd rangsorol és a MEGLÉVŐ address-mezőkből épít labelt — nincs duplikált geokódoló logika/második geocoder", () => {
     const fnMatch = geocodeSrc.match(/export async function searchPlaceCandidates\([\s\S]*?\n\}/);
     assert.ok(fnMatch, "meg kell találni a searchPlaceCandidates() függvényt");
     const fn = fnMatch![0];
     assert.match(fn, /buildFreeTextQueryUrl\(/);
     assert.match(fn, /fetchNominatimResults\(/);
-    assert.match(fn, /\.map\(toPlaceCandidate\)/);
+    assert.match(fn, /rankSearchResultsByCity\(results, trimmed\)/);
+    assert.match(fn, /\.map\(toAddressAutocompleteCandidate\)/);
   });
 
   test("3 karakternél rövidebb keresésnél NEM hívja a Nominatimot — üres listát ad", () => {
@@ -73,10 +80,123 @@ describe("cím autocomplete — /api/admin/vedett-utvonal/address-search végpon
     assert.doesNotMatch(routeSrc, /status: 5\d\d/);
   });
 
-  test("a válasz KIZÁRÓLAG {label, lat, lon} alakú tömb — nincs nyers Nominatim/nyers GeocodePlaceCandidate a kliensnek", () => {
-    assert.match(routeSrc, /label:\s*c\.secondary/);
-    assert.match(routeSrc, /lat:\s*c\.lat/);
-    assert.match(routeSrc, /lon:\s*c\.lon/);
+  test("a válasz a searchPlaceCandidates() MÁR normalizált/rangsorolt listáját adja tovább, változatlanul", () => {
+    assert.match(routeSrc, /return NextResponse\.json\(candidates\);/);
+  });
+});
+
+describe("cím autocomplete — TELEPÜLÉS-ÉRZÉKENY RANGSOROLÁS (rankSearchResultsByCity/toAddressAutocompleteCandidate, valódi függvényhívással)", () => {
+  function mockResult(overrides: Partial<NominatimRawResult> & { address: NominatimRawResult["address"] }): NominatimRawResult {
+    return {
+      display_name: "mock",
+      lat: "47.0",
+      lon: "19.0",
+      ...overrides,
+    };
+  }
+
+  test("A) 'Budaörs Szabadság út' — a budaörsi találat a pécsi elé kerül", () => {
+    const pecs = mockResult({ address: { road: "Szabadság út", city: "Pécs", postcode: "7621" } });
+    const budaors = mockResult({ address: { road: "Szabadság út", town: "Budaörs", postcode: "2040" } });
+    // A Nominatim SAJÁT sorrendjében a pécsi jön előbb — a rangsorolásnak
+    // ezt kell megfordítania.
+    const ranked = rankSearchResultsByCity([pecs, budaors], "Budaörs Szabadság út");
+    assert.equal(ranked[0], budaors, "a budaörsi találatnak kell elöl lennie");
+    assert.equal(ranked[1], pecs);
+  });
+
+  test("B) 'Budapest Kossuth Lajos utca' — a budapesti találat más települések elé kerül", () => {
+    const szeged = mockResult({ address: { road: "Kossuth Lajos utca", city: "Szeged", postcode: "6720" } });
+    const budapest = mockResult({ address: { road: "Kossuth Lajos utca", city: "Budapest", postcode: "1053", city_district: "V. kerület" } });
+    const ranked = rankSearchResultsByCity([szeged, budapest], "Budapest Kossuth Lajos utca");
+    assert.equal(ranked[0], budapest, "a budapesti találatnak kell elöl lennie");
+    assert.equal(ranked[1], szeged);
+  });
+
+  test("B2) explicit település-kontextus hiányában is a Budapest kap alapértelmezett prioritást más településekkel szemben", () => {
+    const csepel = mockResult({ address: { road: "Kossuth Lajos utca", city: "Budapest", postcode: "1211", city_district: "XXI. kerület" } });
+    const debrecen = mockResult({ address: { road: "Kossuth Lajos utca", city: "Debrecen", postcode: "4024" } });
+    const ranked = rankSearchResultsByCity([debrecen, csepel], "Kossuth Lajos utca");
+    assert.equal(ranked[0], csepel, "Budapest (bármelyik kerülete) alapértelmezetten előzze meg a más településeket");
+  });
+
+  test("C) a label tartalmazza az irányítószámot, ha a Nominatim visszaadja — 'Budaörs Szabadság út' -> '2040 Budaörs, Szabadság út'", () => {
+    const budaors = mockResult({ address: { road: "Szabadság út", town: "Budaörs", postcode: "2040" } });
+    const candidate = toAddressAutocompleteCandidate(budaors);
+    assert.equal(candidate.label, "2040 Budaörs, Szabadság út");
+    assert.equal(candidate.postcode, "2040");
+    assert.equal(candidate.city, "Budaörs");
+  });
+
+  test("C2) Budapesten a kerület is megjelenik a labelben, ha elérhető — '1053 Budapest V. kerület, Kossuth Lajos utca'", () => {
+    const result = mockResult({
+      address: { road: "Kossuth Lajos utca", city: "Budapest", postcode: "1053", city_district: "V. kerület" },
+    });
+    const candidate = toAddressAutocompleteCandidate(result);
+    assert.equal(candidate.label, "1053 Budapest V. kerület, Kossuth Lajos utca");
+    assert.equal(candidate.district, "V. kerület");
+  });
+
+  test("irányítószám hiányában is helyes a label — '<település>, <utca>'", () => {
+    const result = mockResult({ address: { road: "Fő utca", village: "Kismaros" } });
+    const candidate = toAddressAutocompleteCandidate(result);
+    assert.equal(candidate.label, "Kismaros, Fő utca");
+  });
+
+  test("D) a searchPlaceCandidates()-ben a max. 5 találat szabály a rangsorolás UTÁN vágja a listát", () => {
+    const fnMatch = geocodeSrc.match(/export async function searchPlaceCandidates\([\s\S]*?\n\}/);
+    const fn = fnMatch![0];
+    assert.match(fn, /const ranked = rankSearchResultsByCity\(results, trimmed\);/);
+    assert.match(fn, /ranked\.slice\(0, limit\)/);
+  });
+
+  test("extractCityContextFromQuery — az első szó CSAK akkor city-context, ha van rá igazoló találat", () => {
+    const budaorsResult = mockResult({ address: { road: "Szabadság út", town: "Budaörs", postcode: "2040" } });
+    const budapestResult = mockResult({ address: { road: "Kossuth Lajos utca", city: "Budapest", postcode: "1053" } });
+
+    assert.equal(extractCityContextFromQuery("Budaörs Szabadság út", [budaorsResult]), "Budaörs");
+    assert.equal(extractCityContextFromQuery("Budapest Kossuth Lajos utca", [budapestResult]), "Budapest");
+  });
+
+  test("HARDENING — 'Kossuth Lajos utca' NEM kap 'Kossuth' city-contextet (nincs Kossuth nevű település a találatok között)", () => {
+    const budapestResult = mockResult({ address: { road: "Kossuth Lajos utca", city: "Budapest", postcode: "1053" } });
+    assert.equal(extractCityContextFromQuery("Kossuth Lajos utca", [budapestResult]), null);
+  });
+
+  test("HARDENING — 'Szabadság út' NEM kap 'Szabadság' city-contextet (nincs Szabadság nevű település a találatok között)", () => {
+    const budaorsResult = mockResult({ address: { road: "Szabadság út", town: "Budaörs", postcode: "2040" } });
+    assert.equal(extractCityContextFromQuery("Szabadság út", [budaorsResult]), null);
+  });
+
+  test("üres query/találatlista esetén is null (nincs kivétel)", () => {
+    assert.equal(extractCityContextFromQuery("", []), null);
+    assert.equal(extractCityContextFromQuery("Kossuth Lajos utca", []), null);
+  });
+
+  test("HARDENING — city-context hiányában ('Kossuth Lajos utca') a rangsorolás a Budapest-alapértelmezésre esik vissza, NEM egy téves első-token büntetésre", () => {
+    const debrecen = mockResult({ address: { road: "Kossuth Lajos utca", city: "Debrecen", postcode: "4024" } });
+    const budapest = mockResult({ address: { road: "Kossuth Lajos utca", city: "Budapest", postcode: "1053" } });
+    const ranked = rankSearchResultsByCity([debrecen, budapest], "Kossuth Lajos utca");
+    assert.equal(ranked[0], budapest, "a téves 'Kossuth' jelölt elvetése után a Budapest-alapértelmezésnek kell érvényesülnie");
+  });
+
+  test("HARDENING — 'Budaörs Szabadság út' TOVÁBBRA IS Budaörs-prioritást ad", () => {
+    const pecs = mockResult({ address: { road: "Szabadság út", city: "Pécs", postcode: "7621" } });
+    const budaors = mockResult({ address: { road: "Szabadság út", town: "Budaörs", postcode: "2040" } });
+    const ranked = rankSearchResultsByCity([pecs, budaors], "Budaörs Szabadság út");
+    assert.equal(ranked[0], budaors);
+  });
+
+  test("HARDENING — 'Budapest Kossuth Lajos utca' TOVÁBBRA IS Budapest-prioritást ad", () => {
+    const szeged = mockResult({ address: { road: "Kossuth Lajos utca", city: "Szeged", postcode: "6720" } });
+    const budapest = mockResult({ address: { road: "Kossuth Lajos utca", city: "Budapest", postcode: "1053" } });
+    const ranked = rankSearchResultsByCity([szeged, budapest], "Budapest Kossuth Lajos utca");
+    assert.equal(ranked[0], budapest);
+  });
+
+  test("HARDENING — a postcode-os label továbbra is működik", () => {
+    const budaors = mockResult({ address: { road: "Szabadság út", town: "Budaörs", postcode: "2040" } });
+    assert.equal(toAddressAutocompleteCandidate(budaors).label, "2040 Budaörs, Szabadság út");
   });
 });
 
