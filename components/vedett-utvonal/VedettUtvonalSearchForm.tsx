@@ -1064,9 +1064,14 @@ function RankedJourneyCard({
                     ✕ Navigáció befejezése
                   </button>
                 ) : (
-                  <button type="button" onClick={() => setManualFullscreen(false)} className="btn-secondary bg-white text-xs shadow">
-                    ✕ Kis nézet
-                  </button>
+                  <>
+                    <button type="button" onClick={() => setManualFullscreen(false)} className="btn-secondary bg-white text-xs shadow">
+                      ✕ Kis nézet
+                    </button>
+                    <button type="button" onClick={startNavigation} className="btn-primary text-xs shadow">
+                      ▶ Navigáció indítása
+                    </button>
+                  </>
                 )}
                 {navigationMode && geo.status === "requesting" && (
                   <span className="rounded bg-white/90 px-2 py-1 text-xs text-gray-700 shadow">Helyzet meghatározása…</span>
