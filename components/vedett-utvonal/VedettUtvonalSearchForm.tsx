@@ -937,6 +937,19 @@ function RankedJourneyCard({
               </div>
             )}
 
+            {navigationMode && routeProgress.offRouteStatus === "OFF_ROUTE" && (
+              <div
+                role="status"
+                aria-live="polite"
+                className="pointer-events-none absolute left-1/2 top-[4.25rem] z-20 w-[calc(100%-1.5rem)] max-w-sm -translate-x-1/2 rounded-xl border border-amber-300 bg-amber-50/95 px-4 py-3 text-center shadow-lg backdrop-blur"
+              >
+                <div className="text-sm font-bold text-amber-950">Letértél az útvonalról.</div>
+                <div className="mt-0.5 text-xs leading-snug text-amber-900">
+                  Az aktuális helyzeted alapján már nem az útvonalon haladsz.
+                </div>
+              </div>
+            )}
+
             {mapFullscreen && (
               <div className="absolute left-2 right-2 top-2 z-10 flex flex-wrap items-center gap-2">
                 {navigationMode ? (
