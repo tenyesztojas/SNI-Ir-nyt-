@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Journey, OrchestratedSearchResult, PersonalizationWeights, RankedJourney, RankingLabel } from "@/lib/vedett-route/types";
 import type { AccessibilityResultStatus } from "@/lib/vedett-route/accessibility";
 import dynamic from "next/dynamic";
 import { useGeolocation } from "@/lib/hooks/useGeolocation";
+import { useRouteNavigation } from "@/lib/hooks/useRouteNavigation";
+import { journeyLegsToGeoJson } from "@/lib/vedett-route/geometry";
 import RestPointQuickAdd, { type RestPointCreatedPayload } from "./RestPointQuickAdd";
 // TELEPÜLÉS-AUTOCOMPLETE ("UX-fejlesztés..." kör, A) rész) — EGYETLEN közös
 // komponens/logika a "Város" mezőkhöz (induló + célhely), nincs duplikált
@@ -626,15 +628,67 @@ function RankedJourneyCard({
           longitude: geo.longitude,
           headingDegrees: geo.headingDegrees,
           speedMetersPerSecond: geo.speedMetersPerSecond,
+          timestampMs: geo.timestampMs,
         }
       : null;
 
-  // ETA V1: a route engine által adott aktuális itinerary érkezési idejét
-  // mutatjuk. Ha a pihenőpont-flow új útvonalat ad (displayedJourney csere),
-  // az ETA automatikusan az új journey arrivalTime-jára vált. Nem nevezünk
-  // kliensoldali becslést "realtime forgalmi" adatnak: folyamatos forgalmi/
-  // késési újraszámítás majd route-refresh/reroute körben kerül rá.
-  const navigationEta = formatClockTime(displayedJourney.arrivalTime);
+  // NAVIGATION SPRINT 2.1 — az EGYETLEN, ténylegesen megjelenített útvonal
+  // geometriájából stabil koordinátalistát készítünk a route-progress motorhoz.
+  // Ugyanazt a journeyLegsToGeoJson() normalizálást használjuk, mint maga a
+  // térkép, ezért a progress engine és a kirajzolt útvonal ugyanazon a
+  // geometrián dolgozik. useMemo szükséges: a useRouteNavigation route-váltásnak
+  // tekinti a routeCoordinates referencia változását, ezért GPS-tickenként nem
+  // szabad új tömböt létrehozni.
+  const navigationLegs = restStopMapState.active && restStopMapState.legsOverride
+    ? restStopMapState.legsOverride
+    : displayedJourney.legs;
+
+  const navigationRouteCoordinates = useMemo(() => {
+    const geojson = journeyLegsToGeoJson(navigationLegs);
+    const coordinates: Array<readonly [number, number]> = [];
+
+    for (const feature of geojson.features) {
+      if (feature.geometry.type !== "LineString") continue;
+      for (const coordinate of feature.geometry.coordinates) {
+        const lon = coordinate[0];
+        const lat = coordinate[1];
+        if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue;
+        const previous = coordinates[coordinates.length - 1];
+        if (previous && previous[0] === lon && previous[1] === lat) continue;
+        coordinates.push([lon, lat]);
+      }
+    }
+
+    return coordinates;
+  }, [navigationLegs]);
+
+  const routeNavigationPosition = currentPosition
+    ? {
+        latitude: currentPosition.latitude,
+        longitude: currentPosition.longitude,
+        speedMetersPerSecond: currentPosition.speedMetersPerSecond,
+        timestampMs: currentPosition.timestampMs,
+      }
+    : null;
+
+  const routeProgress = useRouteNavigation(navigationRouteCoordinates, routeNavigationPosition, {
+    routeDurationSeconds: Math.max(0, displayedJourney.totalDurationMinutes * 60),
+  });
+
+  // ETA V2: navigáció közben a lokális route-progress motor a GPS-pozícióból
+  // számolja a hátralévő geometriai arányt, ebből a hátralévő időt és ETA-t.
+  // Ez NEM forgalmi/realtime újratervezés: nincs GPS-tickenként hálózati kérés.
+  // Amíg nincs használható GPS+route progress, visszaesünk a routing engine
+  // eredeti arrivalTime értékére.
+  const navigationEta = routeProgress.estimatedArrivalTimeMs !== null
+    ? formatClockTime(new Date(routeProgress.estimatedArrivalTimeMs).toISOString())
+    : formatClockTime(displayedJourney.arrivalTime);
+  const navigationRemainingDistance = routeProgress.routeDistanceMeters > 0
+    ? routeProgress.remainingDistanceMeters
+    : null;
+  const navigationRemainingMinutes = routeProgress.remainingDurationSeconds !== null
+    ? Math.max(0, Math.ceil(routeProgress.remainingDurationSeconds / 60))
+    : null;
 
   const lastLeg = displayedJourney.legs.length > 0 ? displayedJourney.legs[displayedJourney.legs.length - 1] : undefined;
   const originalDestination =
@@ -833,10 +887,15 @@ function RankedJourneyCard({
             />
 
             {navigationMode && navigationEta && (
-              <div className="absolute bottom-4 left-1/2 z-10 -translate-x-1/2 rounded-xl bg-white/95 px-4 py-2 text-center shadow-lg backdrop-blur">
+              <div className="absolute bottom-4 left-1/2 z-10 min-w-[180px] -translate-x-1/2 rounded-xl bg-white/95 px-4 py-2 text-center shadow-lg backdrop-blur">
+                {navigationRemainingDistance !== null && navigationRemainingMinutes !== null && (
+                  <div className="mb-0.5 text-sm font-semibold tabular-nums text-sni-text">
+                    {(navigationRemainingDistance / 1000).toLocaleString("hu-HU", { maximumFractionDigits: 1 })} km · {navigationRemainingMinutes} perc
+                  </div>
+                )}
                 <div className="text-[11px] font-medium uppercase tracking-wide text-gray-500">Várható érkezés</div>
                 <div className="text-2xl font-bold tabular-nums text-sni-text">{navigationEta}</div>
-                <div className="text-[10px] text-gray-500">az aktuális útvonalterv alapján</div>
+                <div className="text-[10px] text-gray-500">GPS-alapú útvonalhaladás becslése</div>
               </div>
             )}
 
