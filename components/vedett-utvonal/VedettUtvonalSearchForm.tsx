@@ -925,7 +925,7 @@ function RankedJourneyCard({
             />
 
             {navigationMode && navigationEta && (
-              <div className="absolute bottom-4 left-1/2 z-10 min-w-[180px] -translate-x-1/2 rounded-xl bg-white/95 px-4 py-2 text-center shadow-lg backdrop-blur">
+              <div className="absolute bottom-3 left-3 z-10 w-[42vw] max-w-[180px] rounded-xl bg-white/95 px-3 py-2 text-center shadow-lg backdrop-blur md:bottom-4 md:left-1/2 md:w-auto md:min-w-[180px] md:-translate-x-1/2 md:px-4">
                 {navigationRemainingDistance !== null && navigationRemainingMinutes !== null && (
                   <div className="mb-0.5 text-sm font-semibold tabular-nums text-sni-text">
                     {(navigationRemainingDistance / 1000).toLocaleString("hu-HU", { maximumFractionDigits: 1 })} km · {navigationRemainingMinutes} perc
