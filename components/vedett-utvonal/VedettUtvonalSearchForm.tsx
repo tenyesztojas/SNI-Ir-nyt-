@@ -29,6 +29,13 @@ import {
   type RouteDestination,
 } from "@/lib/vedett-route/searchRequestBuilder";
 import { formatDurationMinutes } from "@/lib/vedett-route/formatDurationMinutes";
+import {
+  createInitialRerouteGuardState,
+  markRerouteFinished,
+  markRerouteStarted,
+  resetRerouteGuard,
+  shouldStartAutomaticReroute,
+} from "@/lib/vedett-route/navigation/rerouteGuard";
 
 // „Aktuális helyzetem" mint indulási pont (UX módosítás, 2026-09-09) — a
 // keresési form induló-mezője mostantól két, egymást KIZÁRÓ móddal
@@ -487,6 +494,16 @@ function RankedJourneyCard({
   const [navigationMode, setNavigationMode] = useState(false);
   const [followMode, setFollowMode] = useState(false);
 
+  // AUTOMATIKUS ÚJRATERVEZÉS (2026-09-15) — a route-progress motor csak
+  // megerősített OFF_ROUTE állapotánál indíthat új MOTIS-tervezést. A guard
+  // refben él, ezért egy GPS-tick miatti render nem nullázza a cooldown/inFlight
+  // állapotot. A session token kizárja, hogy egy régi async válasz egy már
+  // leállított vagy újraindított navigáció itineraryjét felülírja.
+  const rerouteGuardRef = useRef(createInitialRerouteGuardState());
+  const rerouteSessionRef = useRef(0);
+  const [automaticRerouteStatus, setAutomaticRerouteStatus] = useState<"IDLE" | "REROUTING" | "FAILED">("IDLE");
+  const [automaticRerouteMessage, setAutomaticRerouteMessage] = useState<string | null>(null);
+
   // Manuális teljes képernyő (spec 7. pont) — a NORMÁL (nem navigáló) map
   // nézeten is elérhető "⛶ Teljes képernyő" gomb, KÜLÖN a navigationMode-tól:
   // ez nem indít GPS-követést, csak nagyobb nézetet ad. A kettő UNIÓJA
@@ -582,6 +599,10 @@ function RankedJourneyCard({
   };
 
   const startNavigation = () => {
+    rerouteSessionRef.current += 1;
+    rerouteGuardRef.current = resetRerouteGuard();
+    setAutomaticRerouteStatus("IDLE");
+    setAutomaticRerouteMessage(null);
     setNavigationMode(true);
     setFollowMode(true);
     setManualFullscreen(false); // navigationMode már magában fullscreen — nincs szükség a külön manuális flagre is.
@@ -591,6 +612,10 @@ function RankedJourneyCard({
   };
 
   const stopNavigation = () => {
+    rerouteSessionRef.current += 1;
+    rerouteGuardRef.current = resetRerouteGuard();
+    setAutomaticRerouteStatus("IDLE");
+    setAutomaticRerouteMessage(null);
     setNavigationMode(false);
     setFollowMode(false);
     geo.stopWatching();
@@ -607,6 +632,10 @@ function RankedJourneyCard({
   // kezelni.
   useEffect(() => {
     if (!isOpen && navigationMode) {
+      rerouteSessionRef.current += 1;
+      rerouteGuardRef.current = resetRerouteGuard();
+      setAutomaticRerouteStatus("IDLE");
+      setAutomaticRerouteMessage(null);
       setNavigationMode(false);
       setFollowMode(false);
       geo.stopWatching();
@@ -733,6 +762,78 @@ function RankedJourneyCard({
     lastLeg && lastLeg.toLat !== undefined && lastLeg.toLon !== undefined
       ? { name: lastLeg.toName, lat: lastLeg.toLat as number, lon: lastLeg.toLon as number }
       : null;
+
+  // AUTOMATIKUS ÚJRATERVEZÉS — ugyanazt a szerveroldali /resume végpontot
+  // használjuk, mint a pihenőpont utáni folytatás: aktuális GPS -> eredeti
+  // végcél -> friss MOTIS itinerary. A böngésző továbbra sem éri el közvetlenül
+  // a route service-t. POSSIBLY_OFF_ROUTE itt nem elég: a guard kizárólag a
+  // megerősített OFF_ROUTE állapotot engedi át. Sikertelen próbálkozás után a
+  // 30 mp-es guard-cooldown védi a MOTIS-t a reroute-stormtól; ha továbbra is
+  // letértünk, egy későbbi GPS-fix után újra próbálkozhat.
+  useEffect(() => {
+    const decision = shouldStartAutomaticReroute(rerouteGuardRef.current, {
+      navigationActive: navigationMode,
+      offRouteStatus: routeProgress.offRouteStatus,
+      hasCurrentPosition: currentPosition !== null,
+      hasDestination: originalDestination !== null,
+      nowMs: Date.now(),
+    });
+    if (!decision.shouldReroute || !currentPosition || !originalDestination) return;
+
+    const sessionId = rerouteSessionRef.current;
+    const attemptStartedAt = Date.now();
+    const attemptPosition = { lat: currentPosition.latitude, lon: currentPosition.longitude };
+    const attemptDestination = { ...originalDestination };
+    rerouteGuardRef.current = markRerouteStarted(rerouteGuardRef.current, attemptStartedAt);
+    setAutomaticRerouteStatus("REROUTING");
+    setAutomaticRerouteMessage(null);
+
+    void (async () => {
+      try {
+        const response = await fetch("/api/vedett-route/rest-stops/resume", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            currentPosition: attemptPosition,
+            originalDestination: attemptDestination,
+            departAt: new Date().toISOString(),
+          }),
+        });
+        const data = (await response.json()) as
+          | { ok: true; journey: Journey }
+          | { ok: false; reason?: string; message?: string };
+
+        if (rerouteSessionRef.current !== sessionId) return;
+        if (data.ok) {
+          setDisplayedJourney(data.journey);
+          setAutomaticRerouteStatus("IDLE");
+          setAutomaticRerouteMessage(null);
+          return;
+        }
+
+        setAutomaticRerouteStatus("FAILED");
+        setAutomaticRerouteMessage(data.message ?? "Az automatikus újratervezés most nem sikerült.");
+      } catch {
+        if (rerouteSessionRef.current !== sessionId) return;
+        setAutomaticRerouteStatus("FAILED");
+        setAutomaticRerouteMessage("Az automatikus újratervezés most nem sikerült.");
+      } finally {
+        // Csak ugyanennek a sessionnek a guardját oldjuk fel. Egy régi kérés
+        // befejezése nem írhatja felül egy új navigáció guard-állapotát.
+        if (rerouteSessionRef.current === sessionId) {
+          rerouteGuardRef.current = markRerouteFinished(rerouteGuardRef.current);
+        }
+      }
+    })();
+  }, [
+    navigationMode,
+    routeProgress.offRouteStatus,
+    currentPosition?.latitude,
+    currentPosition?.longitude,
+    originalDestination?.name,
+    originalDestination?.lat,
+    originalDestination?.lon,
+  ]);
 
   return (
     <div className="card border-2" style={{ borderColor: ranked.labels.length > 0 ? "#93c5fd" : "#e5e7eb" }}>
@@ -943,9 +1044,15 @@ function RankedJourneyCard({
                 aria-live="polite"
                 className="pointer-events-none absolute left-1/2 top-[4.25rem] z-20 w-[calc(100%-1.5rem)] max-w-sm -translate-x-1/2 rounded-xl border border-amber-300 bg-amber-50/95 px-4 py-3 text-center shadow-lg backdrop-blur"
               >
-                <div className="text-sm font-bold text-amber-950">Letértél az útvonalról.</div>
+                <div className="text-sm font-bold text-amber-950">
+                  {automaticRerouteStatus === "REROUTING" ? "Újratervezem az útvonalat…" : "Letértél az útvonalról."}
+                </div>
                 <div className="mt-0.5 text-xs leading-snug text-amber-900">
-                  Az aktuális helyzeted alapján már nem az útvonalon haladsz.
+                  {automaticRerouteStatus === "REROUTING"
+                    ? "Az aktuális helyzetedből új útvonalat keresek a célodhoz."
+                    : automaticRerouteStatus === "FAILED"
+                      ? automaticRerouteMessage ?? "Az automatikus újratervezés most nem sikerült."
+                      : "Az aktuális helyzeted alapján már nem az útvonalon haladsz."}
                 </div>
               </div>
             )}

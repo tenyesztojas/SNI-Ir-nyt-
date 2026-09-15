@@ -46,10 +46,12 @@ describe("I) Explicit Navigation Mode — SOHA nem automatikus", () => {
   });
 
   test("startNavigation() explicit user-akcióra hívja geo.startWatching()-et, nem valamilyen effektből/mountból", () => {
-    assert.match(
-      formSrc,
-      /const startNavigation = \(\) => \{\s*\n\s*setNavigationMode\(true\);\s*\n\s*setFollowMode\(true\);\s*\n\s*setManualFullscreen\(false\);[\s\S]{0,400}?geo\.startWatching\(\);\s*\n\s*\};/
-    );
+    const startNavMatch = formSrc.match(/const startNavigation = \(\) => \{[\s\S]*?\n {2}\};/);
+    assert.ok(startNavMatch, "meg kell találni a startNavigation() függvényt");
+    assert.match(startNavMatch[0], /setNavigationMode\(true\);/);
+    assert.match(startNavMatch[0], /setFollowMode\(true\);/);
+    assert.match(startNavMatch[0], /setManualFullscreen\(false\);/);
+    assert.match(startNavMatch[0], /geo\.startWatching\(\);/);
   });
 });
 
@@ -112,17 +114,21 @@ describe("L) Foreground GPS Tracking — csak explicit indítású watchPosition
 
 describe("M) WatchPosition Lifecycle — mandatory clearWatch minden leállási úton", () => {
   test("stopNavigation() mindig meghívja geo.stopWatching()-et és nullázza a navigationMode/followMode state-eket", () => {
-    assert.match(
-      formSrc,
-      /const stopNavigation = \(\) => \{\s*\n\s*setNavigationMode\(false\);\s*\n\s*setFollowMode\(false\);\s*\n\s*geo\.stopWatching\(\);\s*\n\s*\};/
-    );
+    const stopNavMatch = formSrc.match(/const stopNavigation = \(\) => \{[\s\S]*?\n {2}\};/);
+    assert.ok(stopNavMatch, "meg kell találni a stopNavigation() függvényt");
+    assert.match(stopNavMatch[0], /setNavigationMode\(false\);/);
+    assert.match(stopNavMatch[0], /setFollowMode\(false\);/);
+    assert.match(stopNavMatch[0], /geo\.stopWatching\(\);/);
   });
 
   test("a kártya BEZÁRÁSA (isOpen -> false) navigáció közben explicit leállítja a GPS-követést — a useEffect erre külön ügyel", () => {
-    assert.match(
-      formSrc,
-      /useEffect\(\(\) => \{\s*\n\s*if \(!isOpen && navigationMode\) \{\s*\n\s*setNavigationMode\(false\);\s*\n\s*setFollowMode\(false\);\s*\n\s*geo\.stopWatching\(\);\s*\n\s*\}\s*\n[\s\S]{0,80}?\}, \[isOpen\]\);/
+    const closeCleanupMatch = formSrc.match(
+      /useEffect\(\(\) => \{\s*\n\s*if \(!isOpen && navigationMode\) \{[\s\S]*?\n\s*\}\s*\n[\s\S]*?\}, \[isOpen\]\);/
     );
+    assert.ok(closeCleanupMatch, "meg kell találni az isOpen navigation cleanup effektet");
+    assert.match(closeCleanupMatch[0], /setNavigationMode\(false\);/);
+    assert.match(closeCleanupMatch[0], /setFollowMode\(false\);/);
+    assert.match(closeCleanupMatch[0], /geo\.stopWatching\(\);/);
   });
 
   test("useGeolocation.ts: unmountkor is garantált a clearWatch (a hook saját cleanup-effektje) — ez a Navigation Mode-tól függetlenül is fennáll, nem regresszált", () => {

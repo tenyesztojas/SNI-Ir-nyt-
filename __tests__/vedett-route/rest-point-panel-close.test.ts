@@ -228,10 +228,11 @@ describe("7) Bezárás nem indít új MOTIS/rest-stops keresést", () => {
 
 describe("8) 'NAVIGÁCIÓ BEFEJEZÉSE' továbbra is külön, teljes funkció — nem keveredik a panel bezárásával", () => {
   test("stopNavigation() továbbra is setNavigationMode(false) + setFollowMode(false) + geo.stopWatching()-et hív, és ez A '✕ Navigáció befejezése' gomb onClick-je, NEM a pihenőpont-panel Bezárás gombja", () => {
-    assert.match(
-      cardSrc,
-      /const stopNavigation = \(\) => \{\s*\n\s*setNavigationMode\(false\);\s*\n\s*setFollowMode\(false\);\s*\n\s*geo\.stopWatching\(\);\s*\n\s*\};/
-    );
+    const stopNavMatch = cardSrc.match(/const stopNavigation = \(\) => \{[\s\S]*?\n {2}\};/);
+    assert.ok(stopNavMatch, "meg kell találni a stopNavigation() függvényt");
+    assert.match(stopNavMatch[0], /setNavigationMode\(false\);/);
+    assert.match(stopNavMatch[0], /setFollowMode\(false\);/);
+    assert.match(stopNavMatch[0], /geo\.stopWatching\(\);/);
     assert.match(cardSrc, /onClick=\{stopNavigation\}[\s\S]{0,80}✕ Navigáció befejezése/);
   });
 

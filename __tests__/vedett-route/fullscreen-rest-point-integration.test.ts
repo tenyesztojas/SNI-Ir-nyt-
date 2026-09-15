@@ -219,7 +219,9 @@ describe("E-F) trackedPosition = legfrissebb, MEGOSZTOTT GPS-pozíció — nincs
 
   test("F) a RestStopFlowPanel.tsx SOSEM hívja geo.startWatching()-et — a folyamatos GPS-követést KIZÁRÓLAG a startNavigation() indíthatja el", () => {
     assert.ok(!/geo\.startWatching\(/.test(restStopFlowPanelSrc), "a RestStopFlowPanel nem indíthat második watchPosition-t");
-    assert.match(cardSrc, /const startNavigation = \(\) => \{[\s\S]{0,500}geo\.startWatching\(\);/, "a watchPosition indítása kizárólag a startNavigation()-ben él");
+    const startNavMatch = cardSrc.match(/const startNavigation = \(\) => \{[\s\S]*?\n {2}\};/);
+    assert.ok(startNavMatch, "meg kell találni a startNavigation() függvényt");
+    assert.match(startNavMatch[0], /geo\.startWatching\(\);/, "a watchPosition indítása kizárólag a startNavigation()-ben él");
   });
 });
 
@@ -251,7 +253,9 @@ describe("J) 'Pihenőpont hozzáadása' a MEGLÉVŐ RestPointQuickAdd flow-t has
 
 describe("K-L) Navigation stop továbbra is clearWatch, nincs új GPS persistence", () => {
   test("K) stopNavigation() továbbra is geo.stopWatching()-et hív (clearWatch a hook belsejében)", () => {
-    assert.match(cardSrc, /const stopNavigation = \(\) => \{[\s\S]{0,120}geo\.stopWatching\(\);/);
+    const stopNavMatch = cardSrc.match(/const stopNavigation = \(\) => \{[\s\S]*?\n {2}\};/);
+    assert.ok(stopNavMatch, "meg kell találni a stopNavigation() függvényt");
+    assert.match(stopNavMatch[0], /geo\.stopWatching\(\);/);
   });
 
   test("L) sem a RestStopFlowPanel.tsx, sem a RestPointQuickAdd.tsx nem ír Supabase-be/adatbázisba folyamatos GPS-koordinátát — a RestPointQuickAdd egyetlen explicit mentése NEM a folyamatos trackedPosition, hanem a felhasználó által jóváhagyott/módosítható mezők", () => {
