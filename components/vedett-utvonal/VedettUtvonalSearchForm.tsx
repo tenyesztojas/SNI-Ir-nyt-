@@ -6,6 +6,7 @@ import type { AccessibilityResultStatus } from "@/lib/vedett-route/accessibility
 import dynamic from "next/dynamic";
 import { useGeolocation } from "@/lib/hooks/useGeolocation";
 import { useRouteNavigation } from "@/lib/hooks/useRouteNavigation";
+import { useScreenWakeLock } from "@/lib/hooks/useScreenWakeLock";
 import { journeyLegsToGeoJson } from "@/lib/vedett-route/geometry";
 import RestPointQuickAdd, { type RestPointCreatedPayload } from "./RestPointQuickAdd";
 // TELEPÜLÉS-AUTOCOMPLETE ("UX-fejlesztés..." kör, A) rész) — EGYETLEN közös
@@ -493,6 +494,12 @@ function RankedJourneyCard({
   // navigáció maradék follow-állapota átszivárogjon egy újba.
   const [navigationMode, setNavigationMode] = useState(false);
   const [followMode, setFollowMode] = useState(false);
+
+  // SCREEN WAKE LOCK (2026-09-15) — aktív navigáció közben best-effort
+  // ébren tartjuk a kijelzőt. A hook progressive enhancement: ha a böngésző
+  // nem támogatja / megtagadja a Wake Lock API-t, a navigáció változatlanul
+  // működik. Háttérből visszatéréskor a hook újrakéri az elveszett lockot.
+  useScreenWakeLock(navigationMode && isOpen);
 
   // AUTOMATIKUS ÚJRATERVEZÉS (2026-09-15) — a route-progress motor csak
   // megerősített OFF_ROUTE állapotánál indíthat új MOTIS-tervezést. A guard
