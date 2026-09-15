@@ -621,8 +621,20 @@ function RankedJourneyCard({
 
   const currentPosition =
     geo.status === "granted" && geo.latitude !== null && geo.longitude !== null
-      ? { latitude: geo.latitude, longitude: geo.longitude }
+      ? {
+          latitude: geo.latitude,
+          longitude: geo.longitude,
+          headingDegrees: geo.headingDegrees,
+          speedMetersPerSecond: geo.speedMetersPerSecond,
+        }
       : null;
+
+  // ETA V1: a route engine által adott aktuális itinerary érkezési idejét
+  // mutatjuk. Ha a pihenőpont-flow új útvonalat ad (displayedJourney csere),
+  // az ETA automatikusan az új journey arrivalTime-jára vált. Nem nevezünk
+  // kliensoldali becslést "realtime forgalmi" adatnak: folyamatos forgalmi/
+  // késési újraszámítás majd route-refresh/reroute körben kerül rá.
+  const navigationEta = formatClockTime(displayedJourney.arrivalTime);
 
   const lastLeg = displayedJourney.legs.length > 0 ? displayedJourney.legs[displayedJourney.legs.length - 1] : undefined;
   const originalDestination =
@@ -819,6 +831,14 @@ function RankedJourneyCard({
               navigationZoom={16}
               onUserGestureCancelFollow={() => setFollowMode(false)}
             />
+
+            {navigationMode && navigationEta && (
+              <div className="absolute bottom-4 left-1/2 z-10 -translate-x-1/2 rounded-xl bg-white/95 px-4 py-2 text-center shadow-lg backdrop-blur">
+                <div className="text-[11px] font-medium uppercase tracking-wide text-gray-500">Várható érkezés</div>
+                <div className="text-2xl font-bold tabular-nums text-sni-text">{navigationEta}</div>
+                <div className="text-[10px] text-gray-500">az aktuális útvonalterv alapján</div>
+              </div>
+            )}
 
             {mapFullscreen && (
               <div className="absolute left-2 right-2 top-2 z-10 flex flex-wrap items-center gap-2">

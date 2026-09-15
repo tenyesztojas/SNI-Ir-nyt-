@@ -32,6 +32,12 @@ export interface GeolocationState {
   latitude: number | null;
   longitude: number | null;
   accuracyMeters: number | null;
+  /** Haladási irány fokban: 0=észak, 90=kelet. GPS heading, vagy mozgásból számított fallback. */
+  headingDegrees: number | null;
+  /** Böngésző által jelzett pillanatnyi sebesség m/s-ban, ha elérhető. */
+  speedMetersPerSecond: number | null;
+  /** Az utolsó érvényes GeolocationPosition időbélyege. */
+  timestampMs: number | null;
   errorMessage: string | null;
 }
 
@@ -40,6 +46,9 @@ const INITIAL_STATE: GeolocationState = {
   latitude: null,
   longitude: null,
   accuracyMeters: null,
+  headingDegrees: null,
+  speedMetersPerSecond: null,
+  timestampMs: null,
   errorMessage: null,
 };
 
@@ -74,12 +83,69 @@ export function useGeolocation(): UseGeolocationResult {
   const watchIdRef = useRef<number | null>(null);
   const [isWatching, setIsWatching] = useState(false);
 
+  const previousFixRef = useRef<{ latitude: number; longitude: number; timestampMs: number } | null>(null);
+  const smoothedHeadingRef = useRef<number | null>(null);
+
   const handleSuccess = useCallback((pos: GeolocationPosition) => {
+    const latitude = pos.coords.latitude;
+    const longitude = pos.coords.longitude;
+    const timestampMs = pos.timestamp || Date.now();
+    const previous = previousFixRef.current;
+
+    // Elsődleges forrás a Geolocation API natív headingje. Ha a böngésző ezt
+    // nem adja (gyakori desktopon és néhány mobilböngészőben), két egymást
+    // követő GPS-fixből számolunk course/bearinget, de csak valódi elmozdulásnál.
+    let measuredHeading =
+      typeof pos.coords.heading === "number" && Number.isFinite(pos.coords.heading)
+        ? ((pos.coords.heading % 360) + 360) % 360
+        : null;
+
+    if (measuredHeading === null && previous) {
+      const toRad = (value: number) => (value * Math.PI) / 180;
+      const toDeg = (value: number) => (value * 180) / Math.PI;
+      const lat1 = toRad(previous.latitude);
+      const lat2 = toRad(latitude);
+      const dLon = toRad(longitude - previous.longitude);
+      const y = Math.sin(dLon) * Math.cos(lat2);
+      const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+
+      const earthRadiusMeters = 6_371_000;
+      const dLat = toRad(latitude - previous.latitude);
+      const havA =
+        Math.sin(dLat / 2) ** 2 +
+        Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+      const distanceMeters = 2 * earthRadiusMeters * Math.asin(Math.min(1, Math.sqrt(havA)));
+
+      // GPS-zajból ne gyártsunk irányt: legalább 3 m tényleges elmozdulás kell.
+      if (distanceMeters >= 3 && (timestampMs - previous.timestampMs) <= 30_000) {
+        measuredHeading = (toDeg(Math.atan2(y, x)) + 360) % 360;
+      }
+    }
+
+    previousFixRef.current = { latitude, longitude, timestampMs };
+
+    // Körkörös simítás: 359° -> 1° átmenetnél se forduljon 358°-ot a kamera.
+    if (measuredHeading !== null) {
+      const previousHeading = smoothedHeadingRef.current;
+      if (previousHeading === null) {
+        smoothedHeadingRef.current = measuredHeading;
+      } else {
+        const shortestDelta = ((measuredHeading - previousHeading + 540) % 360) - 180;
+        smoothedHeadingRef.current = (previousHeading + shortestDelta * 0.35 + 360) % 360;
+      }
+    }
+
     setState({
       status: "granted",
-      latitude: pos.coords.latitude,
-      longitude: pos.coords.longitude,
+      latitude,
+      longitude,
       accuracyMeters: pos.coords.accuracy,
+      headingDegrees: smoothedHeadingRef.current,
+      speedMetersPerSecond:
+        typeof pos.coords.speed === "number" && Number.isFinite(pos.coords.speed)
+          ? Math.max(0, pos.coords.speed)
+          : null,
+      timestampMs,
       errorMessage: null,
     });
   }, []);

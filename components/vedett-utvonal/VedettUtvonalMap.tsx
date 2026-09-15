@@ -66,7 +66,7 @@ export interface VedettUtvonalMapProps {
   carRouteGeometry?: { type: "LineString"; coordinates: [number, number][] } | null;
   fromName?: string;
   toName?: string;
-  currentPosition?: { latitude: number; longitude: number } | null;
+  currentPosition?: { latitude: number; longitude: number; headingDegrees?: number | null; speedMetersPerSecond?: number | null } | null;
   restPoints?: RestPointMarker[];
   // Sprint E.1 — marker <-> kártya kattintás-szinkron (spec 9. pont): ha
   // adott, a kijelölt pihenőpont markere vizuálisan kiemelve jelenik meg,
@@ -155,7 +155,7 @@ export default function VedettUtvonalMap({ legs, carRouteGeometry = null, fromNa
   const mapRef = useRef<maplibregl.Map | null>(null);
   const currentPosMarkerRef = useRef<maplibregl.Marker | null>(null);
   const restPointMarkersRef = useRef<maplibregl.Marker[]>([]);
-  const currentPositionRef = useRef<{ latitude: number; longitude: number } | null>(currentPosition ?? null);
+  const currentPositionRef = useRef<{ latitude: number; longitude: number; headingDegrees?: number | null; speedMetersPerSecond?: number | null } | null>(currentPosition ?? null);
   const [mapReady, setMapReady] = useState(false);
 
   // A user-gesture-cancel callback mindig ezen a ref-en keresztül fut —
@@ -440,12 +440,12 @@ export default function VedettUtvonalMap({ legs, carRouteGeometry = null, fromNa
       });
     }
 
-    if (carRouteGeometry && carRouteGeometry.coordinates.length > 0) {
+    if (carRouteGeometry && carRouteGeometry.coordinates.length > 0 && !followMode) {
       const bounds = new maplibregl.LngLatBounds();
       for (const coord of carRouteGeometry.coordinates) bounds.extend(coord);
       map.fitBounds(bounds, { padding: 48, maxZoom: 17, duration: 300 });
     }
-  }, [carRouteGeometry, mapReady]);
+  }, [carRouteGeometry, mapReady, followMode]);
 
   // Sprint E.1 hotfix (2026-09-08), frissítve az Egyetlen Megosztott Térkép
   // UX módosításnál (2026-09-09) — pihenőpont-jelölt nézet fitBounds/zoom
@@ -534,8 +534,21 @@ export default function VedettUtvonalMap({ legs, carRouteGeometry = null, fromNa
     if (!map || !mapReady) return;
     if (!followMode) return;
     if (typeof currentLat !== "number" || typeof currentLon !== "number") return;
-    map.easeTo({ center: [currentLon, currentLat], zoom: navigationZoom, duration: 400 });
-  }, [followMode, mapReady, currentLat, currentLon, navigationZoom]);
+    const heading = currentPosition?.headingDegrees;
+    const hasHeading = typeof heading === "number" && Number.isFinite(heading);
+    const height = map.getContainer().clientHeight;
+
+    map.easeTo({
+      center: [currentLon, currentLat],
+      zoom: navigationZoom,
+      // Heading-up navigáció: a haladási irány a képernyő teteje felé néz,
+      // ezért a TÉRKÉPET forgatjuk a course szerint, nem a nyilat a viewportban.
+      ...(hasHeading ? { bearing: heading } : {}),
+      // A pozíció enyhén az alsó harmad felé kerül, hogy több út látszódjon előre.
+      offset: [0, Math.round(height * 0.16)],
+      duration: 400,
+    });
+  }, [followMode, mapReady, currentLat, currentLon, navigationZoom, currentPosition?.headingDegrees]);
 
   // Aktuális GPS-pozíció marker — csak a jelenlegi renderben él, nincs
   // perzisztálás (lásd lib/hooks/useGeolocation.ts fejléce).
@@ -549,17 +562,32 @@ export default function VedettUtvonalMap({ legs, carRouteGeometry = null, fromNa
     }
     if (currentPosition) {
       const el = document.createElement("div");
-      el.style.width = "16px";
-      el.style.height = "16px";
-      el.style.borderRadius = "50%";
-      el.style.background = "#2563eb";
-      el.style.border = "3px solid white";
-      el.style.boxShadow = "0 0 0 2px #2563eb55";
-      currentPosMarkerRef.current = new maplibregl.Marker({ element: el })
-        .setLngLat([currentPosition.longitude, currentPosition.latitude])
-        .addTo(map);
+      el.setAttribute("aria-label", "Jelenlegi hely és haladási irány");
+      el.style.width = "30px";
+      el.style.height = "30px";
+      el.style.display = "grid";
+      el.style.placeItems = "center";
+      el.style.filter = "drop-shadow(0 1px 3px rgba(0,0,0,0.35))";
+
+      // Viewporthoz rögzített navigációs chevron. Follow/heading-up módban a
+      // térkép fordul alatta, ezért a nyíl mindig vizuálisan felfelé mutat.
+      // Normál térképnézetben, ha van heading, a marker maga fordul el.
+      el.innerHTML =
+        '<svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true"><path d="M15 2 L27 26 L15 21 L3 26 Z" fill="#2563eb" stroke="white" stroke-width="2.5" stroke-linejoin="round"/></svg>';
+
+      const marker = new maplibregl.Marker({
+        element: el,
+        rotationAlignment: "viewport",
+      }).setLngLat([currentPosition.longitude, currentPosition.latitude]);
+
+      const heading = currentPosition.headingDegrees;
+      if (!followMode && typeof heading === "number" && Number.isFinite(heading)) {
+        marker.setRotation(heading);
+      }
+
+      currentPosMarkerRef.current = marker.addTo(map);
     }
-  }, [currentPosition, mapReady]);
+  }, [currentPosition, mapReady, followMode]);
 
   // Pihenőpontok — Sprint E.1: kategóriánként vizuálisan megkülönböztetve
   // (spec 9. pont, "markerek kategóriánként megkülönböztethetőek legyenek"),

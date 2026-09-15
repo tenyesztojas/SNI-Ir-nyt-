@@ -140,10 +140,20 @@ describe("N) Map Follow Mode — folyamatos easeTo követés navigációs zoomra
     assert.match(mapSrc, /followMode = false, navigationZoom = 16, onUserGestureCancelFollow/);
   });
 
-  test("a follow-effekt easeTo-t használ (sima animáció), NEM jumpTo/flyTo-t, és a navigationZoom propot adja át zoom-nak", () => {
+  test("a follow-effekt easeTo-t használ, navigationZoomot alkalmaz, és támogatja a heading-up kamerát", () => {
     assert.match(
       mapSrc,
-      /if \(!followMode\) return;\s*\n\s*if \(typeof currentLat !== "number" \|\| typeof currentLon !== "number"\) return;\s*\n\s*map\.easeTo\(\{ center: \[currentLon, currentLat\], zoom: navigationZoom, duration: 400 \}\);/
+      /if \(!followMode\) return;/
+    );
+
+    assert.match(
+      mapSrc,
+      /if \(typeof currentLat !== "number" \|\| typeof currentLon !== "number"\) return;/
+    );
+
+    assert.match(
+      mapSrc,
+      /map\.easeTo\(\{[\s\S]*?center: \[currentLon, currentLat\],[\s\S]*?zoom: navigationZoom,[\s\S]*?bearing:[\s\S]*?offset:[\s\S]*?duration: 400,[\s\S]*?\}\);/
     );
   });
 
