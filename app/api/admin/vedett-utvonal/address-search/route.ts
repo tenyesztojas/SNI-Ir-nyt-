@@ -5,8 +5,10 @@
 import { NextResponse } from "next/server";
 import { requireVedettRouteAccess } from "@/lib/vedett-route/access";
 import {
+  parseStreetAndHouseNumber,
   processMapboxGeocodingFeatures,
   processMapboxSearchBoxSuggestions,
+  processStructuredAddressFeatures,
   type MapboxGeocodingFeature,
   type MapboxSearchBoxSuggestion,
 } from "@/lib/vedett-route/addressAutocompleteMapbox";
@@ -33,6 +35,55 @@ export async function POST(request: Request) {
 
   const accessToken = process.env.MAPBOX_ACCESS_TOKEN;
   if (!accessToken) return NextResponse.json([]);
+
+  /*
+   * 0) HÁZSZÁMOS CÍM — Geocoding v6 Structured Input
+   *
+   * Ha a felhasználó egyértelmű házszámot írt a mező végére, nem kezeljük
+   * egyszerű street-prefixként. A Mapbox v6 külön address_number/street/place
+   * mezőket kap, autocomplete=false beállítással. Ez pontosabb és nem engedi,
+   * hogy egy korábban kiválasztott utcaszintű találat elnyelje a házszámot.
+   */
+  const parsedAddress = parseStreetAndHouseNumber(q);
+  if (parsedAddress) {
+    const structuredParams = new URLSearchParams();
+    structuredParams.set("address_number", parsedAddress.addressNumber);
+    structuredParams.set("street", parsedAddress.street);
+    if (city) structuredParams.set("place", city);
+    if (postalOrDistrict && /^\d{4}$/.test(postalOrDistrict)) {
+      structuredParams.set("postcode", postalOrDistrict);
+    }
+    structuredParams.set("country", "hu");
+    structuredParams.set("language", "hu");
+    structuredParams.set("autocomplete", "false");
+    structuredParams.set("access_token", accessToken);
+
+    try {
+      const structuredResponse = await fetch(
+        `${MAPBOX_GEOCODING_URL}?${structuredParams.toString()}`,
+        { signal: AbortSignal.timeout(5000) },
+      );
+      if (structuredResponse.ok) {
+        const structuredData: unknown = await structuredResponse.json().catch(() => null);
+        const structuredFeatures =
+          (structuredData as { features?: MapboxGeocodingFeature[] } | null)?.features ?? [];
+        const structuredSuggestions = processStructuredAddressFeatures(
+          structuredFeatures,
+          parsedAddress.street,
+          parsedAddress.addressNumber,
+          city,
+          postalOrDistrict,
+          5,
+        );
+        if (structuredSuggestions.length > 0) {
+          return NextResponse.json(structuredSuggestions);
+        }
+      }
+    } catch {
+      // Fail-safe: az interaktív Search Box + normál Geocoding fallback lent
+      // továbbra is lefut, tehát a címmező hálózati hibánál sem blokkolódik.
+    }
+  }
 
   /*
    * 1) Search Box /suggest

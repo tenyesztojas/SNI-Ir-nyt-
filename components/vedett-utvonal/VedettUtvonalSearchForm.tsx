@@ -280,6 +280,32 @@ function mergeRestPointMarkers(base: RestPointMarker[], extra: RestPointMarker[]
 // valós idejű, ha van) startTime mezőjéből, órás:perces formában. Ez segíti
 // eldönteni, hogy pl. egy hosszabb várakozás után induló járatra érdemes-e
 // várni, vagy inkább a gyalogos/másik alternatívát választani.
+function splitSelectedAddressLabel(label: string): {
+  street: string;
+  city: string;
+  postalOrDistrict: string;
+  suffix: string;
+} | null {
+  // Az autocomplete API új, autizmusbarát címkéje determinisztikus:
+  // "Utca [házszám], Település[, 1234]". Ebből szerkesztéskor vissza tudjuk
+  // állítani a strukturált MANUAL mezőket anélkül, hogy a kiválasztott
+  // település elveszne (korábban minden MAP_PICKED szerkesztés Budapestet
+  // állított be, ami Sóskút/Budaörs/stb. esetén hibás újrakeresést okozott).
+  const parts = label.split(",").map((part) => part.trim()).filter(Boolean);
+  if (parts.length < 2) return null;
+
+  const street = parts[0];
+  const maybePostcode = parts[parts.length - 1];
+  const hasPostcode = /^\d{4}$/.test(maybePostcode);
+  const cityIndex = hasPostcode ? parts.length - 2 : parts.length - 1;
+  const city = parts[cityIndex];
+  if (!street || !city) return null;
+
+  const postalOrDistrict = hasPostcode ? maybePostcode : "";
+  const suffix = `, ${city}${postalOrDistrict ? `, ${postalOrDistrict}` : ""}`;
+  return { street, city, postalOrDistrict, suffix };
+}
+
 function formatClockTime(iso?: string): string | null {
   if (!iso) return null;
   const d = new Date(iso);
@@ -1603,14 +1629,32 @@ export default function VedettUtvonalSearchForm({
   }
 
   function handleDestinationOverrideChange(value: string) {
-    // Védett Hely "Navigálj oda" integráció — ha a felhasználó a KNOWN_PLACE
-    // módban előretöltött célnév mezőbe kézzel ír, KNOWN_PLACE AZONNAL
-    // megszűnik (SOHA nem használunk elavult/rossz koordinátát a routing
-    // kéréshez ezután), és a begépelt szöveg a strukturált cím "Utca,
-    // házszám" mezőjébe kerül kiindulásként — a Város alapértelmezetten
-    // Budapest, az Irányítószám vagy kerület mező üresen indul, hogy a
-    // felhasználó kitölthesse.
-    setDestination({ type: "MANUAL", city: "Budapest", districtOrPostalCode: "", street: value });
+    // Autocomplete-ból kiválasztott MAP_PICKED cím szerkesztésekor megőrizzük
+    // a kiválasztott települést/irányítószámot. Példa:
+    // "Kőszikla utca, Sóskút, 2038" -> a felhasználó beszúrja a 12-t ->
+    // MANUAL: street="Kőszikla utca 12", city="Sóskút", postcode="2038".
+    // A régi viselkedés minden ilyen szerkesztést Budapestre állított vissza,
+    // ezért a házszámos újrakeresés Sóskútnál szükségszerűen félrement.
+    setDestination((prev) => {
+      if (prev.type === "MAP_PICKED") {
+        const selected = splitSelectedAddressLabel(prev.name);
+        if (selected) {
+          const street = value.endsWith(selected.suffix)
+            ? value.slice(0, -selected.suffix.length).trim()
+            : value;
+          return {
+            type: "MANUAL" as const,
+            city: selected.city,
+            districtOrPostalCode: selected.postalOrDistrict,
+            street,
+          };
+        }
+      }
+
+      // KNOWN_PLACE deep linknél nincs garantált strukturált cím-metaadat,
+      // ezért ott a korábbi biztonságos MANUAL fallback marad.
+      return { type: "MANUAL" as const, city: "Budapest", districtOrPostalCode: "", street: value };
+    });
   }
 
   // Geocoding hardening (2026-09-10), 11-13. pont — a felhasználó a

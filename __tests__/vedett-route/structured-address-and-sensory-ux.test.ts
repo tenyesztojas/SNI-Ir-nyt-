@@ -1,4 +1,4 @@
-// VÉDETT ÚTVONAL — Strukturált címbevitel + érthető szenzoros prioritás UI
+﻿// VÉDETT ÚTVONAL — Strukturált címbevitel + érthető szenzoros prioritás UI
 // (2026-09-XX) — regressziós tesztek a specifikáció 13-14. pontjának A-J
 // (címbevitel) és K-R (prioritási UI) tesztlistájához.
 //
@@ -232,7 +232,12 @@ describe("TASK — Kézi módosítás KNOWN_PLACE -> MANUAL (I)", () => {
   test("I) a KNOWN_PLACE nézet 'Hová?' mezőjébe gépelés handleDestinationOverrideChange-et hív, ami MANUAL módra vált", () => {
     const fnMatch = formSrc.match(/function handleDestinationOverrideChange\(value: string\) \{[\s\S]*?\n  \}/);
     assert.ok(fnMatch, "handleDestinationOverrideChange függvénynek léteznie kell");
-    assert.match(fnMatch![0], /setDestination\(\{ type: "MANUAL", city: "Budapest", districtOrPostalCode: "", street: value \}\);/);
+    assert.match(fnMatch![0], /setDestination\(\(prev\) => \{/);
+    assert.match(fnMatch![0], /type: "MANUAL" as const/);
+    assert.match(fnMatch![0], /city: selected\.city/);
+    assert.match(fnMatch![0], /districtOrPostalCode: selected\.postalOrDistrict/);
+    assert.match(fnMatch![0], /street,/);
+    assert.doesNotMatch(fnMatch![0], /latitude\s*:|longitude\s*:/);
     assert.match(formSrc, /onChange=\{\(e\) => handleDestinationOverrideChange\(e\.target\.value\)\}/);
   });
 });

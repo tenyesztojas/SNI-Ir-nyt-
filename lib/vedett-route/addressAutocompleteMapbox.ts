@@ -20,7 +20,11 @@ export type MapboxGeocodingFeature = {
     name_preferred?: string;
     place_formatted?: string;
     full_address?: string;
-    coordinates?: { longitude?: unknown; latitude?: unknown };
+    coordinates?: {
+      longitude?: unknown;
+      latitude?: unknown;
+      routable_points?: Array<{ name?: string; longitude?: unknown; latitude?: unknown }>;
+    };
     context?: {
       postcode?: { name?: string };
       place?: { name?: string };
@@ -115,6 +119,115 @@ function featureCoordinates(feature: MapboxGeocodingFeature): { lat: number; lon
   return null;
 }
 
+
+/**
+ * A felhasználónak szánt címke szándékosan rövid és determinisztikus.
+ * Nem használjuk közvetlenül a Mapbox full_address/place_formatted szövegét,
+ * mert egyes magyar street találatoknál ugyanaz az utcanév kétszer is
+ * megjelenhet a szolgáltatói formázásban. Autizmusbarát UI-ban ez különösen
+ * zavaró, ezért csak: cím/utca, település, irányítószám jelenik meg.
+ */
+export function buildAccessibleAddressLabel(
+  primary: string | undefined,
+  city?: string,
+  postcode?: string,
+): string {
+  const parts = [primary?.trim(), city?.trim(), postcode?.trim()].filter(
+    (value): value is string => Boolean(value),
+  );
+  const seen = new Set<string>();
+  return parts
+    .filter((part) => {
+      const key = normalizeForPrefixMatch(part);
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .join(", ");
+}
+
+/**
+ * Magyar címmezőből a végén álló házszámot választja le.
+ * Példák: "Kőszikla utca 12", "Fő út 12/A", "Petőfi utca 4-6".
+ * Ha nincs egyértelmű, sorvégi házszám, null-t ad: POI/utcanév keresést
+ * nem próbálunk címként kitalálni.
+ */
+export function parseStreetAndHouseNumber(
+  value: string,
+): { street: string; addressNumber: string } | null {
+  const normalized = value.trim().replace(/\s+/g, " ");
+  const match = normalized.match(/^(.+?)\s+(\d+[A-Za-zÁÉÍÓÖŐÚÜŰáéíóöőúüű]?(?:[/-]\d*[A-Za-zÁÉÍÓÖŐÚÜŰáéíóöőúüű]?)?\.?)$/u);
+  if (!match) return null;
+  const street = match[1]?.trim();
+  const addressNumber = match[2]?.replace(/\.$/, "").trim();
+  if (!street || !addressNumber) return null;
+  return { street, addressNumber };
+}
+
+function structuredAddressCoordinates(feature: MapboxGeocodingFeature): { lat: number; lon: number } | null {
+  const routablePoints = feature.properties?.coordinates?.routable_points;
+  if (Array.isArray(routablePoints)) {
+    const preferred =
+      routablePoints.find((point) => point?.name === "default") ?? routablePoints[0];
+    if (typeof preferred?.latitude === "number" && typeof preferred?.longitude === "number") {
+      return { lat: preferred.latitude, lon: preferred.longitude };
+    }
+  }
+  return featureCoordinates(feature);
+}
+
+export function processStructuredAddressFeatures(
+  features: MapboxGeocodingFeature[],
+  street: string,
+  addressNumber: string,
+  city?: string,
+  postalOrDistrict?: string,
+  limit = 5,
+): AddressAutocompleteSuggestion[] {
+  const wantedCity = city?.trim();
+  const wantedPostcode = postalOrDistrict?.trim();
+  const out: AddressAutocompleteSuggestion[] = [];
+  const seen = new Set<string>();
+
+  for (const feature of features) {
+    const p = feature.properties;
+    if (!p || p.feature_type !== "address") continue;
+    if (wantedCity && !contextHasExactCity(p.context, wantedCity)) continue;
+    if (wantedPostcode && /^\d{4}$/.test(wantedPostcode) && featurePostcode(feature) !== wantedPostcode) continue;
+
+    // Címnél a navigációhoz optimalizált routable point az elsődleges;
+    // csak ennek hiányában használjuk az objektum általános koordinátáját.
+    const coords = structuredAddressCoordinates(feature);
+    if (!coords) continue;
+
+    // Structured Input már külön street/address_number mezőkkel kérdez,
+    // ezért itt nem futtatjuk a régi prefix-filtert a teljes "utca 12"
+    // queryre. Ez volt a házszámos találatok elvesztésének egyik oka.
+    const returnedName = p.name_preferred ?? p.name;
+    const primary = returnedName?.trim() || `${street} ${addressNumber}`;
+    const label = buildAccessibleAddressLabel(primary, featureCity(feature) ?? wantedCity, featurePostcode(feature));
+    if (!label) continue;
+
+    const key = normalizeForPrefixMatch(label);
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    out.push({
+      id: p.mapbox_id ?? feature.id,
+      label,
+      name: primary,
+      city: featureCity(feature) ?? wantedCity,
+      postcode: featurePostcode(feature),
+      district: featureDistrict(feature),
+      lat: coords.lat,
+      lon: coords.lon,
+    });
+    if (out.length >= limit) break;
+  }
+
+  return out;
+}
+
 export function processMapboxSearchBoxSuggestions(
   suggestions: MapboxSearchBoxSuggestion[],
   query: string,
@@ -165,9 +278,11 @@ export function processMapboxSearchBoxSuggestions(
       suggestion.address?.trim() ||
       "";
 
-    const label =
-      suggestion.full_address?.trim() ||
-      [name, suggestion.place_formatted?.trim()].filter(Boolean).join(", ");
+    const label = buildAccessibleAddressLabel(
+      name,
+      structuredCityFromContext(suggestion.context),
+      suggestion.context?.postcode?.name,
+    );
 
     if (!name || !label) continue;
 
@@ -234,9 +349,11 @@ export function processMapboxGeocodingFeatures(
   for (const feature of candidates) {
     const p = feature.properties!;
     const coordinates = featureCoordinates(feature)!;
-    const label =
-      p.full_address ??
-      [p.name_preferred ?? p.name, p.place_formatted].filter(Boolean).join(", ");
+    const label = buildAccessibleAddressLabel(
+      p.name_preferred ?? p.name,
+      featureCity(feature),
+      featurePostcode(feature),
+    );
 
     if (!label) continue;
 

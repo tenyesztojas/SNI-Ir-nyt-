@@ -1,4 +1,4 @@
-// VÉDETT ÚTVONAL — Védett Helyek "Navigálj oda" integráció (2026-09-09)
+﻿// VÉDETT ÚTVONAL — Védett Helyek "Navigálj oda" integráció (2026-09-09)
 //
 // Regressziós tesztek a specifikáció A-L tesztlistájához. Ugyanazt a
 // mintát követi, mint a projekt már meglévő vedett-route tesztjei: a
@@ -199,7 +199,12 @@ describe("I) deep link után a destination mező előre ki van töltve — Vedet
     // marad érvényben.
     const fnMatch = searchFormSrc.match(/function handleDestinationOverrideChange\(value: string\) \{[\s\S]*?\n  \}/);
     assert.ok(fnMatch, "handleDestinationOverrideChange függvénynek léteznie kell");
-    assert.match(fnMatch![0], /setDestination\(\{ type: "MANUAL", city: "Budapest", districtOrPostalCode: "", street: value \}\);/);
+    assert.match(fnMatch![0], /setDestination\(\(prev\) => \{/);
+    assert.match(fnMatch![0], /type: "MANUAL" as const/);
+    assert.match(fnMatch![0], /city: selected\.city/);
+    assert.match(fnMatch![0], /districtOrPostalCode: selected\.postalOrDistrict/);
+    assert.match(fnMatch![0], /street,/);
+    assert.doesNotMatch(fnMatch![0], /latitude\s*:|longitude\s*:/);
   });
 
   test("submit esetén KNOWN_PLACE destination toCoordinates+toName-t küld, MANUAL destination sima 'to' stringet — mindkettő a journeySearchSchema-val validált alakban (viselkedési teszt a pure buildSearchRequestDestinationFields-en keresztül)", () => {

@@ -19,10 +19,13 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
+  buildAccessibleAddressLabel,
   matchesQueryPrefix,
   normalizeForPrefixMatch,
+  parseStreetAndHouseNumber,
   processMapboxGeocodingFeatures,
   processMapboxSearchBoxSuggestions,
+  processStructuredAddressFeatures,
   type MapboxGeocodingFeature,
   type MapboxSearchBoxSuggestion,
 } from "../../lib/vedett-route/addressAutocompleteMapbox.ts";
@@ -337,7 +340,7 @@ describe("cím autocomplete — addressAutocompleteMapbox.ts Geocoding v6 feldol
     });
     const result = processMapboxGeocodingFeatures([feature], "szab", "Budaörs", undefined, 5);
     assert.equal(result.length, 1);
-    assert.equal(result[0].label, "Szabadság út, 2040 Budaörs, Magyarország");
+    assert.equal(result[0].label, "Szabadság út, Budaörs, 2040");
     assert.equal(result[0].lat, 47.4569);
     assert.equal(result[0].lon, 18.9531);
   });
@@ -625,9 +628,13 @@ describe("KOORDINÁTA-ÁTADÁS — Geocoding v6 koordináta közvetlenül MAP_PI
     const updateOriginFnMatch = searchFormSrc.match(/function updateOriginManualField\([\s\S]*?\n {2}\}/);
     assert.match(updateOriginFnMatch![0], /const base = prev\.type === "MANUAL" \? prev : \{ type: "MANUAL" as const, city: "Budapest", districtOrPostalCode: "", street: "" \};/);
 
-    // destination: a MAP_PICKED-kor megjelenő input handleDestinationOverrideChange-et hívja, ami KÖZVETLENÜL egy friss MANUAL objektumra állít (lat/lon nélkül).
+    // destination: MAP_PICKED szerkesztésekor friss MANUAL objektum készül lat/lon nélkül,
+    // de a kiválasztott település/irányítószám megmarad (pl. Sóskút + 2038).
     const overrideFnMatch = searchFormSrc.match(/function handleDestinationOverrideChange\([\s\S]*?\n {2}\}/);
-    assert.match(overrideFnMatch![0], /setDestination\(\{ type: "MANUAL", city: "Budapest", districtOrPostalCode: "", street: value \}\);/);
+    assert.match(overrideFnMatch![0], /if \(prev\.type === "MAP_PICKED"\)/);
+    assert.match(overrideFnMatch![0], /const selected = splitSelectedAddressLabel\(prev\.name\);/);
+    assert.match(overrideFnMatch![0], /city: selected\.city/);
+    assert.match(overrideFnMatch![0], /districtOrPostalCode: selected\.postalOrDistrict/);
     assert.doesNotMatch(overrideFnMatch![0], /latitude|longitude/);
   });
 
@@ -650,5 +657,79 @@ describe("KOORDINÁTA-ÁTADÁS — Geocoding v6 koordináta közvetlenül MAP_PI
     // A handleSubmit MOTIS/orchestrator hívása körüli kódot NEM ez a sprint módosította — a selectOriginSuggestion/selectDestinationSuggestion ÖNÁLLÓ, a state-en kívül semmi mást nem érintő függvény.
     const originFnMatch = searchFormSrc.match(/async function selectOriginSuggestion\([\s\S]*?\n {2}\}/);
     assert.doesNotMatch(originFnMatch![0], /handleSubmit|MOTIS|orchestrat/i);
+  });
+});
+
+
+describe("cím autocomplete — házszám és autizmusbarát címke", () => {
+  test("a sorvégi magyar házszámot külön street/address_number mezőre bontja", () => {
+    assert.deepEqual(parseStreetAndHouseNumber("Kőszikla utca 12"), {
+      street: "Kőszikla utca",
+      addressNumber: "12",
+    });
+    assert.deepEqual(parseStreetAndHouseNumber("Fő út 12/A"), {
+      street: "Fő út",
+      addressNumber: "12/A",
+    });
+    assert.equal(parseStreetAndHouseNumber("Kőszikla utca"), null);
+  });
+
+  test("a megjelenített címke nem duplázza az utcanevet és csak a szükséges kontextust mutatja", () => {
+    assert.equal(
+      buildAccessibleAddressLabel("Kőszikla utca", "Sóskút", "2038"),
+      "Kőszikla utca, Sóskút, 2038",
+    );
+  });
+
+  test("Search Box szolgáltatói full_address duplikáció nem kerül a saját labelbe", () => {
+    const result = processMapboxSearchBoxSuggestions([
+      {
+        mapbox_id: "street.1",
+        feature_type: "street",
+        name: "Kőszikla utca",
+        full_address: "Kőszikla utca, Sóskút, Kőszikla utca, 2038, Pest vármegye, Magyarország",
+        context: { place: { name: "Sóskút" }, postcode: { name: "2038" } },
+      },
+    ], "kős", "Sóskút", "2038", 5);
+    assert.equal(result[0]?.label, "Kőszikla utca, Sóskút, 2038");
+  });
+
+  test("structured address találat házszámmal és koordinátával tér vissza", () => {
+    const features: MapboxGeocodingFeature[] = [{
+      id: "address.1",
+      properties: {
+        mapbox_id: "address.1",
+        feature_type: "address",
+        name: "Kőszikla utca 12",
+        coordinates: { latitude: 47.4, longitude: 18.8 },
+        context: { place: { name: "Sóskút" }, postcode: { name: "2038" } },
+      },
+    }];
+    const result = processStructuredAddressFeatures(features, "Kőszikla utca", "12", "Sóskút", "2038", 5);
+    assert.deepEqual(result[0], {
+      id: "address.1",
+      label: "Kőszikla utca 12, Sóskút, 2038",
+      name: "Kőszikla utca 12",
+      city: "Sóskút",
+      postcode: "2038",
+      district: undefined,
+      lat: 47.4,
+      lon: 18.8,
+    });
+  });
+
+  test("a route házszámnál Geocoding v6 Structured Inputot használ autocomplete=false beállítással", () => {
+    assert.match(routeSrc, /parseStreetAndHouseNumber\(q\)/);
+    assert.match(routeSrc, /structuredParams\.set\("address_number", parsedAddress\.addressNumber\)/);
+    assert.match(routeSrc, /structuredParams\.set\("street", parsedAddress\.street\)/);
+    assert.match(routeSrc, /if \(city\) structuredParams\.set\("place", city\)/);
+    assert.match(routeSrc, /structuredParams\.set\("autocomplete", "false"\)/);
+  });
+
+  test("MAP_PICKED cím kézi szerkesztése nem állítja vissza automatikusan Budapestet", () => {
+    assert.match(searchFormSrc, /if \(prev\.type === "MAP_PICKED"\)/);
+    assert.match(searchFormSrc, /splitSelectedAddressLabel\(prev\.name\)/);
+    assert.match(searchFormSrc, /city: selected\.city/);
+    assert.match(searchFormSrc, /districtOrPostalCode: selected\.postalOrDistrict/);
   });
 });
