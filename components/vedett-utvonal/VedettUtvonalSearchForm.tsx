@@ -647,16 +647,19 @@ function RankedJourneyCard({
     focusOnRestPoints: false,
   });
 
-  const currentPosition =
-    geo.status === "granted" && geo.latitude !== null && geo.longitude !== null
-      ? {
-          latitude: geo.latitude,
-          longitude: geo.longitude,
-          headingDegrees: geo.headingDegrees,
-          speedMetersPerSecond: geo.speedMetersPerSecond,
-          timestampMs: geo.timestampMs,
-        }
-      : null;
+  const currentPosition = useMemo(
+    () =>
+      geo.status === "granted" && geo.latitude !== null && geo.longitude !== null
+        ? {
+            latitude: geo.latitude,
+            longitude: geo.longitude,
+            headingDegrees: geo.headingDegrees,
+            speedMetersPerSecond: geo.speedMetersPerSecond,
+            timestampMs: geo.timestampMs,
+          }
+        : null,
+    [geo.status, geo.latitude, geo.longitude, geo.headingDegrees, geo.speedMetersPerSecond, geo.timestampMs],
+  );
 
   // NAVIGATION SPRINT 2.1 — az EGYETLEN, ténylegesen megjelenített útvonal
   // geometriájából stabil koordinátalistát készítünk a route-progress motorhoz.
@@ -688,18 +691,27 @@ function RankedJourneyCard({
     return coordinates;
   }, [navigationLegs]);
 
-  const routeNavigationPosition = currentPosition
-    ? {
-        latitude: currentPosition.latitude,
-        longitude: currentPosition.longitude,
-        speedMetersPerSecond: currentPosition.speedMetersPerSecond,
-        timestampMs: currentPosition.timestampMs,
-      }
-    : null;
+  const routeNavigationPosition = useMemo(
+    () =>
+      currentPosition
+        ? {
+            latitude: currentPosition.latitude,
+            longitude: currentPosition.longitude,
+            speedMetersPerSecond: currentPosition.speedMetersPerSecond,
+            timestampMs: currentPosition.timestampMs,
+          }
+        : null,
+    [currentPosition],
+  );
 
-  const routeProgress = useRouteNavigation(navigationRouteCoordinates, routeNavigationPosition, {
-    routeDurationSeconds: Math.max(0, displayedJourney.totalDurationMinutes * 60),
-  });
+  const routeProgress = useRouteNavigation(
+    navigationRouteCoordinates,
+    routeNavigationPosition,
+    {
+      routeDurationSeconds: Math.max(0, displayedJourney.totalDurationMinutes * 60),
+    },
+    navigationMode,
+  );
 
   // ETA V2: navigáció közben a lokális route-progress motor a GPS-pozícióból
   // számolja a hátralévő geometriai arányt, ebből a hátralévő időt és ETA-t.
