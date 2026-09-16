@@ -6,6 +6,7 @@ import type { AccessibilityResultStatus } from "@/lib/vedett-route/accessibility
 import dynamic from "next/dynamic";
 import { useGeolocation } from "@/lib/hooks/useGeolocation";
 import { useRouteNavigation } from "@/lib/hooks/useRouteNavigation";
+import { useWalkToTransitBoundary } from "@/lib/hooks/useWalkToTransitBoundary";
 import { useScreenWakeLock } from "@/lib/hooks/useScreenWakeLock";
 import { journeyLegsToNavigationRoute } from "@/lib/vedett-route/geometry";
 import {
@@ -33,6 +34,20 @@ import {
 // navigationInstructions/navigationInstructionForDisplay/activeWalkProgress
 // DERIVÁLT adataiból egy rövid "Utána: ..." preview-szöveg. Nincs új state.
 import { resolveInstructionPreview } from "@/lib/vedett-route/navigation/instructionPreview";
+// NAVIGATION — ACTIVE-LEG REALTIME INFO (Sprint 7, 2026-09-16) — a MÁR
+// MEGLÉVŐ JourneyLeg.realtime/delayMinutes/cancelled mezők navigációs
+// megjelenítése. Nincs új adatforrás, nincs Sensory Data V2.
+import { resolveNavigationRealtimeInfo } from "@/lib/vedett-route/navigation/realtimeInfo";
+// NAVIGATION — WALK→TRANSIT BOUNDARY + TRANSFER TIMING (Sprint 7.1,
+// 2026-09-16). Lásd a modulok fejlécét: a MEGLÉVŐ geometriai activeLegIndex-
+// et FINOMÍTJA (nem helyettesíti egy második state machine-nel), és a MÁR
+// MEGLÉVŐ JourneyLeg idő-mezőket olvassa (nincs új adatforrás).
+import {
+  createInitialWalkToTransitBoundaryState,
+  resolveWalkToTransitBoundary,
+  type WalkToTransitBoundaryState,
+} from "@/lib/vedett-route/navigation/legTransition";
+import { resolveNavigationTransferTiming } from "@/lib/vedett-route/navigation/transferTiming";
 import RestPointQuickAdd, { type RestPointCreatedPayload } from "./RestPointQuickAdd";
 // TELEPÜLÉS-AUTOCOMPLETE ("UX-fejlesztés..." kör, A) rész) — EGYETLEN közös
 // komponens/logika a "Város" mezőkhöz (induló + célhely), nincs duplikált
@@ -717,9 +732,16 @@ function RankedJourneyCard({
             headingDegrees: geo.headingDegrees,
             speedMetersPerSecond: geo.speedMetersPerSecond,
             timestampMs: geo.timestampMs,
+            // SPRINT 7.1, Section D — a böngésző GeolocationPosition.coords.
+            // accuracy értéke MÁR elérhető volt a useGeolocation() hookban
+            // (accuracyMeters), csak eddig nem jutott el a navigációs
+            // logikáig. Itt KIZÁRÓLAG a WALK→TRANSIT boundary resolver
+            // olvassa (lásd lentebb) — a routeProgress/route-matching motor
+            // globális toleranciáját ez NEM módosítja.
+            accuracyMeters: geo.accuracyMeters,
           }
         : null,
-    [geo.status, geo.latitude, geo.longitude, geo.headingDegrees, geo.speedMetersPerSecond, geo.timestampMs],
+    [geo.status, geo.latitude, geo.longitude, geo.headingDegrees, geo.speedMetersPerSecond, geo.timestampMs, geo.accuracyMeters],
   );
 
   // NAVIGATION SPRINT 2.1 — az EGYETLEN, ténylegesen megjelenített útvonal
@@ -806,7 +828,75 @@ function RankedJourneyCard({
   // megegyezik displayedJourney.legs-szel (lásd fent) — a kártya emiatt
   // CSAK abban az esetben él ezekkel az adatokkal, amikor a legIndex-ek
   // valóban a navigationInstructions-t felépítő legs tömbre mutatnak.
-  const activeLegIndex = resolveActiveLegIndex(routeProgress.matchedSegmentIndex, navigationRouteGeometry.legRanges);
+  const geometryActiveLegIndex = resolveActiveLegIndex(routeProgress.matchedSegmentIndex, navigationRouteGeometry.legRanges);
+  const geometryActiveLeg = typeof geometryActiveLegIndex === "number" ? navigationLegs[geometryActiveLegIndex] : undefined;
+
+  // SPRINT 7.1, Section B/C/E — WALK→TRANSIT BOUNDARY RESOLVER. A `geometryActiveLegIndex`
+  // (fent) KIZÁRÓLAG a globális GPS-projekcióból jön (lásd a sprint audit-
+  // riportját: ez okozta a "150 m felesleges gyaloglás" és a "WALK-on
+  // ragadás felszállás után" hibákat). Ha a geometria épp WALK-ot jelez,
+  // megkeressük a KÖVETKEZŐ TRANSIT leget és annak SAJÁT, lokális
+  // geometriáját/boarding-koordinátáját — ez a legTransition.ts pure
+  // resolver bemenete. A resolver EGY MÁSODIK, FÜGGETLEN GPS-bizonyítékot
+  // ad (nem a globális matchedSegmentIndex-et), és csak TÖBB egymást követő,
+  // konzisztens fix után finomítja az aktív leg indexét — sosem egyetlen
+  // mintából, sosem idő alapján (lásd a modul fejlécét).
+  const nextTransitLegForBoundary = useMemo(() => {
+    if (geometryActiveLeg?.mode !== "WALK" || typeof geometryActiveLegIndex !== "number") return null;
+    for (let i = geometryActiveLegIndex + 1; i < navigationLegs.length; i += 1) {
+      if (navigationLegs[i].mode === "TRANSIT") {
+        const leg = navigationLegs[i];
+        const range = navigationRouteGeometry.legRanges.find((r) => r.legIndex === i) ?? null;
+        return {
+          legIndex: i,
+          boardingCoordinate:
+            typeof leg.fromLon === "number" && typeof leg.fromLat === "number"
+              ? ([leg.fromLon, leg.fromLat] as const)
+              : null,
+          legCoordinates: range?.legCoordinates ?? null,
+        };
+      }
+    }
+    return null;
+  }, [geometryActiveLeg?.mode, geometryActiveLegIndex, navigationLegs, navigationRouteGeometry.legRanges]);
+
+  // Ugyanaz a reset-pont, mint a routeProgress motoré (új route vagy
+  // navigáció ki/be) — lásd useRouteNavigation.ts. Stabil objektum-referencia
+  // (useMemo), különben a hook minden renderen resetelne a hiszterézisen.
+  const boundaryResetKey = useMemo(
+    () => ({ coordinates: navigationRouteCoordinates, mode: navigationMode }),
+    [navigationRouteCoordinates, navigationMode],
+  );
+  // Stabil objektum-referencia a GPS-pozícióhoz — KIZÁRÓLAG akkor változzon,
+  // ha a tényleges lat/lon/accuracy is változott, különben egy React
+  // re-render (a tényleges GPS-fixtől függetlenül) hamis, extra
+  // hiszterézis-lépést okozna a boundary resolverben (lásd
+  // useWalkToTransitBoundary.ts — az effect a `position` REFERENCIÁJÁRA
+  // figyel).
+  const boundaryPosition = useMemo(
+    () =>
+      currentPosition
+        ? { latitude: currentPosition.latitude, longitude: currentPosition.longitude, accuracyMeters: currentPosition.accuracyMeters }
+        : null,
+    [currentPosition],
+  );
+  const walkToTransitBoundary = useWalkToTransitBoundary(
+    {
+      geometryActiveLegIndex,
+      geometryActiveLegMode: (geometryActiveLeg?.mode as "WALK" | "TRANSIT" | "RENTAL" | undefined) ?? null,
+      nextTransitLeg: nextTransitLegForBoundary,
+      position: boundaryPosition,
+      offRouteStatus: routeProgress.offRouteStatus,
+      previous: null,
+    },
+    boundaryResetKey,
+  );
+
+  // A VÉGSŐ, a kártya/instrukciók/stop-progress által használt leg index —
+  // normál esetben (WALKING/APPROACHING_BOARDING/AT_BOARDING_AREA/NOT_APPLICABLE)
+  // byte-ra a geometriai értékkel egyezik; KIZÁRÓLAG BOARDED állapotban vált
+  // a következő TRANSIT legre.
+  const activeLegIndex = walkToTransitBoundary.resolvedLegIndex ?? geometryActiveLegIndex;
   const activeLegRange = navigationRouteGeometry.legRanges.find((range) => range.legIndex === activeLegIndex) ?? null;
   const activeLegPhaseFraction = resolveLegPhaseFraction(routeProgress.matchedSegmentIndex, activeLegRange);
   const activeRouteEnd = isAtRouteEnd(routeProgress.matchedSegmentIndex, navigationRouteGeometry.coordinates.length);
@@ -879,17 +969,28 @@ function RankedJourneyCard({
   // Ha nincs megbízható manoeuvre/progress adat (rövid/hiányzó geometria,
   // nincs GPS-match még), a Sprint 2/3 WALK fallback ("Gyalogolj: X")
   // marad — SOSEM jelenítünk meg technikai bizonytalanságot.
+  //
+  // SPRINT 7.1, Section C — BOARDING PROXIMITY. Ha a walkToTransitBoundary
+  // resolver AT_BOARDING_AREA-t jelez (a user ésszerű közelségben van a
+  // boarding ponthoz, lásd legTransition.ts), a maradék-méter alapú
+  // "Haladj tovább X métert" szöveg félrevezető lenne (ez volt a mobilteszt
+  // 1. hibája) — ehelyett egy konkrét, distance-mentes üzenetet mutatunk.
+  // Ez NEM váltja a leget (a geometria még WALK-ot mutat), csak a SZÖVEGET
+  // finomítja — a resolvedLegIndex-alapú BOARDED váltás továbbra is a
+  // konzisztens, több-fixes bizonyíték után történik (lásd fentebb).
   const activeNavigationInstructionWithWalkProgress =
-    activeNavigationInstruction.current?.kind === "WALK" && activeWalkProgress?.currentManoeuvre && activeWalkProgress.phase
-      ? {
-          ...activeNavigationInstruction.current,
-          title: buildWalkInstructionText(
-            activeWalkProgress.currentManoeuvre,
-            activeWalkProgress.phase,
-            activeWalkProgress.distanceToCurrentMeters ?? 0
-          ),
-        }
-      : activeNavigationInstruction.current;
+    activeLegIsWalk && walkToTransitBoundary.phase === "AT_BOARDING_AREA" && activeNavigationInstruction.current
+      ? { ...activeNavigationInstruction.current, title: "Már a beszállási pont közelében vagy", detail: undefined }
+      : activeNavigationInstruction.current?.kind === "WALK" && activeWalkProgress?.currentManoeuvre && activeWalkProgress.phase
+        ? {
+            ...activeNavigationInstruction.current,
+            title: buildWalkInstructionText(
+              activeWalkProgress.currentManoeuvre,
+              activeWalkProgress.phase,
+              activeWalkProgress.distanceToCurrentMeters ?? 0
+            ),
+          }
+        : activeNavigationInstruction.current;
   // REST STOP KOMPATIBILITÁS — amíg egy rest-stop-indított útvonal
   // (legsOverride) aktív, a kártya NEM jelenik meg (lásd a fenti komment:
   // a JourneyLegForGeometry adatmodell nem elegendő megbízható szöveghez).
@@ -915,6 +1016,26 @@ function RankedJourneyCard({
     navigationInstructionForDisplay,
     activeWalkProgress?.nextManoeuvre ?? null
   );
+  // NAVIGATION — ACTIVE-LEG REALTIME INFO (Sprint 7, 2026-09-16). Ugyanazon
+  // a gate-en megy át, mint a current instrukció/preview (REROUTING/
+  // rest-stop legsOverride alatt navigationInstructionForDisplay === null
+  // -> itt is null) — nincs önálló elnyomás-logika. Az `activeLeg` a MÁR
+  // MEGLÉVŐ, Sprint 2 óta számolt aktív-leg deriváció (resolveActiveLegIndex),
+  // NEM egy második leg-progress rendszer. WALK/RENTAL aktív legen a
+  // resolver maga ad null-t (lásd realtimeInfo.ts).
+  const activeRealtimeInfo = navigationInstructionForDisplay
+    ? resolveNavigationRealtimeInfo(activeLeg ?? null)
+    : null;
+  // SPRINT 7.1, Section G/H — CURRENT/NEXT TRANSIT TRANSFER TIMING. Ugyanaz
+  // a REROUTING/rest-stop elnyomás-gate, mint a többi navigációs mezőnél
+  // (navigationInstructionForDisplay === null -> itt is null, nincs önálló
+  // elnyomás-logika). `activeLegIndex` a VÉGSŐ (boundary-finomított) index —
+  // átszállásnál emiatt a "current vehicle" a MÁR MEGLÉVŐ leget, a "next
+  // vehicle" pedig a KÖVETKEZŐ TRANSIT leget mutatja, akkor is, ha a user
+  // épp a köztes átszállási gyaloglást teszi meg.
+  const activeTransferTiming = navigationInstructionForDisplay
+    ? resolveNavigationTransferTiming(displayedJourney.legs, activeLegIndex)
+    : { currentArrival: null, nextDeparture: null };
 
   const lastLeg = displayedJourney.legs.length > 0 ? displayedJourney.legs[displayedJourney.legs.length - 1] : undefined;
   const originalDestination =
@@ -1228,17 +1349,43 @@ function RankedJourneyCard({
                 hogy NE takarja a fenti off-route/rerouting figyelmeztetést;
                 az ETA-kártyát (bottom) és a felső navigációs gombsort (z-10,
                 top-2) sem fedi. */}
+            {/* SPRINT 7.1, Section I — MAP CONTROL OVERLAP JAVÍTÁS. Root cause
+                (lásd a sprint audit-riportját): a korábbi `right-2` (8px) a
+                VedettUtvonalMap.tsx-ben `map.addControl(..., "top-right")`-tal
+                elhelyezett MapLibre NavigationControl + CurrentLocationControl
+                gombokkal ütközött (azok saját, MapLibre-alapértelmezett CSS-e
+                is a jobb-felső sarokban ül). A javítás egy FIX, a MapLibre
+                kontroll-oszlop ISMERT szélességéhez (nem egy konkrét
+                telefonhoz!) méretezett jobb margót foglal (`right-14` =
+                3.5rem), plusz a safe-area insetet — a kontrollok továbbra is
+                láthatók/kattinthatók maradnak, csak a kártya nem fedi őket.
+                Deskop nézetben a `mx-auto max-w-sm` miatt ez érdemi vizuális
+                változást nem okoz. */}
             {navigationMode && navigationInstructionForDisplay && (
               <div
                 role="status"
                 aria-live="polite"
-                className={`absolute left-2 right-2 z-20 mx-auto max-w-sm rounded-xl bg-white/95 px-4 py-3 text-center shadow-lg backdrop-blur ${
+                className={`absolute right-14 z-20 mx-auto max-w-sm rounded-xl bg-white/95 px-4 py-3 text-center shadow-lg backdrop-blur ${
                   routeProgress.offRouteStatus === "OFF_ROUTE" ? "top-[11rem]" : "top-14"
                 }`}
+                style={{
+                  left: "calc(0.5rem + env(safe-area-inset-left, 0px))",
+                  right: "calc(3.5rem + env(safe-area-inset-right, 0px))",
+                }}
               >
                 <div className="text-base font-bold text-sni-text">{navigationInstructionForDisplay.title}</div>
                 {navigationInstructionForDisplay.detail && (
                   <div className="mt-0.5 text-sm text-gray-600">{navigationInstructionForDisplay.detail}</div>
+                )}
+                {/* SPRINT 7.1, Section G/H — CURRENT VEHICLE ARRIVAL. Csak
+                    akkor jelenik meg, ha van megbízható érkezési idő az
+                    aktív TRANSIT leghez (lásd transferTiming.ts) — kompakt,
+                    egysoros, a preview/realtime-sor stílusát követi. */}
+                {activeTransferTiming.currentArrival && (
+                  <div className="mt-1 text-xs text-gray-500">
+                    Érkezés: {formatClockTime(activeTransferTiming.currentArrival.timeIso)}
+                    {activeTransferTiming.currentArrival.isRealtime ? "" : " (menetrend szerint)"}
+                  </div>
                 )}
                 {/* NAVIGATION — NEXT-INSTRUCTION PREVIEW (Sprint 6, 2026-09-16) —
                     a korábbi, puszta "Következő" + nyers next.title helyett
@@ -1250,6 +1397,41 @@ function RankedJourneyCard({
                 {activeInstructionPreview && (
                   <div className="mt-2 border-t border-gray-200 pt-1.5 text-xs text-gray-500">
                     Utána: {activeInstructionPreview.phrase}
+                  </div>
+                )}
+                {/* NAVIGATION — ACTIVE-LEG REALTIME INFO (Sprint 7, 2026-09-16) —
+                    a MÁR MEGLÉVŐ leg.realtime/delayMinutes/cancelled mezők
+                    rövid, nyugodt megjelenítése, a preview alatt, annál is
+                    kisebb hangsúllyal. Nincs új panel/modal/toast, nincs
+                    villogás, nincs duplikált ETA/méter. CANCELLED esetén a
+                    meglévő JourneyRealtimeSummary/TransitLegRealtimeNote
+                    piros jelölését követi (tényszerű, nem dramatizáló). */}
+                {/* SPRINT 7.1, Section G/H — NEXT VEHICLE DEPARTURE. A
+                    kompakt hierarchia (1. current action, 2. current
+                    arrival, 3. next action a preview-sorban, 4. next
+                    departure itt, 5. realtime/cancelled lent) betartva —
+                    NEM duplikálja a "Utána: ..." preview-t, csak az
+                    indulási időt adja hozzá, HA van megbízható adat. */}
+                {activeTransferTiming.nextDeparture && (
+                  <div className="mt-1 text-xs text-gray-500">
+                    {activeTransferTiming.nextDeparture.cancelled ? (
+                      <span className="font-medium text-red-600">
+                        {activeTransferTiming.nextDeparture.routeLabel ?? "A következő járat"} törölve / kihagyva
+                      </span>
+                    ) : (
+                      <>
+                        {activeTransferTiming.nextDeparture.routeLabel ? `${activeTransferTiming.nextDeparture.routeLabel} — ` : ""}
+                        indulás: {formatClockTime(activeTransferTiming.nextDeparture.timeIso as string)}
+                        {activeTransferTiming.nextDeparture.isRealtime ? "" : " (menetrend szerint)"}
+                      </>
+                    )}
+                  </div>
+                )}
+                {activeRealtimeInfo && (
+                  <div
+                    className={`mt-1 text-xs ${activeRealtimeInfo.kind === "CANCELLED" ? "font-medium text-red-600" : "text-gray-500"}`}
+                  >
+                    {activeRealtimeInfo.phrase}
                   </div>
                 )}
               </div>

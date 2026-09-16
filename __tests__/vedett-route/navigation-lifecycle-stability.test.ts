@@ -10,7 +10,41 @@ const hookSrc = fs.readFileSync(path.join(root, "lib/hooks/useRouteNavigation.ts
 describe("Navigation lifecycle stability", () => {
   test("currentPosition memoizált, ezért változatlan GPS-fix nem gyárt új objektumreferenciát", () => {
     assert.match(formSrc, /const currentPosition = useMemo\(/);
-    assert.match(formSrc, /geo\.timestampMs\],\s*\);/);
+
+    // SPRINT 7.1 UTÓKÖR (BOARDED SAFETY REVIEW után) — audit: a currentPosition
+    // objektum a Sprint 7.1-ben bővült egy ÚJ mezővel (geo.accuracyMeters, a
+    // WALK→TRANSIT boundary resolverhez), ezért a useMemo dependency-listája
+    // is bővült. A régi assertion ("geo.timestampMs" a lista UTOLSÓ eleme)
+    // ezt a SZÁNDÉKOS, dokumentált bővítést hibásan buktatta — a lifecycle
+    // invariáns (változatlan GPS-fix -> nincs új objektumreferencia) VÁLTOZATLANUL
+    // igaz, mert (a) minden, a visszaadott objektumban tényleges mezőt viselő
+    // geo.* érték benne van a dependency-listában (tehát azonos primitívek ->
+    // ugyanaz a memoizált referencia), és (b) NINCS indokolatlan, teljes `geo`
+    // objektum-szintű dependency, ami minden rendernél új referenciát okozna
+    // (a `geo` objektum maga minden geolokáció-eseménynél új referenciát kap a
+    // useGeolocation() hookban, tehát object-szintű dependency aláásná a
+    // memoizálást). Az alábbi assertionök ezt a SZEMANTIKAI invariánst
+    // ellenőrzik, nem egy byte-pontos, a mezők sorrendjéhez/számához kötött
+    // regexet — így egy jövőbeli, ugyanígy dokumentált mezőbővítés nem fogja
+    // feleslegesen buktatni ezt a tesztet.
+    const memoBlock = formSrc.match(/const currentPosition = useMemo\(\s*\(\)[\s\S]*?\n\s{2}\);/)?.[0] ?? "";
+    assert.ok(memoBlock.length > 0, "a currentPosition useMemo teljes blokkja megtalálható");
+
+    const depsMatch = memoBlock.match(/\[\s*geo\.[^\]]*\]/);
+    assert.ok(depsMatch, "a useMemo dependency-listája (geo.* mezőkből) megtalálható");
+    const deps = depsMatch[0];
+
+    // Minden GPS-mező, ami TÉNYLEGESEN része a visszaadott currentPosition
+    // objektumnak, szerepel a dependency-listában is.
+    for (const field of ["geo.status", "geo.latitude", "geo.longitude", "geo.headingDegrees", "geo.speedMetersPerSecond", "geo.timestampMs", "geo.accuracyMeters"]) {
+      assert.match(deps, new RegExp(field.replace(".", "\\.")), `${field} szerepel a dependency-listában`);
+    }
+
+    // Nincs indokolatlan, teljes "geo" objektum-szintű dependency (csak a
+    // "geo.mező" alakú, granuláris bejegyzések engedettek).
+    assert.doesNotMatch(deps, /\[\s*geo\s*,/, "nincs `geo` mint önálló, objektum-szintű dependency a lista elején");
+    assert.doesNotMatch(deps, /,\s*geo\s*,/, "nincs `geo` mint önálló, objektum-szintű dependency a lista közepén");
+    assert.doesNotMatch(deps, /,\s*geo\s*\]/, "nincs `geo` mint önálló, objektum-szintű dependency a lista végén");
   });
 
   test("routeNavigationPosition is memoizált", () => {
