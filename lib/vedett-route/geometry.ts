@@ -203,10 +203,21 @@ export function journeyLegsToGeoJson(legs: JourneyLegForGeometry[]): GeoJSON.Fea
 // akkor ehhez a leghez NEM készül range — ez a leg emiatt SOHA nem
 // válhat aktívvá kizárólag matchedSegmentIndex alapján. Ez egy explicit,
 // dokumentált korlátozás, NEM hiba — nincs kitalálva/becsülve semmi.
+// SPRINT 3 (2026-09-16) — a `legCoordinates` a leg SAJÁT, LOKÁLIS
+// koordinátalistája (pontosan az, amit journeyLegsToGeoJson ehhez a leghez
+// LineString-ként épített: valós MOTIS legGeometry dekódolva, vagy
+// fromLat/fromLon -> toLat/toLon egyenes fallback) — MIELŐTT a globális,
+// több lábból összefűzött dedup megtörténne. Ez teszi lehetővé, hogy egy
+// köztes megállót KIZÁRÓLAG a SAJÁT legjére vetítsünk (lásd
+// lib/vedett-route/navigation/instructions.ts projectStopToLegGeometry()),
+// NE a teljes, összefűzött route-ra — egy adott utca/vonal máshol is
+// előfordulhat a Journeyben, ezért egy globális legközelebbi-pont keresés
+// rossz leget találhatna.
 export interface NavigationLegGeometryRange {
   legIndex: number;
   startSegmentIndex: number;
   endSegmentIndex: number;
+  legCoordinates: NavigationCoordinate[];
 }
 
 export interface NavigationRouteGeometry {
@@ -238,7 +249,12 @@ export function journeyLegsToNavigationRoute(legs: JourneyLegForGeometry[]): Nav
     const startSegmentIndex = Math.max(0, entryIndex);
     const endSegmentIndex = exitIndex - 1;
     if (endSegmentIndex >= startSegmentIndex) {
-      legRanges.push({ legIndex, startSegmentIndex, endSegmentIndex });
+      legRanges.push({
+        legIndex,
+        startSegmentIndex,
+        endSegmentIndex,
+        legCoordinates: feature.geometry.coordinates.map(([lon, lat]) => [lon, lat] as NavigationCoordinate),
+      });
     }
   }
 

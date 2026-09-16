@@ -17,6 +17,15 @@
 
 import type { Journey, JourneyLeg } from "@/lib/vedett-route/types";
 import type { NavigationLegGeometryRange } from "@/lib/vedett-route/geometry";
+// Relatív import + explicit .ts kiterjesztés — KÖVETI a szomszédos
+// routeProgress.ts meglévő mintáját (lásd ott: `from "./geometry.ts"`),
+// mert ez egy ÉRTÉK-import (nem `import type`), amit a node --test
+// --experimental-strip-types közvetlenül futtat, tehát a "@/..." Next.js
+// alias itt NEM oldódna fel — a type-only importok (lásd fent) ettől
+// eltérően "@/..."-t használhatnak, mert azokat a strip-types teljesen
+// eltávolítja futásidőben.
+import { projectPointToRoute } from "./geometry.ts";
+import type { NavigationCoordinate } from "./types.ts";
 
 export type NavigationInstructionKind =
   | "START"
@@ -290,6 +299,187 @@ export function isAtRouteEnd(matchedSegmentIndex: number | null, totalCoordinate
   return lastSegmentIndex >= 0 && matchedSegmentIndex >= lastSegmentIndex;
 }
 
+// ============================================================================
+// NAVIGATION INSTRUCTIONS SPRINT 3 (2026-09-16) — megállópozíció-alapú
+// progress ("Utazz még N megállót" / "A következő megállónál szállj le"),
+// a Sprint 2 geometriai harmadolás (BOARD/RIDE/ALIGHT fázis-fraction)
+// FALLBACKJÁVAL, ha nincs elég megbízható stop-koordináta.
+//
+// SEMMILYEN adatmodell-bővítés nincs — kizárólag a MÁR MEGLÉVŐ
+// JourneyLeg.intermediateStops ({ name, lat?, lon? }) mezőt használjuk, ÉS
+// a MÁR MEGLÉVŐ projectPointToRoute() nearest-point matematikát (lásd
+// lib/vedett-route/navigation/geometry.ts) — NEM új geometriai algoritmus.
+// ============================================================================
+
+// A megálló-projekció MEGBÍZHATATLAN, ha a legközelebbi pont a SAJÁT leg
+// geometriájától ennél távolabb van. Konzervatív, provider-semleges
+// (NEM BKK/MÁV/Volán-specifikus) küszöb, ugyanabban a nagyságrendben, mint
+// a routeProgress.ts meglévő offRouteThresholdMeters default-ja (50 m) —
+// dokumentált, tesztelt, NEM kalibrált egyetlen konkrét MOTIS válaszra.
+export const STOP_PROJECTION_MAX_DISTANCE_METERS = 50;
+
+export interface NavigationStopProgress {
+  name: string;
+  legIndex: number;
+  lat: number;
+  lon: number;
+  // A megálló pozíciója a leg SAJÁT (lokális) koordinátalistáján —
+  // NEM a globális, több lábból összefűzött route-on (lásd
+  // lib/vedett-route/geometry.ts NavigationLegGeometryRange.legCoordinates
+  // fejléce). 0-alapú: a leg saját i. és i+1. koordinátája közötti szakaszra
+  // mutat.
+  segmentIndex: number;
+  distanceFromRouteMeters: number;
+}
+
+// Pure helper: EGY köztes megálló vetítése a leg SAJÁT geometriájára —
+// SOSEM a teljes, összefűzött Journey-geometriára (egy adott utca/vonal
+// máshol is előfordulhat a Journeyben, egy globális nearest-point emiatt
+// rossz leget találhatna). Null, ha a megállónak nincs érvényes lat/lon-ja,
+// a leg geometriája használhatatlan (<2 pont), vagy a projekció távolsága
+// meghaladja STOP_PROJECTION_MAX_DISTANCE_METERS-t.
+export function projectStopToLegGeometry(
+  stop: { name: string; lat?: number; lon?: number },
+  legIndex: number,
+  legCoordinates: readonly NavigationCoordinate[]
+): NavigationStopProgress | null {
+  if (stop.lat === undefined || stop.lon === undefined || !Number.isFinite(stop.lat) || !Number.isFinite(stop.lon)) {
+    return null;
+  }
+  if (legCoordinates.length < 2) return null;
+
+  const projection = projectPointToRoute([stop.lon, stop.lat], legCoordinates);
+  if (!projection) return null;
+  if (projection.distanceFromRouteMeters > STOP_PROJECTION_MAX_DISTANCE_METERS) return null;
+
+  return {
+    name: stop.name,
+    legIndex,
+    lat: stop.lat,
+    lon: stop.lon,
+    segmentIndex: projection.segmentIndex,
+    distanceFromRouteMeters: projection.distanceFromRouteMeters,
+  };
+}
+
+export interface LegStopProgressResult {
+  // A MEGBÍZHATÓAN vetített köztes megállók, EREDETI (utazási) sorrendben —
+  // a sorrendet SOHA nem a geometria alapján rendezzük át (lásd modul
+  // fejlécének 3. pontja); a geometria csak azt mondja meg, HOL van egy
+  // megálló, nem azt, MELYIK sorrendben következnek.
+  stops: NavigationStopProgress[];
+  // Igaz, ha MINDEN köztes megálló megbízhatóan vetíthető volt ÉS a
+  // vetített segmentIndex-sorozat monoton (nem csökkenő) az eredeti
+  // sorrendben. Ha hamis, a `stops` mindig üres — a hívó a Sprint 2
+  // geometry-phase fallbackra esik vissza (lásd
+  // selectActiveInstructionWithStopProgress()).
+  reliable: boolean;
+}
+
+// Pure helper: egy leg ÖSSZES köztes megállójának vetítése a leg SAJÁT
+// geometriájára, EGYETLEN "megbízható" jelzővel a teljes legre. Szándékosan
+// "mind vagy semmi": ha csak EGY megálló koordinátája is hiányzik/túl messze
+// van, vagy a sorrend nem monoton, a TELJES leg stop-progressét
+// megbízhatatlannak tekintjük — soha nem próbálunk részleges/kitalált
+// "még N megálló" számot mutatni hiányos adatból.
+export function buildLegStopProgress(
+  intermediateStops: readonly { name: string; lat?: number; lon?: number }[] | undefined,
+  legIndex: number,
+  legCoordinates: readonly NavigationCoordinate[]
+): LegStopProgressResult {
+  const rawStops = intermediateStops ?? [];
+  if (rawStops.length === 0) return { stops: [], reliable: false };
+
+  const projected: NavigationStopProgress[] = [];
+  for (const stop of rawStops) {
+    const projection = projectStopToLegGeometry(stop, legIndex, legCoordinates);
+    if (!projection) return { stops: [], reliable: false };
+    projected.push(projection);
+  }
+
+  // Monotonitás-ellenőrzés (lásd modul fejlécének 3. pontja): az eredeti
+  // sorrendnek szigorúan nem csökkenő segmentIndex-sorozatot kell adnia a
+  // geometrián. Ha SÚLYOSAN nem monoton (bármely stop a sorban VISSZAFELÉ
+  // esik az előzőhöz képest), a stop-progress adatot NEM tekintjük
+  // megbízhatónak — SOSEM próbáljuk "megjavítani" átrendezéssel.
+  for (let i = 1; i < projected.length; i += 1) {
+    if (projected[i].segmentIndex < projected[i - 1].segmentIndex) {
+      return { stops: [], reliable: false };
+    }
+  }
+
+  return { stops: projected, reliable: true };
+}
+
+export interface RemainingStopsResult {
+  // A LESZÁLLÁSIG hátralévő megállók száma, A LESZÁLLÓ MEGÁLLÓT IS
+  // beleértve (az intermediateStops NEM tartalmazza a leszállóhelyet, csak
+  // a from/to KÖZÖTTI köztes megállókat — lásd a modul fejlécének
+  // szemantika-kommentje). Pl. 3 köztes megálló + 1 leszállóhely = induláskor
+  // 4.
+  remainingStopCount: number;
+  // Igaz, ha az UTOLSÓ köztes megállót is egyértelműen elhagytuk — ekkor a
+  // remainingStopCount mindig 1 lenne, de UI-ban SOSEM "Még 1 megálló"-t
+  // jelenítünk meg, hanem "A következő megállónál szállj le"-t (lásd
+  // selectActiveInstructionWithStopProgress()).
+  atFinalStop: boolean;
+}
+
+// Pure helper: matchedSegmentIndex (GLOBÁLIS, a routeProgress motorból) +
+// az aktív leg geometria-tartománya + a leg megbízhatóan vetített köztes
+// megállói -> hátralévő megállók száma. Null, ha bármelyik bemenet
+// invalid/hiányzó, VAGY ha a globális<->lokális segmentIndex-átszámítás
+// belső ellentmondást mutat (lásd lent) — ez utóbbi egy ritka, de explicit
+// védelem egy leg SAJÁT geometriáján belüli duplikált pont ellen, ami
+// elcsúsztatná a globális/lokális szegmensszám-megfelelést.
+export function resolveRemainingStops(
+  matchedSegmentIndex: number | null,
+  legRange: NavigationLegGeometryRange | null | undefined,
+  legStops: readonly NavigationStopProgress[]
+): RemainingStopsResult | null {
+  if (matchedSegmentIndex === null || !Number.isFinite(matchedSegmentIndex) || matchedSegmentIndex < 0) return null;
+  if (!legRange || legStops.length === 0) return null;
+  if (matchedSegmentIndex < legRange.startSegmentIndex || matchedSegmentIndex > legRange.endSegmentIndex) return null;
+
+  const legSegmentSpan = legRange.endSegmentIndex - legRange.startSegmentIndex + 1;
+  // Belső konzisztencia-védelem: minden vetített megálló LOKÁLIS
+  // segmentIndex-ének a leg saját tartományán belül kell lennie. Ha nem
+  // (a leg globális range-je és a leg saját dekódolt geometriája
+  // eltérő szegmensszámot ad — pl. egy leg saját polyline-ján belüli
+  // ritka, duplikált-pont eset), az átszámítás NEM megbízható.
+  if (legStops.some((stop) => stop.segmentIndex < 0 || stop.segmentIndex >= legSegmentSpan)) return null;
+
+  const localMatchedSegmentIndex = matchedSegmentIndex - legRange.startSegmentIndex;
+
+  // Egy megállót akkor tekintünk "elhagyottnak", ha a route progress
+  // EGYÉRTELMŰEN, SZIGORÚAN túljutott a stop szegmensén — a HATÁRON
+  // (localMatchedSegmentIndex === stop.segmentIndex) még NEM elhagyott.
+  // Ez a stabil, determinisztikus küszöb védi ki a GPS-jitter okozta
+  // oda-vissza váltakozást (3 -> 2 -> 3 -> 2), mert egyetlen szegmensen
+  // belüli mozgás sosem változtatja meg az "elhagyott" állapotot.
+  let passedCount = 0;
+  for (const stop of legStops) {
+    if (localMatchedSegmentIndex > stop.segmentIndex) passedCount += 1;
+  }
+
+  const remainingIntermediate = legStops.length - passedCount;
+  return {
+    remainingStopCount: remainingIntermediate + 1,
+    atFinalStop: remainingIntermediate === 0,
+  };
+}
+
+// Pure helper: a hátralévő-megálló eredmény -> megjelenítendő UI-szöveg.
+// Rövid, konkrét, egyszerre EGY fő teendő (autizmusbarát UX, lásd a
+// modul UI-oldali fejléceit VedettUtvonalSearchForm.tsx-ben) — SOHA nem
+// "Még 1 megálló", helyette a konkrétabb "A következő megállónál szállj le".
+export function resolveStopProgressDisplay(remaining: RemainingStopsResult): { title: string } {
+  if (remaining.atFinalStop) {
+    return { title: "A következő megállónál szállj le" };
+  }
+  return { title: `Utazz még ${remaining.remainingStopCount} megállót` };
+}
+
 export interface SelectActiveInstructionOptions {
   // Az AKTUÁLISAN navigált leg indexe — Sprint 2 óta ezt jellemzően
   // resolveActiveLegIndex() adja, matchedSegmentIndex + a leg-geometria
@@ -358,4 +548,33 @@ export function selectActiveInstruction(
   }
 
   return { current: instructions[0], next: instructions[1] ?? null };
+}
+
+// Pure helper (Sprint 3): selectActiveInstruction() + opcionális,
+// megbízhatóan kiszámolt RemainingStopsResult -> current/next pár, ahol a
+// RIDE instrukció szövege megállópozíció-alapú, HA a hívó megbízható
+// hátralévő-megálló adatot ad át.
+//
+// SZÁNDÉKOSAN nem érinti a BOARD/TRANSFER/ALIGHT/ARRIVE/WALK/BIKE_*
+// kimeneteket — lásd a sprint specifikáció 7/9. pontja: a BOARD a leg
+// elején marad, a valódi "Szállj le: X" továbbra is KIZÁRÓLAG a meglévő
+// (Sprint 2) fázis-/route-end logika szerint válik currenttá. Ha
+// `remainingStops` hiányzik (a hívó nem tudott megbízható stop-progresst
+// építeni — lásd buildLegStopProgress()/resolveRemainingStops()), ez a
+// függvény BYTE-RA a Sprint 2 selectActiveInstruction() kimenetét adja
+// vissza (fallback).
+export function selectActiveInstructionWithStopProgress(
+  instructions: readonly NavigationInstruction[],
+  options: SelectActiveInstructionOptions & { remainingStops?: RemainingStopsResult | null } = {}
+): ActiveNavigationInstruction {
+  const base = selectActiveInstruction(instructions, options);
+  if (!base.current || base.current.kind !== "RIDE" || !options.remainingStops) {
+    return base;
+  }
+
+  const display = resolveStopProgressDisplay(options.remainingStops);
+  return {
+    current: { ...base.current, title: display.title, detail: undefined },
+    next: base.next,
+  };
 }

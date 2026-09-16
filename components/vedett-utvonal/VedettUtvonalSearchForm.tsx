@@ -9,11 +9,13 @@ import { useRouteNavigation } from "@/lib/hooks/useRouteNavigation";
 import { useScreenWakeLock } from "@/lib/hooks/useScreenWakeLock";
 import { journeyLegsToNavigationRoute } from "@/lib/vedett-route/geometry";
 import {
+  buildLegStopProgress,
   buildNavigationInstructions,
   isAtRouteEnd,
   resolveActiveLegIndex,
   resolveLegPhaseFraction,
-  selectActiveInstruction,
+  resolveRemainingStops,
+  selectActiveInstructionWithStopProgress,
 } from "@/lib/vedett-route/navigation/instructions";
 import RestPointQuickAdd, { type RestPointCreatedPayload } from "./RestPointQuickAdd";
 // TELEPÜLÉS-AUTOCOMPLETE ("UX-fejlesztés..." kör, A) rész) — EGYETLEN közös
@@ -792,14 +794,39 @@ function RankedJourneyCard({
   const activeLegRange = navigationRouteGeometry.legRanges.find((range) => range.legIndex === activeLegIndex) ?? null;
   const activeLegPhaseFraction = resolveLegPhaseFraction(routeProgress.matchedSegmentIndex, activeLegRange);
   const activeRouteEnd = isAtRouteEnd(routeProgress.matchedSegmentIndex, navigationRouteGeometry.coordinates.length);
+  // NAVIGATION INSTRUCTIONS SPRINT 3 (2026-09-16) — megállópozíció-alapú
+  // "Utazz még N megállót" / "A következő megállónál szállj le", a Sprint 2
+  // geometriai fázis-fallback MEGTARTÁSÁVAL. Kizárólag a MÁR MEGLÉVŐ
+  // displayedJourney.legs[activeLegIndex].intermediateStops-ot használjuk
+  // (ugyanaz a leg, amiből navigationInstructions is épül — lásd fenti
+  // komment), és a leg SAJÁT (activeLegRange.legCoordinates) geometriáját —
+  // SOSEM a teljes route-ot — a köztes megállók vetítéséhez. Ha a
+  // buildLegStopProgress()/resolveRemainingStops() bármely okból
+  // megbízhatatlannak minősíti az adatot (hiányzó/túl messze lévő
+  // koordináta, nem monoton sorrend, invalid matchedSegmentIndex — lásd
+  // ott a dokumentációt), az eredmény null/reliable=false, és
+  // selectActiveInstructionWithStopProgress() BYTE-RA a Sprint 2 fallbackra
+  // esik vissza.
+  const activeLeg = typeof activeLegIndex === "number" ? displayedJourney.legs[activeLegIndex] : undefined;
+  const activeLegStopProgress = useMemo(
+    () =>
+      activeLeg && activeLegRange
+        ? buildLegStopProgress(activeLeg.intermediateStops, activeLegRange.legIndex, activeLegRange.legCoordinates)
+        : { stops: [], reliable: false },
+    [activeLeg, activeLegRange]
+  );
+  const activeRemainingStops = activeLegStopProgress.reliable
+    ? resolveRemainingStops(routeProgress.matchedSegmentIndex, activeLegRange, activeLegStopProgress.stops)
+    : null;
   const activeNavigationInstruction = useMemo(
     () =>
-      selectActiveInstruction(navigationInstructions, {
+      selectActiveInstructionWithStopProgress(navigationInstructions, {
         legIndex: activeLegIndex,
         legPhaseFraction: activeLegPhaseFraction,
         atRouteEnd: activeRouteEnd,
+        remainingStops: activeRemainingStops,
       }),
-    [navigationInstructions, activeLegIndex, activeLegPhaseFraction, activeRouteEnd]
+    [navigationInstructions, activeLegIndex, activeLegPhaseFraction, activeRouteEnd, activeRemainingStops]
   );
   // REST STOP KOMPATIBILITÁS — amíg egy rest-stop-indított útvonal
   // (legsOverride) aktív, a kártya NEM jelenik meg (lásd a fenti komment:

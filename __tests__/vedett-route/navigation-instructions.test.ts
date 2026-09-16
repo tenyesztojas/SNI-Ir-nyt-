@@ -14,11 +14,15 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
+  buildLegStopProgress,
   buildNavigationInstructions,
   isAtRouteEnd,
+  projectStopToLegGeometry,
   resolveActiveLegIndex,
   resolveLegPhaseFraction,
+  resolveRemainingStops,
   selectActiveInstruction,
+  selectActiveInstructionWithStopProgress,
   type NavigationInstruction,
 } from "../../lib/vedett-route/navigation/instructions.ts";
 import { journeyLegsToNavigationRoute } from "../../lib/vedett-route/geometry.ts";
@@ -337,6 +341,213 @@ describe("selectActiveInstruction — fázis-alapú current/next (Sprint 2)", ()
         if (active.current && active.next) assert.notEqual(active.current.id, active.next.id);
       }
     }
+  });
+});
+
+// ============================================================================
+// NAVIGATION INSTRUCTIONS SPRINT 3 (2026-09-16) — megállópozíció-alapú
+// progress. Kézzel épített, 6 pontos (5 szegmenses) leg-lokális
+// koordinátalista — NEM decodePolyline-on át, hogy a projekció/monotonitás/
+// távolság-logikát a geometria-dekódolástól függetlenül, egyértelmű
+// szegmens-indexekkel lehessen tesztelni.
+// ============================================================================
+const STOP_TEST_LEG_COORDINATES: [number, number][] = [
+  [19.0, 47.0],
+  [19.001, 47.0],
+  [19.002, 47.0],
+  [19.003, 47.0],
+  [19.004, 47.0],
+  [19.005, 47.0],
+];
+// A, B, C rendre az 1., 2., 3. szegmensen belül (nem csúcspontban, hogy ne
+// legyen kétértelmű a legközelebbi-szegmens keresés) — a leszállóhely a
+// leg VÉGE (5. pont, 4. szegmens vége), az intermediateStops ezt NEM
+// tartalmazza.
+const STOP_A = { name: "A", lat: 47.0, lon: 19.0015 };
+const STOP_B = { name: "B", lat: 47.0, lon: 19.0025 };
+const STOP_C = { name: "C", lat: 47.0, lon: 19.0035 };
+
+describe("projectStopToLegGeometry / buildLegStopProgress — SAJÁT leg geometriára vetítés", () => {
+  test("1) a megálló KIZÁRÓLAG a SAJÁT leg geometriájára vetül, nem a teljes route-ra", () => {
+    const projection = projectStopToLegGeometry(STOP_B, 0, STOP_TEST_LEG_COORDINATES);
+    assert.ok(projection);
+    assert.equal(projection.segmentIndex, 2);
+    // Ugyanaz a koordináta, egy MÁSIK (távoli) leg-geometriára vetítve
+    // teljesen más (vagy null) eredményt ad — a függvény sosem "keres" a
+    // paraméterként át nem adott geometrián.
+    const otherLegCoordinates: [number, number][] = [
+      [25.0, 60.0],
+      [25.001, 60.0],
+    ];
+    const projectionOnOtherLeg = projectStopToLegGeometry(STOP_B, 1, otherLegCoordinates);
+    assert.equal(projectionOnOtherLeg, null, "a saját legtől távoli geometrián a projekció túl messze van -> null");
+  });
+
+  test("2) a projekció determinisztikus — ugyanaz a bemenet mindig ugyanazt az eredményt adja", () => {
+    const first = projectStopToLegGeometry(STOP_A, 0, STOP_TEST_LEG_COORDINATES);
+    const second = projectStopToLegGeometry({ ...STOP_A }, 0, [...STOP_TEST_LEG_COORDINATES]);
+    assert.deepEqual(first, second);
+  });
+
+  test("3) a stopok EREDETI sorrendje megmarad a `stops` tömbben, még ha a geometriai vetítés más belső indexet is ad", () => {
+    const result = buildLegStopProgress([STOP_A, STOP_B, STOP_C], 0, STOP_TEST_LEG_COORDINATES);
+    assert.equal(result.reliable, true);
+    assert.deepEqual(result.stops.map((s) => s.name), ["A", "B", "C"]);
+  });
+
+  test("4) monoton (nem csökkenő) segmentIndex-sorrend -> megbízható", () => {
+    const result = buildLegStopProgress([STOP_A, STOP_B, STOP_C], 0, STOP_TEST_LEG_COORDINATES);
+    assert.equal(result.reliable, true);
+    assert.equal(result.stops[0].segmentIndex <= result.stops[1].segmentIndex, true);
+    assert.equal(result.stops[1].segmentIndex <= result.stops[2].segmentIndex, true);
+  });
+
+  test("5) SÚLYOSAN nem monoton sorrend (a lista egy KÉSŐBBI stopja geometriailag KORÁBBRA esik) -> megbízhatatlan, NEM rendezzük át", () => {
+    // C-t adjuk meg A ELŐTT, holott C geometriailag KÉSŐBBI szegmensen van.
+    const result = buildLegStopProgress([STOP_C, STOP_A, STOP_B], 0, STOP_TEST_LEG_COORDINATES);
+    assert.equal(result.reliable, false);
+    assert.deepEqual(result.stops, []);
+  });
+
+  test("6) túl távoli megálló-koordináta (STOP_PROJECTION_MAX_DISTANCE_METERS felett) -> a TELJES leg stop-progresse megbízhatatlan", () => {
+    const farStop = { name: "Túl messze", lat: 48.0, lon: 25.0 };
+    const result = buildLegStopProgress([STOP_A, farStop, STOP_C], 0, STOP_TEST_LEG_COORDINATES);
+    assert.equal(result.reliable, false);
+  });
+
+  test("7) hiányzó lat/lon egy köztes megállón -> a TELJES leg stop-progresse megbízhatatlan (nincs részleges/kitalált adat)", () => {
+    const result = buildLegStopProgress([STOP_A, { name: "Nincs koordináta" }, STOP_C], 0, STOP_TEST_LEG_COORDINATES);
+    assert.equal(result.reliable, false);
+  });
+
+  test("nincs intermediateStops / használhatatlan leg geometry (<2 pont) -> megbízhatatlan", () => {
+    assert.equal(buildLegStopProgress(undefined, 0, STOP_TEST_LEG_COORDINATES).reliable, false);
+    assert.equal(buildLegStopProgress([], 0, STOP_TEST_LEG_COORDINATES).reliable, false);
+    assert.equal(buildLegStopProgress([STOP_A], 0, [[19.0, 47.0]]).reliable, false);
+  });
+});
+
+describe("resolveRemainingStops — \"Utazz még N megállót\" szemantika", () => {
+  const legRange = { legIndex: 0, startSegmentIndex: 0, endSegmentIndex: 4, legCoordinates: STOP_TEST_LEG_COORDINATES };
+  const { stops } = buildLegStopProgress([STOP_A, STOP_B, STOP_C], 0, STOP_TEST_LEG_COORDINATES);
+
+  test("8) induláskor (a legelső szegmensen, semelyik stopot sem hagytuk el) -> 3 köztes + 1 leszállóhely = 4 hátralévő", () => {
+    const result = resolveRemainingStops(0, legRange, stops);
+    assert.deepEqual(result, { remainingStopCount: 4, atFinalStop: false });
+  });
+
+  test("9) az első köztes megálló (A) elhagyása után -> 3 hátralévő", () => {
+    const result = resolveRemainingStops(2, legRange, stops); // A(segment 1) < 2 -> elhagyva
+    assert.deepEqual(result, { remainingStopCount: 3, atFinalStop: false });
+  });
+
+  test("10) a második köztes megálló (B) elhagyása után -> 2 hátralévő", () => {
+    const result = resolveRemainingStops(3, legRange, stops); // A,B elhagyva, C határán (még nem elhagyva)
+    assert.deepEqual(result, { remainingStopCount: 2, atFinalStop: false });
+  });
+
+  test("11) az UTOLSÓ köztes megálló (C) elhagyása után -> atFinalStop, SOSEM \"Még 1 megálló\"", () => {
+    const result = resolveRemainingStops(4, legRange, stops); // A,B,C mind elhagyva
+    assert.deepEqual(result, { remainingStopCount: 1, atFinalStop: true });
+  });
+
+  test("12) a stop SAJÁT szegmensének határán még NEM számít elhagyottnak (nincs GPS-jitter-flicker)", () => {
+    // matchedSegmentIndex === B.segmentIndex (2) -> B még NEM elhagyott.
+    const result = resolveRemainingStops(2, legRange, stops);
+    assert.equal(result?.remainingStopCount, 3, "B még nincs elhagyva -> A után, B előtt vagyunk -> 3 hátralévő");
+  });
+
+  test("13) a stop szegmensének határa UTÁN már elhagyottnak számít", () => {
+    // matchedSegmentIndex === B.segmentIndex + 1 (3) -> B már elhagyott.
+    const result = resolveRemainingStops(3, legRange, stops);
+    assert.equal(result?.remainingStopCount, 2, "B is elhagyva -> 2 hátralévő");
+  });
+
+  test("17) invalid/hiányzó matchedSegmentIndex vagy legRange -> null (fallback, sosem dob kivételt)", () => {
+    assert.equal(resolveRemainingStops(null, legRange, stops), null);
+    assert.equal(resolveRemainingStops(-1, legRange, stops), null);
+    assert.equal(resolveRemainingStops(0, null, stops), null);
+    assert.equal(resolveRemainingStops(0, legRange, []), null);
+    assert.equal(resolveRemainingStops(999, legRange, stops), null, "a legRange tartományán kívüli index -> null");
+  });
+});
+
+describe("selectActiveInstructionWithStopProgress — BOARD/RIDE/ALIGHT + stop-progress fallback", () => {
+  const legRange = { legIndex: 1, startSegmentIndex: 0, endSegmentIndex: 4, legCoordinates: STOP_TEST_LEG_COORDINATES };
+  const { stops } = buildLegStopProgress([STOP_A, STOP_B, STOP_C], 1, STOP_TEST_LEG_COORDINATES);
+
+  test("14) BOARD továbbra is megjelenik a leg elején, MÉG stop-progress esetén is (nem váltja fel azonnal a szöveget)", () => {
+    const active = selectActiveInstructionWithStopProgress(buildNavigationInstructions({ legs: THREE_LEG_JOURNEY }), {
+      legIndex: 1,
+      legPhaseFraction: 0,
+      remainingStops: resolveRemainingStops(0, legRange, stops),
+    });
+    assert.equal(active.current?.kind, "BOARD");
+  });
+
+  test("8/9/10/11 megjelenítve — a RIDE instrukció címe a hátralévő megállók számát mutatja, végül a leszállás-figyelmeztetést", () => {
+    const instructions = buildNavigationInstructions({ legs: THREE_LEG_JOURNEY });
+    const atStart = selectActiveInstructionWithStopProgress(instructions, { legIndex: 1, legPhaseFraction: 0.5, remainingStops: resolveRemainingStops(0, legRange, stops) });
+    assert.equal(atStart.current?.kind, "RIDE");
+    assert.equal(atStart.current?.title, "Utazz még 4 megállót");
+
+    const afterA = selectActiveInstructionWithStopProgress(instructions, { legIndex: 1, legPhaseFraction: 0.5, remainingStops: resolveRemainingStops(2, legRange, stops) });
+    assert.equal(afterA.current?.title, "Utazz még 3 megállót");
+
+    const afterC = selectActiveInstructionWithStopProgress(instructions, { legIndex: 1, legPhaseFraction: 0.5, remainingStops: resolveRemainingStops(4, legRange, stops) });
+    assert.equal(afterC.current?.kind, "RIDE", "a VALÓS ALIGHT csak a leg-vég fázisban/route-endnél legyen current");
+    assert.equal(afterC.current?.title, "A következő megállónál szállj le");
+  });
+
+  test("15) ALIGHT nem aktiválódik túl korán — a stop-progress a RIDE CÍMÉT írja át, de nem lép a valódi ALIGHT elé", () => {
+    const instructions = buildNavigationInstructions({ legs: THREE_LEG_JOURNEY });
+    const afterFinalStop = selectActiveInstructionWithStopProgress(instructions, {
+      legIndex: 1,
+      legPhaseFraction: 0.5, // MÉG a RIDE geometriai fázisában, NEM az ALIGHT-ban
+      remainingStops: resolveRemainingStops(4, legRange, stops),
+    });
+    assert.notEqual(afterFinalStop.current?.kind, "ALIGHT");
+    assert.notEqual(afterFinalStop.current?.title, "Szállj le: Keleti pályaudvar");
+  });
+
+  test("16) stop-adat nélkül (remainingStops hiányzik) -> BYTE-RA a Sprint 2 geometry-phase fallback", () => {
+    const instructions = buildNavigationInstructions({ legs: THREE_LEG_JOURNEY });
+    const withStopProgress = selectActiveInstructionWithStopProgress(instructions, { legIndex: 1, legPhaseFraction: 0.5 });
+    const sprint2Fallback = selectActiveInstruction(instructions, { legIndex: 1, legPhaseFraction: 0.5 });
+    assert.deepEqual(withStopProgress, sprint2Fallback);
+  });
+
+  test("18/19/20) WALK, RENTAL/Bubi és ARRIVE viselkedés VÁLTOZATLAN — a stop-progress KIZÁRÓLAG a RIDE-ot érinti", () => {
+    const instructions = buildNavigationInstructions({ legs: THREE_LEG_JOURNEY });
+    const remainingStops = resolveRemainingStops(2, legRange, stops);
+
+    const walk = selectActiveInstructionWithStopProgress(instructions, { legIndex: 0, legPhaseFraction: 0.5, remainingStops });
+    assert.equal(walk.current?.kind, "WALK");
+
+    const bikeInstructions = buildNavigationInstructions({ legs: [rentalLeg()] });
+    const bike = selectActiveInstructionWithStopProgress(bikeInstructions, { legIndex: 0, legPhaseFraction: 0.5, remainingStops });
+    assert.equal(bike.current?.kind, "BIKE_RIDE");
+
+    const arrive = selectActiveInstructionWithStopProgress(instructions, { legIndex: 2, legPhaseFraction: 0.99, atRouteEnd: true, remainingStops });
+    assert.equal(arrive.current?.kind, "ARRIVE");
+  });
+
+  test("21) current és next SOSEM azonos, stop-progress alkalmazása mellett sem", () => {
+    const instructions = buildNavigationInstructions({ legs: THREE_LEG_JOURNEY });
+    for (const matchedSegmentIndex of [0, 2, 3, 4]) {
+      const active = selectActiveInstructionWithStopProgress(instructions, {
+        legIndex: 1,
+        legPhaseFraction: 0.5,
+        remainingStops: resolveRemainingStops(matchedSegmentIndex, legRange, stops),
+      });
+      if (active.current && active.next) assert.notEqual(active.current.id, active.next.id);
+    }
+  });
+
+  test("22) reroute — más Journey/más megálló-koordináták -> más stop-progress, a régi nem szennyez be", () => {
+    const before = buildLegStopProgress([STOP_A, STOP_B, STOP_C], 1, STOP_TEST_LEG_COORDINATES);
+    const rerouted = buildLegStopProgress([{ name: "Új A", lat: 47.0, lon: 19.0045 }], 1, STOP_TEST_LEG_COORDINATES);
+    assert.notDeepEqual(before, rerouted);
   });
 });
 
