@@ -12,6 +12,8 @@
 // végpontok (fromLat/fromLon -> toLat/toLon) közötti egyenes vonalat
 // rajzoljuk, world és sosem generálunk kitalált útvonal-alakot.
 
+import type { NavigationCoordinate } from "./navigation/types";
+
 export interface LatLon {
   lat: number;
   lon: number;
@@ -171,4 +173,74 @@ export function journeyLegsToGeoJson(legs: JourneyLegForGeometry[]): GeoJSON.Fea
   }
 
   return { type: "FeatureCollection", features };
+}
+
+// NAVIGATION INSTRUCTIONS SPRINT 2 (2026-09-16) — a route-progress motor
+// (lib/vedett-route/navigation/routeProgress.ts) és a navigációs
+// utasítás-modell (lib/vedett-route/navigation/instructions.ts) EGYETLEN,
+// KÖZÖS geometria-normalizáláson kell dolgozzon, különben a
+// matchedSegmentIndex és a leg-határok két KÜLÖNBÖZŐ koordinátalistára
+// mutatnának. Ez a függvény pontosan azt a flatten+dedup logikát végzi el,
+// amit korábban a VedettUtvonalSearchForm.tsx `navigationRouteCoordinates`
+// useMemo-ja inline tartalmazott (journeyLegsToGeoJson() feature-jeinek
+// egyetlen koordinátatömbbé fűzése, szomszédos duplikátum-pontok
+// kiszűrésével) — MOST ez az EGYETLEN hely, ahol ez történik.
+//
+// A `legRanges` minden, LineString-et adó leghez (lásd fent: coords.length
+// >= 2) egy [startSegmentIndex, endSegmentIndex] tartományt rendel, ahol a
+// "segmentIndex" UGYANAZT jelenti, mint
+// lib/vedett-route/navigation/geometry.ts projectPointToRoute()
+// segmentIndex mezője (a `coordinates` tömb i. és i+1. pontja közötti
+// szakasz). A tartományok EGYMÁST NEM METSZŐ, FOLYTONOS particionálást
+// adnak: ha egy leg (A) az előző leg (B) utolsó pontjával MEGEGYEZŐ ponton
+// kezdődik (a duplikátum ezért kiszűrődik), a megosztott pont KIMENŐ
+// szegmense (index = B utolsó koordináta-indexe) mindig A-hoz tartozik, B
+// befejező szegmense pedig eggyel korábban ér véget — tehát a közös pont
+// SOSEM okoz átfedést vagy duplikált tulajdonlást.
+//
+// KORLÁTOZÁS: ha egy leg a dedup után NEM ad hozzá legalább egy ÚJ,
+// egyedi koordinátát (pl. nulla hosszúságú vagy teljesen degenerált leg),
+// akkor ehhez a leghez NEM készül range — ez a leg emiatt SOHA nem
+// válhat aktívvá kizárólag matchedSegmentIndex alapján. Ez egy explicit,
+// dokumentált korlátozás, NEM hiba — nincs kitalálva/becsülve semmi.
+export interface NavigationLegGeometryRange {
+  legIndex: number;
+  startSegmentIndex: number;
+  endSegmentIndex: number;
+}
+
+export interface NavigationRouteGeometry {
+  coordinates: NavigationCoordinate[];
+  legRanges: NavigationLegGeometryRange[];
+}
+
+export function journeyLegsToNavigationRoute(legs: JourneyLegForGeometry[]): NavigationRouteGeometry {
+  const geojson = journeyLegsToGeoJson(legs);
+  const coordinates: NavigationCoordinate[] = [];
+  const legRanges: NavigationLegGeometryRange[] = [];
+
+  for (const feature of geojson.features) {
+    if (feature.geometry.type !== "LineString") continue;
+    const legIndex = feature.properties && typeof feature.properties.legIndex === "number" ? feature.properties.legIndex : null;
+    if (legIndex === null) continue;
+
+    const entryIndex = coordinates.length - 1;
+    for (const coordinate of feature.geometry.coordinates) {
+      const lon = coordinate[0];
+      const lat = coordinate[1];
+      if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue;
+      const previous = coordinates[coordinates.length - 1];
+      if (previous && previous[0] === lon && previous[1] === lat) continue;
+      coordinates.push([lon, lat]);
+    }
+    const exitIndex = coordinates.length - 1;
+
+    const startSegmentIndex = Math.max(0, entryIndex);
+    const endSegmentIndex = exitIndex - 1;
+    if (endSegmentIndex >= startSegmentIndex) {
+      legRanges.push({ legIndex, startSegmentIndex, endSegmentIndex });
+    }
+  }
+
+  return { coordinates, legRanges };
 }

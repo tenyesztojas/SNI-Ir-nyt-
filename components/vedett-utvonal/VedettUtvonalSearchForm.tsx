@@ -7,7 +7,14 @@ import dynamic from "next/dynamic";
 import { useGeolocation } from "@/lib/hooks/useGeolocation";
 import { useRouteNavigation } from "@/lib/hooks/useRouteNavigation";
 import { useScreenWakeLock } from "@/lib/hooks/useScreenWakeLock";
-import { journeyLegsToGeoJson } from "@/lib/vedett-route/geometry";
+import { journeyLegsToNavigationRoute } from "@/lib/vedett-route/geometry";
+import {
+  buildNavigationInstructions,
+  isAtRouteEnd,
+  resolveActiveLegIndex,
+  resolveLegPhaseFraction,
+  selectActiveInstruction,
+} from "@/lib/vedett-route/navigation/instructions";
 import RestPointQuickAdd, { type RestPointCreatedPayload } from "./RestPointQuickAdd";
 // TELEPÜLÉS-AUTOCOMPLETE ("UX-fejlesztés..." kör, A) rész) — EGYETLEN közös
 // komponens/logika a "Város" mezőkhöz (induló + célhely), nincs duplikált
@@ -708,24 +715,17 @@ function RankedJourneyCard({
     ? restStopMapState.legsOverride
     : displayedJourney.legs;
 
-  const navigationRouteCoordinates = useMemo(() => {
-    const geojson = journeyLegsToGeoJson(navigationLegs);
-    const coordinates: Array<readonly [number, number]> = [];
-
-    for (const feature of geojson.features) {
-      if (feature.geometry.type !== "LineString") continue;
-      for (const coordinate of feature.geometry.coordinates) {
-        const lon = coordinate[0];
-        const lat = coordinate[1];
-        if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue;
-        const previous = coordinates[coordinates.length - 1];
-        if (previous && previous[0] === lon && previous[1] === lat) continue;
-        coordinates.push([lon, lat]);
-      }
-    }
-
-    return coordinates;
-  }, [navigationLegs]);
+  // NAVIGATION INSTRUCTIONS SPRINT 2 (2026-09-16) — a koordinátalista ÉS a
+  // leg-geometria tartományok (legRanges) MOST egyetlen, közös helperből
+  // (lib/vedett-route/geometry.ts journeyLegsToNavigationRoute()) származnak,
+  // hogy a routeProgress.matchedSegmentIndex és az instrukció-modell
+  // UGYANARRA a flatten/dedup geometriára mutasson — lásd a helper
+  // fejlécének dokumentációját a megosztott-határpont kezeléséről.
+  const navigationRouteGeometry = useMemo(
+    () => journeyLegsToNavigationRoute(navigationLegs),
+    [navigationLegs]
+  );
+  const navigationRouteCoordinates = navigationRouteGeometry.coordinates;
 
   const routeNavigationPosition = useMemo(
     () =>
@@ -763,6 +763,58 @@ function RankedJourneyCard({
   const navigationRemainingMinutes = routeProgress.remainingDurationSeconds !== null
     ? Math.max(0, Math.ceil(routeProgress.remainingDurationSeconds / 60))
     : null;
+
+  // NAVIGATION INSTRUCTIONS SPRINT 1 (2026-09-16) — a MEGLÉVŐ
+  // displayedJourney.legs-ből (pure derivation, useMemo) épül fel az
+  // instrukció-lista. SZÁNDÉKOSAN a displayedJourney.legs-ből, NEM a fenti
+  // navigationLegs-ből (ami rest-stop legsOverride alatt egy
+  // JourneyLegForGeometry[] lehet — lásd lib/vedett-route/geometry.ts —,
+  // aminek NINCS fromName/toName/routeShortName mezője, tehát abból nem
+  // épülne megbízható szöveg). Ez a KORLÁTOZÁS oka, hogy a kártya
+  // rest-stop legsOverride aktív ideje alatt NEM jelenik meg (lásd
+  // activeNavigationInstruction lentebb) — a MEGLÉVŐ rest-stop flow
+  // (map/progress) ettől TELJESEN érintetlen marad.
+  // Automatikus reroute kompatibilitás: setDisplayedJourney(...) után ez a
+  // useMemo automatikusan újraépül (nincs külön, szinkronizálandó
+  // instruction state — elkerülve a "stale navigation instruction"
+  // problémát).
+  const navigationInstructions = useMemo(
+    () => buildNavigationInstructions({ legs: displayedJourney.legs }),
+    [displayedJourney.legs]
+  );
+  // NAVIGATION INSTRUCTIONS SPRINT 2 (2026-09-16) — matchedSegmentIndex ->
+  // legIndex -> leg-en belüli fázis. A navigationRouteGeometry.legRanges a
+  // navigationLegs-ből épül, ami rest-stop legsOverride NÉLKÜL pontosan
+  // megegyezik displayedJourney.legs-szel (lásd fent) — a kártya emiatt
+  // CSAK abban az esetben él ezekkel az adatokkal, amikor a legIndex-ek
+  // valóban a navigationInstructions-t felépítő legs tömbre mutatnak.
+  const activeLegIndex = resolveActiveLegIndex(routeProgress.matchedSegmentIndex, navigationRouteGeometry.legRanges);
+  const activeLegRange = navigationRouteGeometry.legRanges.find((range) => range.legIndex === activeLegIndex) ?? null;
+  const activeLegPhaseFraction = resolveLegPhaseFraction(routeProgress.matchedSegmentIndex, activeLegRange);
+  const activeRouteEnd = isAtRouteEnd(routeProgress.matchedSegmentIndex, navigationRouteGeometry.coordinates.length);
+  const activeNavigationInstruction = useMemo(
+    () =>
+      selectActiveInstruction(navigationInstructions, {
+        legIndex: activeLegIndex,
+        legPhaseFraction: activeLegPhaseFraction,
+        atRouteEnd: activeRouteEnd,
+      }),
+    [navigationInstructions, activeLegIndex, activeLegPhaseFraction, activeRouteEnd]
+  );
+  // REST STOP KOMPATIBILITÁS — amíg egy rest-stop-indított útvonal
+  // (legsOverride) aktív, a kártya NEM jelenik meg (lásd a fenti komment:
+  // a JourneyLegForGeometry adatmodell nem elegendő megbízható szöveghez).
+  //
+  // OFF-ROUTE/REROUTING KOMPATIBILITÁS (Sprint 2, 10. pont) — amíg az
+  // automatikus reroute folyamatban van (automaticRerouteStatus ===
+  // "REROUTING"), a kártya ÁTMENETILEG elrejtve, hogy ne mutasson elavult
+  // instrukciót a RÉGI útvonalról, amíg az ÚJ Journey (és a belőle épülő
+  // instrukció-lista/geometria) meg nem érkezik. Ez NEM módosítja az
+  // off-route felismerést vagy a rerouteGuardot — csak ennek a kártyának a
+  // láthatóságát olvassa.
+  const navigationInstructionForDisplay = (restStopMapState.active && restStopMapState.legsOverride) || automaticRerouteStatus === "REROUTING"
+    ? null
+    : activeNavigationInstruction.current;
 
   const lastLeg = displayedJourney.legs.length > 0 ? displayedJourney.legs[displayedJourney.legs.length - 1] : undefined;
   const originalDestination =
@@ -1061,6 +1113,39 @@ function RankedJourneyCard({
                       ? automaticRerouteMessage ?? "Az automatikus újratervezés most nem sikerült."
                       : "Az aktuális helyzeted alapján már nem az útvonalon haladsz."}
                 </div>
+              </div>
+            )}
+
+            {/* NAVIGATION INSTRUCTIONS SPRINT 1 (2026-09-16) — egy fő teendő
+                domináns megjelenítése: az aktuális instrukció nagy/félkövér,
+                a "Következő" kisebb/másodlagos (5. pont, autizmusbarát UX:
+                rövid, konkrét, nem sürgető szöveg — lásd
+                lib/vedett-route/navigation/instructions.ts). CSAK
+                navigationMode alatt és csak akkor jelenik meg, ha van
+                értelmes aktuális instrukció (navigationInstructionForDisplay
+                — rest-stop legsOverride alatt szándékosan null, lásd a
+                fenti komment). A top offset OFF_ROUTE alatt lejjebb csúszik,
+                hogy NE takarja a fenti off-route/rerouting figyelmeztetést;
+                az ETA-kártyát (bottom) és a felső navigációs gombsort (z-10,
+                top-2) sem fedi. */}
+            {navigationMode && navigationInstructionForDisplay && (
+              <div
+                role="status"
+                aria-live="polite"
+                className={`absolute left-2 right-2 z-20 mx-auto max-w-sm rounded-xl bg-white/95 px-4 py-3 text-center shadow-lg backdrop-blur ${
+                  routeProgress.offRouteStatus === "OFF_ROUTE" ? "top-[11rem]" : "top-14"
+                }`}
+              >
+                <div className="text-base font-bold text-sni-text">{navigationInstructionForDisplay.title}</div>
+                {navigationInstructionForDisplay.detail && (
+                  <div className="mt-0.5 text-sm text-gray-600">{navigationInstructionForDisplay.detail}</div>
+                )}
+                {activeNavigationInstruction.next && (
+                  <div className="mt-2 border-t border-gray-200 pt-1.5">
+                    <div className="text-[10px] font-medium uppercase tracking-wide text-gray-400">Következő</div>
+                    <div className="text-xs text-gray-500">{activeNavigationInstruction.next.title}</div>
+                  </div>
+                )}
               </div>
             )}
 
