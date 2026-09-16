@@ -29,6 +29,10 @@ import {
   resolveDistanceAlongLegMeters,
   resolveWalkProgress,
 } from "@/lib/vedett-route/navigation/walkManoeuvreProgress";
+// NAVIGATION — NEXT-INSTRUCTION PREVIEW (Sprint 6, 2026-09-16) — a MEGLÉVŐ
+// navigationInstructions/navigationInstructionForDisplay/activeWalkProgress
+// DERIVÁLT adataiból egy rövid "Utána: ..." preview-szöveg. Nincs új state.
+import { resolveInstructionPreview } from "@/lib/vedett-route/navigation/instructionPreview";
 import RestPointQuickAdd, { type RestPointCreatedPayload } from "./RestPointQuickAdd";
 // TELEPÜLÉS-AUTOCOMPLETE ("UX-fejlesztés..." kör, A) rész) — EGYETLEN közös
 // komponens/logika a "Város" mezőkhöz (induló + célhely), nincs duplikált
@@ -900,6 +904,17 @@ function RankedJourneyCard({
   const navigationInstructionForDisplay = (restStopMapState.active && restStopMapState.legsOverride) || automaticRerouteStatus === "REROUTING"
     ? null
     : activeNavigationInstructionWithWalkProgress;
+  // NAVIGATION — NEXT-INSTRUCTION PREVIEW (Sprint 6, 2026-09-16). A
+  // `navigationInstructionForDisplay`-t adjuk át `current`-ként — ez UGYANAZ
+  // az érték, ami a kártya cím-szövegét is meghatározza, tehát a REROUTING/
+  // rest-stop elnyomás (fent) a previewre IS automatikusan érvényes (null
+  // current -> null preview, lásd instructionPreview.ts). A WALK-lokális
+  // kanyar-preview csak akkor él, ha van megbízható aktív manőver-progress.
+  const activeInstructionPreview = resolveInstructionPreview(
+    navigationInstructions,
+    navigationInstructionForDisplay,
+    activeWalkProgress?.nextManoeuvre ?? null
+  );
 
   const lastLeg = displayedJourney.legs.length > 0 ? displayedJourney.legs[displayedJourney.legs.length - 1] : undefined;
   const originalDestination =
@@ -1225,10 +1240,16 @@ function RankedJourneyCard({
                 {navigationInstructionForDisplay.detail && (
                   <div className="mt-0.5 text-sm text-gray-600">{navigationInstructionForDisplay.detail}</div>
                 )}
-                {activeNavigationInstruction.next && (
-                  <div className="mt-2 border-t border-gray-200 pt-1.5">
-                    <div className="text-[10px] font-medium uppercase tracking-wide text-gray-400">Következő</div>
-                    <div className="text-xs text-gray-500">{activeNavigationInstruction.next.title}</div>
+                {/* NAVIGATION — NEXT-INSTRUCTION PREVIEW (Sprint 6, 2026-09-16) —
+                    a korábbi, puszta "Következő" + nyers next.title helyett
+                    (ami WALK legen belül SOHA nem tudta a következő kanyart
+                    megmutatni, és BOARD->RIDE-szerű triviális párokat is
+                    kiírt) egy rövid, egysoros "Utána: ..." szöveg — lásd
+                    lib/vedett-route/navigation/instructionPreview.ts. Nincs
+                    új panel, nincs badge/ikon, nincs duplikált méter/ETA. */}
+                {activeInstructionPreview && (
+                  <div className="mt-2 border-t border-gray-200 pt-1.5 text-xs text-gray-500">
+                    Utána: {activeInstructionPreview.phrase}
                   </div>
                 )}
               </div>

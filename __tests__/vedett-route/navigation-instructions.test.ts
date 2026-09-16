@@ -571,10 +571,10 @@ describe("UI-bekötés (VedettUtvonalSearchForm.tsx) — forráskód-szintű ell
     assert.match(searchFormSrc, /restStopMapState\.active && restStopMapState\.legsOverride[\s\S]{0,120}\? null/);
   });
 
-  test("9) current + next vizuális hierarchia jelen van a JSX-ben (a 'next' kisebb/másodlagos, 'Következő' felirattal)", () => {
+  test("9) current + next vizuális hierarchia jelen van a JSX-ben (a 'next' kisebb/másodlagos — Sprint 6 óta 'Utána: ...' preview-szöveg, lásd instructionPreview.ts)", () => {
     assert.match(searchFormSrc, /navigationInstructionForDisplay\.title/);
-    assert.match(searchFormSrc, /activeNavigationInstruction\.next && \(/);
-    assert.match(searchFormSrc, /Következő/);
+    assert.match(searchFormSrc, /activeInstructionPreview && \(/);
+    assert.match(searchFormSrc, /Utána:/);
   });
 
   test("10) a MEGLÉVŐ ETA/hátralévő távolság kártya és a pihenőpont-kontrollok kódja NEM távolítódott el", () => {
