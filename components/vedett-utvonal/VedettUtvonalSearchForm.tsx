@@ -17,6 +17,18 @@ import {
   resolveRemainingStops,
   selectActiveInstructionWithStopProgress,
 } from "@/lib/vedett-route/navigation/instructions";
+// NAVIGATION — WALK TURN-BY-TURN PROGRESS (Sprint 5, 2026-09-16) — a Sprint 4
+// pure walkManoeuvre.ts detektor ÉS a Sprint 5 pure walkManoeuvreProgress.ts
+// híd MINIMÁLIS bekötése: az AKTÍV WALK leg manőverlistája és a
+// current/next kiválasztás TELJESEN a MEGLÉVŐ displayedJourney/routeProgress
+// adatokból van levezetve (useMemo) — nincs új, párhuzamos navigációs state.
+import { detectWalkManoeuvres } from "@/lib/vedett-route/navigation/walkManoeuvre";
+import {
+  buildWalkInstructionText,
+  cumulativeDistanceToVertex,
+  resolveDistanceAlongLegMeters,
+  resolveWalkProgress,
+} from "@/lib/vedett-route/navigation/walkManoeuvreProgress";
 import RestPointQuickAdd, { type RestPointCreatedPayload } from "./RestPointQuickAdd";
 // TELEPÜLÉS-AUTOCOMPLETE ("UX-fejlesztés..." kör, A) rész) — EGYETLEN közös
 // komponens/logika a "Város" mezőkhöz (induló + célhely), nincs duplikált
@@ -828,6 +840,52 @@ function RankedJourneyCard({
       }),
     [navigationInstructions, activeLegIndex, activeLegPhaseFraction, activeRouteEnd, activeRemainingStops]
   );
+  // NAVIGATION — WALK TURN-BY-TURN PROGRESS (Sprint 5, 2026-09-16). CSAK
+  // akkor aktív, ha az activeLeg valóban WALK (nem érinti a
+  // TRANSIT/RENTAL BOARD/RIDE/ALIGHT/TRANSFER/BIKE_* szövegeket, lásd
+  // instructionsForLeg() a Sprint 1/2/3 modulban — VÁLTOZATLAN). A
+  // manoeuvre-lista KIZÁRÓLAG az aktív leg SAJÁT, leg-lokális
+  // geometriájából (activeLegRange.legCoordinates) épül — ugyanaz a
+  // geometria, amit a Sprint 3 stop-progress is használ, tehát reroute
+  // után (új displayedJourney -> új navigationRouteGeometry) automatikusan
+  // ÚJ manoeuvre-listát ad, nincs stale state.
+  const activeLegIsWalk = activeLeg?.mode === "WALK";
+  const activeLegManoeuvres = useMemo(
+    () => (activeLegIsWalk && activeLegRange ? detectWalkManoeuvres(activeLegRange.legCoordinates) : []),
+    [activeLegIsWalk, activeLegRange]
+  );
+  const activeLegTotalDistanceMeters =
+    activeLegManoeuvres.length > 0 ? activeLegManoeuvres[activeLegManoeuvres.length - 1].distanceFromStartMeters : 0;
+  // A leg-lokális kumulatív távolság a MÁR MEGLÉVŐ, backward-tolerance
+  // védett routeProgress.progressDistanceMeters-ből származik (nem
+  // légvonal, nem legPhaseFraction-becslés) — lásd
+  // walkManoeuvreProgress.ts resolveDistanceAlongLegMeters() fejléce.
+  const activeLegDistanceAlongMeters = activeLegIsWalk
+    ? resolveDistanceAlongLegMeters(
+        routeProgress.progressDistanceMeters,
+        navigationRouteGeometry.coordinates,
+        activeLegRange,
+        activeLegTotalDistanceMeters
+      )
+    : null;
+  const activeWalkProgress =
+    activeLegIsWalk && activeLegManoeuvres.length > 0 && activeLegDistanceAlongMeters !== null
+      ? resolveWalkProgress(activeLegManoeuvres, activeLegDistanceAlongMeters)
+      : null;
+  // Ha nincs megbízható manoeuvre/progress adat (rövid/hiányzó geometria,
+  // nincs GPS-match még), a Sprint 2/3 WALK fallback ("Gyalogolj: X")
+  // marad — SOSEM jelenítünk meg technikai bizonytalanságot.
+  const activeNavigationInstructionWithWalkProgress =
+    activeNavigationInstruction.current?.kind === "WALK" && activeWalkProgress?.currentManoeuvre && activeWalkProgress.phase
+      ? {
+          ...activeNavigationInstruction.current,
+          title: buildWalkInstructionText(
+            activeWalkProgress.currentManoeuvre,
+            activeWalkProgress.phase,
+            activeWalkProgress.distanceToCurrentMeters ?? 0
+          ),
+        }
+      : activeNavigationInstruction.current;
   // REST STOP KOMPATIBILITÁS — amíg egy rest-stop-indított útvonal
   // (legsOverride) aktív, a kártya NEM jelenik meg (lásd a fenti komment:
   // a JourneyLegForGeometry adatmodell nem elegendő megbízható szöveghez).
@@ -841,7 +899,7 @@ function RankedJourneyCard({
   // láthatóságát olvassa.
   const navigationInstructionForDisplay = (restStopMapState.active && restStopMapState.legsOverride) || automaticRerouteStatus === "REROUTING"
     ? null
-    : activeNavigationInstruction.current;
+    : activeNavigationInstructionWithWalkProgress;
 
   const lastLeg = displayedJourney.legs.length > 0 ? displayedJourney.legs[displayedJourney.legs.length - 1] : undefined;
   const originalDestination =
