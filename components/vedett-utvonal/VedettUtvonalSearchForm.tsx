@@ -57,6 +57,20 @@ import { resolveNavigationTransferTiming } from "@/lib/vedett-route/navigation/t
 // mintázat, mint az automatikus reroute effektnél).
 import { useTransitRealtimeRefresh } from "@/lib/hooks/useTransitRealtimeRefresh";
 import { mergeRealtimeUpdates } from "@/lib/vedett-route/realtimeRefresh/mergeRealtimeUpdates";
+// NAVIGATION FOUNDATION (2026-09-17) — GPS FIX FRESHNESS + FOREGROUND
+// REACQUISITION. A gpsFixGate.ts PURE modul dönti el, hogy egy adott GPS
+// fix FELHASZNÁLHATÓ-e route progress / leg transition / boarding /
+// reroute-kiértékeléshez. A hívó itt (nem a routeProgress.ts/legTransition.ts
+// belsejében) kapcsolja a lentebbi hookoknak átadott POZÍCIÓT `null`-ra,
+// amikor a fix nem usable — a hookok MÁR MA IS helyesen kezelik a `null`
+// pozíciót, ezért ez a MINIMÁLIS beavatkozási pont. Az itt bevezetett
+// gpsFixUsable állapot NEM módosítja useTransitRealtimeRefresh.ts
+// visibility-return viselkedését (az egy külön, saját mechanizmus).
+import {
+  createInitialGpsFixGateState,
+  evaluateGpsFixUsability,
+  markVisibilityReturned,
+} from "@/lib/vedett-route/navigation/gpsFixGate";
 import RestPointQuickAdd, { type RestPointCreatedPayload } from "./RestPointQuickAdd";
 // TELEPÜLÉS-AUTOCOMPLETE ("UX-fejlesztés..." kör, A) rész) — EGYETLEN közös
 // komponens/logika a "Város" mezőkhöz (induló + célhely), nincs duplikált
@@ -753,6 +767,33 @@ function RankedJourneyCard({
     [geo.status, geo.latitude, geo.longitude, geo.headingDegrees, geo.speedMetersPerSecond, geo.timestampMs, geo.accuracyMeters],
   );
 
+  // NAVIGATION FOUNDATION (2026-09-17) — GPS FIX FRESHNESS + FOREGROUND
+  // REACQUISITION. `gpsFixUsable` a JELENLEGI currentPosition fixre
+  // vonatkozik (nem egy külön state machine) — false, ha a fix STALE/
+  // INVALID, VAGY ha a dokumentum épp visszatért láthatóra és MÉG NEM
+  // érkezett egy, a visszatérés UTÁNI genuinely friss fix.
+  const gpsFixGateRef = useRef(createInitialGpsFixGateState());
+  const [gpsFixUsable, setGpsFixUsable] = useState(true);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== "visible") return;
+      gpsFixGateRef.current = markVisibilityReturned(gpsFixGateRef.current, Date.now());
+      // A KORÁBBAN tárolt fix nem válik automatikusan frissé a visszatéréskor
+      // — azonnal usable=false, amíg a KÖVETKEZŐ genuinely friss fix megérkezik.
+      setGpsFixUsable(false);
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, []);
+
+  useEffect(() => {
+    const result = evaluateGpsFixUsability(gpsFixGateRef.current, currentPosition?.timestampMs ?? null, Date.now());
+    gpsFixGateRef.current = result.nextState;
+    setGpsFixUsable(result.usable);
+  }, [currentPosition?.timestampMs]);
+
   // NAVIGATION SPRINT 2.1 — az EGYETLEN, ténylegesen megjelenített útvonal
   // geometriájából stabil koordinátalistát készítünk a route-progress motorhoz.
   // Ugyanazt a journeyLegsToGeoJson() normalizálást használjuk, mint maga a
@@ -778,7 +819,7 @@ function RankedJourneyCard({
 
   const routeNavigationPosition = useMemo(
     () =>
-      currentPosition
+      currentPosition && gpsFixUsable
         ? {
             latitude: currentPosition.latitude,
             longitude: currentPosition.longitude,
@@ -786,7 +827,7 @@ function RankedJourneyCard({
             timestampMs: currentPosition.timestampMs,
           }
         : null,
-    [currentPosition],
+    [currentPosition, gpsFixUsable],
   );
 
   const routeProgress = useRouteNavigation(
@@ -884,10 +925,10 @@ function RankedJourneyCard({
   // figyel).
   const boundaryPosition = useMemo(
     () =>
-      currentPosition
+      currentPosition && gpsFixUsable
         ? { latitude: currentPosition.latitude, longitude: currentPosition.longitude, accuracyMeters: currentPosition.accuracyMeters }
         : null,
-    [currentPosition],
+    [currentPosition, gpsFixUsable],
   );
   const walkToTransitBoundary = useWalkToTransitBoundary(
     {
@@ -1063,7 +1104,7 @@ function RankedJourneyCard({
     const decision = shouldStartAutomaticReroute(rerouteGuardRef.current, {
       navigationActive: navigationMode,
       offRouteStatus: routeProgress.offRouteStatus,
-      hasCurrentPosition: currentPosition !== null,
+      hasCurrentPosition: currentPosition !== null && gpsFixUsable,
       hasDestination: originalDestination !== null,
       nowMs: Date.now(),
     });
@@ -1119,6 +1160,7 @@ function RankedJourneyCard({
     routeProgress.offRouteStatus,
     currentPosition?.latitude,
     currentPosition?.longitude,
+    gpsFixUsable,
     originalDestination?.name,
     originalDestination?.lat,
     originalDestination?.lon,

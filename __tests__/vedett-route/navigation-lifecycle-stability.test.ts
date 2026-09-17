@@ -49,7 +49,25 @@ describe("Navigation lifecycle stability", () => {
 
   test("routeNavigationPosition is memoizált", () => {
     assert.match(formSrc, /const routeNavigationPosition = useMemo\(/);
-    assert.match(formSrc, /\[currentPosition\],\s*\);/);
+
+    // NAVIGATION FOUNDATION (2026-09-17, GPS FIX FRESHNESS) — a
+    // routeNavigationPosition useMemo SZÁNDÉKOSAN bővült a gpsFixUsable
+    // dependencyvel (lásd gpsFixGate.ts): egy STALE/INVALID vagy pending
+    // reacquisition alatt lévő GPS-fix nem adhat tovább pozíciót a route
+    // progress motornak. A régi assertion ("[currentPosition]," pontosan
+    // ez a tartalom) ezt a dokumentált bővítést hibásan buktatta — az
+    // alábbi a memoizáltság invariánsát ellenőrzi (a dependency-lista
+    // TÉNYLEGESEN mindkét, a visszaadott értéket befolyásoló bemenetet
+    // tartalmazza), nem a lista byte-pontos tartalmát.
+    const memoBlock = formSrc.match(/const routeNavigationPosition = useMemo\(\s*\(\)[\s\S]*?\n\s{2}\);/)?.[0] ?? "";
+    assert.ok(memoBlock.length > 0, "a routeNavigationPosition useMemo teljes blokkja megtalálható");
+
+    const depsMatch = memoBlock.match(/\[[^\]]*\]/);
+    assert.ok(depsMatch, "a useMemo dependency-listája megtalálható");
+    const deps = depsMatch[0];
+
+    assert.match(deps, /\bcurrentPosition\b/, "currentPosition szerepel a dependency-listában");
+    assert.match(deps, /\bgpsFixUsable\b/, "gpsFixUsable szerepel a dependency-listában");
   });
 
   test("a hook explicit active paramétert kap", () => {
