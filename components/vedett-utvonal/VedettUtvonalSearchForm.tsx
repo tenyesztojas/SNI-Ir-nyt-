@@ -100,6 +100,10 @@ import {
   resetRerouteGuard,
   shouldStartAutomaticReroute,
 } from "@/lib/vedett-route/navigation/rerouteGuard";
+import {
+  classifyTransitGeometryConfidence,
+  isRailGuidedTransitMode,
+} from "@/lib/vedett-route/navigation/transitGeometryConfidence";
 
 // „Aktuális helyzetem" mint indulási pont (UX módosítás, 2026-09-09) — a
 // keresési form induló-mezője mostantól két, egymást KIZÁRÓ móddal
@@ -904,6 +908,11 @@ function RankedJourneyCard({
               ? ([leg.fromLon, leg.fromLat] as const)
               : null,
           legCoordinates: range?.legCoordinates ?? null,
+          // SAFETY SPRINT (2026-09-17) — a leg NORMALIZÁLT transitMode-ja
+          // (lásd orchestrator.ts mapLeg(), JourneyLeg.transitMode), a
+          // legTransition.ts gyenge-geometriás BOARDED_UNCERTAIN_GEOMETRY
+          // fallbackjához.
+          transitMode: leg.transitMode,
         };
       }
     }
@@ -964,6 +973,18 @@ function RankedJourneyCard({
   // selectActiveInstructionWithStopProgress() BYTE-RA a Sprint 2 fallbackra
   // esik vissza.
   const activeLeg = typeof activeLegIndex === "number" ? displayedJourney.legs[activeLegIndex] : undefined;
+  // SAFETY SPRINT (2026-09-17) — igaz, HA az aktuális aktív leg sínhez/
+  // vezetett pályához kötött (RAIL/REGIONAL_RAIL/SUBWAY/TRAM, a NORMALIZÁLT
+  // JourneyLeg.transitMode alapján) ÉS a SAJÁT geometriája (activeLegRange.
+  // legCoordinates) bizonyítottan "weak" (lásd transitGeometryConfidence.ts,
+  // pl. a VPS-proven S40 2-pontos eset). Kizárólag ezt a MEGLÉVŐ, MÁR
+  // kiszámolt geometriát nézi — nincs új mérés/becslés. Ez a jel az
+  // automatikus reroute-ot tiltja le (lásd lent), a WALK OFF_ROUTE/reroute
+  // logikát NEM érinti (activeLeg.mode === "TRANSIT" feltétel).
+  const activeLegTransitGeometryUncertain =
+    activeLeg?.mode === "TRANSIT" &&
+    isRailGuidedTransitMode(activeLeg.transitMode) &&
+    classifyTransitGeometryConfidence(activeLegRange?.legCoordinates ?? null) === "WEAK";
   const activeLegStopProgress = useMemo(
     () =>
       activeLeg && activeLegRange
@@ -1107,6 +1128,11 @@ function RankedJourneyCard({
       hasCurrentPosition: currentPosition !== null && gpsFixUsable,
       hasDestination: originalDestination !== null,
       nowMs: Date.now(),
+      // SAFETY SPRINT (2026-09-17) — gyenge, sínhez kötött transit-geometria
+      // esetén a geometria-eltérés önmagában nem lehet automatikus
+      // újratervezés alapja (lásd rerouteGuard.ts). A globális 50 m-es
+      // OFF_ROUTE küszöb és a WALK reroute-viselkedés VÁLTOZATLAN.
+      transitGeometryUncertain: activeLegTransitGeometryUncertain,
     });
     if (!decision.shouldReroute || !currentPosition || !originalDestination) return;
 

@@ -56,6 +56,7 @@
 // KIZÁRÓLAG a mért GPS-elmozdulás dönt.
 
 import { haversineMeters, projectPointToRoute } from "./geometry.ts";
+import { classifyTransitGeometryConfidence, isRailGuidedTransitMode } from "./transitGeometryConfidence.ts";
 import type { NavigationCoordinate, NavigationPosition, OffRouteStatus } from "./types.ts";
 
 /**
@@ -91,7 +92,18 @@ export type WalkToTransitPhase =
   | "WALKING" // normál WALK progress, nincs boarding a közelben
   | "APPROACHING_BOARDING" // közeledik a boarding ponthoz
   | "AT_BOARDING_AREA" // ésszerű közelségben a boarding ponthoz — ne kérjen több gyaloglást
-  | "BOARDED"; // több, konzisztens GPS-bizonyíték szerint már a TRANSIT szakaszon van
+  | "BOARDED" // több, konzisztens GPS-bizonyíték szerint már a TRANSIT szakaszon van
+  // SAFETY SPRINT (2026-09-17) — sínhez/vezetett pályához kötött (RAIL/
+  // REGIONAL_RAIL/SUBWAY/TRAM) legnél, HA a leg SAJÁT geometriája
+  // bizonyítottan "weak" (lásd transitGeometryConfidence.ts, pl. a
+  // VPS-proven S40 2-pontos eset), a szigorú BOARDED progress-mérés
+  // strukturálisan nem tud pozitív döntést hozni, mert a GPS a
+  // leegyszerűsített vonalra sosem fog jól illeszkedni. Ez az állapot NEM
+  // állítja biztosra a felszállást és NEM talál ki jármű-azonosítót — csak
+  // annyit jelez, hogy a "Szállj fel" instrukció innentől félrevezető
+  // lenne, és hogy a geometria-eltérés itt NEM lehet auto-reroute alapja
+  // (lásd rerouteGuard.ts transitGeometryUncertain bemenete).
+  | "BOARDED_UNCERTAIN_GEOMETRY";
 
 export interface WalkToTransitNextTransitLeg {
   legIndex: number;
@@ -99,6 +111,8 @@ export interface WalkToTransitNextTransitLeg {
   boardingCoordinate: NavigationCoordinate | null;
   /** A TRANSIT leg SAJÁT, lokális geometriája (NEM a globális, összefűzött route). */
   legCoordinates: readonly NavigationCoordinate[] | null;
+  /** A leg NORMALIZÁLT transitMode-ja (JourneyLeg.transitMode — lásd orchestrator.ts mapLeg()), HA TRANSIT. */
+  transitMode?: string;
 }
 
 export interface WalkToTransitBoundaryInput {
@@ -126,6 +140,14 @@ export interface WalkToTransitBoundaryState {
   transitFitStreakStartProgressMeters: number | null;
   /** A LEGUTÓBBI fix nettó előrehaladása a streak kezdete óta (diagnosztikai/teszt célra is). */
   transitProgressMeters: number | null;
+  /**
+   * SAFETY SPRINT (2026-09-17) — hány egymást követő fixen áll fenn a
+   * "gyenge, sínhez kötött geometria + a boarding ponttól távolodás"
+   * bizonyíték (lásd BOARDED_UNCERTAIN_GEOMETRY). Kizárólag ennek az
+   * állapotnak a hiszterézisét szolgálja; a szigorú, jó-geometriájú BOARDED
+   * logikát NEM érinti.
+   */
+  departureEvidenceFixes: number;
 }
 
 export function createInitialWalkToTransitBoundaryState(): WalkToTransitBoundaryState {
@@ -136,6 +158,7 @@ export function createInitialWalkToTransitBoundaryState(): WalkToTransitBoundary
     consecutiveTransitFitFixes: 0,
     transitFitStreakStartProgressMeters: null,
     transitProgressMeters: null,
+    departureEvidenceFixes: 0,
   };
 }
 
@@ -174,6 +197,7 @@ export function resolveWalkToTransitBoundary(input: WalkToTransitBoundaryInput):
       consecutiveTransitFitFixes: 0,
       transitFitStreakStartProgressMeters: null,
       transitProgressMeters: null,
+      departureEvidenceFixes: 0,
     };
   }
 
@@ -185,6 +209,7 @@ export function resolveWalkToTransitBoundary(input: WalkToTransitBoundaryInput):
       consecutiveTransitFitFixes: 0,
       transitFitStreakStartProgressMeters: null,
       transitProgressMeters: null,
+      departureEvidenceFixes: 0,
     };
   }
 
@@ -247,24 +272,86 @@ export function resolveWalkToTransitBoundary(input: WalkToTransitBoundaryInput):
       consecutiveTransitFitFixes,
       transitFitStreakStartProgressMeters,
       transitProgressMeters,
+      departureEvidenceFixes: previous?.departureEvidenceFixes ?? 0,
     };
   }
 
-  // Boarded állapotból nem "esünk vissza" WALK-ra egyetlen, a fenti
-  // feltételnek meg nem felelő fix miatt, HA az előző tick már BOARDED
-  // volt — a korábbi legre visszaugrás elkerülése (sprint teszt-lista 14.
-  // pontja). A visszaváltás KIZÁRÓLAG akkor történhet meg, ha a MEGLÉVŐ
-  // routeProgress maga (a globális geometria) egy MÁSIK, nem-WALK legre vált
-  // — az emiatt hívja ezt a resolvert `geometryActiveLegMode !== "WALK"`
-  // ággal, ami fentebb már lezárva van.
-  if (previous?.phase === "BOARDED") {
+  // Boarded (VAGY a lenti, gyenge-geometriás BOARDED_UNCERTAIN_GEOMETRY)
+  // állapotból nem "esünk vissza" WALK-ra egyetlen, a fenti feltételnek meg
+  // nem felelő fix miatt, HA az előző tick már ilyen volt — a korábbi legre
+  // visszaugrás elkerülése (sprint teszt-lista 14. pontja, és a SAFETY
+  // SPRINT 5. tesztje: "gyenge sínes geometria nem ragadhat örökre Szállj
+  // fel-en, DE miután kilépett belőle, ne is oszcilláljon vissza"). A
+  // visszaváltás KIZÁRÓLAG akkor történhet meg, ha a MEGLÉVŐ routeProgress
+  // maga (a globális geometria) egy MÁSIK, nem-WALK legre vált — az emiatt
+  // hívja ezt a resolvert `geometryActiveLegMode !== "WALK"` ággal, ami
+  // fentebb már lezárva van.
+  if (previous?.phase === "BOARDED" || previous?.phase === "BOARDED_UNCERTAIN_GEOMETRY") {
     return {
-      phase: "BOARDED",
+      phase: previous.phase,
       resolvedLegIndex: nextTransitLeg.legIndex,
       boardingDistanceMeters,
       consecutiveTransitFitFixes: previousFixes,
       transitFitStreakStartProgressMeters: previousStreakStart,
       transitProgressMeters: previous?.transitProgressMeters ?? null,
+      departureEvidenceFixes: previous?.departureEvidenceFixes ?? 0,
+    };
+  }
+
+  // SAFETY SPRINT (2026-09-17) — WEAK/RAIL-GUIDED GEOMETRIA FALLBACK. A
+  // fenti szigorú BOARDED feltétel (proximity+fit+mért progress a TRANSIT
+  // leg SAJÁT geometriája mentén) VÁLTOZATLAN — ez az ág csak akkor fut,
+  // ha az MÁR nem teljesült. VPS-proven S40 eset: sínhez kötött
+  // (REGIONAL_RAIL) legnél a legCoordinates gyakorlatilag egy 2-pontos
+  // egyenes (lásd transitGeometryConfidence.ts) — ezen a "vonalon" a GPS
+  // strukturálisan sosem fog jól illeszkedni (fitsTransitGeometry hamis
+  // maradhat, miközben a user ténylegesen a vonaton ül és halad), ezért a
+  // szigorú progress-mérés itt sosem tud pozitív BOARDED döntést hozni. Mivel
+  // a repo nem ad elegendő adatot egy BIZTONSÁGOS, pozitív BOARDED
+  // állapotra ebben az esetben, egy ÚJ, bizonytalan átmeneti állapotot
+  // (BOARDED_UNCERTAIN_GEOMETRY) vezetünk be — SOSEM állítjuk biztosra a
+  // felszállást, és NEM találunk ki jármű-azonosítót. Az egyetlen
+  // felhasznált bizonyíték: a user korábban a boarding pont ésszerű
+  // közelségében volt (AT_BOARDING_AREA/APPROACHING_BOARDING vagy már ez az
+  // állapot), ÉS azóta több egymást követő fixen TÉNYLEGESEN távolodik a
+  // boarding ponttól — ez a legjobb elérhető, tisztán GPS-alapú jel arra,
+  // hogy elindult a járművel, idő (menetrend/realtime) NÉLKÜL.
+  const nextLegIsRailGuided = isRailGuidedTransitMode(nextTransitLeg.transitMode);
+  const nextLegGeometryConfidence = classifyTransitGeometryConfidence(nextTransitLeg.legCoordinates);
+  const weakRailGeometry = nextLegIsRailGuided && nextLegGeometryConfidence === "WEAK";
+
+  // A KEZDŐ jel (első "távolodó" fix) KIZÁRÓLAG akkor számít, ha az előző
+  // tick a boarding pont ésszerű közelségében volt (AT_BOARDING_AREA/
+  // APPROACHING_BOARDING) — ez zárja ki, hogy egy sosem-boarding-közeli
+  // WALK szakasz véletlenül evidence-t gyűjtsön. Miután a streak
+  // elindult (previous.departureEvidenceFixes > 0), a TOVÁBBI távolodó
+  // fixek AKKOR IS beleszámítanak, ha eközben a boardingDistanceMeters már
+  // túlnőtt a 3x proximity küszöbön és a lenti ágak WALKING-ra váltanak —
+  // különben egy gyorsan távolodó (valóban induló) vonat pár fixen belül
+  // "kiesne" a számlálásból, mielőtt a 3 megerősítő fix összegyűlne.
+  const wasNearBoardingBefore =
+    previous?.phase === "AT_BOARDING_AREA" ||
+    previous?.phase === "APPROACHING_BOARDING" ||
+    (previous?.departureEvidenceFixes ?? 0) > 0;
+  const previousBoardingDistanceMeters = previous?.boardingDistanceMeters ?? null;
+  const movingAwayFromBoarding =
+    boardingDistanceMeters !== null &&
+    previousBoardingDistanceMeters !== null &&
+    boardingDistanceMeters > previousBoardingDistanceMeters;
+
+  const previousDepartureEvidenceFixes = previous?.departureEvidenceFixes ?? 0;
+  const departureEvidenceFixes =
+    weakRailGeometry && wasNearBoardingBefore && movingAwayFromBoarding ? previousDepartureEvidenceFixes + 1 : 0;
+
+  if (weakRailGeometry && departureEvidenceFixes >= BOARDING_CONFIRM_FIXES) {
+    return {
+      phase: "BOARDED_UNCERTAIN_GEOMETRY",
+      resolvedLegIndex: nextTransitLeg.legIndex,
+      boardingDistanceMeters,
+      consecutiveTransitFitFixes,
+      transitFitStreakStartProgressMeters,
+      transitProgressMeters,
+      departureEvidenceFixes,
     };
   }
 
@@ -280,6 +367,7 @@ export function resolveWalkToTransitBoundary(input: WalkToTransitBoundaryInput):
       consecutiveTransitFitFixes,
       transitFitStreakStartProgressMeters,
       transitProgressMeters,
+      departureEvidenceFixes,
     };
   }
 
@@ -291,6 +379,7 @@ export function resolveWalkToTransitBoundary(input: WalkToTransitBoundaryInput):
       consecutiveTransitFitFixes,
       transitFitStreakStartProgressMeters,
       transitProgressMeters,
+      departureEvidenceFixes,
     };
   }
 
@@ -301,5 +390,6 @@ export function resolveWalkToTransitBoundary(input: WalkToTransitBoundaryInput):
     consecutiveTransitFitFixes,
     transitFitStreakStartProgressMeters,
     transitProgressMeters,
+    departureEvidenceFixes,
   };
 }

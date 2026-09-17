@@ -14,6 +14,17 @@ export interface RerouteGuardInput {
   hasDestination: boolean;
   nowMs: number;
   cooldownMs?: number;
+  /**
+   * SAFETY SPRINT (2026-09-17) — igaz, HA a jelenleg aktív (vagy éppen
+   * bizonytalan felszállási állapotú) sínhez/vezetett pályához kötött
+   * TRANSIT leg SAJÁT geometriája bizonyítottan "weak" (lásd
+   * transitGeometryConfidence.ts, pl. a VPS-proven S40 2-pontos eset). Ilyen
+   * esetben a geometria-alapú GPS-eltérés ÖNMAGÁBAN sosem elég bizonyíték
+   * az automatikus újratervezéshez — a hívó (VedettUtvonalSearchForm) ezt
+   * a MEGLÉVŐ OFF_ROUTE-tól FÜGGETLEN, plusz feltételként adja át; a globális
+   * 50 m-es küszöb és a WALK reroute-viselkedés VÁLTOZATLAN marad.
+   */
+  transitGeometryUncertain?: boolean;
 }
 
 export type RerouteBlockReason =
@@ -22,7 +33,8 @@ export type RerouteBlockReason =
   | "POSITION_MISSING"
   | "DESTINATION_MISSING"
   | "REQUEST_IN_FLIGHT"
-  | "COOLDOWN_ACTIVE";
+  | "COOLDOWN_ACTIVE"
+  | "TRANSIT_GEOMETRY_UNCERTAIN";
 
 export type RerouteGuardDecision =
   | { shouldReroute: true; reason: null }
@@ -38,6 +50,7 @@ export function shouldStartAutomaticReroute(
 ): RerouteGuardDecision {
   if (!input.navigationActive) return { shouldReroute: false, reason: "NAVIGATION_INACTIVE" };
   if (input.offRouteStatus !== "OFF_ROUTE") return { shouldReroute: false, reason: "NOT_CONFIRMED_OFF_ROUTE" };
+  if (input.transitGeometryUncertain) return { shouldReroute: false, reason: "TRANSIT_GEOMETRY_UNCERTAIN" };
   if (!input.hasCurrentPosition) return { shouldReroute: false, reason: "POSITION_MISSING" };
   if (!input.hasDestination) return { shouldReroute: false, reason: "DESTINATION_MISSING" };
   if (state.inFlight) return { shouldReroute: false, reason: "REQUEST_IN_FLIGHT" };
