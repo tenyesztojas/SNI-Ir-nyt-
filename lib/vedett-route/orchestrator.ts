@@ -54,7 +54,10 @@ function minutesBetween(a?: string, b?: string): number {
 //  - a MOTIS jelezte, hogy ez a láb realtime-korrigált (leg.realTime === true), ÉS
 //  - ténylegesen volt scheduled* ÉS tényleges (startTime/endTime) időpont is,
 // különben undefined marad — SOHA nem becslés vagy 0 alapérték.
-function computeDelayMinutes(leg: MotisLeg): number | undefined {
+// Sprint 7.2 — exportálva, hogy a realtime-refresh extraction (lib/vedett-route/
+// realtimeRefresh/extractUpdates.ts) UGYANEZT a bizonyított logikát használja
+// a frissen lekért MOTIS legekre, ne duplikálja máshol.
+export function computeDelayMinutes(leg: MotisLeg): number | undefined {
   if (!leg.realTime) return undefined;
   const scheduled = leg.to?.scheduledArrival ?? leg.from?.scheduledDeparture;
   const actual = leg.endTime ?? leg.startTime;
@@ -125,6 +128,14 @@ function mapLeg(leg: MotisLeg, molBubiRequestActive: boolean): JourneyLeg {
     geometryPrecision: leg.legGeometry?.precision,
     intermediateStops: leg.intermediateStops?.map((s) => ({ name: s.name ?? "Megálló", lat: s.lat, lon: s.lon })),
     routeColor: leg.routeColor,
+    // Sprint 7.2 (LIVE TRANSIT REALTIME REFRESH) — a raw MOTIS leg stabil
+    // identitás-mezői, MINIMÁLISAN megőrizve (lásd types.ts JourneyLeg
+    // kommentje). Csak akkor kerülnek kitöltésre, ha a MOTIS válasz
+    // ténylegesen tartalmazta — soha nem generált/becsült érték.
+    tripId: leg.tripId,
+    routeId: leg.routeId,
+    fromStopId: leg.from?.stopId,
+    toStopId: leg.to?.stopId,
   };
 }
 

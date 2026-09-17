@@ -851,8 +851,17 @@ describe("AA-AM) UX HOTFIX (2026-09-13, ötödik kör) — RestPanelMode: 'Pihen
 // módban a döntés MÁR a szülőben, a külső CTA-k valamelyikének megnyomásával
 // megtörtént). A lenti tesztek a felhasználó explicit A-L pontjait fedik le.
 const restStopFlowPanelModeParamMatch = restStopFlowPanelSrc.match(/export default function RestStopFlowPanel\(\{[\s\S]{0,400}?\r?\n {2}mode,\r?\n\}: RestStopFlowPanelProps\)/);
-const restStopFlowPanelJsxMatch = /<RestStopFlowPanel(?=\s)/.exec(cardSrc);
-const restStopFlowPanelJsxBlock = restStopFlowPanelJsxMatch ? cardSrc.slice(restStopFlowPanelJsxMatch.index, restStopFlowPanelJsxMatch.index + 500) : "";
+// SPRINT 7.2 (2026-09-16) HOTFIX: korábban ez egy FIX 500 karakteres
+// substring volt a "<RestStopFlowPanel" kezdő indextől — ez brittle volt,
+// mert egy hosszabb inline callback (pl. onRouteResumed) a 500 karakteres
+// határon TÚLRA csúsztathatja a `mode={restPanelMode}` propot, hamis
+// tesztbukást okozva, miközben a production JSX helyes. A javítás: a teljes
+// JSX opening-elementet a SAJÁT záró "/>"-jéig nyerjük ki (nem-görgős
+// regex), ami a callback hosszától FÜGGETLENÜL stabil — a `[\s\S]*?`
+// pontosan az első "/>"-nál áll meg, ami ennek a self-closing elementnek a
+// tényleges vége.
+const restStopFlowPanelJsxMatch = /<RestStopFlowPanel(?=\s)[\s\S]*?\/>/.exec(cardSrc);
+const restStopFlowPanelJsxBlock = restStopFlowPanelJsxMatch ? restStopFlowPanelJsxMatch[0] : "";
 
 describe("AN-AY) UX HOTFIX (2026-09-13, hatodik kör) — a RestStopFlowPanel SAJÁT belső renderelése is a explicit mode propot követi, ADD módból is eltűnik a másik funkció döntőgombja", () => {
   test("A) a külső 'Pihenőre van szükségem' (handleRequestRestCta) restPanelMode-ot 'SEARCH'-re állítja, ez adódik át a panelnek mode propként", () => {

@@ -160,6 +160,16 @@ export interface JourneyLeg {
   // nem ír vagy olvas belőlük.
   stopAccessibility?: AccessibilityStatus;
   vehicleAccessibility?: AccessibilityStatus;
+  // Sprint 7.2 (LIVE TRANSIT REALTIME REFRESH, 2026-09-16) — a nyers MOTIS
+  // MotisLeg/MotisPlace stabil identitás-mezői, MINIMÁLISAN megőrizve (lásd
+  // orchestrator.ts classifyItineraryStepFreeAccessibility() blokkja, ami
+  // már bizonyítottan megbízhatóként kezeli ugyanezeket a mezőket a nyers
+  // MOTIS válaszból). KIZÁRÓLAG a realtime-refresh identitás-párosításhoz
+  // kell — SOHA nem jelenik meg a UI-ban.
+  tripId?: string;
+  routeId?: string;
+  fromStopId?: string;
+  toStopId?: string;
 }
 
 export interface Journey {

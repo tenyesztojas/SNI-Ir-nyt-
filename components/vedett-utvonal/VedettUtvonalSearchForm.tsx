@@ -48,6 +48,15 @@ import {
   type WalkToTransitBoundaryState,
 } from "@/lib/vedett-route/navigation/legTransition";
 import { resolveNavigationTransferTiming } from "@/lib/vedett-route/navigation/transferTiming";
+// NAVIGATION — LIVE TRANSIT REALTIME REFRESH (Sprint 7.2, 2026-09-16) — a
+// MÁR MEGLÉVŐ displayedJourney TRANSIT lábainak realtime mezőit (departure/
+// arrival/delay/cancelled) frissíti, PONTOS stabil identitás (tripId)
+// alapján, egy PURE merge-en keresztül. Nincs új navigációs state machine —
+// a hook csak a meglévő setDisplayedJourney(prev => ...) functional update
+// mintát használja (lásd rerouteSessionRef staleness-guard, ugyanaz a
+// mintázat, mint az automatikus reroute effektnél).
+import { useTransitRealtimeRefresh } from "@/lib/hooks/useTransitRealtimeRefresh";
+import { mergeRealtimeUpdates } from "@/lib/vedett-route/realtimeRefresh/mergeRealtimeUpdates";
 import RestPointQuickAdd, { type RestPointCreatedPayload } from "./RestPointQuickAdd";
 // TELEPÜLÉS-AUTOCOMPLETE ("UX-fejlesztés..." kör, A) rész) — EGYETLEN közös
 // komponens/logika a "Város" mezőkhöz (induló + célhely), nincs duplikált
@@ -1115,6 +1124,42 @@ function RankedJourneyCard({
     originalDestination?.lon,
   ]);
 
+  // LIVE TRANSIT REALTIME REFRESH (Sprint 7.2, 2026-09-16) — a hívó (itt)
+  // építi a lekérdezési kontextust a MÁR MEGLÉVŐ displayedJourney saját
+  // origin/destination/departAt adataiból, és a TRANSIT lábak stabil
+  // (tripId) identitásából — a hook maga sosem lát/bíz a teljes Journey
+  // objektumban, csak ebben a szűk kontextusban.
+  const nextLegIndex = typeof activeLegIndex === "number" ? activeLegIndex + 1 : 0;
+  const hasRelevantTransitLeg = Boolean(
+    activeLeg?.mode === "TRANSIT" || displayedJourney.legs[nextLegIndex]?.mode === "TRANSIT"
+  );
+  const firstLeg = displayedJourney.legs.length > 0 ? displayedJourney.legs[0] : undefined;
+  const realtimeRefreshContext = useMemo(() => {
+    if (!navigationMode) return null;
+    const transitLegIdentities = displayedJourney.legs
+      .filter((leg) => leg.mode === "TRANSIT" && leg.tripId)
+      .map((leg) => ({ tripId: leg.tripId as string, routeId: leg.routeId }));
+    if (transitLegIdentities.length === 0) return null;
+    if (firstLeg?.fromLat === undefined || firstLeg?.fromLon === undefined) return null;
+    if (lastLeg?.toLat === undefined || lastLeg?.toLon === undefined) return null;
+    return {
+      from: { lat: firstLeg.fromLat, lon: firstLeg.fromLon },
+      to: { lat: lastLeg.toLat, lon: lastLeg.toLon },
+      departAt: displayedJourney.departureTime,
+      legs: transitLegIdentities,
+    };
+  }, [navigationMode, displayedJourney, firstLeg, lastLeg]);
+
+  useTransitRealtimeRefresh({
+    navigationActive: navigationMode,
+    hasRelevantTransitLeg,
+    hasRestStopOverride: Boolean(restStopMapState.active && restStopMapState.legsOverride),
+    isRerouting: automaticRerouteStatus === "REROUTING",
+    context: realtimeRefreshContext,
+    sessionId: rerouteSessionRef.current,
+    onUpdates: (updates) => setDisplayedJourney((prev) => mergeRealtimeUpdates(prev, updates)),
+  });
+
   return (
     <div className="card border-2" style={{ borderColor: ranked.labels.length > 0 ? "#93c5fd" : "#e5e7eb" }}>
       <div className="flex flex-wrap items-center gap-2">
@@ -1625,7 +1670,14 @@ function RankedJourneyCard({
                 originalDestination={originalDestination}
                 originalDepartAt={displayedJourney.departureTime}
                 geo={geo}
-                onRouteResumed={(nextJourney) => setDisplayedJourney(nextJourney)}
+                onRouteResumed={(nextJourney) => {
+                  // Sprint 7.2, 8. pont — a rest-stop resume is ÚJ Journey-t
+                  // hoz be, ezért ez is új realtime-refresh sessiont kell
+                  // nyitnia (ugyanaz a rerouteSessionRef, amit az automatikus
+                  // reroute effekt is használ a staleness-guardhoz).
+                  rerouteSessionRef.current += 1;
+                  setDisplayedJourney(nextJourney);
+                }}
                 onMapStateChange={setRestStopMapState}
                 externalRequestRestToken={restRequestToken}
                 mode={restPanelMode}
