@@ -84,6 +84,24 @@ export interface GpsFixUsabilityResult {
   freshness: GpsFixFreshness;
 }
 
+// METRO GPS LOSS + MAP CAMERA SAFETY SPRINT (2026-09-17) — "GPS QUALITY
+// STATE". NEM egy második freshness-rendszer: a MÁR meglévő
+// GpsFixUsabilityResult (freshness + usable) mezőit osztályozza egy, a
+// hívó oldal (kamera/marker döntések) számára kényelmesebb, durva
+// állapotra. Nincs új küszöbérték, nincs accuracy-alapú heurisztika.
+//
+//   GOOD     — friss ÉS felhasználható fix (usable === true).
+//   DEGRADED — a fix technikailag FRESH, de MÉG NEM usable (pl.
+//              foreground reacquisition alatt a visszatérés ELŐTTI utolsó
+//              ismert fix) — bizonytalan, de nem "elveszett".
+//   LOST     — a fix STALE vagy INVALID (nincs megbízható, aktuális adat).
+export type GpsQuality = "GOOD" | "DEGRADED" | "LOST";
+
+export function classifyGpsQuality(result: Pick<GpsFixUsabilityResult, "usable" | "freshness">): GpsQuality {
+  if (result.usable) return "GOOD";
+  return result.freshness === "FRESH" ? "DEGRADED" : "LOST";
+}
+
 /**
  * Egy adott GPS fix (annak `timestampMs`-e) FELHASZNÁLHATÓ-e route
  * progress / leg transition / boarding / reroute-kiértékeléshez.

@@ -798,6 +798,29 @@ function RankedJourneyCard({
     setGpsFixUsable(result.usable);
   }, [currentPosition?.timestampMs]);
 
+  // METRO GPS LOSS + MAP CAMERA SAFETY SPRINT (2026-09-17) — a FENTI effekt
+  // KIZÁRÓLAG új currentPosition.timestampMs érkezésekor fut. Ha a GPS
+  // TELJESEN elnémul (pl. metróalagút — a watchPosition egyáltalán nem ad
+  // több fixet), a fenti effekt SOHA nem futna újra, és gpsFixUsable örökre
+  // az UTOLSÓ (jó) értéken ragadna, hiába telt el réges régen a
+  // GPS_FIX_MAX_AGE_MS. Ez a periodikus újraértékelés UGYANAZT a pure
+  // evaluateGpsFixUsability()-t hívja, a jelenlegi Date.now()-hoz képest —
+  // NEM egy új heurisztika/threshold, csak a MEGLÉVŐ staleness-küszöb
+  // órajel-vezérelt újraellenőrzése. Kizárólag AKTÍV navigáció alatt fut
+  // (máskor nincs értelme), és SOSEM állítja vissza automatikusan a
+  // followMode-ot vagy a kamerát — kizárólag a gpsFixUsable minőség-jelzőt
+  // tartja naprakészen, amit a lenti <VedettUtvonalMap> pozíció-gate-je
+  // (mapCurrentPosition) és a meglévő navigációs guardok olvasnak.
+  useEffect(() => {
+    if (!navigationMode) return;
+    const intervalId = window.setInterval(() => {
+      const result = evaluateGpsFixUsability(gpsFixGateRef.current, currentPosition?.timestampMs ?? null, Date.now());
+      gpsFixGateRef.current = result.nextState;
+      setGpsFixUsable(result.usable);
+    }, 5_000);
+    return () => window.clearInterval(intervalId);
+  }, [navigationMode, currentPosition?.timestampMs]);
+
   // NAVIGATION SPRINT 2.1 — az EGYETLEN, ténylegesen megjelenített útvonal
   // geometriájából stabil koordinátalistát készítünk a route-progress motorhoz.
   // Ugyanazt a journeyLegsToGeoJson() normalizálást használjuk, mint maga a
@@ -1404,7 +1427,16 @@ function RankedJourneyCard({
           >
             <VedettUtvonalMap
               legs={restStopMapState.active && restStopMapState.legsOverride ? restStopMapState.legsOverride : displayedJourney.legs}
-              currentPosition={currentPosition}
+              // METRO GPS LOSS + MAP CAMERA SAFETY SPRINT (2026-09-17) — a
+              // térkép SOHA nem kap "aktuálisként" bemutatott pozíciót, ha a
+              // gpsFixGate (lásd fent) a jelenlegi fixet NEM usable-nek
+              // minősíti (STALE/INVALID, vagy foreground-reacquisition alatti
+              // visszatérés-előtti fix). Ez tartja a kamerát/markert a
+              // legutóbbi stabil állapotban ahelyett, hogy egy elavult/
+              // bizonytalan fixet mutatnánk aktuálisként, vagy azzal
+              // mozgatnánk a kamerát (lásd VedettUtvonalMap.tsx follow-
+              // effektjének/marker-effektjének korai return-jét null pozícióra).
+              currentPosition={gpsFixUsable ? currentPosition : null}
               restPoints={mergeRestPointMarkers(
                 sessionRestPoints.map((rp) => ({ id: rp.id, name: rp.name, latitude: rp.latitude, longitude: rp.longitude })),
                 restStopMapState.active ? restStopMapState.restPoints : []

@@ -164,16 +164,28 @@ describe("N) Map Follow Mode — folyamatos easeTo követés navigációs zoomra
   });
 
   test("a route-fitBounds ÉS a pihenőpont-fókusz fitBounds effektek is followMode alatt kikapcsolnak, nehogy versengjenek a kamerával a follow-effekttel", () => {
-    assert.match(mapSrc, /if \(hasCoords && !restPointFocusMode && !followMode\) \{/);
-    assert.match(mapSrc, /if \(followMode\) return;\s*\n\s*\n\s*const hasCurrentPosition/);
+    // METRO GPS LOSS + MAP CAMERA SAFETY SPRINT (2026-09-17) — a feltétel
+    // kiegészült egy `!userCameraOverrideRef.current` ellenőrzéssel (lásd
+    // navigation-gps-loss-camera-safety.test.ts), a KORÁBBI három feltétel
+    // (hasCoords/!restPointFocusMode/!followMode) VÁLTOZATLANUL megvan.
+    assert.match(mapSrc, /if \(hasCoords && !restPointFocusMode && !followMode && !userCameraOverrideRef\.current\) \{/);
+    // METRO GPS LOSS + MAP CAMERA SAFETY SPRINT (2026-09-17) — a
+    // `if (followMode) return;` UTÁN egy ÚJ `if (userCameraOverrideRef.current)
+    // return;` sor is bekerült (lásd fent) a `const hasCurrentPosition` előtt.
+    assert.match(mapSrc, /if \(followMode\) return;[\s\S]*?if \(userCameraOverrideRef\.current\) return;\s*\n\s*\n\s*const hasCurrentPosition/);
   });
 });
 
 describe("O) User Pan/Zoom — csak VALÓDI felhasználói gesztus szakítja meg a follow-módot", () => {
   test("a dragstart/zoomstart/rotatestart/pitchstart eseményeken originalEvent-et vizsgál — programozott easeTo/fitBounds sosem szakítja meg a follow-ot", () => {
+    // METRO GPS LOSS + MAP CAMERA SAFETY SPRINT (2026-09-17) — a gesztus-
+    // kezelő kiegészült egy `userCameraOverrideRef.current = true;` sorral
+    // (lásd navigation-gps-loss-camera-safety.test.ts) — a MEGLÉVŐ
+    // onUserGestureCancelFollowRef hívás VÁLTOZATLANUL, ugyanabban az
+    // `if (e.originalEvent)` ágban fut.
     assert.match(
       mapSrc,
-      /const handlePossibleUserGesture = \(e: \{ originalEvent\?: unknown \}\) => \{\s*\n\s*if \(e\.originalEvent\) \{\s*\n\s*onUserGestureCancelFollowRef\.current\?\.\(\);\s*\n\s*\}\s*\n\s*\};/
+      /const handlePossibleUserGesture = \(e: \{ originalEvent\?: unknown \}\) => \{\s*\n\s*if \(e\.originalEvent\) \{\s*\n[\s\S]*?onUserGestureCancelFollowRef\.current\?\.\(\);\s*\n\s*\}\s*\n\s*\};/
     );
     assert.match(mapSrc, /map\.on\("dragstart", handlePossibleUserGesture\);/);
     assert.match(mapSrc, /map\.on\("zoomstart", handlePossibleUserGesture\);/);
@@ -225,7 +237,9 @@ describe("Q) Route Stays Visible / Map Performance — nincs remount, nincs GPS-
   });
 
   test("VedettUtvonalMap.tsx: a route-geometria rajzolása (addSource/addLayer) followMode-tól FÜGGETLENÜL mindig lefut — csak a KAMERA (fitBounds) kapcsol ki followMode alatt", () => {
-    const followGuardIdx = mapSrc.indexOf("if (hasCoords && !restPointFocusMode && !followMode)");
+    // METRO GPS LOSS + MAP CAMERA SAFETY SPRINT (2026-09-17) — a guard
+    // feltétele kiegészült `!userCameraOverrideRef.current`-tel, lásd fent.
+    const followGuardIdx = mapSrc.indexOf("if (hasCoords && !restPointFocusMode && !followMode && !userCameraOverrideRef.current)");
     const addSourceIdx = mapSrc.indexOf("map.addSource(sourceId");
     assert.ok(addSourceIdx !== -1 && followGuardIdx !== -1 && addSourceIdx < followGuardIdx, "az addSource/addLayer hívásoknak a followMode-fitBounds guard ELŐTT kell futniuk, feltétel nélkül");
   });

@@ -167,6 +167,26 @@ export default function VedettUtvonalMap({ legs, carRouteGeometry = null, fromNa
     onUserGestureCancelFollowRef.current = onUserGestureCancelFollow;
   }, [onUserGestureCancelFollow]);
 
+  // METRO GPS LOSS + MAP CAMERA SAFETY SPRINT (2026-09-17) — "USER OWNS
+  // CAMERA" ownership-guard. A KORÁBBI viselkedés hibája: a route-/
+  // pihenőpont-fitBounds effektek KIZÁRÓLAG a `followMode`-ot nézték —
+  // ha a felhasználó egy valódi gesztussal megszakította a követést
+  // (followMode=false), egy KÉSŐBBI legs/displayedJourney/realtime-frissítés
+  // ÚJRA lefuttatta a fitBounds-ot, és láthatóan "visszarántotta" a kamerát
+  // a felhasználó alól. Ez a ref PONTOSAN azt jelöli, hogy a felhasználó
+  // SAJÁT gesztussal vette át a kamerát — a lenti fitBounds-effektek ezt is
+  // ellenőrzik a `followMode` mellett. Kizárólag valódi felhasználói
+  // gesztus (lásd handlePossibleUserGesture, `e.originalEvent`) állítja
+  // true-ra, és KIZÁRÓLAG a felhasználó explicit "Kövesd a helyzetem"
+  // művelete (followMode: false -> true váltás, lásd a lenti effekt) oldja
+  // fel — NINCS időzítő/automatikus visszakapcsolás. Az ELSŐ, még sosem
+  // navigált route-előnézet fitBounds-ját ez NEM érinti (a ref induló
+  // értéke false).
+  const userCameraOverrideRef = useRef(false);
+  useEffect(() => {
+    if (followMode) userCameraOverrideRef.current = false;
+  }, [followMode]);
+
   // A GPS-gomb mindig ezt a ref-et olvassa — nem hoz létre új GPS-watch-ot,
   // nem perzisztálja/logolja a koordinátát (lásd useGeolocation.ts
   // fejléce), csak a props-ból már amúgy is kapott pozíciót tükrözi.
@@ -216,6 +236,7 @@ export default function VedettUtvonalMap({ legs, carRouteGeometry = null, fromNa
     // megkülönböztetési mód.
     const handlePossibleUserGesture = (e: { originalEvent?: unknown }) => {
       if (e.originalEvent) {
+        userCameraOverrideRef.current = true;
         onUserGestureCancelFollowRef.current?.();
       }
     };
@@ -404,7 +425,12 @@ export default function VedettUtvonalMap({ legs, carRouteGeometry = null, fromNa
     // útvonal-geometria rajzolása (a fenti addSource/addLayer) ettől
     // FÜGGETLENÜL mindig megtörténik — a route SOHA nem tűnik el
     // navigáció közben (spec 13. pont, "route stays visible").
-    if (hasCoords && !restPointFocusMode && !followMode) {
+    // METRO GPS LOSS + MAP CAMERA SAFETY SPRINT — lásd userCameraOverrideRef
+    // fejlécét: a felhasználó saját gesztussal átvett kamerájába egy legs-
+    // változás (pl. realtime frissítés, reroute) SEM nyúlhat bele. Az első,
+    // sosem-navigált route-előnézetet ez nem érinti (a ref induló értéke
+    // false).
+    if (hasCoords && !restPointFocusMode && !followMode && !userCameraOverrideRef.current) {
       map.fitBounds(bounds, { padding: 48, maxZoom: 17, duration: 300 });
     }
   }, [legs, mapReady, restPointFocusMode, followMode]);
@@ -440,7 +466,7 @@ export default function VedettUtvonalMap({ legs, carRouteGeometry = null, fromNa
       });
     }
 
-    if (carRouteGeometry && carRouteGeometry.coordinates.length > 0 && !followMode) {
+    if (carRouteGeometry && carRouteGeometry.coordinates.length > 0 && !followMode && !userCameraOverrideRef.current) {
       const bounds = new maplibregl.LngLatBounds();
       for (const coord of carRouteGeometry.coordinates) bounds.extend(coord);
       map.fitBounds(bounds, { padding: 48, maxZoom: 17, duration: 300 });
@@ -488,6 +514,10 @@ export default function VedettUtvonalMap({ legs, carRouteGeometry = null, fromNa
     // Explicit Navigation Mode, 10. pont: followMode alatt a lenti
     // follow-effekt felel a kameráért, ez itt sem fut ilyenkor.
     if (followMode) return;
+    // METRO GPS LOSS + MAP CAMERA SAFETY SPRINT — lásd userCameraOverrideRef
+    // fejlécét: a felhasználó saját gesztussal átvett kamerájába egy
+    // pihenőpont-jelölt-lista frissülés sem nyúlhat bele.
+    if (userCameraOverrideRef.current) return;
 
     const hasCurrentPosition = typeof currentLat === "number" && typeof currentLon === "number";
     if (!hasCurrentPosition && restPoints.length === 0) {
