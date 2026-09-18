@@ -127,4 +127,27 @@ describe("automatic reroute guard", () => {
     assert.equal(decisionForegroundOnly.shouldReroute, false);
     assert.equal(decisionForegroundOnly.reason, "FOREGROUND_REACQUISITION");
   });
+
+  // SPRINT 8.2 (NAVIGATION SESSION PERSISTENCE, 2026-09-18) — egy ÚJ/
+  // mountolt JS-session storage-ból restore-olt navigáció, amíg nincs
+  // stabil friss GPS-bizonyíték, FÜGGETLENÜL blokkolja az automatikus
+  // reroute-ot — UGYANAZ az elv, mint foregroundRecoveryActive-nél, KÜLÖN
+  // reason-nel (lásd navigationSessionPersistence.ts fejléce a foreground/
+  // restore recovery elkülönítéséről).
+  test("restoreRecoveryActive=true blokkolja az automatikus reroute-ot, még megerősített OFF_ROUTE esetén is", () => {
+    const state = createInitialRerouteGuardState();
+    assert.equal(
+      shouldStartAutomaticReroute(state, { ...READY, restoreRecoveryActive: true }).reason,
+      "RESTORE_RECOVERY_ACTIVE",
+    );
+  });
+
+  test("restoreRecoveryActive=false (vagy hiányzó) esetén a globális OFF_ROUTE/reroute-viselkedés VÁLTOZATLAN", () => {
+    const state = createInitialRerouteGuardState();
+    assert.deepEqual(
+      shouldStartAutomaticReroute(state, { ...READY, restoreRecoveryActive: false }),
+      { shouldReroute: true, reason: null },
+    );
+    assert.deepEqual(shouldStartAutomaticReroute(state, READY), { shouldReroute: true, reason: null });
+  });
 });

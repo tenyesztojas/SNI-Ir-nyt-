@@ -120,6 +120,19 @@ import {
   type ForegroundRecoveryPhase,
 } from "@/lib/vedett-route/navigation/foregroundReacquisition";
 import { vedettRouteForegroundDebugLog } from "@/lib/vedett-route/logger";
+// NAVIGATION SESSION PERSISTENCE — SPRINT 8.2 (2026-09-18). Pure
+// serialize/validate/save/load/clear modul, hogy az aktív navigáció
+// túlélje a reload/tab-evictiont/új JS-session mountot. KÜLÖN fogalom, mint
+// a foreground reacquisition (lásd navigationSessionPersistence.ts fejléce).
+import {
+  clearNavigationSession,
+  deriveDestinationFromJourney,
+  loadNavigationSession,
+  saveNavigationSession,
+  sanitizeRestoredJourney,
+  serializeNavigationSession,
+  type PersistedNavigationSession,
+} from "@/lib/vedett-route/navigation/navigationSessionPersistence";
 
 // „Aktuális helyzetem" mint indulási pont (UX módosítás, 2026-09-09) — a
 // keresési form induló-mezője mostantól két, egymást KIZÁRÓ móddal
@@ -601,6 +614,15 @@ function RankedJourneyCard({
   const foregroundRecoveryRef = useRef(createInitialForegroundRecoveryState());
   const [foregroundRecoveryPhase, setForegroundRecoveryPhase] = useState<ForegroundRecoveryPhase>("IDLE");
 
+  // SPRINT 8.2 (NAVIGATION SESSION PERSISTENCE, 2026-09-18) — restoreRecoveryRef
+  // a foregroundReacquisition.ts UGYANAZON pure fázis-átmenet modulját
+  // használja fel, DE KÜLÖN reffel/koncepcióként: a restore-recovery egy ÚJ/
+  // mountolt JS-session storage-ból történő helyreállítása, NEM a
+  // foreground-reacquisition (ugyanaz a session tér vissza háttérből) — a
+  // kettő SOHA nem mosható össze (lásd navigationSessionPersistence.ts).
+  const restoreRecoveryRef = useRef(createInitialForegroundRecoveryState());
+  const [restoreRecoveryPhase, setRestoreRecoveryPhase] = useState<ForegroundRecoveryPhase>("IDLE");
+
   // A navigációs "session" bármely megváltozása (kártya-bezárás navigáció
   // közben, navigáció leállítása, manuális/automatikus reroute) a MEGLÉVŐ
   // rerouteSessionRef-et bumpolja — ez EGYIDEJŰLEG érvényteleníti a
@@ -618,7 +640,54 @@ function RankedJourneyCard({
     }
     foregroundRecoveryRef.current = cancelForegroundRecovery(foregroundRecoveryRef.current);
     setForegroundRecoveryPhase(foregroundRecoveryRef.current.phase);
+    // SPRINT 8.2 — session-váltás a restore-recovery ciklust is érvényteleníti.
+    restoreRecoveryRef.current = cancelForegroundRecovery(restoreRecoveryRef.current);
+    setRestoreRecoveryPhase(restoreRecoveryRef.current.phase);
   };
+
+  // SPRINT 8.2 (NAVIGATION SESSION PERSISTENCE, 2026-09-18) — EXPLICIT,
+  // NÉV SZERINT KÜLÖN belépési pont a navigationMode-ba, a startNavigation()
+  // (friss, explicit user-akció) MELLETT — a régi safety invariant
+  // VÁLTOZATLAN marad: a navigationMode bekapcsolása KIZÁRÓLAG ebből a KÉT
+  // szemantikailag külön, explicit helyről futhat, SOHA egy sima mount/
+  // effekt önmagában. Ezt a függvényt KIZÁRÓLAG a lenti mount-effekt hívja,
+  // ÉS csak azután, hogy a persisted session runtime-validálva lett (schema/
+  // TTL/navigationActive — lásd navigationSessionPersistence.ts — ÉS
+  // fingerprint-egyezés a kártya saját journey-jével). Ez NEM egy "új
+  // navigáció indítása" — egy KORÁBBAN, explicit user-akcióval (startNavigation)
+  // elindított, MÉG érvényes session helyreállítása.
+  const restorePersistedNavigation = (persisted: PersistedNavigationSession) => {
+    bumpNavigationSession();
+    rerouteGuardRef.current = resetRerouteGuard();
+    setAutomaticRerouteStatus("IDLE");
+    setAutomaticRerouteMessage(null);
+    // A régi GPS/off-route/progress/realtime runtime állapotot SOHA nem
+    // bízzuk el a storage-ból — a displayedJourney realtime-mezőit
+    // sanitizeRestoredJourney() konzervatív alapállapotra állítja, a
+    // MEGLÉVŐ useTransitRealtimeRefresh hook frissíti majd felül, ha van
+    // friss adat (lásd lentebb, változatlan wiring).
+    setDisplayedJourney(sanitizeRestoredJourney(persisted.displayedJourney));
+    setNavigationMode(true);
+    setFollowMode(true);
+    restoreRecoveryRef.current = startForegroundRecovery(restoreRecoveryRef.current);
+    setRestoreRecoveryPhase(restoreRecoveryRef.current.phase);
+    geo.startWatching();
+  };
+
+  // Mount-once restore-KÍSÉRLET storage-ból (reload/tab-eviction/új
+  // JS-session túlélése). Az effekt ÖNMAGA SOHA nem hívja setNavigationMode-ot
+  // — kizárólag validál (fail-closed: érvénytelen/lejárt/hiányzó session,
+  // vagy fingerprint-eltérés esetén nem csinál semmit), és csak érvényes
+  // egyezés esetén adja át a döntést az explicit restorePersistedNavigation()
+  // helpernek.
+  useEffect(() => {
+    const persisted = loadNavigationSession(Date.now());
+    if (!persisted) return;
+    if (!persisted.displayedJourney.fingerprint || !journey.fingerprint) return;
+    if (persisted.displayedJourney.fingerprint !== journey.fingerprint) return;
+    restorePersistedNavigation(persisted);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Manuális teljes képernyő (spec 7. pont) — a NORMÁL (nem navigáló) map
   // nézeten is elérhető "⛶ Teljes képernyő" gomb, KÜLÖN a navigationMode-tól:
@@ -735,7 +804,27 @@ function RankedJourneyCard({
     setNavigationMode(false);
     setFollowMode(false);
     geo.stopWatching();
+    clearNavigationSession(); // SPRINT 8.2 — explicit navigáció leállítása törli a persisted sessiont.
   };
+
+  // SPRINT 8.2 (NAVIGATION SESSION PERSISTENCE, 2026-09-18) — a navigáció
+  // stabil alapját frissítjük storage-ban minden legitim displayedJourney-
+  // váltáskor (automatikus reroute, rest-stop resume), amíg a navigáció
+  // aktív — egy reload/tab-eviction ezért a LEGFRISSEBB stabil journey-t
+  // állítja helyre, nem a kártya induló itineraryjét. Az ÚJ payload
+  // felülírja a régit (nincs szükség külön "clear a régi session-t"
+  // lépésre destination/journey-váltáskor).
+  useEffect(() => {
+    if (!navigationMode) return;
+    saveNavigationSession(
+      serializeNavigationSession({
+        destination: deriveDestinationFromJourney(displayedJourney),
+        displayedJourney,
+        nowMs: Date.now(),
+      }),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [navigationMode, displayedJourney]);
 
   // WatchPosition lifecycle (spec 9. pont, "mandatory clearWatch on stop/
   // unmount") — ha a kártya BEZÁRUL (isOpen -> false) navigáció közben, a
@@ -755,6 +844,7 @@ function RankedJourneyCard({
       setNavigationMode(false);
       setFollowMode(false);
       geo.stopWatching();
+      clearNavigationSession(); // SPRINT 8.2 — a kártya-bezárás közbeni navigáció-leállítás is törli a persisted sessiont.
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
@@ -869,6 +959,17 @@ function RankedJourneyCard({
     }
   };
 
+  // SPRINT 8.2 — a MEGLÉVŐ gpsFixGate.ts kimeneteiből frissíti a KÜLÖN
+  // restoreRecoveryRef fázisát is (lásd a modul fejlécét a foreground/
+  // restore recovery elkülönítéséről).
+  const applyRestoreRecoveryPhaseUpdate = (gps: { usable: boolean; reacquiring: boolean }) => {
+    const previous = restoreRecoveryRef.current;
+    const next = updateForegroundRecoveryPhase(previous, gps);
+    if (next.phase === previous.phase) return;
+    restoreRecoveryRef.current = next;
+    setRestoreRecoveryPhase(next.phase);
+  };
+
   useEffect(() => {
     if (typeof document === "undefined") return;
     const handleVisibilityChange = () => {
@@ -908,6 +1009,7 @@ function RankedJourneyCard({
     setGpsFixUsable(result.usable);
     setGpsReacquiring(isGpsReacquiring(result.nextState));
     applyForegroundRecoveryPhaseUpdate({ usable: result.usable, reacquiring: isGpsReacquiring(result.nextState) });
+    applyRestoreRecoveryPhaseUpdate({ usable: result.usable, reacquiring: isGpsReacquiring(result.nextState) });
   }, [currentPosition?.timestampMs]);
 
   // METRO GPS LOSS + MAP CAMERA SAFETY SPRINT (2026-09-17) — a FENTI effekt
@@ -931,6 +1033,7 @@ function RankedJourneyCard({
       setGpsFixUsable(result.usable);
       setGpsReacquiring(isGpsReacquiring(result.nextState));
       applyForegroundRecoveryPhaseUpdate({ usable: result.usable, reacquiring: isGpsReacquiring(result.nextState) });
+      applyRestoreRecoveryPhaseUpdate({ usable: result.usable, reacquiring: isGpsReacquiring(result.nextState) });
     }, 5_000);
     return () => window.clearInterval(intervalId);
   }, [navigationMode, currentPosition?.timestampMs]);
@@ -1328,6 +1431,9 @@ function RankedJourneyCard({
       // reason-nel (spec 8. pont) — a globális OFF_ROUTE-küszöb és a
       // gpsReacquiring-guard VÁLTOZATLAN, ez egy plusz védelmi réteg.
       foregroundRecoveryActive: isForegroundRecoveryActive(foregroundRecoveryPhase),
+      // SPRINT 8.2 — restore-recovery (storage-ból helyreállított session,
+      // MÉG nincs stabil friss GPS) is FÜGGETLEN, plusz blokkoló feltétel.
+      restoreRecoveryActive: isForegroundRecoveryActive(restoreRecoveryPhase),
     });
     if (!decision.shouldReroute || !currentPosition || !originalDestination) return;
 
@@ -1384,6 +1490,7 @@ function RankedJourneyCard({
     gpsFixUsable,
     gpsReacquiring,
     foregroundRecoveryPhase,
+    restoreRecoveryPhase,
     originalDestination?.name,
     originalDestination?.lat,
     originalDestination?.lon,

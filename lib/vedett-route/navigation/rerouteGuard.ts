@@ -47,6 +47,22 @@ export interface RerouteGuardInput {
    * gyűjtött elég friss bizonyítékot az aktuális helyzetéről.
    */
   foregroundRecoveryActive?: boolean;
+  /**
+   * SPRINT 8.2 (NAVIGATION SESSION PERSISTENCE, 2026-09-18) — igaz, HA a
+   * jelenlegi navigáció egy ÚJ/mountolt JS-session storage-ból (localStorage)
+   * történő restore-jából ered, ÉS a meglévő gpsFixGate.ts szerint MÉG NEM
+   * áll rendelkezésre stabil, friss GPS-bizonyíték. FÜGGETLEN, plusz
+   * feltétel — UGYANAZ az elv, mint foregroundRecoveryActive-nél, DE
+   * KONCEPTUÁLISAN KÜLÖN: a foreground-reacquisition ugyanaz a JS-session
+   * tér vissza háttérből, a restore-recovery egy ÚJ JS-session áll helyre
+   * storage-ból (lásd navigationSessionPersistence.ts fejléce). A hívó
+   * (VedettUtvonalSearchForm.tsx) KÜLÖN refben tartja a két recovery-t,
+   * még ha ugyanazt a pure fázis-átmenet modult (foregroundReacquisition.ts)
+   * használja is fel mindkettőhöz — ez NEM egy második, párhuzamos GPS
+   * state machine, csak a MEGLÉVŐ, kis modul másik, külön névvel követett
+   * felhasználása.
+   */
+  restoreRecoveryActive?: boolean;
 }
 
 export type RerouteBlockReason =
@@ -58,7 +74,8 @@ export type RerouteBlockReason =
   | "COOLDOWN_ACTIVE"
   | "TRANSIT_GEOMETRY_UNCERTAIN"
   | "GPS_REACQUIRING"
-  | "FOREGROUND_REACQUISITION";
+  | "FOREGROUND_REACQUISITION"
+  | "RESTORE_RECOVERY_ACTIVE";
 
 export type RerouteGuardDecision =
   | { shouldReroute: true; reason: null }
@@ -77,6 +94,7 @@ export function shouldStartAutomaticReroute(
   if (input.transitGeometryUncertain) return { shouldReroute: false, reason: "TRANSIT_GEOMETRY_UNCERTAIN" };
   if (input.gpsReacquiring) return { shouldReroute: false, reason: "GPS_REACQUIRING" };
   if (input.foregroundRecoveryActive) return { shouldReroute: false, reason: "FOREGROUND_REACQUISITION" };
+  if (input.restoreRecoveryActive) return { shouldReroute: false, reason: "RESTORE_RECOVERY_ACTIVE" };
   if (!input.hasCurrentPosition) return { shouldReroute: false, reason: "POSITION_MISSING" };
   if (!input.hasDestination) return { shouldReroute: false, reason: "DESTINATION_MISSING" };
   if (state.inFlight) return { shouldReroute: false, reason: "REQUEST_IN_FLIGHT" };

@@ -38,11 +38,41 @@ describe("I) Explicit Navigation Mode — SOHA nem automatikus", () => {
     assert.match(formSrc, /const \[navigationMode, setNavigationMode\] = useState\(false\);/);
   });
 
-  test("a '▶ Navigáció indítása' gomb a KIZÁRÓLAGOS belépési pont a navigationMode-ba", () => {
+  test("a '▶ Navigáció indítása' gomb + az explicit restorePersistedNavigation() a KIZÁRÓLAGOS belépési pontok a navigationMode-ba", () => {
     assert.match(formSrc, /▶ Navigáció indítása/);
-    // A gomb onClick-je startNavigation — nincs más setNavigationMode(true) hívás sehol a fájlban.
+    // SPRINT 8.2 (NAVIGATION SESSION PERSISTENCE, 2026-09-18) — a régi
+    // invariáns ("setNavigationMode(true) KIZÁRÓLAG EGY helyről") a lényegét
+    // megtartva bővült: PONTOSAN KÉT szemantikailag explicit hely engedett —
+    // (1) startNavigation(), friss user-akció; (2) restorePersistedNavigation(),
+    // KIZÁRÓLAG már runtime-validált, aktív persisted session helyreállítása
+    // (lásd navigationSessionPersistence.ts). Egy sima mount/effekt ÖNMAGA
+    // TOVÁBBRA sem kapcsolhatja be — ezt a lenti tesztek külön bizonyítják.
     const setTrueMatches = formSrc.match(/setNavigationMode\(true\)/g) ?? [];
-    assert.equal(setTrueMatches.length, 1, "setNavigationMode(true) KIZÁRÓLAG a startNavigation()-ban futhat, semmilyen automatikus/mount-effektben");
+    assert.equal(
+      setTrueMatches.length,
+      2,
+      "setNavigationMode(true) KIZÁRÓLAG a startNavigation()-ban és a restorePersistedNavigation()-ban futhat, semmilyen más automatikus/mount-effektben",
+    );
+  });
+
+  test("setNavigationMode(true) KIZÁRÓLAG a startNavigation() és a restorePersistedNavigation() függvénytörzsében fordul elő", () => {
+    const startNavMatch = formSrc.match(/const startNavigation = \(\) => \{[\s\S]*?\n {2}\};/);
+    const restoreMatch = formSrc.match(/const restorePersistedNavigation = \(persisted: PersistedNavigationSession\) => \{[\s\S]*?\n {2}\};/);
+    assert.ok(startNavMatch, "meg kell találni a startNavigation() függvényt");
+    assert.ok(restoreMatch, "meg kell találni a restorePersistedNavigation() függvényt");
+    assert.match(startNavMatch[0], /setNavigationMode\(true\);/);
+    assert.match(restoreMatch[0], /setNavigationMode\(true\);/);
+
+    // A KÉT függvénytörzsön KÍVÜL eső forrás NEM tartalmazhat setNavigationMode(true) hívást.
+    const outsideBothBodies = formSrc.replace(startNavMatch[0], "").replace(restoreMatch[0], "");
+    assert.doesNotMatch(outsideBothBodies, /setNavigationMode\(true\)/);
+  });
+
+  test("a mount-effekt (persisted session restore-kísérlet) ÖNMAGA nem hív setNavigationMode(true)-t — kizárólag validál, és csak érvényes egyezés esetén hívja a restorePersistedNavigation() helpert", () => {
+    const mountEffectMatch = formSrc.match(/useEffect\(\(\) => \{\s*\n\s*const persisted = loadNavigationSession\(Date\.now\(\)\);[\s\S]*?\n {2}\}, \[\]\);/);
+    assert.ok(mountEffectMatch, "meg kell találni a persisted-session restore mount-effektet");
+    assert.doesNotMatch(mountEffectMatch[0], /setNavigationMode\(true\)/);
+    assert.match(mountEffectMatch[0], /restorePersistedNavigation\(persisted\);/);
   });
 
   test("startNavigation() explicit user-akcióra hívja geo.startWatching()-et, nem valamilyen effektből/mountból", () => {
