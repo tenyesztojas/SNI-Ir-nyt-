@@ -3564,21 +3564,20 @@ export default function VedettUtvonalSearchForm({
             </p>
           )}
 
-          {/* BKK Realtime integráció, 10. pont: a riasztásokat SZÁNDÉKOSAN
-              nem egyes útvonalakhoz rendelve, hanem keresés-szinten, valós
-              BKK Alerts.pb adatból jelenítjük meg (lásd types.ts
-              OrchestratedSearchResult.serviceAlerts dokumentációja). */}
-          {result.serviceAlerts.length > 0 && (
-            <div className="space-y-1 rounded border border-amber-200 bg-amber-50 p-2">
-              <p className="text-xs font-semibold text-amber-800">Aktuális BKK riasztások (nem feltétlenül érintik a lenti útvonalakat):</p>
-              {result.serviceAlerts.map((a) => (
-                <p key={a.id} className="text-xs text-amber-700">
-                  ⚠️ {a.header}
-                  {a.description ? ` — ${a.description}` : ""}
-                </p>
-              ))}
-            </div>
-          )}
+          {/* BKK Realtime integráció, 10. pont — GLOBÁLIS, útvonalhoz nem
+              kötött service-alert blokk SZÁNDÉKOSAN ELTÁVOLÍTVA a
+              felhasználói UI-ból (2026-09-18, Védett Útvonal UX hibajegy):
+              a BKK Alerts.pb feedből érkező riasztások válogatás nélkül,
+              nyers HTML markuppal (leírás mezőben <ul>/<li>/<strong> stb.)
+              jelentek meg, akkor is, ha nem érintik a lenti útvonalakat —
+              ez ellentétes a Védett Útvonal UX-ével, különösen autista
+              felhasználók számára. A `result.serviceAlerts` adat/backend
+              (orchestrator.ts, BKK Alerts.pb lekérés) VÁLTOZATLAN marad —
+              KIZÁRÓLAG ennek a globális blokknak a RENDERELÉSE szűnt meg.
+              Jövőbeli irány (KÜLÖN feature, MOST NEM implementálva): csak
+              a kiválasztott útvonal konkrét járatához/szakaszához
+              bizonyíthatóan kapcsolódó riasztás jelenhet meg; bizonytalan
+              relevancia esetén nem jelenítünk meg figyelmeztetést. */}
 
           {result.journeys.map((r, i) => (
             <RankedJourneyCard
