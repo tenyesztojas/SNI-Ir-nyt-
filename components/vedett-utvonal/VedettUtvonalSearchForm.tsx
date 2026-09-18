@@ -133,6 +133,34 @@ import {
   serializeNavigationSession,
   type PersistedNavigationSession,
 } from "@/lib/vedett-route/navigation/navigationSessionPersistence";
+// LIVE ALTERNATIVE — SPRINT 8.4 (8.4A pure engine, 8.4B runtime wiring,
+// 2026-09-18). "STAY ON CURRENT ROUTE" az alap — ez a bekötés SOHA nem vált
+// automatikusan journey-t, kizárólag OFFERED állapotban ajánl fel egy
+// candidate-et, és a váltás KIZÁRÓLAG explicit "Ezt választom" után történik
+// (lásd liveAlternative.ts fejléce). Ez NEM az automatikus reroute (fentebb,
+// rerouteGuard.ts) — a Live Alternative csak akkor futhat, ha a user
+// TOVÁBBRA IS a helyes útvonalon van (lásd offRouteConfirmed guard bemenet).
+import {
+  acceptLiveAlternativeOffer,
+  buildRealtimeDegradationSamples,
+  computeRemainingJourneyMetrics,
+  computeSwitchingCost,
+  createInitialLiveAlternativeGuardState,
+  createInitialLiveAlternativeOffer,
+  declineLiveAlternativeOffer,
+  discardLiveAlternativeSearch,
+  evaluateMeaningfulImprovement,
+  evaluateRealtimeDegradation,
+  markLiveAlternativeEventDeclined,
+  markLiveAlternativeSearchFinished,
+  markLiveAlternativeSearchStarted,
+  presentLiveAlternativeOffer,
+  selectBestLiveAlternativeCandidate,
+  shouldStartLiveAlternativeSearch,
+  startLiveAlternativeOfferSearch,
+  type LiveAlternativeTrigger,
+} from "@/lib/vedett-route/navigation/liveAlternative";
+import { computeJourneyFingerprint } from "@/lib/vedett-route/fingerprint";
 
 // „Aktuális helyzetem" mint indulási pont (UX módosítás, 2026-09-09) — a
 // keresési form induló-mezője mostantól két, egymást KIZÁRÓ móddal
@@ -622,6 +650,16 @@ function RankedJourneyCard({
   // kettő SOHA nem mosható össze (lásd navigationSessionPersistence.ts).
   const restoreRecoveryRef = useRef(createInitialForegroundRecoveryState());
   const [restoreRecoveryPhase, setRestoreRecoveryPhase] = useState<ForegroundRecoveryPhase>("IDLE");
+
+  // LIVE ALTERNATIVE — SPRINT 8.4B (2026-09-18). A guard state (cooldown/
+  // in-flight/decline-suppression) refben él, UGYANAZ az elv, mint
+  // rerouteGuardRef-nél — egy GPS-tick miatti render nem nullázza. Az offer
+  // state VISZONT React state, mert render-vezérelt UI-t hajt (OFFERED
+  // kártya). `liveAlternativePreviewOpen` KIZÁRÓLAG UI-szintű "Megnézem"
+  // toggle — nem cseréli a displayedJourney-t, csak a preview-kártyát nyitja.
+  const liveAlternativeGuardRef = useRef(createInitialLiveAlternativeGuardState());
+  const [liveAlternativeOffer, setLiveAlternativeOffer] = useState(createInitialLiveAlternativeOffer());
+  const [liveAlternativePreviewOpen, setLiveAlternativePreviewOpen] = useState(false);
 
   // A navigációs "session" bármely megváltozása (kártya-bezárás navigáció
   // közben, navigáció leállítása, manuális/automatikus reroute) a MEGLÉVŐ
@@ -1522,6 +1560,141 @@ function RankedJourneyCard({
     };
   }, [navigationMode, displayedJourney, firstLeg, lastLeg]);
 
+  // LIVE ALTERNATIVE — SPRINT 8.4B (2026-09-18). Egyetlen belépési pont a
+  // 8.4A pure guard/engine felé — a hívó (React) SOHA nem duplikál guard-
+  // logikát, csak a bemeneteket adja át és a döntést végrehajtja. Kizárólag
+  // a MEGLÉVŐ, MÁR bekötött POST /api/admin/vedett-utvonal/search
+  // planning endpointot hívja (a fő keresési form is ezt hívja, lásd fent
+  // handleSubmit) — ez, ELLENTÉTBEN a /rest-stops/resume végponttal, TÖBB
+  // ranked Journey candidate-et ad vissza (OrchestratedSearchResult.journeys),
+  // ami a Live Alternative candidate-összehasonlításhoz szükséges. A
+  // böngésző itt sem éri el közvetlenül a MOTIS-t. Origin: aktuális
+  // megbízható GPS. Destination: az AKTÍV navigáció eredeti célja
+  // (originalDestination), SOHA nem disruption-módosított. Planning time:
+  // "innen MOST van-e jobb út" — explicit CURRENT time, NEM az eredeti,
+  // frozen departAt (az továbbra is KIZÁRÓLAG a realtime-refresh identitás
+  // számára marad érvényben, lásd realtimeRefreshContext fent).
+  const maybeStartLiveAlternativeSearch = async (trigger: LiveAlternativeTrigger) => {
+    const nowMs = Date.now();
+    const decision = shouldStartLiveAlternativeSearch(liveAlternativeGuardRef.current, {
+      navigationActive: navigationMode,
+      offRouteConfirmed: routeProgress.offRouteStatus === "OFF_ROUTE",
+      gpsReliable: currentPosition !== null && gpsFixUsable && !gpsReacquiring,
+      foregroundRecoveryActive: isForegroundRecoveryActive(foregroundRecoveryPhase),
+      restoreRecoveryActive: isForegroundRecoveryActive(restoreRecoveryPhase),
+      hasDestination: originalDestination !== null,
+      trigger,
+      nowMs,
+    });
+    if (!decision.shouldSearch || !currentPosition || !originalDestination) return;
+
+    const sessionGeneration = rerouteSessionRef.current;
+    const currentRemaining = computeRemainingJourneyMetrics(displayedJourney, activeLegIndex ?? null);
+    liveAlternativeGuardRef.current = markLiveAlternativeSearchStarted(liveAlternativeGuardRef.current, trigger, nowMs);
+    setLiveAlternativePreviewOpen(false);
+    setLiveAlternativeOffer(startLiveAlternativeOfferSearch(trigger, sessionGeneration));
+
+    try {
+      const response = await fetch("/api/admin/vedett-utvonal/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fromCoordinates: { latitude: currentPosition.latitude, longitude: currentPosition.longitude },
+          toCoordinates: { latitude: originalDestination.lat, longitude: originalDestination.lon },
+          toName: originalDestination.name,
+          departAt: new Date().toISOString(),
+        }),
+      });
+      const data = (await response.json()) as OrchestratedSearchResult | { ok: false; reason?: string };
+
+      if (rerouteSessionRef.current !== sessionGeneration) {
+        setLiveAlternativeOffer((offer) => discardLiveAlternativeSearch(offer, sessionGeneration));
+        return;
+      }
+      if (!data.ok || !Array.isArray(data.journeys) || data.journeys.length === 0) return;
+
+      const candidates = data.journeys.map((ranked) => ranked.journey);
+      const currentFingerprint = displayedJourney.fingerprint ?? computeJourneyFingerprint(displayedJourney);
+      const best = selectBestLiveAlternativeCandidate(candidates, currentFingerprint);
+      if (!best) return;
+
+      const candidateRemaining = computeRemainingJourneyMetrics(best, 0);
+      const switchingCost = computeSwitchingCost({ current: currentRemaining, candidate: candidateRemaining });
+      const rawTimeDifferenceMinutes = currentRemaining.remainingDurationMinutes - candidateRemaining.remainingDurationMinutes;
+      const netTimeBenefitMinutes = rawTimeDifferenceMinutes - switchingCost.totalPenaltyMinutes;
+      const structuralImprovement = {
+        fewerTransfers: candidateRemaining.remainingTransfers < currentRemaining.remainingTransfers,
+        lessWalking: candidateRemaining.remainingWalkingMinutes < currentRemaining.remainingWalkingMinutes,
+      };
+      // Sensory/preferencia-alapú kapu KIZÁRÓLAG akkor aktiválódhat, ha
+      // valós preferencia-adat áll rendelkezésre — ez a kártya jelenleg nem
+      // kapja meg a `weights` state-et (a szülő formban él, lásd fent), így
+      // itt SOHA nem fabrikálunk preferencia-előnyt (hasRealPreferenceData
+      // mindig false) — ez SZÁNDÉKOSAN dokumentált, kis, biztonságos
+      // egyszerűsítés, NEM hiba.
+      const gate = evaluateMeaningfulImprovement({
+        rawTimeDifferenceMinutes,
+        netTimeBenefitMinutes,
+        disruptionDriven: trigger.type === "PROVEN_RELEVANT_DISRUPTION",
+        structuralImprovement,
+        hasRealPreferenceData: false,
+        preferenceFavorsStructuralImprovement: false,
+      });
+      if (!gate.meaningful) return;
+
+      const bullets: string[] = [];
+      if (rawTimeDifferenceMinutes >= 1) bullets.push(`${Math.round(rawTimeDifferenceMinutes)} perccel gyorsabb`);
+      if (structuralImprovement.fewerTransfers) bullets.push("Kevesebb átszállás");
+      if (structuralImprovement.lessWalking) bullets.push("Kevesebb gyaloglás");
+
+      setLiveAlternativeOffer((offer) =>
+        presentLiveAlternativeOffer(
+          offer,
+          best,
+          { netTimeBenefitMinutes, reason: gate.reason, bullets: bullets.slice(0, 3) },
+          sessionGeneration
+        )
+      );
+    } catch {
+      setLiveAlternativeOffer((offer) => discardLiveAlternativeSearch(offer, sessionGeneration));
+    } finally {
+      liveAlternativeGuardRef.current = markLiveAlternativeSearchFinished(liveAlternativeGuardRef.current);
+    }
+  };
+
+  const handleLiveAlternativeDecline = () => {
+    if (liveAlternativeOffer.trigger) {
+      liveAlternativeGuardRef.current = markLiveAlternativeEventDeclined(
+        liveAlternativeGuardRef.current,
+        liveAlternativeOffer.trigger.eventId,
+        Date.now()
+      );
+    }
+    setLiveAlternativePreviewOpen(false);
+    setLiveAlternativeOffer(declineLiveAlternativeOffer(liveAlternativeOffer));
+  };
+
+  // ACCEPT — az EGYETLEN hely, ahol egy Live Alternative candidate
+  // displayedJourney-vé válhat. Stale-session ellenőrzés a MEGLÉVŐ
+  // rerouteSessionRef generation-je alapján (spec 14. pont: "preferáld a
+  // generation checket az agresszív useEffect láncok helyett" — NINCS külön
+  // useEffect, csak ez az explicit, egyszeri ellenőrzés a kattintás
+  // pillanatában). Explicit TILOS: a navigationMode bekapcsolása/
+  // startNavigation() hívása — a navigáció már aktív, csak a journey
+  // cserélődik.
+  const handleLiveAlternativeAccept = () => {
+    const accepted = acceptLiveAlternativeOffer(liveAlternativeOffer);
+    if (!accepted) return;
+    setLiveAlternativePreviewOpen(false);
+    if (liveAlternativeOffer.sessionGeneration !== rerouteSessionRef.current) {
+      setLiveAlternativeOffer(createInitialLiveAlternativeOffer());
+      return;
+    }
+    setDisplayedJourney(accepted.acceptedJourney);
+    bumpNavigationSession();
+    setLiveAlternativeOffer(createInitialLiveAlternativeOffer());
+  };
+
   useTransitRealtimeRefresh({
     navigationActive: navigationMode,
     hasRelevantTransitLeg,
@@ -1529,7 +1702,27 @@ function RankedJourneyCard({
     isRerouting: automaticRerouteStatus === "REROUTING",
     context: realtimeRefreshContext,
     sessionId: rerouteSessionRef.current,
-    onUpdates: (updates) => setDisplayedJourney((prev) => mergeRealtimeUpdates(prev, updates)),
+    onUpdates: (updates) => {
+      // SIGNIFICANT_REALTIME_DEGRADATION TRIGGER — a MEGLÉVŐ ~30s realtime-
+      // refresh kimenetéből, ÚJ POLLER NÉLKÜL (lásd liveAlternative.ts 7.
+      // pont). A degradation-kiértékelés a MEGLÉVŐ displayedJourney (a jelen
+      // render aktuális állapota) és az új updates összevetésével történik,
+      // MIELŐTT a merge-updater fut — ez PONTOSAN a MEGLÉVŐ Sprint 7.2
+      // hook-mintázat (onUpdatesRef mindig a legfrissebb closure-t hívja),
+      // NEM egy második, párhuzamos GPS/realtime state machine.
+      const degradation = evaluateRealtimeDegradation(buildRealtimeDegradationSamples(displayedJourney, updates));
+      setDisplayedJourney((prev) => mergeRealtimeUpdates(prev, updates));
+      if (degradation.degraded && degradation.worstLegTripId) {
+        void maybeStartLiveAlternativeSearch({
+          type: "SIGNIFICANT_REALTIME_DEGRADATION",
+          // Stabil, tripId-hez kötött esemény-identitás — UGYANAZ a romlás
+          // (pl. +2 -> +6 -> +7 perc) NEM generál minden pollozási ciklusban
+          // új eventId-t, a cooldown/decline-suppression emiatt helyesen
+          // véd az ismételt search ellen (lásd liveAlternative.ts 5. pont).
+          eventId: `degradation:${degradation.worstLegTripId}`,
+        });
+      }
+    },
   });
 
   return (
@@ -1759,6 +1952,77 @@ function RankedJourneyCard({
                     : automaticRerouteStatus === "FAILED"
                       ? automaticRerouteMessage ?? "Az automatikus újratervezés most nem sikerült."
                       : "Az aktuális helyzeted alapján már nem az útvonalon haladsz."}
+                </div>
+              </div>
+            )}
+
+            {/* LIVE ALTERNATIVE — SPRINT 8.4B (2026-09-18). KIZÁRÓLAG OFFERED
+                állapotban jelenik meg, nyugodt, nem-modális, nem villogó
+                kártya — valódi <button> elemek, nincs auto-fókusz. Az
+                OFF_ROUTE bannerrel gyakorlatilag sosem jelenik meg egyszerre
+                (a guard explicit blokkolja a keresést OFF_ROUTE alatt), de a
+                pozíció szándékosan ugyanaz a "nem takarja az ETA-kártyát/
+                gombsort" sáv. */}
+            {navigationMode && liveAlternativeOffer.status === "OFFERED" && !liveAlternativePreviewOpen && (
+              <div
+                role="status"
+                aria-live="polite"
+                className="absolute left-1/2 top-[4.25rem] z-20 w-[calc(100%-1.5rem)] max-w-sm -translate-x-1/2 rounded-xl border border-sky-300 bg-sky-50/95 px-4 py-3 shadow-lg backdrop-blur"
+              >
+                <div className="text-sm font-bold text-sky-950">Találtunk egy kedvezőbb lehetőséget.</div>
+                {liveAlternativeOffer.comparisonSummary && liveAlternativeOffer.comparisonSummary.bullets.length > 0 && (
+                  <ul className="mt-1 list-disc pl-4 text-xs leading-snug text-sky-900">
+                    {liveAlternativeOffer.comparisonSummary.bullets.map((bullet) => (
+                      <li key={bullet}>{bullet}</li>
+                    ))}
+                  </ul>
+                )}
+                <div className="mt-2 flex gap-2">
+                  <button
+                    type="button"
+                    className="flex-1 rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white"
+                    onClick={() => setLiveAlternativePreviewOpen(true)}
+                  >
+                    Megnézem
+                  </button>
+                  <button
+                    type="button"
+                    className="flex-1 rounded-lg border border-sky-300 bg-white px-3 py-1.5 text-xs font-semibold text-sky-900"
+                    onClick={handleLiveAlternativeDecline}
+                  >
+                    Maradok ezen
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {navigationMode && liveAlternativeOffer.status === "OFFERED" && liveAlternativePreviewOpen && liveAlternativeOffer.candidateJourney && (
+              <div
+                role="status"
+                aria-live="polite"
+                className="absolute left-1/2 top-[4.25rem] z-20 w-[calc(100%-1.5rem)] max-w-sm -translate-x-1/2 rounded-xl border border-sky-300 bg-white/95 px-4 py-3 shadow-lg backdrop-blur"
+              >
+                <div className="text-sm font-bold text-sky-950">Alternatív útvonal előnézete</div>
+                <div className="mt-1 text-xs leading-snug text-sky-900">
+                  {Math.round(liveAlternativeOffer.candidateJourney.totalDurationMinutes)} perc ·{" "}
+                  {liveAlternativeOffer.candidateJourney.transfers} átszállás ·{" "}
+                  {Math.round(liveAlternativeOffer.candidateJourney.walkingMinutes)} perc gyaloglás
+                </div>
+                <div className="mt-2 flex gap-2">
+                  <button
+                    type="button"
+                    className="flex-1 rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white"
+                    onClick={handleLiveAlternativeAccept}
+                  >
+                    Ezt választom
+                  </button>
+                  <button
+                    type="button"
+                    className="flex-1 rounded-lg border border-sky-300 bg-white px-3 py-1.5 text-xs font-semibold text-sky-900"
+                    onClick={handleLiveAlternativeDecline}
+                  >
+                    Maradok az eredetin
+                  </button>
                 </div>
               </div>
             )}

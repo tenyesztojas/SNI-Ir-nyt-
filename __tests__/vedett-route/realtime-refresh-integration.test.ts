@@ -13,7 +13,14 @@ const source = readFileSync("components/vedett-utvonal/VedettUtvonalSearchForm.t
 
 describe("live transit realtime refresh integration", () => {
   it("a functional setDisplayedJourney(prev => mergeRealtimeUpdates(...)) mintát használja, sosem blind full-journey replace-t", () => {
-    assert.match(source, /onUpdates:\s*\(updates\)\s*=>\s*setDisplayedJourney\(\(prev\)\s*=>\s*mergeRealtimeUpdates\(prev,\s*updates\)\)/);
+    // SPRINT 8.4B (LIVE ALTERNATIVE, 2026-09-18) — az onUpdates callback
+    // MOSTANTÓL egy blokk-törzs (a SIGNIFICANT_REALTIME_DEGRADATION trigger
+    // kiértékelése miatt, lásd liveAlternative.ts), de a lényegi invariáns
+    // VÁLTOZATLAN: a callback belsejében a setDisplayedJourney hívás
+    // TOVÁBBRA IS kizárólag a functional prev => mergeRealtimeUpdates(prev,
+    // updates) mintát használja — sosem blind full-journey replace-t.
+    assert.match(source, /onUpdates:\s*\(updates\)\s*=>\s*\{/);
+    assert.match(source, /setDisplayedJourney\(\(prev\)\s*=>\s*mergeRealtimeUpdates\(prev,\s*updates\)\)/);
   });
 
   it("a meglévő rerouteSessionRef-et használja session-guardként (nincs második, párhuzamos session-mechanizmus)", () => {
