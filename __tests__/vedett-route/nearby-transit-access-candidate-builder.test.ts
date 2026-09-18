@@ -348,7 +348,12 @@ describe("buildNearbyTransitAccessCandidates — request-költségvetés / fanou
   });
 
   test("nearbyStopLimit hiányában az alapérték (DEFAULT_NEARBY_STOP_LIMIT) érvényes", async () => {
-    const stops = Array.from({ length: 5 }, (_, i) => nearbyStop({ stopId: `S${i}`, lat: 47.5 + i * 0.001 }));
+    // 2026-09-18 production regresszió javítás után DEFAULT_NEARBY_STOP_LIMIT
+    // 3-ról 6-ra emelkedett (lásd nearbyTransitAccess.ts fejléce) — a
+    // fixture-nek legalább ennyi (+ margin) stopot kell adnia, különben a
+    // teszt hamis pozitívot adna (a "walkingCallCount === 5" véletlenül
+    // egyezne egy KISEBB, hibás limittel is).
+    const stops = Array.from({ length: 8 }, (_, i) => nearbyStop({ stopId: `S${i}`, lat: 47.5 + i * 0.001 }));
     let walkingCallCount = 0;
     globalThis.fetch = (async (input: string | URL) => {
       const url = String(input);

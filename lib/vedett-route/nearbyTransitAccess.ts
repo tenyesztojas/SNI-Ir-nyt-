@@ -27,15 +27,51 @@
 // gyalogos elérése egy külön, jövőbeli probléma, amit ez a sprint TUDATOSAN
 // nem old meg.
 //
-// KÉRÉS-KÖLTSÉGVETÉS (spec 5. pont): egy buildNearbyTransitAccessCandidates()
-// futás PONTOSAN 1 lookupNearbyStops() hívást indít, és LEGFELJEBB
-// `nearbyStopLimit` fetchMotisWalkingRoute() hívást (alapérték
-// DEFAULT_NEARBY_STOP_LIMIT=3, felső korlát MAX_NEARBY_STOP_LIMIT=10 — a
-// sidecar saját MAX_NEARBY_LIMIT-jével egyező, lásd
+// KÉRÉS-KÖLTSÉGVETÉS (spec 5. pont, MÓDOSÍTVA a 2026-09-18 production
+// regresszió javításával — lásd DISCOVERY VS. PROCESSING LIMIT lent):
+// egy buildNearbyTransitAccessCandidates() futás PONTOSAN 1
+// lookupNearbyStops() hívást indít, és LEGFELJEBB `nearbyStopLimit`
+// fetchMotisWalkingRoute() hívást (alapérték DEFAULT_NEARBY_STOP_LIMIT=6,
+// felső korlát MAX_NEARBY_STOP_LIMIT=10 — a sidecar saját
+// MAX_NEARBY_LIMIT-jével egyező, lásd
 // vps-accessibility-sidecar/src/nearbyStops.ts). NINCS retry-fanout, NINCS
 // rekurzív keresés, NINCS automatikus radius-bővítés. A gyalogos hívások
 // egyszerű, korlátozott párhuzamossággal futnak (Promise.all — a limit már
 // eleve kis, fix szám, nincs szükség általános worker poolra).
+//
+// DISCOVERY VS. PROCESSING LIMIT (2026-09-18 production regresszió,
+// javítás): a KORÁBBI kód a sidecar /nearby-stops kérés `limit` mezőjét
+// ÉS a tényleges gyalogos/MOTIS-feldolgozási korlátot UGYANARRA a
+// `nearbyStopLimit` értékre állította. Ez egy valós production esetben
+// (lat=47.5015, lon=19.0197) bizonyítottan hibás: a sidecar nearest-first
+// válasza ELSŐ 3 eleme mind felszíni (bus) megálló volt, egy valódi,
+// releváns rapid-transit csomópont (több platformmal reprezentált stop-
+// klaszter) pedig csak a 6. helyen szerepelt — a régi kód limit=3-mal
+// kérte a sidecart, tehát az a candidate a sidecar válaszból SOHA nem is
+// jutott ki, a helyi `nearbyStops.slice(0, nearbyStopLimit)` levágás már
+// nem tudta "megmenteni". A javítás ÁLTALÁNOS (nem megálló/város-
+// specifikus): a sidecar-DISCOVERY kérés limitje (DEFAULT esetben
+// DEFAULT_NEARBY_DISCOVERY_LIMIT=MAX_NEARBY_STOP_LIMIT=10, tehát a
+// sidecar saját, már létező felső korlátja) FÜGGETLEN a tényleges
+// gyalogos/MOTIS-feldolgozási limittől (DEFAULT_NEARBY_STOP_LIMIT=6) —
+// nagyobb pool kerül lekérve, de a TÉNYLEGES hálózati (walking+transit-
+// plan) hívások száma szigorúan bounded marad, lásd resolveDiscoveryLimit()
+// lent. Ha a hívó EXPLICIT nearbyStopLimit-et ad meg, a discovery limit
+// VÁLTOZATLANUL azzal egyezik (visszafelé kompatibilis a korábbi,
+// explicit-override viselkedéssel) — a decoupling KIZÁRÓLAG a DEFAULT
+// (nincs explicit override) útra vonatkozik.
+//
+// NÉV-ALAPÚ DEDUP (spec-bővítés, ugyanaz a javítás): a sidecar nearest-
+// first válasza a valós feedben UGYANAZT a fizikai helyet (pl. egy
+// többplatformos csomópontot) TÖBBSZÖR is visszaadhatja külön stopId-vel
+// (minden platform saját GTFS stop_id-je) — ha ezt dedup nélkül vinnénk
+// tovább a feldolgozásba, a kis `nearbyStopLimit` "hely"-ek helyett
+// redundáns PLATFORM-duplikátumokkal telne meg. A dedup KIZÁRÓLAG a
+// (opcionális) `name` mezőre épül — üres/hiányzó name esetén a stopId
+// marad az egyedi kulcs (nincs viselkedésváltozás olyan feedeknél, ahol a
+// sidecar nem ad name-et) — NEM parent_station-alapú (azt a sidecar saját,
+// már létező, változatlan dedupja kezeli/kezelheti), és NEM tartalmaz
+// semmilyen konkrét, bekódolt megállónevet.
 //
 // FAIL-SAFE (spec 6. pont): egyetlen gyalogos candidate hibája (timeout,
 // routing_error, invalid_input, stb.) vagy hasznavehetetlen geometriája
@@ -68,14 +104,39 @@ import { vedettRouteLog } from "./logger.ts";
 import type { TransitProviderId } from "./types.ts";
 import type { NearbyStopCandidate } from "./accessibilityLookupClient.ts";
 
-/** Alapérték — LEGFELJEBB ennyi gyalogos MOTIS-hívás indul futásonként, ha a hívó nem ad meg mást. */
-export const DEFAULT_NEARBY_STOP_LIMIT = 3;
+/**
+ * Alapérték — LEGFELJEBB ennyi gyalogos MOTIS-hívás (és ennyi feldolgozott
+ * access candidate) indul futásonként, ha a hívó nem ad meg mást.
+ *
+ * 3 -> 6 (2026-09-18, production regresszió javítás): egy valós
+ * production esetben (lásd DISCOVERY VS. PROCESSING LIMIT a fájl
+ * fejlécében) egy releváns rapid-transit csomópont a nearest-first
+ * sorrendben csak a 6. helyen szerepelt, 5 db, hozzá közelebbi felszíni
+ * megálló mögött. A régi (3) érték ezt a kis, de valós esetet
+ * szisztematikusan kizárta volna a feldolgozásból MÉG akkor is, ha a
+ * discovery limit már nagyobb (lásd DEFAULT_NEARBY_DISCOVERY_LIMIT). A 6
+ * ÁLTALÁNOS, nem egy konkrét megállóhoz/városhoz kötött szám — egyszerűen
+ * a legkisebb, dokumentált, valós bizonyítékkal alátámasztott érték, ami
+ * ezt a KONKRÉT, bizonyított esetet már helyesen kezeli, továbbra is
+ * szigorúan kis/bounded (nem 10-20).
+ */
+export const DEFAULT_NEARBY_STOP_LIMIT = 6;
 
 // A sidecar saját MAX_NEARBY_LIMIT-jével EGYEZŐ felső korlát (lásd
 // vps-accessibility-sidecar/src/nearbyStops.ts) — ez a modul SOSEM kérhet
 // (és SOSEM indíthat gyalogos hívást) többre, mint amit a sidecar
 // egyáltalán kiszolgálna.
 export const MAX_NEARBY_STOP_LIMIT = 10;
+
+/**
+ * A sidecar /nearby-stops kérés DEFAULT discovery limitje (amikor a hívó
+ * NEM ad meg explicit nearbyStopLimit-et) — SZÁNDÉKOSAN nagyobb, mint a
+ * tényleges feldolgozási limit (DEFAULT_NEARBY_STOP_LIMIT), lásd
+ * DISCOVERY VS. PROCESSING LIMIT a fájl fejlécében. Egyezik a sidecar
+ * saját, már létező, változatlan MAX_NEARBY_STOP_LIMIT/MAX_NEARBY_LIMIT
+ * felső korlátjával — NEM egy új, önkényes szám.
+ */
+export const DEFAULT_NEARBY_DISCOVERY_LIMIT = MAX_NEARBY_STOP_LIMIT;
 
 export interface NearbyTransitAccessInput {
   provider: TransitProviderId;
@@ -113,6 +174,42 @@ function clampNearbyStopLimit(limit: number | undefined): number {
   const raw = limit ?? DEFAULT_NEARBY_STOP_LIMIT;
   if (!Number.isFinite(raw) || raw <= 0) return DEFAULT_NEARBY_STOP_LIMIT;
   return Math.min(Math.floor(raw), MAX_NEARBY_STOP_LIMIT);
+}
+
+/**
+ * A sidecar /nearby-stops kérésben küldött discovery limit. Ha a hívó
+ * EXPLICIT nearbyStopLimit-et adott meg, a discovery limit VÁLTOZATLANUL
+ * azzal egyezik (visszafelé kompatibilis — ugyanaz az érték megy a
+ * sidecarnak és szabja meg a feldolgozási korlátot is, mint korábban).
+ * KIZÁRÓLAG a DEFAULT (nincs explicit override) esetben nagyobb a
+ * discovery pool, mint a feldolgozási limit — lásd DISCOVERY VS.
+ * PROCESSING LIMIT a fájl fejlécében.
+ */
+function resolveDiscoveryLimit(explicitNearbyStopLimit: number | undefined, processingLimit: number): number {
+  if (explicitNearbyStopLimit !== undefined) return processingLimit;
+  return DEFAULT_NEARBY_DISCOVERY_LIMIT;
+}
+
+/**
+ * Név-alapú dedup a discovery-poolon, a walking/MOTIS-feldolgozás ELŐTT
+ * (lásd NÉV-ALAPÚ DEDUP a fájl fejlécében). A bemenet MÁR nearest-first
+ * sorrendű (a sidecar garantálja ezt), ezért egy adott (nem üres) `name`
+ * ELSŐ előfordulása mindig a legközelebbi — a dedup ezért egyszerű
+ * "első nyer" logikával helyes, nincs szükség külön min-keresésre. Üres/
+ * hiányzó `name` esetén a stopId marad az egyedi kulcs (SOSEM összevonva
+ * más stoppal) — ez SOHA nem dob el egy candidate-et, csak a redundáns
+ * ÖSSZEVONÁST végzi el, a sorrend (nearest-first) megmarad.
+ */
+function dedupeByName(stops: readonly NearbyStopCandidate[]): NearbyStopCandidate[] {
+  const seenKeys = new Set<string>();
+  const result: NearbyStopCandidate[] = [];
+  for (const stop of stops) {
+    const key = stop.name && stop.name.trim().length > 0 ? `name:${stop.name.trim()}` : `stopId:${stop.stopId}`;
+    if (seenKeys.has(key)) continue;
+    seenKeys.add(key);
+    result.push(stop);
+  }
+  return result;
 }
 
 /**
@@ -194,14 +291,18 @@ export async function buildNearbyTransitAccessCandidates(
   input: NearbyTransitAccessInput
 ): Promise<NearbyTransitAccessResult> {
   const nearbyStopLimit = clampNearbyStopLimit(input.nearbyStopLimit);
+  const discoveryLimit = resolveDiscoveryLimit(input.nearbyStopLimit, nearbyStopLimit);
 
-  // PONTOSAN 1 nearby-stops lookup futásonként (spec 5. pont).
+  // PONTOSAN 1 nearby-stops lookup futásonként (spec 5. pont) — a
+  // discoveryLimit lehet nagyobb, mint nearbyStopLimit (lásd DISCOVERY VS.
+  // PROCESSING LIMIT a fájl fejlécében), de MÉG EZ IS szigorúan a sidecar
+  // saját MAX_NEARBY_STOP_LIMIT/MAX_NEARBY_LIMIT felső korlátján belül van.
   const nearbyStops = await lookupNearbyStops(
     input.provider,
     input.originLat,
     input.originLon,
     input.radiusMeters,
-    nearbyStopLimit
+    discoveryLimit
   );
 
   if (!nearbyStops || nearbyStops.length === 0) {
@@ -210,10 +311,16 @@ export async function buildNearbyTransitAccessCandidates(
     return { ok: true, candidates: [] };
   }
 
+  // Név-alapú dedup a NAGYOBB discovery poolon (lásd NÉV-ALAPÚ DEDUP a fájl
+  // fejlécében), MIELŐTT a tényleges (kis, bounded) feldolgozási limitre
+  // vágnánk — ez biztosítja, hogy ugyanannak a fizikai helynek redundáns
+  // platform-duplikátumai ne foglalják el a kis feldolgozási kvóta helyét.
+  const dedupedStops = dedupeByName(nearbyStops);
+
   // Fail-safe levágás: MÉG AKKOR IS legfeljebb `nearbyStopLimit` hosszúra
-  // vágjuk a listát, ha a sidecar (hibásan/váratlanul) többet adna vissza —
-  // ez a modul SOSEM indít ennél több gyalogos hívást.
-  const boundedStops = nearbyStops.slice(0, nearbyStopLimit);
+  // vágjuk a (deduped) listát, ha a sidecar (hibásan/váratlanul) többet
+  // adna vissza — ez a modul SOSEM indít ennél több gyalogos hívást.
+  const boundedStops = dedupedStops.slice(0, nearbyStopLimit);
 
   const origin = { lat: input.originLat, lon: input.originLon };
   const settled = await Promise.all(boundedStops.map((stop) => evaluateWalkingAccess(origin, stop)));
