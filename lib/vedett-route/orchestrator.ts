@@ -26,6 +26,14 @@ import {
   type AccessibilityIndexLike,
   type StepFreeLegLike,
 } from "./accessibility.ts";
+import { encodePolyline } from "./geometry.ts";
+// NEARBY TRANSIT ACCESS SPRINT (2026-09-18) — a MÁR MEGLÉVŐ, önállóan
+// tesztelt stop-based candidate builder ÚJRAHASZNÁLÁSA (lásd
+// nearbyTransitJourneyCandidates.ts fejléce). Ez az EGYETLEN integrációs
+// pont ebben a sprintben — nincs második, párhuzamos nearby-transit
+// rendszer, nincs új MOTIS kliens.
+import { buildNearbyTransitJourneyCandidates } from "./nearbyTransitJourneyCandidates.ts";
+import type { StopBasedTransitCandidate } from "./nearbyTransitJourneyCandidates.ts";
 import type { MotisItinerary, MotisLeg } from "./motisTypes.ts";
 import type {
   Journey,
@@ -203,6 +211,133 @@ export function mapMotisItineraryToJourney(
   };
   journey.fingerprint = computeJourneyFingerprint(journey);
   return journey;
+}
+
+// NEARBY TRANSIT ACCESS SPRINT (2026-09-18) — GENERIKUS "WALK ACCESS a
+// közeli megállóhoz" Journey-normalizáló. NEM Déli/M2/Budapest-specifikus:
+// KIZÁRÓLAG a MÁR MEGLÉVŐ ReachableStopCandidate (nearbyTransitAccess.ts,
+// valós MOTIS POST /api/route gyaloglás) és a MÁR MEGLÉVŐ StopBasedTransitCandidate
+// (nearbyTransitJourneyCandidates.ts, valós MOTIS /api/v6/plan a megállótól
+// a célig) mezőit használja.
+//
+// KOHERENCIA (spec 6. pont): a végső Journey ELSŐ lába a VALÓS
+// CURRENT POSITION -> STOP gyaloglás (valós geometria/idő/távolság, SOSEM
+// teleportálva a megállóhoz) — a MOTIS transit-tervezés maga a megállótól
+// indult, de a felhasználó felé megjelenő Journey a TELJES, koherens
+// utat mutatja: WALK ACCESS + TRANSIT LEGS (+ LAST MILE, ha az itinerary
+// saját maga is tartalmaz záró gyalogos lábat).
+function buildNearbyAccessWalkLeg(
+  access: StopBasedTransitCandidate["access"],
+  origin: { lat: number; lon: number },
+  originName: string
+): JourneyLeg {
+  const walkingMinutes = Math.round((access.walkingDurationSeconds / 60) * 10) / 10;
+  return {
+    mode: "WALK",
+    fromName: originName,
+    toName: access.stopName ?? "Megálló",
+    durationMinutes: walkingMinutes,
+    distanceMeters: Math.round(access.walkingDistanceMeters),
+    realtime: false,
+    fromLat: origin.lat,
+    fromLon: origin.lon,
+    toLat: access.stopLat,
+    toLon: access.stopLon,
+    // A geometria a MOTIS POST /api/route VALÓS válaszából származik (lásd
+    // motisStreetRoute.ts flattenStreetRouteGeometry()) — encodePolyline()
+    // a MEGLÉVŐ decodePolyline() pontos inverze, NEM új geometria-forrás.
+    geometryEncoded: encodePolyline(access.walkingGeometry),
+    geometryPrecision: 6,
+  };
+}
+
+/**
+ * Egy StopBasedTransitCandidate -> Journey[] (egy elem/nyers itinerary,
+ * ugyanaz a "nem feltételezzük, hogy 1 candidate = 1 Journey" elv, mint a
+ * normál rawItineraries.map(mapMotisItineraryToJourney) ágban). A WALK
+ * access leg mindig a lista ELSŐ lába — a transit itinerary saját legjei
+ * (a MEGLÉVŐ mapMotisItineraryToJourney()-vel normalizálva) követik.
+ *
+ * `originalDepartAt`-ot használjuk a Journey megjelenített indulási
+ * idejéhez (amikor a user TÉNYLEGESEN elindul a jelenlegi helyéről) —
+ * SOSEM az itinerary saját startTime-ját, ami a MEGÁLLÓTÓL indul (lásd
+ * computeTransitDepartureTime() a nearbyTransitJourneyCandidates.ts-ben:
+ * transitDepartureTime = originalDepartAt + walkingDurationSeconds, tehát
+ * originalDepartAt = transitDepartureTime - walkingDurationSeconds, de itt
+ * egyszerűbb/pontosabb egyenesen a hívótól kapott eredeti értéket használni).
+ */
+function mapNearbyTransitCandidateToJourneys(
+  candidate: StopBasedTransitCandidate,
+  origin: { lat: number; lon: number },
+  originName: string,
+  destinationName: string,
+  originalDepartAt: string,
+  molBubiRequestActive: boolean
+): Journey[] {
+  const walkLeg = buildNearbyAccessWalkLeg(candidate.access, origin, originName);
+
+  return candidate.itineraries.map((itinerary) => {
+    // A stop-based itinerary a MEGÁLLÓTÓL indul — a displayNames.from ITT a
+    // megálló neve (a MOTIS saját stop-neve marad az első transit-lábon,
+    // hacsak a hívó explicit másképp nem geokódolta), a displayNames.to
+    // VÁLTOZATLANUL a felhasználó eredeti célja.
+    const transitJourney = mapMotisItineraryToJourney(itinerary, { from: candidate.access.stopName ?? "Megálló", to: destinationName }, molBubiRequestActive);
+    const legs: JourneyLeg[] = [walkLeg, ...transitJourney.legs];
+    const walkingMinutes = Math.round((transitJourney.walkingMinutes + walkLeg.durationMinutes) * 10) / 10;
+    const totalDurationMinutes = Math.round((transitJourney.totalDurationMinutes + walkLeg.durationMinutes) * 10) / 10;
+    const walkingDistanceMeters =
+      transitJourney.walkingDistanceMeters !== undefined && walkLeg.distanceMeters !== undefined
+        ? transitJourney.walkingDistanceMeters + walkLeg.distanceMeters
+        : undefined;
+
+    const journey: Journey = {
+      ...transitJourney,
+      departureTime: originalDepartAt,
+      totalDurationMinutes,
+      walkingMinutes,
+      walkingDistanceMeters,
+      legs,
+    };
+    journey.fingerprint = computeJourneyFingerprint(journey);
+    return journey;
+  });
+}
+
+// NEARBY TRANSIT ACCESS SPRINT (2026-09-18) — a teljes nearby-expansion
+// KIZÁRÓLAG enhancement (spec 12. pont): SOHA nem dob kivételt, SOHA nem
+// hiúsíthatja meg a normál keresést. A buildNearbyTransitJourneyCandidates()
+// maga is fail-safe (lásd ott), de ez a try/catch egy MÁSODIK, defenzív
+// réteg (pl. váratlan programozási hiba a mapper-ben) — a hívó
+// (searchVedettRoutes) ezt a Promise.all() RÉSZEKÉNT futtatja a két normál
+// MOTIS hívással PÁRHUZAMOSAN, tehát egyetlen extra hálózati kör-idő sem
+// adódik hozzá a válaszidőhöz.
+async function fetchNearbyTransitAccessJourneys(
+  request: JourneySearchRequest,
+  displayNames: { from: string; to: string }
+): Promise<Journey[]> {
+  try {
+    const result = await buildNearbyTransitJourneyCandidates({
+      provider: "BKK",
+      originLat: request.from.lat,
+      originLon: request.from.lon,
+      destination: { lat: request.to.lat, lon: request.to.lon },
+      originalDepartAt: request.departAt,
+      // KÉRÉS-KÖLTSÉGVETÉS (spec 11. pont): a MEGLÉVŐ, bounded alapértékek
+      // (nearbyTransitAccess.ts DEFAULT_NEARBY_STOP_LIMIT=3) megtartva —
+      // nincs itt felülírt, nagyobb limit. numItineraries kis, explicit
+      // felső korlát, hogy egy nearby-stop transit-terve se legyen
+      // szükségtelenül nagy MOTIS válasz.
+      numItineraries: 3,
+    });
+    const molBubiRequestActive = Boolean(request.molBubiEnabled);
+    const origin = { lat: request.from.lat, lon: request.from.lon };
+    return result.candidates.flatMap((candidate) =>
+      mapNearbyTransitCandidateToJourneys(candidate, origin, displayNames.from, displayNames.to, request.departAt, molBubiRequestActive)
+    );
+  } catch {
+    vedettRouteLog("routing_error", "info", { reason: "nearby_transit_access_expansion_failed" });
+    return [];
+  }
 }
 
 export interface OrchestratorErrorResult {
@@ -405,7 +540,21 @@ export async function searchVedettRoutes(
   // (Bubi nélküli) kérés BYTE-RA változatlan marad.
   const bubiMotisParams = request.molBubiEnabled ? buildBubiMotisParams(request.bikePropulsion) : undefined;
 
-  const [defaultResult, calmerResult, serviceAlerts] = await Promise.all([
+  // A geokódolt hely (Nominatim) "name" mezője a TELJES cím (pl. "Széll
+  // Kálmán tér, Margit-negyed, Országút, II. kerület, Budapest, ..."), a
+  // MOTIS viszont a valódi megálló RÖVID nevét adja (pl. "Széll Kálmán
+  // tér"). A rövidítés a geokódolt cím ELSŐ (legspecifikusabb) tagját
+  // használja — ez nem kitalált adat, hanem a Nominatim válaszának első
+  // vesszővel elválasztott szegmense. Előbbre hozva (a Promise.all elé),
+  // hogy a nearby-transit expansion is ugyanezt a MEGLÉVŐ logikát
+  // használja a WALK access leg megjelenített nevéhez.
+  const shortPlaceName = (fullName: string): string => fullName.split(",")[0]?.trim() || fullName;
+  const displayNames = {
+    from: shortPlaceName(request.from.name),
+    to: shortPlaceName(request.to.name),
+  };
+
+  const [defaultResult, calmerResult, serviceAlerts, nearbyJourneys] = await Promise.all([
     fetchMotisPlan({ fromPlace, toPlace, time: request.departAt, numItineraries: 6, ...stepFreeMotisParams, ...bubiMotisParams }),
     fetchMotisPlan({
       fromPlace,
@@ -417,6 +566,13 @@ export async function searchVedettRoutes(
       ...bubiMotisParams,
     }),
     fetchServiceAlertsSafely(),
+    // NEARBY TRANSIT ACCESS SPRINT (2026-09-18) — a normál MOTIS hívásokkal
+    // PÁRHUZAMOSAN, hogy ne adjon extra válaszidőt. A step-free (lépcsőmentes)
+    // keresés EBBEN a sprintben SZÁNDÉKOSAN kimarad: az akadálymentesség-
+    // klasszifikáció a NYERS MOTIS legs-eket igényli (StepFreeLegLike), amit
+    // egy nearby WALK-access-szel bővített candidate nem tud megbízhatóan
+    // adni — a normál step-free viselkedés emiatt BYTE-RA változatlan marad.
+    request.stepFreeRequired ? Promise.resolve<Journey[]>([]) : fetchNearbyTransitAccessJourneys(request, displayNames),
   ]);
 
   if (!defaultResult.ok && !calmerResult.ok) {
@@ -489,21 +645,6 @@ export async function searchVedettRoutes(
     return { ok: false, reason: "no_route_found", message: "Nem található útvonal a megadott helyek és időpont között." };
   }
 
-  // A geokódolt hely (Nominatim) "name" mezője a TELJES cím (pl. "Széll
-  // Kálmán tér, Margit-negyed, Országút, II. kerület, Budapest, ..."), a
-  // MOTIS viszont a valódi megálló RÖVID nevét adja (pl. "Széll Kálmán
-  // tér"). Ha a teljes hosszú címet írnánk az első láb kiindulópontjára, az
-  // vizuálisan megtévesztő: úgy tűnik, mintha "X → X" séta lenne, holott
-  // valójában egy valós, néhány száz méteres séta a megadott koordinátától
-  // a legközelebbi megállóig — csak épp mindkettő ugyanazt a köznyelvi
-  // helynevet viseli. A rövidítés a geokódolt cím ELSŐ (legspecifikusabb)
-  // tagját használja — ez nem kitalált adat, hanem a Nominatim válaszának
-  // első vesszővel elválasztott szegmense.
-  const shortPlaceName = (fullName: string): string => fullName.split(",")[0]?.trim() || fullName;
-  const displayNames = {
-    from: shortPlaceName(request.from.name),
-    to: shortPlaceName(request.to.name),
-  };
   // MOL BUBI FRONTEND/ROUTING INTEGRÁCIÓ, PHASE 1.1 HARDENING — a
   // molBubiRequestActive context EBBŐL a keresésből (request.molBubiEnabled)
   // származik, SOHA nem a visszakapott legekből találgatva.
@@ -525,7 +666,15 @@ export async function searchVedettRoutes(
     }
   });
 
-  let deduped = deduplicateJourneys(journeys);
+  // NEARBY TRANSIT ACCESS SPRINT (2026-09-18) — a nearby-generált Journey-k
+  // a rawItineraries-alapú `journeys`-tömb UTÁN kerülnek hozzáadva, ÍGY a
+  // fenti rawItineraryByFingerprint index-alapú párosítás (idx -> rawItineraries[idx])
+  // NEM sérül. A dedup, a sensory scoring és a ranking innentől UGYANAZT a
+  // MEGLÉVŐ pipeline-t futtatja mindkét forrásra — nincs mesterséges
+  // előny/hátrány a nearby candidate-oknak (spec 7/8/9. pont).
+  const journeysWithNearby = nearbyJourneys.length > 0 ? [...journeys, ...nearbyJourneys] : journeys;
+
+  let deduped = deduplicateJourneys(journeysWithNearby);
 
   // AKADÁLYMENTES / LÉPCSŐMENTES MVP (2026-09-11, Task C, spec 5/6/10.
   // pont) — EZ A BLOKK KIZÁRÓLAG akkor fut, ha a felhasználó explicit

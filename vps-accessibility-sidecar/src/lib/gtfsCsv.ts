@@ -79,3 +79,15 @@ export function parseOptionalGtfsInt(raw: string | undefined): number | undefine
   const n = Number(raw.trim());
   return Number.isFinite(n) ? n : undefined;
 }
+
+// NEARBY TRANSIT ACCESS BACKEND sprint (2026-09-17) — külön, egyértelmű
+// néven (NEM parseOptionalGtfsInt), mert a stop_lat/stop_lon TIZEDESJEGYES
+// mezők — a "Int" névhez nem illő elnevezés hívó oldali félreértést
+// okozna (pl. hogy kerekítünk), miközben itt SOSEM kerekítünk. SZINKRONBAN
+// TARTANDÓ a fő repo lib/vedett-route/gtfsCsv.ts ugyanezen függvényével.
+/** GTFS opcionális lebegőpontos mező (pl. stop_lat/stop_lon) biztonságos beolvasása — üres/hibás string esetén undefined. */
+export function parseOptionalGtfsFloat(raw: string | undefined): number | undefined {
+  if (raw === undefined || raw.trim() === "") return undefined;
+  const n = Number(raw.trim());
+  return Number.isFinite(n) ? n : undefined;
+}

@@ -23,10 +23,20 @@
 // Ez a kliens KIZÁRÓLAG a hivatalos, ellenőrzött MOTIS API paramétereket
 // használja (lásd MotisPlanParams a motisTypes.ts-ben) — soha nem
 // találgatott/nem dokumentált paramétert.
+//
+// KÉT MOTIS ÚTVONAL él ebben a fájlban: fetchMotisPlan() a
+// GET /api/v6/plan (transit tervezés), fetchMotisWalkingRoute() (NEARBY
+// TRANSIT ACCESS BACKEND sprint, 2026-09-17) a POST /api/route (gyalogos
+// street-routing, VALÓS VPS E2E teszttel bizonyított, profile:"foot"
+// KISBETŰVEL — NEM keverendő a /api/v6/plan pedestrianProfile:"FOOT"
+// paraméterével). MINDKETTŐ UGYANAZT a base-URL feloldást/auth-mintát
+// használja (lásd resolveRouteTarget lent) — nincs duplikált konfiguráció.
 
 import { getRouteServiceConfig, getLegacyDirectMotisBaseUrl } from "./config.ts";
 import { vedettRouteLog } from "./logger.ts";
 import type { MotisPlanParams, MotisPlanResponse, MotisPlanResult } from "./motisTypes.ts";
+import { isValidStreetRoutePoint, parseMotisStreetRouteResponse } from "./motisStreetRoute.ts";
+import type { MotisStreetRouteResult, StreetRoutePoint } from "./motisStreetRoute.ts";
 
 const DEFAULT_TIMEOUT_MS = 10_000;
 const MAX_TIMEOUT_MS = 30_000;
@@ -121,10 +131,23 @@ interface FetchOutcome {
   timeoutError?: boolean;
 }
 
-async function performFetch(url: string, headers: HeadersInit | undefined, timeoutMs: number): Promise<FetchOutcome> {
+async function performFetch(
+  url: string,
+  headers: HeadersInit | undefined,
+  timeoutMs: number,
+  // NEARBY TRANSIT ACCESS BACKEND sprint (2026-09-17, street routing) —
+  // OPCIONÁLIS method/body, alapértelmezetten GET és body nélkül (a
+  // MEGLÉVŐ /api/v6/plan hívás viselkedése BYTE-RA változatlan marad,
+  // mert az továbbra is a 3-paraméteres alakban hívja ezt a függvényt).
+  // A POST /api/route (fetchMotisWalkingRoute) hívja meg method/body-val.
+  method: "GET" | "POST" = "GET",
+  body?: string
+): Promise<FetchOutcome> {
   try {
     const res = await fetch(url, {
+      method,
       headers,
+      body,
       signal: AbortSignal.timeout(Math.min(timeoutMs, MAX_TIMEOUT_MS)),
       cache: "no-store",
     });
@@ -159,12 +182,14 @@ async function performFetch(url: string, headers: HeadersInit | undefined, timeo
 async function fetchWithSingleRetryOnNetworkError(
   url: string,
   headers: HeadersInit | undefined,
-  timeoutMs: number
+  timeoutMs: number,
+  method: "GET" | "POST" = "GET",
+  body?: string
 ): Promise<FetchOutcome> {
-  const first = await performFetch(url, headers, timeoutMs);
+  const first = await performFetch(url, headers, timeoutMs, method, body);
   if (!first.networkError) return first;
   await new Promise((resolve) => setTimeout(resolve, 250));
-  return performFetch(url, headers, timeoutMs);
+  return performFetch(url, headers, timeoutMs, method, body);
 }
 
 export async function fetchMotisPlan(params: MotisPlanParams): Promise<MotisPlanResult> {
@@ -236,4 +261,115 @@ export async function fetchMotisPlan(params: MotisPlanParams): Promise<MotisPlan
   }
 
   return { ok: true, data: outcome.json as MotisPlanResponse };
+}
+
+// NEARBY TRANSIT ACCESS BACKEND sprint (2026-09-17, folytatás) — MOTIS
+// street/walking routing kliens.
+//
+// KIZÁRÓLAG a MÁR bizonyított POST /api/route végpontot hívja
+// (profil/direction FIX "foot"/"forward", lásd motisStreetRoute.ts
+// fejléce) — UGYANAZT a base-URL feloldást (resolveRouteTarget: route
+// service elsőbbséggel, legacy direct fejlesztői fallback), auth-fejléc-
+// mintát és egyetlen-retry-hálózati-hibán stratégiát használja, mint
+// fetchMotisPlan() fent — NINCS duplikált MOTIS config/base-URL logika,
+// NINCS új env változó.
+//
+// SZIGORÚAN IZOLÁLT (spec): ezt a függvényt ebben a sprintben SEHOL nem
+// hívja az orchestrator.ts route-search flow-ja, és NEM kombinálódik a
+// Nearby Stop Discovery réteggel (lookupNearbyStops()) — kizárólag
+// önállóan tesztelt, jövőbeli bekötésre előkészített kliens-képesség.
+function buildStreetRouteHeaders(target: Exclude<RouteTarget, null>): HeadersInit {
+  if (target.mode === "route_service") {
+    return { ...buildHeaders(target), "Content-Type": "application/json" };
+  }
+  return { "Content-Type": "application/json" };
+}
+
+export async function fetchMotisWalkingRoute(start: StreetRoutePoint, destination: StreetRoutePoint): Promise<MotisStreetRouteResult> {
+  // Spec 5. pont: érvénytelen bemenetre SOSEM megy ki MOTIS kérés.
+  if (!isValidStreetRoutePoint(start) || !isValidStreetRoutePoint(destination)) {
+    return {
+      ok: false,
+      reason: "invalid_input",
+      message: "A gyalogos útvonal-kéréshez érvénytelen start/destination koordináta érkezett.",
+    };
+  }
+
+  const target = resolveRouteTarget();
+  if (!target) {
+    vedettRouteLog("routing_engine_unavailable", "warn", { reason: "route_service_not_configured", api: "street_route" });
+    return {
+      ok: false,
+      reason: "routing_engine_unavailable",
+      message: "A gyalogos útvonaltervezés átmenetileg nem érhető el.",
+    };
+  }
+
+  const url = `${target.baseUrl}/api/route`;
+  const body = JSON.stringify({ start, destination, profile: "foot", direction: "forward" });
+  const headers = buildStreetRouteHeaders(target);
+  const timeoutMs = DEFAULT_TIMEOUT_MS;
+
+  const outcome =
+    target.mode === "route_service"
+      ? await fetchWithSingleRetryOnNetworkError(url, headers, timeoutMs, "POST", body)
+      : await performFetch(url, headers, timeoutMs, "POST", body);
+
+  if (outcome.timeoutError) {
+    vedettRouteLog("timeout", "error", { mode: target.mode, api: "street_route" });
+    return {
+      ok: false,
+      reason: "timeout",
+      message: "A gyalogos útvonaltervezés átmenetileg nem érhető el.",
+    };
+  }
+
+  if (outcome.networkError) {
+    vedettRouteLog("routing_engine_unavailable", "error", { mode: target.mode, reason: "network_error", api: "street_route" });
+    return {
+      ok: false,
+      reason: "routing_engine_unavailable",
+      message: "A gyalogos útvonaltervezés átmenetileg nem érhető el.",
+    };
+  }
+
+  if (outcome.parseError) {
+    vedettRouteLog("malformed_response", "error", { mode: target.mode, status: outcome.status, api: "street_route" });
+    return {
+      ok: false,
+      reason: "routing_error",
+      status: outcome.status,
+      message: "A gyalogos útvonal-routing hibás választ adott.",
+    };
+  }
+
+  if (!outcome.ok) {
+    if (outcome.status === 401 || outcome.status === 403) {
+      vedettRouteLog("routing_error", "error", { mode: target.mode, status: outcome.status, reason: "route_service_auth_failed", api: "street_route" });
+    } else {
+      vedettRouteLog("routing_error", "error", { mode: target.mode, status: outcome.status, api: "street_route" });
+    }
+    return {
+      ok: false,
+      reason: "routing_error",
+      status: outcome.status,
+      message: "A gyalogos útvonal-routing hibát adott vissza.",
+    };
+  }
+
+  // A HTTP réteg sikeres — de a MOTIS válasz ALAKJÁT ("ne bízz vakon a
+  // JSON-ban", spec 4. pont) itt runtime validáljuk, mielőtt bármi
+  // hívó felé kiadnánk.
+  const parsed = parseMotisStreetRouteResponse(outcome.json);
+  if ("error" in parsed) {
+    vedettRouteLog("malformed_response", "error", { mode: target.mode, api: "street_route", parseError: parsed.error });
+    return {
+      ok: false,
+      reason: "routing_error",
+      status: outcome.status,
+      message: "A gyalogos útvonal-válasz hibás alakú.",
+    };
+  }
+
+  return { ok: true, data: parsed };
 }

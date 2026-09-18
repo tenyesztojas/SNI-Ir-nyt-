@@ -232,3 +232,109 @@ export async function lookupAccessibilityIndexForItineraries(
     clearTimeout(timeoutHandle);
   }
 }
+
+// NEARBY TRANSIT ACCESS BACKEND sprint (2026-09-17) — a sidecar ÚJ
+// POST /nearby-stops endpointjának kliense.
+//
+// SZIGORÚAN IZOLÁLT: ez a függvény ebben a körben SEHOL nincs meghívva a
+// production route-search flow-ból (orchestrator.ts-t ez a sprint NEM
+// módosítja) — kizárólag a jövőbeli bekötéshez előkészített, önállóan
+// tesztelt kliens-képesség. A `distanceMeters` mező (lásd
+// vps-accessibility-sidecar/src/nearbyStops.ts fejléce) KIZÁRÓLAG
+// candidate discovery célú, egyenes-vonalú (Haversine) távolság — SOHA
+// nem tényleges gyaloglási távolság/idő.
+//
+// UGYANAZ a fail-safe szerződés, mint lookupAccessibilityIndexForItineraries()-nél:
+// SOHA nem dob kivételt, minden hibaágon (nincs konfigurálva, ismeretlen
+// provider->dataset leképezés, timeout, hálózati hiba, malformed JSON/
+// body, nem "ok"/"unavailable" alak) `null`-t ad vissza.
+export interface NearbyStopCandidate {
+  stopId: string;
+  parentStation?: string;
+  name?: string;
+  lat: number;
+  lon: number;
+  /** KIZÁRÓLAG candidate discovery célú, egyenes-vonalú (Haversine) távolság — SOHA nem gyaloglási távolság/idő. */
+  distanceMeters: number;
+}
+
+interface NearbyStopsSidecarResponseBody {
+  ok?: boolean;
+  status?: "ok" | "unavailable";
+  stops?: NearbyStopCandidate[];
+}
+
+function isValidNearbyStopsResponse(body: unknown): body is NearbyStopsSidecarResponseBody {
+  if (!body || typeof body !== "object") return false;
+  const b = body as NearbyStopsSidecarResponseBody;
+  if (b.status !== "ok" && b.status !== "unavailable") return false;
+  if (b.status === "ok" && !Array.isArray(b.stops)) return false;
+  return true;
+}
+
+export async function lookupNearbyStops(
+  provider: TransitProviderId,
+  lat: number,
+  lon: number,
+  radiusMeters?: number,
+  limit?: number
+): Promise<NearbyStopCandidate[] | null> {
+  const config = getAccessibilitySidecarConfig();
+  if (!config) {
+    vedettRouteLog("routing_error", "info", { reason: "accessibility_sidecar_not_configured" });
+    return null;
+  }
+
+  const dataset = PROVIDER_TO_SIDECAR_DATASET[provider];
+  if (!dataset) return null;
+
+  const controller = new AbortController();
+  const timeoutHandle = setTimeout(() => controller.abort(), config.timeoutMs);
+  try {
+    const response = await fetch(`${config.baseUrl.replace(/\/+$/, "")}/nearby-stops`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${config.authToken}`,
+      },
+      body: JSON.stringify({ dataset, lat, lon, radiusMeters, limit }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      vedettRouteLog("routing_error", "warn", {
+        reason: "nearby_stops_lookup_http_error",
+        status: response.status,
+      });
+      return null;
+    }
+
+    let body: unknown;
+    try {
+      body = await response.json();
+    } catch {
+      vedettRouteLog("routing_error", "warn", { reason: "nearby_stops_lookup_malformed_json" });
+      return null;
+    }
+
+    if (!isValidNearbyStopsResponse(body)) {
+      vedettRouteLog("routing_error", "warn", { reason: "nearby_stops_lookup_malformed_body" });
+      return null;
+    }
+
+    if (body.status === "unavailable") {
+      vedettRouteLog("routing_error", "info", { reason: "nearby_stops_lookup_dataset_unavailable" });
+      return null;
+    }
+
+    return body.stops ?? [];
+  } catch (err) {
+    vedettRouteLog("routing_error", "warn", {
+      reason: "nearby_stops_lookup_failed",
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  } finally {
+    clearTimeout(timeoutHandle);
+  }
+}

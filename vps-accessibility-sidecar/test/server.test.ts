@@ -187,3 +187,83 @@ test("POST /lookup: a válasz SOSEM tartalmazza a Bearer tokent/secretet", async
   const text = await res.text();
   assert.equal(text.includes(AUTH_TOKEN), false);
 });
+
+// NEARBY TRANSIT ACCESS BACKEND sprint (2026-09-17) — POST /nearby-stops
+// HTTP-szintű tesztek. A fixture GTFS zip (lásd makeGtfsZip() fent) NEM
+// tartalmaz stop_lat/stop_lon-t, ezért ehhez a szakaszhoz egy KÜLÖN,
+// koordinátákat IS tartalmazó zip-et építünk és aktiválunk — ez a
+// meglévő "bkkgtfs" dataset egy ÚJABB generációja, nem érinti a fenti
+// /lookup tesztek által már lefuttatott/ellenőrzött korábbi generációt.
+async function makeGtfsZipWithCoordinates(dir: string): Promise<string> {
+  const zip = new AdmZip();
+  zip.addFile(
+    "stops.txt",
+    Buffer.from(
+      "stop_id,parent_station,stop_name,stop_lat,stop_lon,location_type\n" +
+        "PLATFORM_A,STATION_X,Platform A,47.5001,19.0000,0\n" +
+        "PLATFORM_B,STATION_X,Platform B,47.5002,19.0000,0\n" +
+        "NO_COORDS,,No Coords Stop,,,0\n",
+      "utf-8"
+    )
+  );
+  zip.addFile("trips.txt", Buffer.from("trip_id,wheelchair_accessible\n", "utf-8"));
+  const zipPath = path.join(dir, "gtfs-with-coords.zip");
+  await writeFile(zipPath, zip.toBuffer());
+  return zipPath;
+}
+
+test("POST /nearby-stops: auth fejléc nélkül 401-et ad", async () => {
+  const res = await fetch(`${baseUrl}/nearby-stops`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ dataset: "bkkgtfs", lat: 47.5, lon: 19.0 }),
+  });
+  assert.equal(res.status, 401);
+});
+
+test("POST /nearby-stops: ismeretlen dataset 404-et ad (fail-safe, UGYANAZ mint /lookup-nál)", async () => {
+  const res = await fetch(`${baseUrl}/nearby-stops`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${AUTH_TOKEN}` },
+    body: JSON.stringify({ dataset: "mavgtfs", lat: 47.5, lon: 19.0 }),
+  });
+  assert.equal(res.status, 404);
+});
+
+test("POST /nearby-stops: érvénytelen (tartományon kívüli) koordináta 400-at ad", async () => {
+  const res = await fetch(`${baseUrl}/nearby-stops`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${AUTH_TOKEN}` },
+    body: JSON.stringify({ dataset: "bkkgtfs", lat: 999, lon: 19.0 }),
+  });
+  assert.equal(res.status, 400);
+});
+
+test("POST /nearby-stops: malformed JSON body 400-at ad, nem 500-at", async () => {
+  const res = await fetch(`${baseUrl}/nearby-stops`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${AUTH_TOKEN}` },
+    body: "{ nem: valid json",
+  });
+  assert.equal(res.status, 400);
+});
+
+test("POST /nearby-stops: helyes koordinátára station-dedupolt candidate-et ad, konkrét stopId-vel", async () => {
+  const zipPath = await makeGtfsZipWithCoordinates(dataDir);
+  await buildAndActivate("bkkgtfs", zipPath);
+  await pollDatasetOnce("bkkgtfs");
+
+  const res = await fetch(`${baseUrl}/nearby-stops`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${AUTH_TOKEN}` },
+    body: JSON.stringify({ dataset: "bkkgtfs", lat: 47.5, lon: 19.0, radiusMeters: 1000, limit: 3 }),
+  });
+  assert.equal(res.status, 200);
+  const body = (await res.json()) as { ok: boolean; status: string; stops: { stopId: string; parentStation?: string; distanceMeters: number }[] };
+  assert.equal(body.status, "ok");
+  // PLATFORM_A és PLATFORM_B egyaránt STATION_X alá tartozik -> station-szinten EGY candidate marad.
+  assert.equal(body.stops.length, 1);
+  assert.equal(body.stops[0].parentStation, "STATION_X");
+  assert.equal(body.stops[0].stopId, "PLATFORM_A", "a klaszteren belül a legközelebbi platform (PLATFORM_A) a reprezentáns");
+  assert.ok(Number.isInteger(body.stops[0].distanceMeters));
+});

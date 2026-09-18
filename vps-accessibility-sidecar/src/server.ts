@@ -5,17 +5,26 @@
 // kis footprintű Node vagy Python process, felesleges keretrendszer
 // nélkül") — csak a beépített node:http modult.
 //
-// Két endpoint:
-//   GET  /health   — publikus (Caddy mögött, de nem igényel auth-ot; NEM
-//                     tartalmaz secretet/GPS-t/koordinátát/felhasználói
-//                     adatot, kizárólag a manifest mezőket + "status"-t,
-//                     lásd spec 20. pont).
-//   POST /lookup    — Bearer-auth kötelező. Body: {dataset, stopIds?,
-//                     tripIds?, pathwayQueries?}. Response: {provider,
-//                     dataset, generation, builtAt, stops, trips,
-//                     pathways} — SOSEM a teljes indexet, csak a kért
-//                     id-k/pathway-kérdések által érintett, SZŰKÍTETT
-//                     részhalmazt (spec 6/17. pont).
+// Három endpoint:
+//   GET  /health        — publikus (Caddy mögött, de nem igényel auth-ot;
+//                          NEM tartalmaz secretet/GPS-t/koordinátát/
+//                          felhasználói adatot, kizárólag a manifest
+//                          mezőket + "status"-t, lásd spec 20. pont).
+//   POST /lookup         — Bearer-auth kötelező. Body: {dataset, stopIds?,
+//                          tripIds?, pathwayQueries?}. Response: {provider,
+//                          dataset, generation, builtAt, stops, trips,
+//                          pathways} — SOSEM a teljes indexet, csak a kért
+//                          id-k/pathway-kérdések által érintett, SZŰKÍTETT
+//                          részhalmazt (spec 6/17. pont).
+//   POST /nearby-stops   — NEARBY TRANSIT ACCESS BACKEND sprint
+//                          (2026-09-17). Bearer-auth kötelező. Body:
+//                          {dataset, lat, lon, radiusMeters?, limit?}.
+//                          Response: {ok, status, stops:[{stopId,
+//                          parentStation?, name?, lat, lon,
+//                          distanceMeters}]} — lásd nearbyStops.ts fejléce:
+//                          a distanceMeters KIZÁRÓLAG candidate discovery
+//                          célra való egyenes-vonalú (Haversine) távolság,
+//                          SOHA nem valódi gyaloglási távolság/idő.
 //
 // Biztonság (spec 9. pont): a browser SOHA nem éri el ezt közvetlenül —
 // ez csak localhost-on figyel (nem 0.0.0.0-n), a Caddy reverse proxy
@@ -39,6 +48,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { timingSafeEqual } from "node:crypto";
 import { getLoadedDataset, pollDatasetOnce, startPolling } from "./activeIndexStore.js";
 import { selectPathwaySubgraph, type PathwayQuery } from "./stationSubgraph.js";
+import { findNearbyStops, parseNearbyStopsRequest } from "./nearbyStops.js";
 import type { StopAccessibilityIndexEntry, TripAccessibilityIndexEntry } from "./lib/accessibilityIndex.js";
 
 // --- Konfiguráció (env-alapú, spec 9/19. pont) -------------------------
@@ -259,6 +269,58 @@ async function handleLookup(req: IncomingMessage, res: ServerResponse): Promise<
   });
 }
 
+async function handleNearbyStops(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  if (!isAuthorized(req)) {
+    sendJson(res, 401, { ok: false, error: "UNAUTHORIZED" });
+    return;
+  }
+
+  let rawBody: string;
+  try {
+    rawBody = await readBody(req);
+  } catch (err) {
+    if (err instanceof Error && err.message === "BODY_TOO_LARGE") {
+      sendJson(res, 413, { ok: false, error: "BODY_TOO_LARGE" });
+      return;
+    }
+    sendJson(res, 400, { ok: false, error: "BODY_READ_FAILED" });
+    return;
+  }
+
+  let parsedBody: unknown;
+  try {
+    parsedBody = JSON.parse(rawBody);
+  } catch {
+    sendJson(res, 400, { ok: false, error: "MALFORMED_JSON" });
+    return;
+  }
+
+  const parsedRequest = parseNearbyStopsRequest(parsedBody);
+  if ("error" in parsedRequest) {
+    sendJson(res, 400, { ok: false, error: parsedRequest.error });
+    return;
+  }
+  const { dataset, lat, lon, radiusMeters, limit } = parsedRequest;
+
+  if (!configuredDatasets().includes(dataset)) {
+    // Ismeretlen dataset — UGYANAZ a fail-safe kezelés, mint /lookup-nál
+    // (spec 19. pont): sosem crash, a kliens ezt egyértelmű 404-ként kapja.
+    sendJson(res, 404, { ok: false, error: "UNKNOWN_DATASET" });
+    return;
+  }
+
+  const loaded = getLoadedDataset(dataset);
+  if (!loaded) {
+    // A dataset ismert, de a sidecaron még nincs betöltve generation —
+    // UGYANAZ a "nem hiba, csak nincs adat" szemantika, mint /lookup-nál.
+    sendJson(res, 200, { ok: true, status: "unavailable", stops: [] });
+    return;
+  }
+
+  const stops = findNearbyStops(loaded.index, lat, lon, radiusMeters, limit);
+  sendJson(res, 200, { ok: true, status: "ok", stops });
+}
+
 export function createAccessibilitySidecarServer() {
   return createServer((req, res) => {
     void (async () => {
@@ -271,6 +333,10 @@ export function createAccessibilitySidecarServer() {
         }
         if (req.method === "POST" && path === "/lookup") {
           await handleLookup(req, res);
+          return;
+        }
+        if (req.method === "POST" && path === "/nearby-stops") {
+          await handleNearbyStops(req, res);
           return;
         }
         sendJson(res, 404, { ok: false, error: "NOT_FOUND" });

@@ -74,6 +74,41 @@ export function decodePolyline(encoded: string | undefined | null, precision = 6
   return coordinates;
 }
 
+// NEARBY TRANSIT ACCESS SPRINT (2026-09-18) — encodePolyline() a decodePolyline()
+// PONTOS inverze (standard Google encoded-polyline algoritmus). Kizárólag
+// VALÓS, már meglévő koordinátákat (pl. motisStreetRoute.ts flattenStreetRouteGeometry()
+// kimenete) kódol vissza a MEGLÉVŐ JourneyLeg.geometryEncoded/geometryPrecision
+// mezőkbe — nincs második geometria-formátum, nincs kitalált pont.
+export function encodePolyline(coordinates: readonly (readonly [lon: number, lat: number])[], precision = 6): string {
+  if (!coordinates || coordinates.length === 0) return "";
+  const factor = Math.pow(10, precision);
+  let output = "";
+  let prevLat = 0;
+  let prevLon = 0;
+
+  const encodeValue = (value: number): string => {
+    let v = value < 0 ? ~(value << 1) : value << 1;
+    let result = "";
+    while (v >= 0x20) {
+      result += String.fromCharCode((0x20 | (v & 0x1f)) + 63);
+      v >>= 5;
+    }
+    result += String.fromCharCode(v + 63);
+    return result;
+  };
+
+  for (const [lon, lat] of coordinates) {
+    const latRounded = Math.round(lat * factor);
+    const lonRounded = Math.round(lon * factor);
+    output += encodeValue(latRounded - prevLat);
+    output += encodeValue(lonRounded - prevLon);
+    prevLat = latRounded;
+    prevLon = lonRounded;
+  }
+
+  return output;
+}
+
 // GTFS route_color normalizálása (2026-09-08, MapLibre "Could not parse
 // color from value '#'" hiba javítása).
 //

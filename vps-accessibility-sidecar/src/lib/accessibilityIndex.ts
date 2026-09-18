@@ -20,7 +20,7 @@
 // index KIZÁRÓLAG a ténylegesen átadott GTFS zip tartalmából épül.
 
 import AdmZip from "adm-zip";
-import { parseGtfsCsv, parseOptionalGtfsInt } from "./gtfsCsv.js";
+import { parseGtfsCsv, parseOptionalGtfsFloat, parseOptionalGtfsInt } from "./gtfsCsv.js";
 import type { TransitProviderId } from "./types.js";
 
 // --- Minimum mezők (spec 3. pont) -------------------------------------
@@ -30,6 +30,20 @@ export interface StopAccessibilityIndexEntry {
   parentStation?: string;
   /** Nyers GTFS wheelchair_boarding érték — a klasszifikáció (0/üres=UNKNOWN) az accessibility.ts felelőssége, itt csak tároljuk. */
   wheelchairBoarding?: number;
+  // NEARBY TRANSIT ACCESS BACKEND sprint (2026-09-17) — OPCIONÁLIS mezők a
+  // Nearby Stop Discovery alapréteghez (lásd ../nearbyStops.ts). A MEGLÉVŐ
+  // accessibility klasszifikáció (accessibility.ts a fő repóban) ezeket NEM
+  // olvassa — a mezők hozzáadása NEM módosítja a meglévő
+  // wheelchairBoarding/parentStation viselkedést. SZINKRONBAN TARTANDÓ a fő
+  // repo lib/vedett-route/accessibilityIndex.ts ugyanezen mezőivel.
+  /** Nyers GTFS stop_name. */
+  stopName?: string;
+  /** Nyers GTFS stop_lat. */
+  latitude?: number;
+  /** Nyers GTFS stop_lon. */
+  longitude?: number;
+  /** Nyers GTFS location_type. */
+  locationType?: number;
 }
 
 export interface TripAccessibilityIndexEntry {
@@ -95,6 +109,10 @@ export function buildAccessibilityIndexFromGtfsZip(
         stopId,
         parentStation: row.parent_station || undefined,
         wheelchairBoarding: parseOptionalGtfsInt(row.wheelchair_boarding),
+        stopName: row.stop_name || undefined,
+        latitude: parseOptionalGtfsFloat(row.stop_lat),
+        longitude: parseOptionalGtfsFloat(row.stop_lon),
+        locationType: parseOptionalGtfsInt(row.location_type),
       };
     }
   }
