@@ -78,4 +78,53 @@ describe("automatic reroute guard", () => {
     assert.deepEqual(shouldStartAutomaticReroute(state, { ...READY, gpsReacquiring: false }), { shouldReroute: true, reason: null });
     assert.deepEqual(shouldStartAutomaticReroute(state, READY), { shouldReroute: true, reason: null });
   });
+
+  // SPRINT 8.1 (FOREGROUND REACQUISITION, 2026-09-18) — tesztlista D. pont:
+  // amíg a hívó saját foregroundReacquisition.ts állapota szerint egy
+  // hidden->visible utáni recovery-ciklus folyamatban van, az automatikus
+  // reroute FÜGGETLENÜL blokkolva van, még megerősített OFF_ROUTE esetén is
+  // — ugyanaz az elv, mint transitGeometryUncertain/gpsReacquiring-nél.
+  test("foregroundRecoveryActive=true blokkolja az automatikus reroute-ot, még megerősített OFF_ROUTE esetén is", () => {
+    const state = createInitialRerouteGuardState();
+    assert.equal(
+      shouldStartAutomaticReroute(state, { ...READY, foregroundRecoveryActive: true }).reason,
+      "FOREGROUND_REACQUISITION",
+    );
+  });
+
+  test("foregroundRecoveryActive=false (vagy hiányzó) esetén a globális OFF_ROUTE/reroute-viselkedés VÁLTOZATLAN", () => {
+    const state = createInitialRerouteGuardState();
+    assert.deepEqual(
+      shouldStartAutomaticReroute(state, { ...READY, foregroundRecoveryActive: false }),
+      { shouldReroute: true, reason: null },
+    );
+    assert.deepEqual(shouldStartAutomaticReroute(state, READY), { shouldReroute: true, reason: null });
+  });
+
+  // SPRINT 8.1 — tesztlista K. pont: gyenge transit-geometria ÉS foreground-
+  // bizonytalanság EGYSZERRE fennállása esetén sem hamis OFF_ROUTE, sem
+  // auto-reroute nem indulhat — a precedencia-sorrend szerint a
+  // TRANSIT_GEOMETRY_UNCERTAIN reason ér előbb (lásd shouldStartAutomaticReroute
+  // precedencia: ...transitGeometryUncertain -> gpsReacquiring ->
+  // foregroundRecoveryActive...), de MINDKÉT feltétel önmagában is blokkolna.
+  test("transitGeometryUncertain + foregroundRecoveryActive együtt is blokkolja az automatikus reroute-ot", () => {
+    const state = createInitialRerouteGuardState();
+    const decision = shouldStartAutomaticReroute(state, {
+      ...READY,
+      transitGeometryUncertain: true,
+      foregroundRecoveryActive: true,
+    });
+    assert.equal(decision.shouldReroute, false);
+    assert.equal(decision.reason, "TRANSIT_GEOMETRY_UNCERTAIN");
+
+    // Ha a geometria bizonytalansága önmagában megszűnne, a foreground-
+    // recovery FÜGGETLEN blokkja továbbra is tartja a tiltást.
+    const decisionForegroundOnly = shouldStartAutomaticReroute(state, {
+      ...READY,
+      transitGeometryUncertain: false,
+      foregroundRecoveryActive: true,
+    });
+    assert.equal(decisionForegroundOnly.shouldReroute, false);
+    assert.equal(decisionForegroundOnly.reason, "FOREGROUND_REACQUISITION");
+  });
 });

@@ -105,6 +105,21 @@ import {
   classifyTransitGeometryConfidence,
   isRailGuidedTransitMode,
 } from "@/lib/vedett-route/navigation/transitGeometryConfidence";
+// FOREGROUND REACQUISITION — SPRINT 8.1 (2026-09-18). Pure fázis-modell a
+// MEGLÉVŐ gpsFixGate.ts kimeneteinek (usable/reacquiring) elnevezésére +
+// egy monoton generation-számláló (lásd a modul fejlécét) — nem duplikál
+// semmilyen freshness/quality/hiszterézis logikát.
+import {
+  cancelForegroundRecovery,
+  createInitialForegroundRecoveryState,
+  isForegroundRecoveryActive,
+  isGenuineForegroundTransition,
+  startForegroundRecovery,
+  updateForegroundRecoveryPhase,
+  type DocumentVisibilityState,
+  type ForegroundRecoveryPhase,
+} from "@/lib/vedett-route/navigation/foregroundReacquisition";
+import { vedettRouteForegroundDebugLog } from "@/lib/vedett-route/logger";
 
 // „Aktuális helyzetem" mint indulási pont (UX módosítás, 2026-09-09) — a
 // keresési form induló-mezője mostantól két, egymást KIZÁRÓ móddal
@@ -579,6 +594,32 @@ function RankedJourneyCard({
   const [automaticRerouteStatus, setAutomaticRerouteStatus] = useState<"IDLE" | "REROUTING" | "FAILED">("IDLE");
   const [automaticRerouteMessage, setAutomaticRerouteMessage] = useState<string | null>(null);
 
+  // FOREGROUND REACQUISITION — SPRINT 8.1 (2026-09-18). `foregroundRecoveryRef`
+  // a MEGLÉVŐ gpsFixGate.ts kimeneteit követi (lásd a wiring lentebb, a
+  // gpsFixGateRef melletti effektekben) — `foregroundRecoveryPhase` a
+  // React-oldali, render/effekt-függőségekhez szükséges tükör-state.
+  const foregroundRecoveryRef = useRef(createInitialForegroundRecoveryState());
+  const [foregroundRecoveryPhase, setForegroundRecoveryPhase] = useState<ForegroundRecoveryPhase>("IDLE");
+
+  // A navigációs "session" bármely megváltozása (kártya-bezárás navigáció
+  // közben, navigáció leállítása, manuális/automatikus reroute) a MEGLÉVŐ
+  // rerouteSessionRef-et bumpolja — ez EGYIDEJŰLEG érvényteleníti a
+  // folyamatban lévő foreground-recovery ciklust is (spec 3. pont: "ha
+  // recovery közben leáll a navigáció / másik journey indul / új route
+  // kerül kiválasztásra, az ELŐZŐ async eredmény nem írhatja felül az új
+  // állapotot") — UGYANAZT a MEGLÉVŐ session-mechanizmust bővíti, NEM egy
+  // második, párhuzamos session-fogalmat hoz létre.
+  const bumpNavigationSession = () => {
+    rerouteSessionRef.current += 1;
+    if (isForegroundRecoveryActive(foregroundRecoveryRef.current.phase)) {
+      vedettRouteForegroundDebugLog("foreground_reacquisition_cancelled", {
+        generation: foregroundRecoveryRef.current.generation,
+      });
+    }
+    foregroundRecoveryRef.current = cancelForegroundRecovery(foregroundRecoveryRef.current);
+    setForegroundRecoveryPhase(foregroundRecoveryRef.current.phase);
+  };
+
   // Manuális teljes képernyő (spec 7. pont) — a NORMÁL (nem navigáló) map
   // nézeten is elérhető "⛶ Teljes képernyő" gomb, KÜLÖN a navigationMode-tól:
   // ez nem indít GPS-követést, csak nagyobb nézetet ad. A kettő UNIÓJA
@@ -674,7 +715,7 @@ function RankedJourneyCard({
   };
 
   const startNavigation = () => {
-    rerouteSessionRef.current += 1;
+    bumpNavigationSession();
     rerouteGuardRef.current = resetRerouteGuard();
     setAutomaticRerouteStatus("IDLE");
     setAutomaticRerouteMessage(null);
@@ -687,7 +728,7 @@ function RankedJourneyCard({
   };
 
   const stopNavigation = () => {
-    rerouteSessionRef.current += 1;
+    bumpNavigationSession();
     rerouteGuardRef.current = resetRerouteGuard();
     setAutomaticRerouteStatus("IDLE");
     setAutomaticRerouteMessage(null);
@@ -707,7 +748,7 @@ function RankedJourneyCard({
   // kezelni.
   useEffect(() => {
     if (!isOpen && navigationMode) {
-      rerouteSessionRef.current += 1;
+      bumpNavigationSession();
       rerouteGuardRef.current = resetRerouteGuard();
       setAutomaticRerouteStatus("IDLE");
       setAutomaticRerouteMessage(null);
@@ -789,14 +830,73 @@ function RankedJourneyCard({
   // tiltja le, a kamera/marker stabilitást nem érinti.
   const [gpsReacquiring, setGpsReacquiring] = useState(false);
 
+  // FOREGROUND REACQUISITION — SPRINT 8.1 (2026-09-18). A `visibilitychange`
+  // listener [] deps-szel regisztrálódik (mount-kor egyszer) — friss
+  // navigationMode/displayedJourney értéket ezért refből olvas, nem a
+  // closure-ből (spec 2. pont: "csak akkor induljon foreground
+  // reacquisition, ha navigation aktív ÉS van aktuális journey/session").
+  const navigationModeRef = useRef(navigationMode);
+  navigationModeRef.current = navigationMode;
+  const hasDisplayedJourneyRef = useRef(displayedJourney.legs.length > 0);
+  hasDisplayedJourneyRef.current = displayedJourney.legs.length > 0;
+
+  // COMMIT ELŐTTI CÉLZOTT KORREKCIÓ (2026-09-18) — a handleVisibilityChange
+  // korábban KIZÁRÓLAG a JELENLEGI document.visibilityState-et nézte
+  // ("=== visible"), és implicit módon bízott abban, hogy a böngésző
+  // visibilitychange eseménye csak VALÓDI állapotváltozáskor tüzel. Ez egy
+  // explicit, hívó-oldali "előző állapot" reffel most determinisztikusan
+  // bizonyított — lásd isGenuineForegroundTransition() (pure, tesztelt).
+  // Kezdőérték: a document TÉNYLEGES jelenlegi állapota (SSR/teszt alatt,
+  // ahol `document` nem létezik, "visible" a biztonságos, semleges alapérték
+  // — ott ez az effekt egyébként sem fut, lásd lentebb `typeof document`).
+  const previousVisibilityStateRef = useRef<DocumentVisibilityState>(
+    typeof document !== "undefined" ? (document.visibilityState as DocumentVisibilityState) : "visible",
+  );
+
+  // A gpsFixGate.ts KIMENETÉBŐL (usable/reacquiring) frissíti a
+  // foregroundRecoveryRef fázisát — nem duplikál semmilyen freshness/
+  // quality logikát, csak a MÁR kiszámolt eredményt adja tovább. Csak
+  // akkor logol/renderel, ha a fázis TÉNYLEG változott (nincs zajos,
+  // minden tick-en ismétlődő log/setState).
+  const applyForegroundRecoveryPhaseUpdate = (gps: { usable: boolean; reacquiring: boolean }) => {
+    const previous = foregroundRecoveryRef.current;
+    const next = updateForegroundRecoveryPhase(previous, gps);
+    if (next.phase === previous.phase) return;
+    foregroundRecoveryRef.current = next;
+    setForegroundRecoveryPhase(next.phase);
+    if (next.phase === "STABLE") {
+      vedettRouteForegroundDebugLog("foreground_reacquisition_stable", { generation: next.generation });
+    }
+  };
+
   useEffect(() => {
     if (typeof document === "undefined") return;
     const handleVisibilityChange = () => {
-      if (document.visibilityState !== "visible") return;
+      // A "előző állapot" reffel EXPLICITEN bizonyítjuk, hogy VALÓDI
+      // hidden->visible átmenet történt — nem csak azt, hogy a JELENLEGI
+      // állapot "visible" (lásd isGenuineForegroundTransition()). A refet
+      // MINDEN hívásnál frissítjük, még akkor is, ha ez az esemény nem
+      // genuine tranzitiont képvisel (pl. egy "hidden" esemény vagy egy
+      // spurious, ismételt "visible" hívás) — így a KÖVETKEZŐ esemény is
+      // helyesen ítélhető meg.
+      const previousVisibilityState = previousVisibilityStateRef.current;
+      const currentVisibilityState = document.visibilityState as DocumentVisibilityState;
+      previousVisibilityStateRef.current = currentVisibilityState;
+      if (!isGenuineForegroundTransition(previousVisibilityState, currentVisibilityState)) return;
       gpsFixGateRef.current = markVisibilityReturned(gpsFixGateRef.current, Date.now());
       // A KORÁBBAN tárolt fix nem válik automatikusan frissé a visszatéréskor
       // — azonnal usable=false, amíg a KÖVETKEZŐ genuinely friss fix megérkezik.
       setGpsFixUsable(false);
+      // Foreground-reacquisition csak akkor indul, ha valóban aktív
+      // navigáció folyik ÉS van megjelenített journey — máskor a
+      // gpsFixUsable=false fentebbi mellékhatása ártalmatlan (nincs, ami
+      // olvassa), de EXPLICIT recovery-ciklust/logolást nem indítunk.
+      if (!navigationModeRef.current || !hasDisplayedJourneyRef.current) return;
+      foregroundRecoveryRef.current = startForegroundRecovery(foregroundRecoveryRef.current);
+      setForegroundRecoveryPhase(foregroundRecoveryRef.current.phase);
+      vedettRouteForegroundDebugLog("foreground_reacquisition_started", {
+        generation: foregroundRecoveryRef.current.generation,
+      });
     };
     document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
@@ -807,6 +907,7 @@ function RankedJourneyCard({
     gpsFixGateRef.current = result.nextState;
     setGpsFixUsable(result.usable);
     setGpsReacquiring(isGpsReacquiring(result.nextState));
+    applyForegroundRecoveryPhaseUpdate({ usable: result.usable, reacquiring: isGpsReacquiring(result.nextState) });
   }, [currentPosition?.timestampMs]);
 
   // METRO GPS LOSS + MAP CAMERA SAFETY SPRINT (2026-09-17) — a FENTI effekt
@@ -829,6 +930,7 @@ function RankedJourneyCard({
       gpsFixGateRef.current = result.nextState;
       setGpsFixUsable(result.usable);
       setGpsReacquiring(isGpsReacquiring(result.nextState));
+      applyForegroundRecoveryPhaseUpdate({ usable: result.usable, reacquiring: isGpsReacquiring(result.nextState) });
     }, 5_000);
     return () => window.clearInterval(intervalId);
   }, [navigationMode, currentPosition?.timestampMs]);
@@ -1220,6 +1322,12 @@ function RankedJourneyCard({
       // WALK reroute-viselkedés VÁLTOZATLAN (routeNavigationPosition fent
       // már null-t ad ebben az ablakban, ez itt a plusz védelmi réteg).
       gpsReacquiring,
+      // SPRINT 8.1 (FOREGROUND REACQUISITION, 2026-09-18) — amíg a hidden->
+      // visible átmenet utáni recovery-ciklus folyamatban van (WAITING_FOR_
+      // FRESH_GPS/REACQUIRING), auto-reroute TILOS, EXPLICIT, jól naplózható
+      // reason-nel (spec 8. pont) — a globális OFF_ROUTE-küszöb és a
+      // gpsReacquiring-guard VÁLTOZATLAN, ez egy plusz védelmi réteg.
+      foregroundRecoveryActive: isForegroundRecoveryActive(foregroundRecoveryPhase),
     });
     if (!decision.shouldReroute || !currentPosition || !originalDestination) return;
 
@@ -1275,6 +1383,7 @@ function RankedJourneyCard({
     currentPosition?.longitude,
     gpsFixUsable,
     gpsReacquiring,
+    foregroundRecoveryPhase,
     originalDestination?.name,
     originalDestination?.lat,
     originalDestination?.lon,
@@ -1840,7 +1949,7 @@ function RankedJourneyCard({
                   // hoz be, ezért ez is új realtime-refresh sessiont kell
                   // nyitnia (ugyanaz a rerouteSessionRef, amit az automatikus
                   // reroute effekt is használ a staleness-guardhoz).
-                  rerouteSessionRef.current += 1;
+                  bumpNavigationSession();
                   setDisplayedJourney(nextJourney);
                 }}
                 onMapStateChange={setRestStopMapState}

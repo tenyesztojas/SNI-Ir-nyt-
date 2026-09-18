@@ -35,6 +35,18 @@ export interface RerouteGuardInput {
    * a globális OFF_ROUTE-küszöb és a WALK reroute-viselkedés VÁLTOZATLAN.
    */
   gpsReacquiring?: boolean;
+  /**
+   * SPRINT 8.1 (FOREGROUND REACQUISITION, 2026-09-18) — igaz, HA a hívó
+   * saját foregroundReacquisition.ts állapota szerint egy hidden->visible
+   * átmenet utáni recovery-ciklus MÉG folyamatban van (lásd
+   * isForegroundRecoveryActive()). FÜGGETLEN, plusz feltétel — UGYANAZ az
+   * elv, mint transitGeometryUncertain/gpsReacquiring-nél: a globális
+   * OFF_ROUTE-küszöb és a WALK reroute-viselkedés VÁLTOZATLAN, ez csak egy
+   * ÚJABB blokkoló réteg, explicit, jól naplózható reason-nel, mert a
+   * felhasználó éppen most tért vissza a háttérből és a rendszer még nem
+   * gyűjtött elég friss bizonyítékot az aktuális helyzetéről.
+   */
+  foregroundRecoveryActive?: boolean;
 }
 
 export type RerouteBlockReason =
@@ -45,7 +57,8 @@ export type RerouteBlockReason =
   | "REQUEST_IN_FLIGHT"
   | "COOLDOWN_ACTIVE"
   | "TRANSIT_GEOMETRY_UNCERTAIN"
-  | "GPS_REACQUIRING";
+  | "GPS_REACQUIRING"
+  | "FOREGROUND_REACQUISITION";
 
 export type RerouteGuardDecision =
   | { shouldReroute: true; reason: null }
@@ -63,6 +76,7 @@ export function shouldStartAutomaticReroute(
   if (input.offRouteStatus !== "OFF_ROUTE") return { shouldReroute: false, reason: "NOT_CONFIRMED_OFF_ROUTE" };
   if (input.transitGeometryUncertain) return { shouldReroute: false, reason: "TRANSIT_GEOMETRY_UNCERTAIN" };
   if (input.gpsReacquiring) return { shouldReroute: false, reason: "GPS_REACQUIRING" };
+  if (input.foregroundRecoveryActive) return { shouldReroute: false, reason: "FOREGROUND_REACQUISITION" };
   if (!input.hasCurrentPosition) return { shouldReroute: false, reason: "POSITION_MISSING" };
   if (!input.hasDestination) return { shouldReroute: false, reason: "DESTINATION_MISSING" };
   if (state.inFlight) return { shouldReroute: false, reason: "REQUEST_IN_FLIGHT" };

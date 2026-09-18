@@ -39,7 +39,15 @@ export type VedettRouteLogEvent =
   // EZ AZ EVENT SOHA nem kerül logolásra. Nem tartós logging — a root
   // cause bizonyítása után a hívási helyek (nem maga a típus/infra)
   // eltávolíthatók.
-  | "nearby_transit_debug";
+  | "nearby_transit_debug"
+  // FOREGROUND REACQUISITION — SPRINT 8.1 (2026-09-18). Kizárólag
+  // vedettRouteForegroundDebugLog() hívja, KIZÁRÓLAG amikor
+  // process.env.VEDETT_ROUTE_FOREGROUND_DEBUG === "true" (lásd
+  // vedettRouteForegroundDebugLog() lent) — normál productionben (flag
+  // nélkül) EZ AZ EVENT SOHA nem kerül logolásra. A hívó (lásd
+  // VedettUtvonalSearchForm.tsx foregroundReacquisition.ts wiring) KIZÁRÓLAG
+  // checkpoint/phase/generation-t ad át — SOHA GPS-koordinátát.
+  | "foreground_reacquisition_debug";
 
 export function vedettRouteLog(
   event: VedettRouteLogEvent,
@@ -72,4 +80,16 @@ export function vedettRouteLog(
 export function vedettRouteNearbyDebugLog(checkpoint: string, details: Record<string, unknown>) {
   if (process.env.VEDETT_ROUTE_NEARBY_TRANSIT_DEBUG !== "true") return;
   vedettRouteLog("nearby_transit_debug", "info", { checkpoint, ...details });
+}
+
+// IDEIGLENES DIAGNOSZTIKAI GATE (2026-09-18, FOREGROUND REACQUISITION,
+// SPRINT 8.1) — kizárólag a foreground-reacquisition checkpointjait
+// ("foreground_reacquisition_started"/"_stable"/"_cancelled") logolja,
+// KIZÁRÓLAG amikor a VEDETT_ROUTE_FOREGROUND_DEBUG env változó PONTOSAN
+// "true" (alapértelmezés: KI, production zajmentes marad). SOSEM logol
+// GPS-koordinátát — a hívó KIZÁRÓLAG checkpoint/generation-t ad át, a
+// redact() biztonsági háló ettől függetlenül továbbra is aktív.
+export function vedettRouteForegroundDebugLog(checkpoint: string, details: Record<string, unknown>) {
+  if (process.env.VEDETT_ROUTE_FOREGROUND_DEBUG !== "true") return;
+  vedettRouteLog("foreground_reacquisition_debug", "info", { checkpoint, ...details });
 }

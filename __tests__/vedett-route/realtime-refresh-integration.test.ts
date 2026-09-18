@@ -21,9 +21,17 @@ describe("live transit realtime refresh integration", () => {
   });
 
   it("a rest-stop resume is új realtime-refresh sessiont nyit", () => {
+    // SPRINT 8.1 (FOREGROUND REACQUISITION, 2026-09-18) — a korábbi közvetlen
+    // `rerouteSessionRef.current += 1` hívást a MEGLÉVŐ session-mechanizmust
+    // bővítő `bumpNavigationSession()` helper váltotta fel (lásd
+    // VedettUtvonalSearchForm.tsx) — ez a session-bump viselkedést
+    // VÁLTOZATLANUL megtartja (rerouteSessionRef.current += 1 a helper
+    // belsejében ugyanúgy megtörténik), csak EMELLETT egy folyamatban lévő
+    // foreground-recovery ciklust is érvénytelenít. A teszt ezért a helper
+    // hívását keresi, nem a nyers increment literált.
     const resumeHandlerIndex = source.indexOf("onRouteResumed={(nextJourney)");
-    const nextIncrement = source.indexOf("rerouteSessionRef.current += 1", resumeHandlerIndex);
-    assert.ok(resumeHandlerIndex >= 0 && nextIncrement > resumeHandlerIndex && nextIncrement < resumeHandlerIndex + 400);
+    const nextBump = source.indexOf("bumpNavigationSession()", resumeHandlerIndex);
+    assert.ok(resumeHandlerIndex >= 0 && nextBump > resumeHandlerIndex && nextBump < resumeHandlerIndex + 400);
   });
 
   it("a rest-stop legsOverride és a rerouting állapot elnyomja a pollingot", () => {
