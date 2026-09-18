@@ -100,7 +100,7 @@ import { lookupNearbyStops } from "./accessibilityLookupClient.ts";
 import { fetchMotisWalkingRoute } from "./motisClient.ts";
 import { flattenStreetRouteGeometry } from "./motisStreetRoute.ts";
 import type { StreetRouteCoordinate } from "./motisStreetRoute.ts";
-import { vedettRouteLog } from "./logger.ts";
+import { vedettRouteLog, vedettRouteNearbyDebugLog } from "./logger.ts";
 import type { TransitProviderId } from "./types.ts";
 import type { NearbyStopCandidate } from "./accessibilityLookupClient.ts";
 
@@ -322,8 +322,32 @@ export async function buildNearbyTransitAccessCandidates(
   // adna vissza — ez a modul SOSEM indít ennél több gyalogos hívást.
   const boundedStops = dedupedStops.slice(0, nearbyStopLimit);
 
+  // IDEIGLENES DIAGNOSZTIKA (lásd logger.ts vedettRouteNearbyDebugLog) —
+  // candidate-enként: stopId, name, distance, selected yes/no (a
+  // discovery+dedup UTÁNI, feldolgozásra kiválasztott lista).
+  for (const stop of dedupedStops) {
+    vedettRouteNearbyDebugLog("discovery_selection", {
+      stopId: stop.stopId,
+      stopName: stop.name,
+      discoveryDistanceMeters: stop.distanceMeters,
+      discoveryLocationType: stop.locationType,
+      selected: boundedStops.includes(stop),
+    });
+  }
+
   const origin = { lat: input.originLat, lon: input.originLon };
   const settled = await Promise.all(boundedStops.map((stop) => evaluateWalkingAccess(origin, stop)));
+
+  for (let i = 0; i < boundedStops.length; i++) {
+    const stop = boundedStops[i];
+    const outcome = settled[i];
+    vedettRouteNearbyDebugLog("walking_access", {
+      stopId: stop.stopId,
+      stopName: stop.name,
+      walkingSuccess: outcome !== null,
+      ...(outcome ? { walkingDistanceMeters: outcome.walkingDistanceMeters, walkingDurationSeconds: outcome.walkingDurationSeconds } : {}),
+    });
+  }
 
   const candidates = settled.filter((c): c is ReachableStopCandidate => c !== null);
   candidates.sort(compareCandidates);

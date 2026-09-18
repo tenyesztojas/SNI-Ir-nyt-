@@ -17,7 +17,7 @@ import { computeSensoryScore } from "./sensoryEngine.ts";
 import { deduplicateJourneys, computeJourneyFingerprint } from "./fingerprint.ts";
 import { rankJourneys } from "./ranking.ts";
 import { normalizePersonalizationWeights } from "./personalization.ts";
-import { vedettRouteLog } from "./logger.ts";
+import { vedettRouteLog, vedettRouteNearbyDebugLog } from "./logger.ts";
 import { getTransitProvider } from "./providers/registry.ts";
 import { lookupAccessibilityIndexForItineraries } from "./accessibilityLookupClient.ts";
 import {
@@ -331,9 +331,24 @@ async function fetchNearbyTransitAccessJourneys(
     });
     const molBubiRequestActive = Boolean(request.molBubiEnabled);
     const origin = { lat: request.from.lat, lon: request.from.lon };
-    return result.candidates.flatMap((candidate) =>
+    const journeys = result.candidates.flatMap((candidate) =>
       mapNearbyTransitCandidateToJourneys(candidate, origin, displayNames.from, displayNames.to, request.departAt, molBubiRequestActive)
     );
+    // IDEIGLENES DIAGNOSZTIKA (lásd logger.ts vedettRouteNearbyDebugLog) —
+    // "ranking input yes/no": ez a lista PONTOSAN az, amit searchVedettRoutes()
+    // a `journeysWithNearby` tömbön keresztül továbbad a dedup/sensory/ranking
+    // pipeline-nak.
+    for (const journey of journeys) {
+      const transitLeg = journey.legs.find((leg) => leg.mode === "TRANSIT");
+      vedettRouteNearbyDebugLog("ranking_input", {
+        fromStopId: transitLeg?.fromStopId,
+        routeShortName: transitLeg?.routeShortName,
+        totalDurationMinutes: journey.totalDurationMinutes,
+        transfers: journey.transfers,
+        walkingMinutes: journey.walkingMinutes,
+      });
+    }
+    return journeys;
   } catch {
     vedettRouteLog("routing_error", "info", { reason: "nearby_transit_access_expansion_failed" });
     return [];
@@ -771,6 +786,27 @@ export async function searchVedettRoutes(
 
   const withSensory = deduped.map((journey) => ({ ...journey, sensory: computeSensoryScore(journey, weights) }));
   const ranked = rankJourneys(withSensory);
+
+  // IDEIGLENES DIAGNOSZTIKA (lásd logger.ts vedettRouteNearbyDebugLog) —
+  // "ranking output yes/no" ÉS "API response-ban volt yes/no" (a `ranked`
+  // PONTOSAN az, amit a végleges `journeys: ranked` API response mezőbe
+  // teszünk lentebb) — a nearbyJourneys-ből (fentebb) származó
+  // fromStopId-ket keressük vissza a ranked listában, azonosítva, hogy a
+  // rangsorolás/label-szűrés MEGTARTOTTA-e a nearby-generált candidate-et.
+  if (nearbyJourneys.length > 0) {
+    const nearbyFromStopIds = new Set(
+      nearbyJourneys.map((j) => j.legs.find((leg) => leg.mode === "TRANSIT")?.fromStopId).filter((id): id is string => Boolean(id))
+    );
+    for (const nearbyId of nearbyFromStopIds) {
+      const inRanked = ranked.some((r) => r.journey.legs.find((leg) => leg.mode === "TRANSIT")?.fromStopId === nearbyId);
+      vedettRouteNearbyDebugLog("ranking_output", {
+        fromStopId: nearbyId,
+        rankingOutput: inRanked,
+        apiResponse: inRanked,
+        labels: inRanked ? ranked.find((r) => r.journey.legs.find((leg) => leg.mode === "TRANSIT")?.fromStopId === nearbyId)?.labels : undefined,
+      });
+    }
+  }
 
   const confidences = withSensory.map((j) => j.sensory?.confidence ?? 0);
   const sensoryConfidenceAvg =

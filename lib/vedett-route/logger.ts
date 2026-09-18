@@ -31,7 +31,15 @@ export type VedettRouteLogEvent =
   | "routing_engine_unavailable"
   | "timeout"
   | "malformed_response"
-  | "connection_test";
+  | "connection_test"
+  // NEARBY TRANSIT ACCESS — IDEIGLENES DIAGNOSZTIKAI SPRINT (2026-09-18,
+  // 3. kör). Kizárólag vedettRouteNearbyDebugLog() hívja, KIZÁRÓLAG amikor
+  // process.env.VEDETT_ROUTE_NEARBY_TRANSIT_DEBUG === "true" (lásd
+  // vedettRouteNearbyDebugLog() lent) — normál productionben (flag nélkül)
+  // EZ AZ EVENT SOHA nem kerül logolásra. Nem tartós logging — a root
+  // cause bizonyítása után a hívási helyek (nem maga a típus/infra)
+  // eltávolíthatók.
+  | "nearby_transit_debug";
 
 export function vedettRouteLog(
   event: VedettRouteLogEvent,
@@ -49,4 +57,19 @@ export function vedettRouteLog(
   if (level === "error") console.error(line);
   else if (level === "warn") console.warn(line);
   else console.log(line);
+}
+
+// IDEIGLENES DIAGNOSZTIKAI GATE (2026-09-18, NEARBY TRANSIT ACCESS 3.
+// kör) — kizárólag a nearby-transit pipeline checkpointjait logolja,
+// KIZÁRÓLAG amikor a VEDETT_ROUTE_NEARBY_TRANSIT_DEBUG env változó
+// PONTOSAN "true" (alapértelmezés: KI, tehát production zajmentes marad,
+// amíg valaki explicit be nem kapcsolja egy konkrét diagnosztikai
+// keresésre). SOSEM logol GPS-koordinátát, felhasználói azonosítót vagy
+// secretet — a hívók (lásd nearbyTransitAccess.ts/
+// nearbyTransitJourneyCandidates.ts/orchestrator.ts) KIZÁRÓLAG
+// stopId/name/distance/siker-e/route-metaadatot adnak át, a redact()
+// biztonsági háló ettől függetlenül továbbra is aktív.
+export function vedettRouteNearbyDebugLog(checkpoint: string, details: Record<string, unknown>) {
+  if (process.env.VEDETT_ROUTE_NEARBY_TRANSIT_DEBUG !== "true") return;
+  vedettRouteLog("nearby_transit_debug", "info", { checkpoint, ...details });
 }

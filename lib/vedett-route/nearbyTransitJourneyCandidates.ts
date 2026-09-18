@@ -54,7 +54,7 @@
 import { buildNearbyTransitAccessCandidates } from "./nearbyTransitAccess.ts";
 import type { NearbyTransitAccessInput, ReachableStopCandidate } from "./nearbyTransitAccess.ts";
 import { fetchMotisPlan } from "./motisClient.ts";
-import { vedettRouteLog } from "./logger.ts";
+import { vedettRouteLog, vedettRouteNearbyDebugLog } from "./logger.ts";
 import type { MotisItinerary } from "./motisTypes.ts";
 import type { TransitProviderId } from "./types.ts";
 
@@ -184,6 +184,7 @@ async function evaluateTransitCandidate(
       reason: "nearby_transit_journey_candidate_unknown_provider_dataset_tag",
       stopId: access.stopId,
     });
+    vedettRouteNearbyDebugLog("motis_transit_plan", { stopId: access.stopId, motisFromPlace: null, itineraryCount: 0, journeyGenerated: false, reason: "unknown_provider_dataset_tag" });
     return null;
   }
 
@@ -205,6 +206,7 @@ async function evaluateTransitCandidate(
       stopId: access.stopId,
       planReason: planResult.reason,
     });
+    vedettRouteNearbyDebugLog("motis_transit_plan", { stopId: access.stopId, motisFromPlace: fromPlace, itineraryCount: 0, journeyGenerated: false, reason: `plan_failed:${planResult.reason}` });
     return null;
   }
 
@@ -213,6 +215,23 @@ async function evaluateTransitCandidate(
   // `direct` mező EGYARÁNT tartalmazhat találatot (lásd orchestrator.ts
   // searchVedettRoutes() rawItineraries összeállítása), ugyanúgy itt is.
   const itineraries: MotisItinerary[] = [...(planResult.data.itineraries ?? []), ...(planResult.data.direct ?? [])];
+
+  // IDEIGLENES DIAGNOSZTIKA (lásd logger.ts vedettRouteNearbyDebugLog) —
+  // a MOTIS request pontos fromPlace-e (stopId-alapú vs. koordináta-
+  // alapú megkülönbözethető belőle), a visszaadott itinerary-szám, és az
+  // ELSŐ itinerary ELSŐ transit lábjának mode/route-ja (ha van) — ez
+  // közvetlenül megválaszolja, hogy a MOTIS a várt boarding pointból ad-e
+  // vissza legalább egy transit itinerary-t.
+  const firstItineraryFirstTransitLeg = itineraries[0]?.legs.find((leg) => leg.mode !== "WALK");
+  vedettRouteNearbyDebugLog("motis_transit_plan", {
+    stopId: access.stopId,
+    motisFromPlace: fromPlace,
+    transitDepartureTime,
+    itineraryCount: itineraries.length,
+    firstTransitMode: firstItineraryFirstTransitLeg?.mode,
+    firstTransitRoute: firstItineraryFirstTransitLeg?.routeShortName,
+    journeyGenerated: itineraries.length > 0,
+  });
 
   if (itineraries.length === 0) {
     // Nem hiba — ez a megálló egyszerűen nem adott transit-tervezési

@@ -256,6 +256,15 @@ export interface NearbyStopCandidate {
   lon: number;
   /** KIZÁRÓLAG candidate discovery célú, egyenes-vonalú (Haversine) távolság — SOHA nem gyaloglási távolság/idő. */
   distanceMeters: number;
+  /**
+   * IDEIGLENES DIAGNOSZTIKAI MEZŐ (NEARBY TRANSIT ACCESS, 3. kör,
+   * 2026-09-18) — a sidecar nyers GTFS location_type mezője (lásd
+   * vps-accessibility-sidecar/src/nearbyStops.ts NearbyStopCandidate),
+   * KIZÁRÓLAG diagnosztikai naplózáshoz (nearbyTransitAccess.ts
+   * discovery_selection checkpoint) — a meglévő discovery/dedup/
+   * feldolgozási logika ezt NEM olvassa, NEM szűr rá.
+   */
+  locationType?: number;
 }
 
 interface NearbyStopsSidecarResponseBody {

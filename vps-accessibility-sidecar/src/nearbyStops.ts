@@ -104,6 +104,19 @@ export interface NearbyStopCandidate {
   lat: number;
   lon: number;
   distanceMeters: number;
+  /**
+   * IDEIGLENES DIAGNOSZTIKAI MEZŐ (NEARBY TRANSIT ACCESS, 3. kör,
+   * 2026-09-18) — a nyers GTFS location_type, változatlanul átemelve az
+   * indexből (lásd accessibilityIndex.ts StopAccessibilityIndexEntry.
+   * locationType). Ez a modul (findNearbyStops) EZ a mező hozzáadása
+   * ELŐTT sem SZŰRT rá — ez itt KIZÁRÓLAG megfigyelhetőséget ad hozzá
+   * (a hívó eldöntheti, hogy egy discovery-találat station/platform
+   * location_type=0/1, vagy entrance/generic-node/boarding-area
+   * location_type=2/3/4, esetleg hiányzó location_type — ez utóbbi kettő
+   * GTFS szerint SOHA nem önálló boarding point). NEM változtatja meg a
+   * findNearbyStops() meglévő discovery/dedup/limit viselkedését.
+   */
+  locationType?: number;
 }
 
 /**
@@ -169,5 +182,6 @@ export function findNearbyStops(index: AccessibilityIndex, lat: number, lon: num
       lat: stop.latitude as number,
       lon: stop.longitude as number,
       distanceMeters: Math.round(stop.distanceMeters),
+      locationType: stop.locationType,
     }));
 }
