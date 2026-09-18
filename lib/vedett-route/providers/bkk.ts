@@ -40,6 +40,17 @@ const CACHE_DIR = path.join(process.cwd(), ".vedett-cache", "gtfs-static", "bkk"
 const CACHE_ZIP_PATH = path.join(CACHE_DIR, "budapest_gtfs.zip");
 const CACHE_META_PATH = path.join(CACHE_DIR, "meta.json");
 
+// SPRINT 8.3 — a GTFS-RT protobuf mezők (pl. Alert.activePeriod.start/end)
+// protobufjs Long instance-ként ÉRKEZHETNEK (nem plain number), NEM új
+// dependency-t vezet be — a gtfs-realtime-bindings saját Long típusán a
+// toNumber() metódus már elérhető, csak defenzíven hívjuk.
+function toEpochSeconds(value: number | { toNumber(): number } | null | undefined): number | undefined {
+  if (value == null) return undefined;
+  if (typeof value === "number") return value;
+  if (typeof value.toNumber === "function") return value.toNumber();
+  return undefined;
+}
+
 function withKey(url: string): string {
   const key = process.env.BKK_API_KEY;
   return `${url}?key=${encodeURIComponent(key ?? "")}`;
@@ -180,6 +191,18 @@ export class BkkProvider implements TransitProvider {
           affectedRouteIds: (alert.informedEntity ?? []).map((ie) => ie.routeId).filter((x): x is string => Boolean(x)),
           affectedStopIds: (alert.informedEntity ?? []).map((ie) => ie.stopId).filter((x): x is string => Boolean(x)),
           url: alert.url?.translation?.[0]?.text,
+          // SPRINT 8.3 — a nyers informedEntity route<->trip<->stop PÁROSÍTÁS
+          // és az activePeriod megőrzése (lásd types.ts ServiceAlert fejléce)
+          // — a disruptionRelevance.ts motor ezekre épül.
+          informedEntities: (alert.informedEntity ?? []).map((ie) => ({
+            routeId: ie.routeId ?? undefined,
+            tripId: ie.trip?.tripId ?? undefined,
+            stopId: ie.stopId ?? undefined,
+          })),
+          activePeriod: (alert.activePeriod ?? []).map((p) => ({
+            startSeconds: toEpochSeconds(p.start),
+            endSeconds: toEpochSeconds(p.end),
+          })),
         } satisfies ServiceAlert;
       });
   }

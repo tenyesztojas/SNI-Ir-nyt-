@@ -17,6 +17,16 @@ export interface ServiceAlert {
   affectedRouteIds?: string[];
   affectedStopIds?: string[];
   url?: string;
+  // SPRINT 8.3 (ROUTE-SPECIFIC DISRUPTION RELEVANCE ENGINE, 2026-09-18) —
+  // ADDITÍV, backward-compatible mezők: a fenti affectedRouteIds/
+  // affectedStopIds flatten listák ÖNMAGUKBAN elvesztik a nyers GTFS-RT
+  // Alert.informedEntity route<->trip<->stop PÁROSÍTÁST és az
+  // Alert.activePeriod időbeli érvényességet — a disruptionRelevance.ts
+  // motor emiatt EZEKRE a strukturált mezőkre épül, nem a flatten listákra.
+  // Csak akkor kerülnek kitöltésre, ha a nyers GTFS-RT válasz ténylegesen
+  // tartalmazta — hiányukban a motor fail-closed módon UNKNOWN/IRRELEVANT-ot ad.
+  informedEntities?: { routeId?: string; tripId?: string; stopId?: string }[];
+  activePeriod?: { startSeconds?: number; endSeconds?: number }[];
 }
 
 export interface TripUpdate {
