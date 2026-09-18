@@ -68,6 +68,15 @@ import type { NavigationCoordinate, NavigationPosition, OffRouteStatus } from ".
 export const BOARDING_PROXIMITY_METERS = 35;
 
 /**
+ * A leszállási pont (TRANSIT leg SAJÁT to-koordinátája) "ésszerű közelsége"
+ * az ARRIVED felismeréshez — SZÁNDÉKOSAN AZONOS nagyságrend/érték, mint
+ * BOARDING_PROXIMITY_METERS (szimmetrikus: a boarding és az alighting
+ * ugyanolyan GPS-bizonytalanság mellett, ugyanolyan gyalogos-közeli
+ * kontextusban történik).
+ */
+export const ALIGHTING_PROXIMITY_METERS = 35;
+
+/**
  * Hány egymást követő, EGYIDEJŰLEG megerősítő GPS-fix kell MINIMÁLISAN a
  * BOARDED váltáshoz — ÖNMAGÁBAN NEM elég (lásd TRANSIT_PROGRESS_THRESHOLD_METERS),
  * de egy 1-2 fixes, esetleg egyetlen GPS-glitch-ből álló sorozat ennél
@@ -103,7 +112,17 @@ export type WalkToTransitPhase =
   // annyit jelez, hogy a "Szállj fel" instrukció innentől félrevezető
   // lenne, és hogy a geometria-eltérés itt NEM lehet auto-reroute alapja
   // (lásd rerouteGuard.ts transitGeometryUncertain bemenete).
-  | "BOARDED_UNCERTAIN_GEOMETRY";
+  | "BOARDED_UNCERTAIN_GEOMETRY"
+  // TRANSIT STATE CONTINUITY + ARRIVAL SPRINT (2026-09-18) — a jelenleg
+  // BOARDED/BOARDED_UNCERTAIN_GEOMETRY TRANSIT leg GENERIKUSAN (nem
+  // megálló-/járat-specifikusan) észlelt vége: több egymást követő fix
+  // bizonyítja, hogy a user a leg SAJÁT to-koordinátájának (leszállási
+  // pont) ésszerű közelségébe ért. Ez a leg lezárását jelenti — a
+  // resolvedLegIndex innentől a KÖVETKEZŐ ORIGINAL leget mutatja, az
+  // eredeti Journey/displayedJourney változatlan marad, NINCS új /plan
+  // hívás. Sticky, ugyanúgy mint BOARDED — egyetlen GPS-kiesés/eltérés
+  // nem bontja meg.
+  | "ARRIVED";
 
 export interface WalkToTransitNextTransitLeg {
   legIndex: number;
@@ -113,6 +132,24 @@ export interface WalkToTransitNextTransitLeg {
   legCoordinates: readonly NavigationCoordinate[] | null;
   /** A leg NORMALIZÁLT transitMode-ja (JourneyLeg.transitMode — lásd orchestrator.ts mapLeg()), HA TRANSIT. */
   transitMode?: string;
+  /**
+   * TRANSIT STATE CONTINUITY + ARRIVAL SPRINT (2026-09-18) — a TRANSIT leg
+   * SAJÁT to-koordinátája (a leszállási pont), HA elérhető. GENERIKUS
+   * bizonyíték a leszállás felismeréséhez (lásd resolveWalkToTransitBoundary
+   * lentebbi ARRIVED ágát) — SOSEM járat-/megálló-specifikus, kizárólag a
+   * MÁR MEGLÉVŐ JourneyLeg.toLat/toLon adatból.
+   */
+  alightingCoordinate?: NavigationCoordinate | null;
+  /**
+   * Igaz, ha a Journey-ben van egy KÖVETKEZŐ leg a jelenlegi TRANSIT leg
+   * UTÁN (legIndex + 1 létezik). Az ARRIVED állapot KIZÁRÓLAG akkor
+   * léphet tovább a következő legre, ha ez igaz — az utolsó legnél a
+   * végső megérkezést a MEGLÉVŐ, geometria-alapú isAtRouteEnd() jelzi,
+   * ez a modul azt nem helyettesíti. Opcionális/hiányzó -> hamis (nincs
+   * ARRIVED-továbblépés), hogy a MEGLÉVŐ hívók/tesztek e mező nélkül is
+   * byte-ra a régi, biztonságos passthrough-t kapják.
+   */
+  hasFollowingLeg?: boolean;
 }
 
 export interface WalkToTransitBoundaryInput {
@@ -148,6 +185,14 @@ export interface WalkToTransitBoundaryState {
    * logikát NEM érinti.
    */
   departureEvidenceFixes: number;
+  /**
+   * TRANSIT STATE CONTINUITY + ARRIVAL SPRINT (2026-09-18) — hány egymást
+   * követő fixen áll fenn a "BOARDED/BOARDED_UNCERTAIN_GEOMETRY ÉS a
+   * TRANSIT leg SAJÁT leszállási pontjának ésszerű közelségében van"
+   * bizonyíték (lásd ARRIVED fázis). Kizárólag ennek a hiszterézisét
+   * szolgálja.
+   */
+  arrivalEvidenceFixes: number;
 }
 
 export function createInitialWalkToTransitBoundaryState(): WalkToTransitBoundaryState {
@@ -159,6 +204,7 @@ export function createInitialWalkToTransitBoundaryState(): WalkToTransitBoundary
     transitFitStreakStartProgressMeters: null,
     transitProgressMeters: null,
     departureEvidenceFixes: 0,
+    arrivalEvidenceFixes: 0,
   };
 }
 
@@ -198,10 +244,26 @@ export function resolveWalkToTransitBoundary(input: WalkToTransitBoundaryInput):
       transitFitStreakStartProgressMeters: null,
       transitProgressMeters: null,
       departureEvidenceFixes: 0,
+      arrivalEvidenceFixes: 0,
     };
   }
 
-  if (!nextTransitLeg || !position || !isFiniteNumber(position.latitude) || !isFiniteNumber(position.longitude)) {
+  const isStickyPhase = previous?.phase === "BOARDED" || previous?.phase === "BOARDED_UNCERTAIN_GEOMETRY" || previous?.phase === "ARRIVED";
+
+  // TRANSIT STATE CONTINUITY SPRINT (2026-09-18) — "GPS FIX != JOURNEY
+  // STATE": egy hiányzó/érvénytelen pozíció (GPS LOSS — a hívó ilyenkor
+  // `position: null`-t ad át, lásd VedettUtvonalSearchForm.tsx gpsFixUsable
+  // gate-je) NEM negatív bizonyíték, és SOSEM törölhet egy MÁR elért
+  // BOARDED/BOARDED_UNCERTAIN_GEOMETRY/ARRIVED állapotot — ez okozta a
+  // valódi mobilteszten megfigyelt hibát (GPS-kiesés a vonaton -> "Gyalogolj"
+  // instrukció jelent meg, majd hamis "Letértél az útvonalról"). Ha a
+  // korábbi állapot sticky (felszállt/megérkezett), AZ EGÉSZ állapotot
+  // byte-ra megőrizzük; egyébként (még sosem volt boarding-bizonyíték) az
+  // eredeti, zeroed WALKING viselkedés marad — ez a plain WALK-only
+  // legeknél (nincs következő TRANSIT leg) a geometryActiveLegIndex-et
+  // KÖVETŐ, friss resolvedLegIndex-et ad, ahogy korábban is.
+  if (!position || !isFiniteNumber(position.latitude) || !isFiniteNumber(position.longitude)) {
+    if (isStickyPhase && previous) return previous;
     return {
       phase: "WALKING",
       resolvedLegIndex: geometryActiveLegIndex,
@@ -210,11 +272,56 @@ export function resolveWalkToTransitBoundary(input: WalkToTransitBoundaryInput):
       transitFitStreakStartProgressMeters: null,
       transitProgressMeters: null,
       departureEvidenceFixes: 0,
+      arrivalEvidenceFixes: 0,
     };
   }
 
+  if (!nextTransitLeg) {
+    if (isStickyPhase && previous) return previous;
+    return {
+      phase: "WALKING",
+      resolvedLegIndex: geometryActiveLegIndex,
+      boardingDistanceMeters: null,
+      consecutiveTransitFitFixes: 0,
+      transitFitStreakStartProgressMeters: null,
+      transitProgressMeters: null,
+      departureEvidenceFixes: 0,
+      arrivalEvidenceFixes: 0,
+    };
+  }
+
+  // TRANSIT STATE CONTINUITY + ARRIVAL SPRINT (2026-09-18) — a leszállás
+  // GENERIKUS felismerése (Section 6): ha az előző tick már BOARDED/
+  // BOARDED_UNCERTAIN_GEOMETRY volt, és van egy KÖVETKEZŐ ORIGINAL leg,
+  // több egymást követő fix bizonyítja a jelenlegi TRANSIT leg SAJÁT
+  // to-koordinátájának (leszállási pont) ésszerű közelségét -> a leg
+  // lezárul, resolvedLegIndex a KÖVETKEZŐ legre ugrik. NINCS jármű-
+  // azonosítás, NINCS /plan hívás — kizárólag a MEGLÉVŐ GPS-koordináta
+  // + a MÁR MEGLÉVŐ JourneyLeg.to koordináta.
+  if (previous?.phase === "ARRIVED") return previous;
+  const wasBoardedBefore = previous?.phase === "BOARDED" || previous?.phase === "BOARDED_UNCERTAIN_GEOMETRY";
+  let arrivalEvidenceFixes = 0;
+
   const gpsCoordinate: NavigationCoordinate = [position.longitude, position.latitude];
   const proximity = boardingProximityFor(position.accuracyMeters);
+
+  if (wasBoardedBefore && nextTransitLeg.hasFollowingLeg && nextTransitLeg.alightingCoordinate) {
+    const alightingDistanceMeters = haversineMeters(gpsCoordinate, nextTransitLeg.alightingCoordinate);
+    const previousArrivalFixes = previous?.arrivalEvidenceFixes ?? 0;
+    arrivalEvidenceFixes = alightingDistanceMeters <= ALIGHTING_PROXIMITY_METERS ? previousArrivalFixes + 1 : 0;
+    if (arrivalEvidenceFixes >= BOARDING_CONFIRM_FIXES) {
+      return {
+        phase: "ARRIVED",
+        resolvedLegIndex: nextTransitLeg.legIndex + 1,
+        boardingDistanceMeters: previous?.boardingDistanceMeters ?? null,
+        consecutiveTransitFitFixes: previous?.consecutiveTransitFitFixes ?? 0,
+        transitFitStreakStartProgressMeters: previous?.transitFitStreakStartProgressMeters ?? null,
+        transitProgressMeters: previous?.transitProgressMeters ?? null,
+        departureEvidenceFixes: previous?.departureEvidenceFixes ?? 0,
+        arrivalEvidenceFixes,
+      };
+    }
+  }
 
   const boardingDistanceMeters = nextTransitLeg.boardingCoordinate
     ? haversineMeters(gpsCoordinate, nextTransitLeg.boardingCoordinate)
@@ -273,6 +380,7 @@ export function resolveWalkToTransitBoundary(input: WalkToTransitBoundaryInput):
       transitFitStreakStartProgressMeters,
       transitProgressMeters,
       departureEvidenceFixes: previous?.departureEvidenceFixes ?? 0,
+      arrivalEvidenceFixes,
     };
   }
 
@@ -295,6 +403,7 @@ export function resolveWalkToTransitBoundary(input: WalkToTransitBoundaryInput):
       transitFitStreakStartProgressMeters: previousStreakStart,
       transitProgressMeters: previous?.transitProgressMeters ?? null,
       departureEvidenceFixes: previous?.departureEvidenceFixes ?? 0,
+      arrivalEvidenceFixes,
     };
   }
 
@@ -352,6 +461,7 @@ export function resolveWalkToTransitBoundary(input: WalkToTransitBoundaryInput):
       transitFitStreakStartProgressMeters,
       transitProgressMeters,
       departureEvidenceFixes,
+      arrivalEvidenceFixes,
     };
   }
 
@@ -368,6 +478,7 @@ export function resolveWalkToTransitBoundary(input: WalkToTransitBoundaryInput):
       transitFitStreakStartProgressMeters,
       transitProgressMeters,
       departureEvidenceFixes,
+      arrivalEvidenceFixes,
     };
   }
 
@@ -380,6 +491,7 @@ export function resolveWalkToTransitBoundary(input: WalkToTransitBoundaryInput):
       transitFitStreakStartProgressMeters,
       transitProgressMeters,
       departureEvidenceFixes,
+      arrivalEvidenceFixes,
     };
   }
 
@@ -391,5 +503,6 @@ export function resolveWalkToTransitBoundary(input: WalkToTransitBoundaryInput):
     transitFitStreakStartProgressMeters,
     transitProgressMeters,
     departureEvidenceFixes,
+    arrivalEvidenceFixes,
   };
 }

@@ -147,6 +147,11 @@ describe("6) BOARDED_UNCERTAIN_GEOMETRY nem vezet be jármű-azonosító/idő-al
       state = step(state, { position: { latitude: lat, longitude: 0 } });
     }
     assert.equal(state.phase, "BOARDED_UNCERTAIN_GEOMETRY");
+    // TRANSIT STATE CONTINUITY + ARRIVAL SPRINT (2026-09-18) — additív
+    // "arrivalEvidenceFixes" mező (lásd legTransition.ts ARRIVED ága); a
+    // sprint fejléce szerint SEM jármű-azonosítót, SEM idő-alapú mezőt nem
+    // vezet be — kizárólag egy MÁSIK, ugyanolyan GPS-fix-alapú hiszterézis-
+    // számlálót, mint a MÁR MEGLÉVŐ departureEvidenceFixes.
     assert.deepEqual(new Set(Object.keys(state)), new Set([
       "phase",
       "resolvedLegIndex",
@@ -155,6 +160,7 @@ describe("6) BOARDED_UNCERTAIN_GEOMETRY nem vezet be jármű-azonosító/idő-al
       "transitFitStreakStartProgressMeters",
       "transitProgressMeters",
       "departureEvidenceFixes",
+      "arrivalEvidenceFixes",
     ]));
   });
 });

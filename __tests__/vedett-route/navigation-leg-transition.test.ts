@@ -253,3 +253,104 @@ describe("konstansok konzisztenciája", () => {
     assert.ok(TRANSIT_PROGRESS_THRESHOLD_METERS > 0);
   });
 });
+
+// ============================================================================
+// TRANSIT STATE CONTINUITY + GPS REACQUISITION + ARRIVAL SPRINT (2026-09-18)
+// — "GPS FIX != JOURNEY STATE". Lásd legTransition.ts fejléc-kommentjeit az
+// alább tesztelt null-position-preservation és ARRIVED ágakról.
+// ============================================================================
+
+describe("GPS LOSS — BOARDED/BOARDED_UNCERTAIN_GEOMETRY állapot GPS-kiesésen át (teszt-lista 2. pont)", () => {
+  test("BOARDED után egy null pozíció (GPS LOSS) NEM esik vissza WALKING-ra, byte-ra megőrzi az állapotot", () => {
+    const boarded = run([-0.00005, -0.00015, -0.00025]);
+    assert.equal(boarded.phase, "BOARDED");
+    const duringLoss = step(boarded, { position: null });
+    assert.deepEqual(duringLoss, boarded);
+    // Több egymást követő null-fix (teljes GPS-kiesés a tunnelben) sem
+    // változtat semmit — nincs "absence of data = negative evidence".
+    const stillDuringLoss = step(duringLoss, { position: null });
+    assert.deepEqual(stillDuringLoss, boarded);
+  });
+
+  test("BOARDED_UNCERTAIN_GEOMETRY (gyenge sínes geometria) után null pozíció is megőrzi az állapotot", () => {
+    // Ugyanaz a fixture-stílus, mint navigation-transit-geometry-safety.test.ts
+    // "5)" szekciója: 2-pontos, dél felé futó "weak" REGIONAL_RAIL geometria,
+    // a mozgás ÉSZAK felé (a vonal IRÁNYÁVAL ELLENTÉTESEN) — így a
+    // projectPointToRoute a [0,0] végpontra klemmel, a distanceFromRouteMeters
+    // sosem éri el a szigorú fitsTransitGeometry küszöböt, tehát KIZÁRÓLAG a
+    // weak-rail departure-evidence fallback vezethet BOARDED_UNCERTAIN_GEOMETRY-hez.
+    const weakLeg = {
+      legIndex: 1,
+      boardingCoordinate: [0, 0] as [number, number],
+      legCoordinates: [[0, 0], [0, -0.02]] as [number, number][],
+      transitMode: "REGIONAL_RAIL",
+    };
+    let state: WalkToTransitBoundaryState | null = step(null, { position: { latitude: 0.0002, longitude: 0 }, nextTransitLeg: weakLeg });
+    assert.equal(state.phase, "AT_BOARDING_AREA");
+    for (const lat of [0.0006, 0.0012, 0.002]) {
+      state = step(state, { position: { latitude: lat, longitude: 0 }, nextTransitLeg: weakLeg });
+    }
+    assert.equal((state as WalkToTransitBoundaryState).phase, "BOARDED_UNCERTAIN_GEOMETRY");
+    const duringLoss = step(state, { position: null, nextTransitLeg: weakLeg });
+    assert.equal(duringLoss.phase, "BOARDED_UNCERTAIN_GEOMETRY");
+    assert.deepEqual(duringLoss, state);
+  });
+
+  test("WALKING/AT_BOARDING_AREA (sosem boarded) állapotból null pozíció a régi, zeroed WALKING viselkedést adja (nincs regresszió plain WALK-only journeyn)", () => {
+    const atBoardingArea = step(null, { position: { latitude: 0.0002, longitude: 0 } });
+    assert.equal(atBoardingArea.phase, "AT_BOARDING_AREA");
+    const duringLoss = step(atBoardingArea, { position: null });
+    assert.equal(duringLoss.phase, "WALKING");
+    assert.equal(duringLoss.resolvedLegIndex, 0);
+  });
+});
+
+describe("ARRIVAL / ALIGHTING — generikus leszállás-felismerés (teszt-lista 7/8/9. pont)", () => {
+  const weakLegWithAlighting = {
+    legIndex: 1,
+    boardingCoordinate: [0, 0] as [number, number],
+    legCoordinates: TRANSIT_LEG_COORDINATES,
+    alightingCoordinate: [0, -0.02] as [number, number], // a leg saját to-koordinátája
+    hasFollowingLeg: true,
+  };
+
+  test("BOARDED + a leg SAJÁT to-koordinátájának ésszerű közelsége, több egymást követő fixen -> ARRIVED, resolvedLegIndex a KÖVETKEZŐ ORIGINAL legre ugrik", () => {
+    const boarded = run([-0.00005, -0.00015, -0.00025], { nextTransitLeg: weakLegWithAlighting });
+    assert.equal(boarded.phase, "BOARDED");
+    let state: WalkToTransitBoundaryState = boarded;
+    // A leszállási pont [0, -0.02] — kb. 22 m-es közelségbe kerülünk.
+    for (let i = 0; i < BOARDING_CONFIRM_FIXES; i += 1) {
+      state = step(state, { position: { latitude: -0.0198, longitude: 0 }, nextTransitLeg: weakLegWithAlighting });
+    }
+    assert.equal(state.phase, "ARRIVED");
+    assert.equal(state.resolvedLegIndex, weakLegWithAlighting.legIndex + 1);
+  });
+
+  test("ARRIVED sticky — egy ezt követő, nem-megerősítő fix (vagy GPS-kiesés) nem bontja meg", () => {
+    let state: WalkToTransitBoundaryState = run([-0.00005, -0.00015, -0.00025], { nextTransitLeg: weakLegWithAlighting });
+    for (let i = 0; i < BOARDING_CONFIRM_FIXES; i += 1) {
+      state = step(state, { position: { latitude: -0.0198, longitude: 0 }, nextTransitLeg: weakLegWithAlighting });
+    }
+    assert.equal(state.phase, "ARRIVED");
+    const afterJitter = step(state, { position: { latitude: -0.05, longitude: 0.01 }, nextTransitLeg: weakLegWithAlighting });
+    assert.equal(afterJitter.phase, "ARRIVED");
+    assert.equal(afterJitter.resolvedLegIndex, weakLegWithAlighting.legIndex + 1);
+    const duringLoss = step(afterJitter, { position: null, nextTransitLeg: weakLegWithAlighting });
+    assert.equal(duringLoss.phase, "ARRIVED");
+  });
+
+  test("nincs KÖVETKEZŐ leg (hasFollowingLeg: false) -> nincs ARRIVED, a végső megérkezést a MEGLÉVŐ isAtRouteEnd() jelzi, nem ez a modul", () => {
+    const lastLeg = { ...weakLegWithAlighting, hasFollowingLeg: false };
+    let state = run([-0.00005, -0.00015, -0.00025], { nextTransitLeg: lastLeg });
+    assert.equal(state.phase, "BOARDED");
+    for (let i = 0; i < BOARDING_CONFIRM_FIXES; i += 1) {
+      state = step(state, { position: { latitude: -0.0198, longitude: 0 }, nextTransitLeg: lastLeg });
+    }
+    assert.notEqual(state.phase, "ARRIVED");
+  });
+
+  test("resolveWalkToTransitBoundary pure/szinkron — az ARRIVED ág sem hív semmilyen aszinkron/hálózati függvényt (nincs /plan hívás normál érkezésre)", () => {
+    const result = resolveWalkToTransitBoundary(baseInput({ nextTransitLeg: weakLegWithAlighting }));
+    assert.ok(!(result as unknown as Promise<unknown>).then, "a resolver sosem ad vissza Promise-t");
+  });
+});

@@ -25,6 +25,16 @@ export interface RerouteGuardInput {
    * 50 m-es küszöb és a WALK reroute-viselkedés VÁLTOZATLAN marad.
    */
   transitGeometryUncertain?: boolean;
+  /**
+   * TRANSIT STATE CONTINUITY + GPS REACQUISITION SPRINT (2026-09-18) —
+   * igaz, HA a gpsFixGate.ts szerint MÉG a LOST utáni "bemelegítési"
+   * (REACQUIRING) ablakban vagyunk (lásd isGpsReacquiring()). Az ELSŐ
+   * néhány, egy GPS-kiesés UTÁN visszaérkező fix (jump/wifi/cell/tunnel-
+   * exit multipath) SOSE lehet önmagában auto-reroute alapja — UGYANAZ az
+   * elv, mint a transitGeometryUncertain-nél: FÜGGETLEN, plusz feltétel,
+   * a globális OFF_ROUTE-küszöb és a WALK reroute-viselkedés VÁLTOZATLAN.
+   */
+  gpsReacquiring?: boolean;
 }
 
 export type RerouteBlockReason =
@@ -34,7 +44,8 @@ export type RerouteBlockReason =
   | "DESTINATION_MISSING"
   | "REQUEST_IN_FLIGHT"
   | "COOLDOWN_ACTIVE"
-  | "TRANSIT_GEOMETRY_UNCERTAIN";
+  | "TRANSIT_GEOMETRY_UNCERTAIN"
+  | "GPS_REACQUIRING";
 
 export type RerouteGuardDecision =
   | { shouldReroute: true; reason: null }
@@ -51,6 +62,7 @@ export function shouldStartAutomaticReroute(
   if (!input.navigationActive) return { shouldReroute: false, reason: "NAVIGATION_INACTIVE" };
   if (input.offRouteStatus !== "OFF_ROUTE") return { shouldReroute: false, reason: "NOT_CONFIRMED_OFF_ROUTE" };
   if (input.transitGeometryUncertain) return { shouldReroute: false, reason: "TRANSIT_GEOMETRY_UNCERTAIN" };
+  if (input.gpsReacquiring) return { shouldReroute: false, reason: "GPS_REACQUIRING" };
   if (!input.hasCurrentPosition) return { shouldReroute: false, reason: "POSITION_MISSING" };
   if (!input.hasDestination) return { shouldReroute: false, reason: "DESTINATION_MISSING" };
   if (state.inFlight) return { shouldReroute: false, reason: "REQUEST_IN_FLIGHT" };

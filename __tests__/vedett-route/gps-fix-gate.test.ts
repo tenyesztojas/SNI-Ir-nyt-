@@ -12,8 +12,11 @@ import {
   classifyGpsFixFreshness,
   createInitialGpsFixGateState,
   evaluateGpsFixUsability,
+  isGpsReacquiring,
   markVisibilityReturned,
+  updateGpsReacquisitionState,
   GPS_FIX_MAX_AGE_MS,
+  GPS_REACQUISITION_STABLE_FIXES,
   type GpsFixGateState,
 } from "../../lib/vedett-route/navigation/gpsFixGate.ts";
 
@@ -120,4 +123,68 @@ test("markVisibilityReturned: az állapot pontosan a megadott nowMs-re áll be",
 
 test("createInitialGpsFixGateState: nincs pending reacquisition induláskor", () => {
   assert.equal(freshState().pendingReacquisitionSinceMs, null);
+});
+
+// ============================================================================
+// TRANSIT STATE CONTINUITY + GPS REACQUISITION SPRINT (2026-09-18) — teszt-
+// lista 3/4/5. pont: LOST -> első reacquired fix (ELÉGTELEN), inkonzisztens
+// reacquired fixek (ELÉGTELEN), majd több stabil fix (VÉGRE OK).
+// ============================================================================
+
+test("createInitialGpsFixGateState: sosem volt LOST -> isGpsReacquiring hamis", () => {
+  assert.equal(isGpsReacquiring(freshState()), false);
+});
+
+test("updateGpsReacquisitionState: LOST -> streak 0, isGpsReacquiring igaz (teszt-lista 3. pont eleje)", () => {
+  const afterLost = updateGpsReacquisitionState(freshState(), "LOST");
+  assert.equal(afterLost.reacquisitionStreak, 0);
+  assert.equal(isGpsReacquiring(afterLost), true);
+});
+
+test("updateGpsReacquisitionState: LOST -> egyetlen GOOD fix -> MÉG reacquiring (teszt-lista 3. pont: nem elég ÖNMAGÁBAN)", () => {
+  const afterLost = updateGpsReacquisitionState(freshState(), "LOST");
+  const afterOneGood = updateGpsReacquisitionState(afterLost, "GOOD");
+  assert.equal(isGpsReacquiring(afterOneGood), true);
+  assert.equal(afterOneGood.reacquisitionStreak, 1);
+});
+
+test("updateGpsReacquisitionState: LOST -> GOOD -> LOST (inkonzisztens fixek) -> a streak visszaáll 0-ra, MÉG reacquiring (teszt-lista 4. pont)", () => {
+  let state = updateGpsReacquisitionState(freshState(), "LOST");
+  state = updateGpsReacquisitionState(state, "GOOD");
+  state = updateGpsReacquisitionState(state, "GOOD");
+  state = updateGpsReacquisitionState(state, "LOST");
+  assert.equal(state.reacquisitionStreak, 0);
+  assert.equal(isGpsReacquiring(state), true);
+});
+
+test(`updateGpsReacquisitionState: LOST -> ${GPS_REACQUISITION_STABLE_FIXES} egymást követő GOOD fix -> isGpsReacquiring hamis, normál kiértékelés folytatódik (teszt-lista 5. pont)`, () => {
+  let state = updateGpsReacquisitionState(freshState(), "LOST");
+  for (let i = 0; i < GPS_REACQUISITION_STABLE_FIXES; i += 1) {
+    state = updateGpsReacquisitionState(state, "GOOD");
+  }
+  assert.equal(isGpsReacquiring(state), false);
+  assert.equal(state.reacquisitionStreak, null);
+});
+
+test("updateGpsReacquisitionState: DEGRADED sem növeli, sem nem törli a streaket LOST után", () => {
+  let state = updateGpsReacquisitionState(freshState(), "LOST");
+  state = updateGpsReacquisitionState(state, "DEGRADED");
+  assert.equal(state.reacquisitionStreak, 0);
+  assert.equal(isGpsReacquiring(state), true);
+});
+
+test("updateGpsReacquisitionState: sosem volt LOST -> egy GOOD/DEGRADED fix NEM indít reacquisition-ablakot (nincs feleslegesen 3 fixes bemelegítés minden navigáció elején)", () => {
+  const afterGood = updateGpsReacquisitionState(freshState(), "GOOD");
+  assert.equal(isGpsReacquiring(afterGood), false);
+  const afterDegraded = updateGpsReacquisitionState(freshState(), "DEGRADED");
+  assert.equal(isGpsReacquiring(afterDegraded), false);
+});
+
+test("evaluateGpsFixUsability: STALE (LOST) fix után egyetlen usable fix MÉG reacquiring-ot jelez (result.reacquiring)", () => {
+  const lostResult = evaluateGpsFixUsability(freshState(), 0, GPS_FIX_MAX_AGE_MS + 1);
+  assert.equal(lostResult.quality, "LOST");
+  const firstGoodResult = evaluateGpsFixUsability(lostResult.nextState, 100_000, 100_000);
+  assert.equal(firstGoodResult.usable, true);
+  assert.equal(firstGoodResult.quality, "GOOD");
+  assert.equal(firstGoodResult.reacquiring, true);
 });

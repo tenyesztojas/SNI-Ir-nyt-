@@ -62,4 +62,20 @@ describe("automatic reroute guard", () => {
     assert.deepEqual(resetRerouteGuard(), createInitialRerouteGuardState());
     assert.equal(shouldStartAutomaticReroute(resetRerouteGuard(), { ...READY, nowMs: READY.nowMs + 1_000 }).shouldReroute, true);
   });
+
+  // TRANSIT STATE CONTINUITY + GPS REACQUISITION SPRINT (2026-09-18) — teszt-
+  // lista 3/4/10. pont: egy LOST periódus utáni, még nem stabil GPS-fix
+  // (gpsReacquiring) SOSEM lehet automatikus reroute alapja, még
+  // megerősített OFF_ROUTE mellett sem — FÜGGETLEN blokk, ugyanaz az elv,
+  // mint transitGeometryUncertain-nél.
+  test("gpsReacquiring=true blokkolja az automatikus reroute-ot, még megerősített OFF_ROUTE esetén is", () => {
+    const state = createInitialRerouteGuardState();
+    assert.equal(shouldStartAutomaticReroute(state, { ...READY, gpsReacquiring: true }).reason, "GPS_REACQUIRING");
+  });
+
+  test("gpsReacquiring=false (vagy hiányzó) esetén a globális OFF_ROUTE/reroute-viselkedés VÁLTOZATLAN", () => {
+    const state = createInitialRerouteGuardState();
+    assert.deepEqual(shouldStartAutomaticReroute(state, { ...READY, gpsReacquiring: false }), { shouldReroute: true, reason: null });
+    assert.deepEqual(shouldStartAutomaticReroute(state, READY), { shouldReroute: true, reason: null });
+  });
 });

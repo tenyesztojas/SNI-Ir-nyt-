@@ -58,13 +58,24 @@ export function classifyGpsFixFreshness(
  * A "foreground reacquisition" állapot. `pendingReacquisitionSinceMs`
  * nem-null, amikor a dokumentum nemrég vált láthatóvá, és MÉG NEM
  * érkezett egy, ehhez az időponthoz képest genuinely friss fix.
+ *
+ * TRANSIT STATE CONTINUITY + GPS REACQUISITION SPRINT (2026-09-18) —
+ * `reacquisitionStreak` egy MÁSODIK, FÜGGETLEN hiszterézis-számláló
+ * (UGYANAZ a minta, mint a boarding-hiszterézis BOARDING_CONFIRM_FIXES-e
+ * legTransition.ts-ben): null, amíg a GPS minőség sosem volt LOST (vagy
+ * már visszastabilizálódott); 0-ra áll minden LOST klasszifikációnál;
+ * minden ezt követő GOOD fixnél nő, amíg GPS_REACQUISITION_STABLE_FIXES-t
+ * elérve visszaáll null-ra ("STABLE"). A cél: az ELSŐ néhány, LOST utáni
+ * fix (jump/wifi/cell/tunnel-exit multipath) SOSE legyen önmagában
+ * OFF_ROUTE-bizonyíték — lásd isGpsReacquiring().
  */
 export interface GpsFixGateState {
   pendingReacquisitionSinceMs: number | null;
+  reacquisitionStreak: number | null;
 }
 
 export function createInitialGpsFixGateState(): GpsFixGateState {
-  return { pendingReacquisitionSinceMs: null };
+  return { pendingReacquisitionSinceMs: null, reacquisitionStreak: null };
 }
 
 /**
@@ -75,13 +86,24 @@ export function createInitialGpsFixGateState(): GpsFixGateState {
  * `evaluateGpsFixUsability` majd a fix saját timestamp-jével összevet.
  */
 export function markVisibilityReturned(state: GpsFixGateState, nowMs: number): GpsFixGateState {
-  return { pendingReacquisitionSinceMs: nowMs };
+  return { ...state, pendingReacquisitionSinceMs: nowMs };
 }
 
 export interface GpsFixUsabilityResult {
   usable: boolean;
   nextState: GpsFixGateState;
   freshness: GpsFixFreshness;
+  /**
+   * TRANSIT STATE CONTINUITY + GPS REACQUISITION SPRINT (2026-09-18) —
+   * additív mezők, byte-ra a MÁR MEGLÉVŐ freshness/usable-ből levezetve
+   * (lásd classifyGpsQuality/isGpsReacquiring), hogy egyetlen hívó se
+   * kelljen a saját GpsFixGateState-jét külön kezelnie a reacquisition-
+   * hiszterézishez — evaluateGpsFixUsability a `nextState`-tel EGYÜTT adja
+   * vissza.
+   */
+  quality: GpsQuality;
+  /** Igaz, amíg egy LOST periódus utáni "bemelegítési" ablakban vagyunk. */
+  reacquiring: boolean;
 }
 
 // METRO GPS LOSS + MAP CAMERA SAFETY SPRINT (2026-09-17) — "GPS QUALITY
@@ -100,6 +122,44 @@ export type GpsQuality = "GOOD" | "DEGRADED" | "LOST";
 export function classifyGpsQuality(result: Pick<GpsFixUsabilityResult, "usable" | "freshness">): GpsQuality {
   if (result.usable) return "GOOD";
   return result.freshness === "FRESH" ? "DEGRADED" : "LOST";
+}
+
+/**
+ * Hány egymást követő GOOD fix kell egy LOST periódus UTÁN, mielőtt a
+ * pozíció ismét OFF_ROUTE-bizonyítékként (route-progress kiértékelés,
+ * automatikus reroute) felhasználható — UGYANAZ a küszöb-nagyságrend, mint
+ * legTransition.ts BOARDING_CONFIRM_FIXES-e (dokumentált, meglévő minta,
+ * nincs új szám kitalálva).
+ */
+export const GPS_REACQUISITION_STABLE_FIXES = 3;
+
+/**
+ * TRANSIT STATE CONTINUITY SPRINT (2026-09-18) — a `reacquisitionStreak`
+ * mező tiszta állapotátmenete. LOST -> 0 (a streak "elindult, de még nem
+ * ért célba"); minden ezt követő GOOD fix +1, amíg a küszöböt elérve
+ * null-ra ("nincs aktív reacquisition, minden stabil") vissza nem áll.
+ * DEGRADED sem növeli, sem nem törli a streaket (bizonytalan, de nem
+ * "elveszett" — lásd GpsQuality kommentje). Ha a streak MÁR null (sosem
+ * volt LOST, vagy már stabilizálódott), egy DEGRADED/GOOD fix NEM indít
+ * új reacquisition-ablakot — KIZÁRÓLAG egy tényleges LOST klasszifikáció
+ * teheti ezt, elkerülve, hogy a normál (sosem elveszett) GPS-folyam
+ * feleslegesen 3 fixes "bemelegítést" kapjon minden navigáció elején.
+ */
+export function updateGpsReacquisitionState(state: GpsFixGateState, quality: GpsQuality): GpsFixGateState {
+  if (quality === "LOST") {
+    return { ...state, reacquisitionStreak: 0 };
+  }
+  if (state.reacquisitionStreak === null) return state;
+  if (quality === "DEGRADED") return state;
+  const nextStreak = state.reacquisitionStreak + 1;
+  return nextStreak >= GPS_REACQUISITION_STABLE_FIXES
+    ? { ...state, reacquisitionStreak: null }
+    : { ...state, reacquisitionStreak: nextStreak };
+}
+
+/** Igaz, amíg egy LOST periódus utáni "bemelegítési" ablakban vagyunk (lásd fent). */
+export function isGpsReacquiring(state: GpsFixGateState): boolean {
+  return state.reacquisitionStreak !== null;
 }
 
 /**
@@ -124,10 +184,16 @@ export function evaluateGpsFixUsability(
 ): GpsFixUsabilityResult {
   const freshness = classifyGpsFixFreshness(timestampMs, nowMs, maxAgeMs);
 
+  const finish = (usable: boolean, nextStateWithoutReacquisition: GpsFixGateState): GpsFixUsabilityResult => {
+    const quality = classifyGpsQuality({ usable, freshness });
+    const nextState = updateGpsReacquisitionState(nextStateWithoutReacquisition, quality);
+    return { usable, nextState, freshness, quality, reacquiring: isGpsReacquiring(nextState) };
+  };
+
   if (freshness !== "FRESH") {
     // STALE/INVALID fix: sose törli a pending reacquisition flaget —
     // továbbra is várunk egy genuinely friss fixre.
-    return { usable: false, nextState: state, freshness };
+    return finish(false, state);
   }
 
   if (state.pendingReacquisitionSinceMs !== null) {
@@ -136,11 +202,11 @@ export function evaluateGpsFixUsability(
       // Friss (nem lejárt) fix, de a visibility-visszatérés ELŐTTRŐL
       // származik (pl. háttérben az utolsó ismert érték) — még nem
       // számít "a visszatérés utáni első friss fixnek".
-      return { usable: false, nextState: state, freshness };
+      return finish(false, state);
     }
     // Az első genuinely friss fix a visszatérés óta — reacquisition kész.
-    return { usable: true, nextState: { pendingReacquisitionSinceMs: null }, freshness };
+    return finish(true, { ...state, pendingReacquisitionSinceMs: null });
   }
 
-  return { usable: true, nextState: state, freshness };
+  return finish(true, state);
 }

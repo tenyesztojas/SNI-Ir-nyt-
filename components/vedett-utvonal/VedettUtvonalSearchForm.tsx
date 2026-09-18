@@ -69,6 +69,7 @@ import { mergeRealtimeUpdates } from "@/lib/vedett-route/realtimeRefresh/mergeRe
 import {
   createInitialGpsFixGateState,
   evaluateGpsFixUsability,
+  isGpsReacquiring,
   markVisibilityReturned,
 } from "@/lib/vedett-route/navigation/gpsFixGate";
 import RestPointQuickAdd, { type RestPointCreatedPayload } from "./RestPointQuickAdd";
@@ -778,6 +779,15 @@ function RankedJourneyCard({
   // érkezett egy, a visszatérés UTÁNI genuinely friss fix.
   const gpsFixGateRef = useRef(createInitialGpsFixGateState());
   const [gpsFixUsable, setGpsFixUsable] = useState(true);
+  // TRANSIT STATE CONTINUITY + GPS REACQUISITION SPRINT (2026-09-18) — igaz
+  // egy tényleges GPS LOST periódus UTÁN, amíg még nem gyűlt össze
+  // GPS_REACQUISITION_STABLE_FIXES egymást követő GOOD fix (lásd
+  // gpsFixGate.ts isGpsReacquiring()). A c4dfab5 camera-safety SZÁNDÉKOSAN
+  // NEM ezt olvassa (lásd a térkép-komponens currentPosition propját
+  // lentebb, ami változatlanul KIZÁRÓLAG gpsFixUsable-t nézi) — ez a jelző KIZÁRÓLAG a
+  // route-progress/boarding pozitív bizonyítékot fagyasztja és a reroute-ot
+  // tiltja le, a kamera/marker stabilitást nem érinti.
+  const [gpsReacquiring, setGpsReacquiring] = useState(false);
 
   useEffect(() => {
     if (typeof document === "undefined") return;
@@ -796,6 +806,7 @@ function RankedJourneyCard({
     const result = evaluateGpsFixUsability(gpsFixGateRef.current, currentPosition?.timestampMs ?? null, Date.now());
     gpsFixGateRef.current = result.nextState;
     setGpsFixUsable(result.usable);
+    setGpsReacquiring(isGpsReacquiring(result.nextState));
   }, [currentPosition?.timestampMs]);
 
   // METRO GPS LOSS + MAP CAMERA SAFETY SPRINT (2026-09-17) — a FENTI effekt
@@ -817,6 +828,7 @@ function RankedJourneyCard({
       const result = evaluateGpsFixUsability(gpsFixGateRef.current, currentPosition?.timestampMs ?? null, Date.now());
       gpsFixGateRef.current = result.nextState;
       setGpsFixUsable(result.usable);
+      setGpsReacquiring(isGpsReacquiring(result.nextState));
     }, 5_000);
     return () => window.clearInterval(intervalId);
   }, [navigationMode, currentPosition?.timestampMs]);
@@ -844,9 +856,17 @@ function RankedJourneyCard({
   );
   const navigationRouteCoordinates = navigationRouteGeometry.coordinates;
 
+  // TRANSIT STATE CONTINUITY + GPS REACQUISITION SPRINT (2026-09-18) — a
+  // `gpsReacquiring` gate UGYANAZT a MEGLÉVŐ mintát követi, mint a c4dfab5
+  // sprint gpsFixUsable-gate-je: egy LOST periódus utáni, még nem stabil
+  // fixet a route-progress motor SOHA nem kap meg pozícióként, tehát nem
+  // gyűjthet OFF_ROUTE-bizonyítékot/nem indíthat auto-reroute-ot belőle
+  // (lásd rerouteGuard.ts gpsReacquiring bemenete is). A kamera/marker
+  // (VedettUtvonalMap currentPosition prop) SZÁNDÉKOSAN nem ezt a gate-et
+  // olvassa — c4dfab5 camera safety változatlan.
   const routeNavigationPosition = useMemo(
     () =>
-      currentPosition && gpsFixUsable
+      currentPosition && gpsFixUsable && !gpsReacquiring
         ? {
             latitude: currentPosition.latitude,
             longitude: currentPosition.longitude,
@@ -854,7 +874,7 @@ function RankedJourneyCard({
             timestampMs: currentPosition.timestampMs,
           }
         : null,
-    [currentPosition, gpsFixUsable],
+    [currentPosition, gpsFixUsable, gpsReacquiring],
   );
 
   const routeProgress = useRouteNavigation(
@@ -936,6 +956,17 @@ function RankedJourneyCard({
           // legTransition.ts gyenge-geometriás BOARDED_UNCERTAIN_GEOMETRY
           // fallbackjához.
           transitMode: leg.transitMode,
+          // TRANSIT STATE CONTINUITY + ARRIVAL SPRINT (2026-09-18) — a leg
+          // SAJÁT to-koordinátája (leszállási pont) a generikus ARRIVED
+          // felismeréshez (lásd legTransition.ts), ÉS igaz/hamis jelző,
+          // hogy van-e a Journey-ben egy KÖVETKEZŐ leg ez után (az ARRIVED
+          // csak akkor léphet tovább — a végső megérkezést a MEGLÉVŐ
+          // isAtRouteEnd() jelzi, ezt a modul azt nem helyettesíti).
+          alightingCoordinate:
+            typeof leg.toLon === "number" && typeof leg.toLat === "number"
+              ? ([leg.toLon, leg.toLat] as const)
+              : null,
+          hasFollowingLeg: i + 1 < navigationLegs.length,
         };
       }
     }
@@ -955,12 +986,15 @@ function RankedJourneyCard({
   // hiszterézis-lépést okozna a boundary resolverben (lásd
   // useWalkToTransitBoundary.ts — az effect a `position` REFERENCIÁJÁRA
   // figyel).
+  // Ugyanaz a gpsReacquiring-gate, mint routeNavigationPosition-nél fent —
+  // egy LOST utáni instabil fix a boundary resolvernek se adjon SE
+  // boarding-, SE (a legTransition.ts ARRIVED ágán) érkezés-bizonyítékot.
   const boundaryPosition = useMemo(
     () =>
-      currentPosition && gpsFixUsable
+      currentPosition && gpsFixUsable && !gpsReacquiring
         ? { latitude: currentPosition.latitude, longitude: currentPosition.longitude, accuracyMeters: currentPosition.accuracyMeters }
         : null,
-    [currentPosition, gpsFixUsable],
+    [currentPosition, gpsFixUsable, gpsReacquiring],
   );
   const walkToTransitBoundary = useWalkToTransitBoundary(
     {
@@ -980,7 +1014,29 @@ function RankedJourneyCard({
   // a következő TRANSIT legre.
   const activeLegIndex = walkToTransitBoundary.resolvedLegIndex ?? geometryActiveLegIndex;
   const activeLegRange = navigationRouteGeometry.legRanges.find((range) => range.legIndex === activeLegIndex) ?? null;
-  const activeLegPhaseFraction = resolveLegPhaseFraction(routeProgress.matchedSegmentIndex, activeLegRange);
+  // TRANSIT STATE CONTINUITY + ARRIVAL SPRINT (2026-09-18) — ROOT CAUSE
+  // FIX a "Szállj fel felszállás után is kiírva marad" hibára (Probléma A).
+  // resolveLegPhaseFraction() a GLOBÁLIS routeProgress.matchedSegmentIndex-
+  // et projektálja az AKTÍV (BOARDED esetén már a TRANSIT) leg saját
+  // tartományára — de amíg a globális, összefűzött route-matching a
+  // gyenge/rövid TRANSIT geometrián NEM tud jól illeszkedni (pont ez a
+  // VPS-proven S40 eset), ez a fraction STRUKTURÁLISAN 0 marad, ezért az
+  // instructions.ts selectActiveInstruction() mindig a leg ELSŐ
+  // sub-instrukcióját ("Szállj fel") választja — FÜGGETLENÜL attól, hogy a
+  // walkToTransitBoundary MÁR bizonyítottan BOARDED/BOARDED_UNCERTAIN_
+  // GEOMETRY. Fix: ha a boundary resolver már felszállást (vagy gyenge-
+  // geometriás felszállási bizonyítékot) jelez, a fraction-t egy
+  // konzervatív, a "RIDE" sub-instrukciót garantáltan kiválasztó értékre
+  // (0.5) emeljük — ez SOHA nem csökkenti a fractiont (Math.max), tehát
+  // valódi geometriai előrehaladás (pl. jó geometriájú legeknél) továbbra
+  // is elérheti az ALIGHT/TRANSFER sub-instrukciót. Nincs jármű-azonosítás,
+  // nincs kitalált pozíció — kizárólag a MÁR MEGLÉVŐ, GPS-bizonyítékkal
+  // igazolt fázisállapot.
+  const isBoardedPhase =
+    walkToTransitBoundary.phase === "BOARDED" || walkToTransitBoundary.phase === "BOARDED_UNCERTAIN_GEOMETRY";
+  const activeLegPhaseFraction = isBoardedPhase
+    ? Math.max(0.5, resolveLegPhaseFraction(routeProgress.matchedSegmentIndex, activeLegRange))
+    : resolveLegPhaseFraction(routeProgress.matchedSegmentIndex, activeLegRange);
   const activeRouteEnd = isAtRouteEnd(routeProgress.matchedSegmentIndex, navigationRouteGeometry.coordinates.length);
   // NAVIGATION INSTRUCTIONS SPRINT 3 (2026-09-16) — megállópozíció-alapú
   // "Utazz még N megállót" / "A következő megállónál szállj le", a Sprint 2
@@ -1156,6 +1212,14 @@ function RankedJourneyCard({
       // újratervezés alapja (lásd rerouteGuard.ts). A globális 50 m-es
       // OFF_ROUTE küszöb és a WALK reroute-viselkedés VÁLTOZATLAN.
       transitGeometryUncertain: activeLegTransitGeometryUncertain,
+      // TRANSIT STATE CONTINUITY + GPS REACQUISITION SPRINT (2026-09-18) —
+      // egy LOST periódus utáni, még nem stabil GPS-fix (lásd
+      // gpsFixGate.ts isGpsReacquiring()) SOSEM lehet automatikus reroute
+      // alapja — UGYANAZ a FÜGGETLEN blokkoló elv, mint fent
+      // transitGeometryUncertain-nél. A globális OFF_ROUTE-küszöb és a
+      // WALK reroute-viselkedés VÁLTOZATLAN (routeNavigationPosition fent
+      // már null-t ad ebben az ablakban, ez itt a plusz védelmi réteg).
+      gpsReacquiring,
     });
     if (!decision.shouldReroute || !currentPosition || !originalDestination) return;
 
@@ -1210,6 +1274,7 @@ function RankedJourneyCard({
     currentPosition?.latitude,
     currentPosition?.longitude,
     gpsFixUsable,
+    gpsReacquiring,
     originalDestination?.name,
     originalDestination?.lat,
     originalDestination?.lon,
