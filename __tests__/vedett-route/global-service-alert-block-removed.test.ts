@@ -3,24 +3,29 @@
 // útvonalhoz nem kötött BKK Alerts.pb lista válogatás nélkül, néhol nyers
 // HTML markuppal jelent meg a találati oldalon).
 //
-// SZŰK, cél szerinti regresszió (nem a teljes komponens véletlenszerű
-// user-facing tartalmát vizsgálja — lásd beta-removal-regression.test.ts
-// figyelmeztetését a túl széles tesztek ellen): KIZÁRÓLAG azt bizonyítja,
-// hogy
+// SPRINT 8.5 MÓDOSÍTÁS (2026-09-19) — a 2026-09-18-as fejléc EXPLICIT
+// "jövőbeli irány"-ként jelölte meg: "csak a kiválasztott útvonal konkrét
+// járatához/szakaszához bizonyíthatóan kapcsolódó riasztás jelenhet meg;
+// bizonytalan relevancia esetén nem jelenítünk meg figyelmeztetést." Ez
+// MOST implementálva lett (lásd disruptionRelevance.ts + liveAlternative.ts
+// buildDisruptionTriggers() bekötése RankedJourneyCardba) — a `serviceAlerts`
+// szó emiatt MÁR NEM tiltott a user-facing forrásban. A regresszió, amit ez
+// a teszt VÉD, NEM a "serviceAlerts szó léte", hanem a KONKRÉT hiba: egy
+// VÁLOGATÁS NÉLKÜLI, teljes alert-lista megjelenítése nyers szöveggel/
+// HTML-lel. Ezért a teszt mostantól azt bizonyítja, hogy
 //   1) a "Aktuális BKK riasztások" cím-szöveg NEM szerepel többé a
-//      keresőform user-facing forrásában (kommentektől megtisztítva — a
-//      backend-etjelentő, technikai kommentek MEGENGEDETTEK, azok nem
-//      jelennek meg felhasználónak),
-//   2) a komponens NEM renderel semmilyen `result.serviceAlerts`-alapú
-//      listát (a mező NEVE technikai kommentben megengedett, de tényleges
-//      `.map`/JSX-felhasználás formájában NEM szerepelhet a megtisztított
-//      forrásban).
+//      keresőform user-facing forrásában,
+//   2) a komponens SEHOL nem renderel `alert.header`/`alert.description`
+//      (vagy ezekkel ekvivalens nyers alert-szöveget) JSX-ben,
+//   3) a `serviceAlerts` egyetlen user-facing felhasználása a PROVEN_RELEVANT-
+//      gated Live Alternative trigger (buildDisruptionTriggers hívás), NEM
+//      egy `.map`-pel felsorolt, válogatás nélküli lista.
 //
 // A backend (`OrchestratedSearchResult.serviceAlerts`, orchestrator.ts BKK
-// Alerts.pb lekérés) EBBEN A KÖRBEN SZÁNDÉKOSAN VÁLTOZATLAN — ezt a tesztet
-// a projekt konvenciója szerint (lásd beta-removal-regression.test.ts)
-// forrás-szintű, jsdom/@testing-library NÉLKÜLI ellenőrzésként írjuk,
-// mert ez a komponens ebben a projektben sosem render-alapú tesztelt.
+// Alerts.pb lekérés) VÁLTOZATLAN — ezt a tesztet a projekt konvenciója
+// szerint (lásd beta-removal-regression.test.ts) forrás-szintű, jsdom/
+// @testing-library NÉLKÜLI ellenőrzésként írjuk, mert ez a komponens ebben
+// a projektben sosem render-alapú tesztelt.
 
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
@@ -44,13 +49,18 @@ describe("Globális BKK service-alert blokk eltávolítva a Védett Útvonal ker
     assert.doesNotMatch(cleaned, /Aktuális BKK riasztások/, `${SEARCH_FORM_PATH} még tartalmazza a globális riasztás-cím user-facing szövegét`);
   });
 
-  test("a komponens NEM iterál/renderel result.serviceAlerts-en a megtisztított forrásban (nincs .serviceAlerts.map vagy .serviceAlerts.length JSX-ág)", () => {
-    assert.doesNotMatch(cleaned, /serviceAlerts/, `${SEARCH_FORM_PATH} még hivatkozik serviceAlerts-re a user-facing (nem-komment) forrásban`);
+  test("a komponens SEHOL nem renderel nyers alert.header/alert.description szöveget (a válogatás nélküli lista NEM éledt újra)", () => {
+    assert.doesNotMatch(cleaned, /\balert\.header\b/, `${SEARCH_FORM_PATH} nyers alert.header-t renderel — ez a globális blokk visszatérése lenne`);
+    assert.doesNotMatch(cleaned, /\balert\.description\b/, `${SEARCH_FORM_PATH} nyers alert.description-t renderel — ez a globális blokk visszatérése lenne`);
+    assert.doesNotMatch(cleaned, /serviceAlerts\.map/, `${SEARCH_FORM_PATH} válogatás nélkül iterál a teljes serviceAlerts listán`);
   });
 
-  test("a nyers forrás (kommentekkel együtt) ÖNTESZT — a stripComments() ténylegesen levágja a fejlécbe írt magyarázó kommentet, tehát a fenti két assert valódi user-facing hiányt bizonyít, nem csak a komment eltávolítását", () => {
-    assert.match(src, /serviceAlerts/, "a nyers forrásnak MÉG tartalmaznia kell a szót egy magyarázó kommentben, különben az önteszt nem bizonyít semmit");
-    assert.doesNotMatch(cleaned, /serviceAlerts/);
+  test("SPRINT 8.5 — a `serviceAlerts` EGYETLEN user-facing felhasználása a PROVEN_RELEVANT-gated Live Alternative trigger, nem egy megjelenített lista", () => {
+    assert.match(
+      cleaned,
+      /buildDisruptionTriggers\(serviceAlerts, legs, activeLegIndex \?\? null, Date\.now\(\)\)/,
+      "a serviceAlerts-nek a MEGLÉVŐ 8.3 relevancia-motoron (buildDisruptionTriggers) kell átfolynia, nem közvetlen renderelésen"
+    );
   });
 
   test("a keresőform user-facing JSX-e VÁLTOZATLANUL renderel journey-kártyákat (result.journeys.map) — a módosítás NEM távolította el a normál eredménylistát", () => {

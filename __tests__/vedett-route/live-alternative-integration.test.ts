@@ -128,6 +128,50 @@ describe("Live Alternative runtime — displayedJourney csere KIZÁRÓLAG az exp
   });
 });
 
+const disruptionEffectBody = extractBetween(
+  "useEffect(() => {\n    if (!navigationMode || serviceAlerts.length === 0) return;",
+  "}, [navigationMode, serviceAlerts, displayedJourney, activeLegIndex]);"
+);
+
+describe("Live Alternative runtime — SPRINT 8.5, PROVEN_RELEVANT_DISRUPTION trigger", () => {
+  test("17) serviceAlerts a MEGLÉVŐ result.serviceAlerts adatútból érkezik (nincs Context/store/új fetch)", () => {
+    assert.match(source, /serviceAlerts=\{result\.serviceAlerts\}/);
+    assert.match(source, /serviceAlerts: ServiceAlert\[\];/);
+  });
+
+  test("18) a relevancia KIZÁRÓLAG a MEGLÉVŐ 8.3 engine-en (buildDisruptionTriggers -> evaluateDisruptionRelevance) keresztül dől el, nincs saját React relevancia-logika", () => {
+    assert.match(disruptionEffectBody, /toDisruptionRelevanceLegs\(displayedJourney\)/);
+    assert.match(disruptionEffectBody, /buildDisruptionTriggers\(serviceAlerts, legs, activeLegIndex \?\? null, Date\.now\(\)\)/);
+    assert.doesNotMatch(disruptionEffectBody, /\.header\b/);
+    assert.doesNotMatch(disruptionEffectBody, /\.description\b/);
+  });
+
+  test("19) UGYANAZ a maybeStartLiveAlternativeSearch pipeline fut, mint a realtime degradation triggernél — nincs második fetch-kódút", () => {
+    assert.match(disruptionEffectBody, /void maybeStartLiveAlternativeSearch\(triggers\[0\]\)/);
+    assert.doesNotMatch(disruptionEffectBody, /fetch\(/);
+  });
+
+  test("20) nincs trigger esetén korai return, NINCS keresés navigationMode=false vagy üres serviceAlerts esetén", () => {
+    assert.match(source, /if \(!navigationMode \|\| serviceAlerts\.length === 0\) return;/);
+    assert.match(source, /if \(triggers\.length === 0\) return;/);
+  });
+
+  test("21) render/új serviceAlerts object-reference önmagában nem hoz létre saját fetch-implementációt — a hatás a MEGLÉVŐ maybeStart-ra delegál", () => {
+    assert.doesNotMatch(disruptionEffectBody, /new Headers|XMLHttpRequest/);
+  });
+
+  test("22) a user-facing disruption szöveg NEM nyers alert-szöveg és NEM kitalált ok (pl. 'dugó'/'baleset'/'lezárás')", () => {
+    const bulletsBlockStart = source.indexOf("const bullets: string[] = [];");
+    const bulletsBlock = source.slice(bulletsBlockStart, bulletsBlockStart + 700);
+    assert.match(bulletsBlock, /"Fennakadás érinti az útvonaladat\."/);
+    assert.doesNotMatch(bulletsBlock, /dugó|baleset|lezárás|kimarad/i);
+  });
+
+  test("23) a globális BKK alert-box NEM éledt újra (a korábbi eltávolítási komment/regresszió VÁLTOZATLAN)", () => {
+    assert.match(source, /GLOBÁLIS, útvonalhoz nem[\s\S]{0,40}kötött service-alert blokk SZÁNDÉKOSAN ELTÁVOLÍTVA/);
+  });
+});
+
 describe("Live Alternative runtime — UI accessibility (16. pont)", () => {
   test("16) valódi <button type=\"button\"> elemek, nincs autoFocus/modal", () => {
     const uiBlockStart = source.indexOf("LIVE ALTERNATIVE — SPRINT 8.4B (2026-09-18). KIZÁRÓLAG OFFERED");

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { Journey, OrchestratedSearchResult, PersonalizationWeights, RankedJourney, RankingLabel } from "@/lib/vedett-route/types";
+import type { Journey, OrchestratedSearchResult, PersonalizationWeights, RankedJourney, RankingLabel, ServiceAlert } from "@/lib/vedett-route/types";
 import type { AccessibilityResultStatus } from "@/lib/vedett-route/accessibility";
 import dynamic from "next/dynamic";
 import { useGeolocation } from "@/lib/hooks/useGeolocation";
@@ -142,6 +142,7 @@ import {
 // TOVÁBBRA IS a helyes útvonalon van (lásd offRouteConfirmed guard bemenet).
 import {
   acceptLiveAlternativeOffer,
+  buildDisruptionTriggers,
   buildRealtimeDegradationSamples,
   computeRemainingJourneyMetrics,
   computeSwitchingCost,
@@ -161,6 +162,12 @@ import {
   type LiveAlternativeTrigger,
 } from "@/lib/vedett-route/navigation/liveAlternative";
 import { computeJourneyFingerprint } from "@/lib/vedett-route/fingerprint";
+// SPRINT 8.5 — a MEGLÉVŐ 8.3 engine (csak export/signature szinten
+// használva itt): a React komponens SOHA nem implementál saját alert-
+// relevancia logikát, kizárólag a leg-shape konverziót (toDisruptionRelevanceLegs)
+// és a fail-closed relevancia-motort (evaluateDisruptionRelevance-en
+// keresztül, a buildDisruptionTriggers() hívja) hívja.
+import { toDisruptionRelevanceLegs } from "@/lib/vedett-route/navigation/disruptionRelevance";
 
 // „Aktuális helyzetem" mint indulási pont (UX módosítás, 2026-09-09) — a
 // keresési form induló-mezője mostantól két, egymást KIZÁRÓ móddal
@@ -576,10 +583,19 @@ function RankedJourneyCard({
   ranked,
   isOpen,
   onToggleMap,
+  serviceAlerts,
 }: {
   ranked: RankedJourney;
   isOpen: boolean;
   onToggleMap: () => void;
+  // SPRINT 8.5 (ROUTE-SPECIFIC DISRUPTION -> LIVE ALTERNATIVE, 2026-09-19) —
+  // a LEGKISEBB adatút: a szülő `result` state-je (a keresési válasz) MÁR
+  // tartalmazza a BKK Alerts.pb-ből származó `serviceAlerts`-t (lásd
+  // orchestrator.ts OrchestratedSearchResult.serviceAlerts — ez a globális
+  // alert-box eltávolítása óta is VÁLTOZATLANUL a válasz része, csak a
+  // RENDERELÉSE szűnt meg, lásd a hívó oldali komment). Nincs Context/
+  // store/új hook architektúra — EGY új prop.
+  serviceAlerts: ServiceAlert[];
 }) {
   const journey = ranked.journey;
   const sensory = journey.sensory;
@@ -1643,6 +1659,10 @@ function RankedJourneyCard({
       if (!gate.meaningful) return;
 
       const bullets: string[] = [];
+      // SPRINT 8.5 (12. pont) — KIZÁRÓLAG PROVEN_RELEVANT disruption esetén,
+      // rövid, NEM nyers alert-szöveg, és NEM egy konkrét, a strukturált
+      // adat által igazolatlan ok-feltételezés.
+      if (trigger.type === "PROVEN_RELEVANT_DISRUPTION") bullets.push("Fennakadás érinti az útvonaladat.");
       if (rawTimeDifferenceMinutes >= 1) bullets.push(`${Math.round(rawTimeDifferenceMinutes)} perccel gyorsabb`);
       if (structuralImprovement.fewerTransfers) bullets.push("Kevesebb átszállás");
       if (structuralImprovement.lessWalking) bullets.push("Kevesebb gyaloglás");
@@ -1694,6 +1714,27 @@ function RankedJourneyCard({
     bumpNavigationSession();
     setLiveAlternativeOffer(createInitialLiveAlternativeOffer());
   };
+
+  // PROVEN_RELEVANT_DISRUPTION TRIGGER — SPRINT 8.5 (2026-09-19). UGYANAZ a
+  // maybeStartLiveAlternativeSearch() pipeline fut, mint a
+  // SIGNIFICANT_REALTIME_DEGRADATION triggernél (nincs második fetch-
+  // kódút) — ez a hatás KIZÁRÓLAG a triggert azonosítja a MEGLÉVŐ 8.3
+  // engine-en keresztül (buildDisruptionTriggers -> evaluateDisruptionRelevance),
+  // a React réteg nem dönt relevanciáról. Render/új serviceAlerts object-
+  // reference önmagában NEM okoz ismételt keresést: a buildDisruptionTriggers
+  // stabil, alert.id-alapú eventId-t ad, a guard (cooldown/lastEventId/
+  // decline-suppression) ugyanúgy dedupol, mint a degradation triggernél.
+  useEffect(() => {
+    if (!navigationMode || serviceAlerts.length === 0) return;
+    const legs = toDisruptionRelevanceLegs(displayedJourney);
+    const triggers = buildDisruptionTriggers(serviceAlerts, legs, activeLegIndex ?? null, Date.now());
+    if (triggers.length === 0) return;
+    // Legfeljebb 1 keresés — a guard (in-flight/cooldown) amúgy is csak
+    // egyet engedne át; itt is csak az elsőt, bizonyítottan releváns
+    // triggert próbáljuk.
+    void maybeStartLiveAlternativeSearch(triggers[0]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [navigationMode, serviceAlerts, displayedJourney, activeLegIndex]);
 
   useTransitRealtimeRefresh({
     navigationActive: navigationMode,
@@ -4065,6 +4106,7 @@ export default function VedettUtvonalSearchForm({
               ranked={r}
               isOpen={openIndex === i}
               onToggleMap={() => setOpenIndex((prev) => (prev === i ? null : i))}
+              serviceAlerts={result.serviceAlerts}
             />
           ))}
         </div>
