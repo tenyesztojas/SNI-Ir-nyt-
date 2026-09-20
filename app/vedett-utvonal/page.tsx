@@ -129,8 +129,8 @@ export default async function VedettUtvonalPage({
           adja a látható/felolvasott címet, az ikon dekoratív (alt=""). */}
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="flex items-center gap-2.5">
-          <img src="/vedett-utvonal-logo-icon.png" alt="" aria-hidden="true" className="h-8 w-auto sm:h-9" />
-          <img src="/vedett-utvonal-wordmark.png" alt="Védett Útvonal" className="h-5 w-auto sm:h-6" />
+          <img src="/vedett-utvonal-logo-icon.png" alt="" aria-hidden="true" className="h-[35.2px] w-auto sm:h-[39.6px]" />
+          <img src="/vedett-utvonal-wordmark.png" alt="Védett Útvonal" className="h-[22px] w-auto sm:h-[26.4px]" />
         </h1>
       </div>
       <p className="mt-1 text-sm text-gray-600">

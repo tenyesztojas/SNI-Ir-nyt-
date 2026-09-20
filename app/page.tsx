@@ -85,8 +85,8 @@ export default async function HomePage() {
           <div className="relative overflow-hidden rounded-3xl border border-sni-brand-teal/20 bg-gradient-to-br from-sni-brand-teal/5 via-white to-sni-brand-navy/5 p-6 sm:p-8">
             {/* Branding (2026-09-20): logó szöveg helyett. */}
             <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-sni-brand-teal/15 px-3 py-1.5">
-              <img src="/vedett-utvonal-logo-icon.png" alt="" aria-hidden="true" className="h-5 w-auto" />
-              <img src="/vedett-utvonal-wordmark.png" alt="Védett Útvonal" className="h-3.5 w-auto sm:h-4" />
+              <img src="/vedett-utvonal-logo-icon.png" alt="" aria-hidden="true" className="h-[22px] w-auto" />
+              <img src="/vedett-utvonal-wordmark.png" alt="Védett Útvonal" className="h-[15.4px] w-auto sm:h-[17.6px]" />
             </div>
 
             <h2 className="text-xl font-bold text-gray-900 sm:text-2xl">
