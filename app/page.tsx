@@ -83,9 +83,10 @@ export default async function HomePage() {
       {vedettRouteEnabled && (
         <section className="mx-auto max-w-5xl px-4 pb-4 pt-8 sm:px-6 sm:pt-12">
           <div className="relative overflow-hidden rounded-3xl border border-sni-brand-teal/20 bg-gradient-to-br from-sni-brand-teal/5 via-white to-sni-brand-navy/5 p-6 sm:p-8">
-            {/* Round 9, B) rész — cím: "Védett Útvonal" (BÉTA badge nélkül). */}
-            <div className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-sni-brand-teal/15 px-3 py-1 text-xs font-bold uppercase tracking-wide text-sni-brand-teal">
-              Védett Útvonal
+            {/* Branding (2026-09-20): logó szöveg helyett. */}
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-sni-brand-teal/15 px-3 py-1.5">
+              <img src="/vedett-utvonal-logo-icon.png" alt="" aria-hidden="true" className="h-5 w-auto" />
+              <img src="/vedett-utvonal-wordmark.png" alt="Védett Útvonal" className="h-3.5 w-auto sm:h-4" />
             </div>
 
             <h2 className="text-xl font-bold text-gray-900 sm:text-2xl">

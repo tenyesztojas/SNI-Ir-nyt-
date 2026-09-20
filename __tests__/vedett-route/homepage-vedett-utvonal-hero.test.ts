@@ -101,10 +101,12 @@ describe("B) FŐOLDALI HERO-SZÖVEG — a specifikáció szerinti végleges tart
     assert.match(homeSrc, /BKK, MÁV, Volánbusz és MOL Bubi – Próbáld ki, és segíts a visszajelzéseddel még jobbá tenni\./);
   });
 
-  test("a cím egyszerűen 'Védett Útvonal' — 'Béta' szó NÉLKÜL — a badge-pill elemben", () => {
-    assert.match(
-      homeSrc,
-      /<div className="mb-3 inline-flex items-center gap-1\.5 rounded-full bg-sni-brand-teal\/15 px-3 py-1 text-xs font-bold uppercase tracking-wide text-sni-brand-teal">\s*\n\s*Védett Útvonal\s*\n\s*<\/div>/
-    );
+  test("BRANDING FRISSÍTÉS (2026-09-20) — a badge-pill a hivatalos logót (ikon + felirat-kép) jeleníti meg a sima szöveg helyett, 'Béta' szó nélkül", () => {
+    const badgeIdx = homeSrc.indexOf('<div className="mb-3 inline-flex items-center gap-2 rounded-full bg-sni-brand-teal/15');
+    assert.ok(badgeIdx !== -1, "a badge-pill konténernek léteznie kell");
+    const badgeBlock = homeSrc.slice(badgeIdx, badgeIdx + 400);
+    assert.match(badgeBlock, /<img src="\/vedett-utvonal-logo-icon\.png" alt="" aria-hidden="true"/, "a dekoratív logó-ikonnak meg kell jelennie a felirat-kép ELŐTT");
+    assert.match(badgeBlock, /<img src="\/vedett-utvonal-wordmark\.png" alt="Védett Útvonal"/, "a felirat-képnek 'Védett Útvonal' alt szöveggel kell rendelkeznie (hozzáférhető név)");
+    assert.doesNotMatch(badgeBlock, /Béta/i, "a 'Béta' szó nem térhet vissza");
   });
 });

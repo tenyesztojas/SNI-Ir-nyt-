@@ -123,8 +123,15 @@ export default async function VedettUtvonalPage({
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6">
+      {/* Branding frissítés (2026-09-20) — a szöveges "Védett Útvonal" cím
+          helyett a hivatalos logó (ikon + felirat-kép) jelenik meg. Az `h1`
+          szemantika/hozzáférhető név MEGMARAD: a felirat-kép `alt` szövege
+          adja a látható/felolvasott címet, az ikon dekoratív (alt=""). */}
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-2xl font-bold text-sni-text">Védett Útvonal</h1>
+        <h1 className="flex items-center gap-2.5">
+          <img src="/vedett-utvonal-logo-icon.png" alt="" aria-hidden="true" className="h-8 w-auto sm:h-9" />
+          <img src="/vedett-utvonal-wordmark.png" alt="Védett Útvonal" className="h-5 w-auto sm:h-6" />
+        </h1>
       </div>
       <p className="mt-1 text-sm text-gray-600">
         A Védett Útvonal jelenleg tesztelés alatt áll. Az útvonal- és pihenőpont-adatok
