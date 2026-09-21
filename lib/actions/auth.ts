@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { safeReturnPath } from "@/lib/pwa/safeReturnPath";
 import { upsertCommunityProfile } from "@/app/kozosseg/actions";
 import type { CommunityRole } from "@/lib/community/types";
 
@@ -22,8 +23,15 @@ export async function signInAction(
 
   if (error) return { error: "Hibás email vagy jelszó." };
 
+  // VÉDETT ÚTVONAL NAVIGATION-ONLY PWA sprint (2026-09-21) — ha a
+  // felhasználó egy "next" return-URL-lel érkezett (pl. a Védett Útvonal
+  // PWA shell irányította ide bejelentkezés nélkül), sikeres belépés után
+  // oda térünk vissza, NEM a normál /profil-ra. safeReturnPath() nyílt
+  // redirect ellen véd (csak "/"-lel kezdődő, relatív útvonalat fogad el).
+  const nextPath = safeReturnPath(String(formData.get("next") ?? ""), "/profil");
+
   revalidatePath("/", "layout");
-  redirect("/profil");
+  redirect(nextPath);
 }
 
 export async function signUpAction(
@@ -93,8 +101,9 @@ export async function signUpAction(
     redirect("/kozosseg/profilom?uj=1");
   }
 
+  const nextPath = safeReturnPath(String(formData.get("next") ?? ""), "/profil");
   revalidatePath("/", "layout");
-  redirect("/profil");
+  redirect(nextPath);
 }
 
 export async function changePasswordAction(

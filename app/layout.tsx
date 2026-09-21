@@ -34,6 +34,15 @@ export default function RootLayout({
   // Az itt lévő custom inline scriptek kézzel kapják meg.
   const nonce = headers().get("x-nonce") ?? undefined;
 
+  // VÉDETT ÚTVONAL NAVIGATION-ONLY PWA sprint (2026-09-21) — a middleware
+  // állítja be (lásd middleware.ts x-pathname header). A Védett Útvonal PWA
+  // shell (/vedett-utvonal/app) nem kapja meg a sitewide Header/Footer/
+  // PWAInstallBanner/PWASessionTracker-t: azokat a saját, dedikált shell-je
+  // (VedettUtvonalPwaShell) helyettesíti. A VédettSarok PWA identitása és a
+  // normál /vedett-utvonal oldal EBBŐL NEM változik.
+  const pathname = headers().get("x-pathname") ?? "";
+  const isVedettUtvonalPwaShell = pathname.startsWith("/vedett-utvonal/app");
+
   return (
     <html lang="hu">
       <head>
@@ -65,11 +74,11 @@ export default function RootLayout({
       </head>
       <body className="flex min-h-screen flex-col bg-gray-100 font-sans antialiased">
         <AccessibilityProvider>
-          <Header />
+          {!isVedettUtvonalPwaShell && <Header />}
           <main className="flex-1">{children}</main>
-          <Footer />
-          <PWAInstallBanner />
-          <PWASessionTracker />
+          {!isVedettUtvonalPwaShell && <Footer />}
+          {!isVedettUtvonalPwaShell && <PWAInstallBanner />}
+          {!isVedettUtvonalPwaShell && <PWASessionTracker />}
         </AccessibilityProvider>
 
         {/* Google Analytics – nonce szükséges a CSP script-src nonce-alapú engedélyhez */}

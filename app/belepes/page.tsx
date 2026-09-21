@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useFormState, useFormStatus } from "react-dom";
 import { LogIn, Mail, ChevronDown, Users } from "lucide-react";
 import { signInAction, signUpAction, AuthActionState } from "@/lib/actions/auth";
+import { safeReturnPath } from "@/lib/pwa/safeReturnPath";
 
 function SubmitButton({ label }: { label: string }) {
   const { pending } = useFormStatus();
@@ -14,7 +15,17 @@ function SubmitButton({ label }: { label: string }) {
   );
 }
 
-export default function LoginPage() {
+export default function LoginPage({
+  searchParams,
+}: {
+  searchParams?: { next?: string };
+}) {
+  // VÉDETT ÚTVONAL NAVIGATION-ONLY PWA sprint (2026-09-21) — ha a Védett
+  // Útvonal PWA shell (vagy bármely más hívó) egy "next" visszatérési
+  // URL-lel irányított ide, sikeres belépés/regisztráció után oda térünk
+  // vissza (lásd lib/actions/auth.ts). safeReturnPath() nyílt redirect
+  // ellen véd.
+  const safeNext = safeReturnPath(searchParams?.next, "/profil");
   const [mode, setMode] = useState<"belepes" | "regisztracio">("belepes");
   const [showEmail, setShowEmail] = useState(true);
   const [joinCommunity, setJoinCommunity] = useState(false);
@@ -82,6 +93,7 @@ export default function LoginPage() {
                   <input type="password" name="password" className="input-field mt-1.5" required minLength={6} />
                 </div>
                 {state?.error && <p className="text-sm text-red-600">{state.error}</p>}
+                <input type="hidden" name="next" value={safeNext} />
                 <SubmitButton label="Belépés" />
                 <p className="text-center text-xs text-gray-400">
                   <a href="/elfelejtett-jelszo" className="text-sni-brand-teal hover:underline focus:outline-none focus:ring-2 focus:ring-sni-brand-teal rounded">
@@ -177,6 +189,7 @@ export default function LoginPage() {
                 </div>
 
                 {state?.error && <p className="text-sm text-red-600">{state.error}</p>}
+                <input type="hidden" name="next" value={safeNext} />
                 <SubmitButton label="Regisztráció" />
               </form>
             )}

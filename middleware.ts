@@ -205,6 +205,14 @@ export async function middleware(request: NextRequest) {
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-nonce", nonce);
 
+  // VÉDETT ÚTVONAL NAVIGATION-ONLY PWA sprint (2026-09-21) — a pathname
+  // headerként való átadása teszi lehetővé, hogy a root layout.tsx (Server
+  // Component, nincs usePathname()-je) LAYOUT SZINTEN (nem CSS-sel) tudja
+  // eldönteni, hogy a Védett Útvonal PWA shell (/vedett-utvonal/app) alatt
+  // vagyunk-e, és ez alapján kihagyja a Header/Footer/PWAInstallBanner/
+  // PWASessionTracker renderelését. Ugyanaz a minta, mint az x-nonce-nál.
+  requestHeaders.set("x-pathname", path);
+
   // ── Supabase session refresh ───────────────────────────────────────────────
   let response = NextResponse.next({
     request: { headers: requestHeaders },

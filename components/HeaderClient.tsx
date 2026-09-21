@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState, useRef, useEffect } from "react";
+import type { MouseEvent as ReactMouseEvent } from "react";
 import { Menu, X, LogOut, ChevronDown, BookOpen, MapPin } from "lucide-react";
 import { signOutAction } from "@/lib/actions/auth";
 import AccessibilityButton from "@/components/accessibility/AccessibilityButton";
@@ -128,6 +129,30 @@ export default function HeaderClient({
 
   const closeMobile = () => setMobileOpen(false);
 
+  // VÉDETT ÚTVONAL NAVIGATION-ONLY PWA sprint (2026-09-21), 7. pont —
+  // VédettSarok PWA -> Védett Útvonal handoff. Szabványos, megbízható
+  // jelzést használ (display-mode: standalone / iOS navigator.standalone),
+  // NEM egy "másik PWA telepítve van-e" hacket. Ha a felhasználó éppen a
+  // telepített VédettSarok PWA-ban van, a "Védett Útvonal" pilot linkre
+  // kattintva a dedikált PWA shellre (/vedett-utvonal/app) irányítjuk;
+  // egyébként (normál böngésző tab) a href VÁLTOZATLANUL a normál
+  // /vedett-utvonal oldalra visz.
+  function handlePilotLinkClick(e: ReactMouseEvent<HTMLAnchorElement>, linkKey: string) {
+    if (linkKey !== "vedett_route_beta") return;
+    if (typeof window === "undefined") return;
+    const standalone =
+      window.matchMedia("(display-mode: standalone)").matches ||
+      (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
+    if (!standalone) return;
+    e.preventDefault();
+    (window as Window & { gtag?: (...args: unknown[]) => void }).gtag?.(
+      "event",
+      "vedettsarok_pwa_to_vedett_utvonal_handoff",
+      { source_surface: "vedettsarok_pwa", target_surface: "vedett_utvonal" },
+    );
+    window.location.href = "/vedett-utvonal/app";
+  }
+
   return (
     <header className="sticky top-0 z-40 bg-white shadow-md">
       <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3 sm:px-6">
@@ -181,6 +206,7 @@ export default function HeaderClient({
             <Link
               key={link.href}
               href={link.href}
+              onClick={(e) => handlePilotLinkClick(e, link.key)}
               className="relative flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold text-sni-brand-teal transition-colors hover:bg-sni-brand-teal/10"
             >
               {link.label}
@@ -370,7 +396,7 @@ export default function HeaderClient({
               <Link
                 key={link.href}
                 href={link.href}
-                onClick={closeMobile}
+                onClick={(e) => { handlePilotLinkClick(e, link.key); closeMobile(); }}
                 className="flex items-center gap-1.5 rounded-xl px-4 py-3 text-base font-semibold text-sni-brand-teal hover:bg-sni-brand-teal/10"
               >
                 {link.label}
