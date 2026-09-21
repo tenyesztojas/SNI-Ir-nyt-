@@ -9,6 +9,14 @@ export function useRouteNavigation(
   position: NavigationPosition | null,
   options: RouteProgressOptions = {},
   active = true,
+  // TRANSIT GPS LOSS + CAMERA FOLLOW FIX SPRINT (2026-09-21) — opcionális,
+  // additív paraméter (alapértéke 0 -> a MEGLÉVŐ hívási helyeken byte-ra a
+  // régi viselkedés). A hívó (VedettUtvonalSearchForm.tsx) ennek increment-
+  // jével tudja explicit force-resetelni a hook belső állapotát (törli a
+  // felgyűlt OFF_ROUTE-bizonyítékot/consecutiveOffRouteFixes-t) UGYANAZZAL a
+  // MÁR MEGLÉVŐ reset-mechanizmussal, mint a route-/active-váltás — nincs
+  // új állapotgép, csak egy plusz "reset-jel" ugyanahhoz az effekthez.
+  resetToken = 0,
 ): RouteProgressState {
   const [state, setState] = useState<RouteProgressState>(() => createInitialRouteProgress());
   const previousRef = useRef<RouteProgressState | null>(null);
@@ -16,7 +24,7 @@ export function useRouteNavigation(
   useEffect(() => {
     previousRef.current = null;
     setState(createInitialRouteProgress());
-  }, [routeCoordinates, active]);
+  }, [routeCoordinates, active, resetToken]);
 
   useEffect(() => {
     if (!active || !position || routeCoordinates.length < 2) return;

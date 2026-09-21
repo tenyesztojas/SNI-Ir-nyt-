@@ -228,8 +228,18 @@ describe("O) User Pan/Zoom — csak VALÓDI felhasználói gesztus szakítja meg
     assert.match(mapSrc, /onUserGestureCancelFollowRef\.current = onUserGestureCancelFollow;/);
   });
 
-  test("VedettUtvonalSearchForm.tsx: a gesztus-megszakítás setFollowMode(false)-ra fut, és 'Kövesd a helyzetem' gomb jelenik meg followMode=false alatt navigáció közben", () => {
-    assert.match(formSrc, /onUserGestureCancelFollow=\{\(\) => setFollowMode\(false\)\}/);
+  // TRANSIT GPS LOSS + CAMERA FOLLOW FIX SPRINT (2026-09-21) — a gesztus-
+  // megszakítás mostantól IDEIGLENES (4 mp múlva magától visszaáll, lásd
+  // followResumeTimer.ts + follow-resume-timer.test.ts): handleUserGestureCancelFollow
+  // hívja a setFollowMode(false)-t ÉS elindítja a timert. A "Kövesd a
+  // helyzetem" gomb (explicit, azonnali recenter + timer cancel) VÁLTOZATLANUL
+  // megjelenik followMode=false alatt navigáció közben.
+  test("VedettUtvonalSearchForm.tsx: a gesztus-megszakítás setFollowMode(false)-ra fut ÉS elindítja az ideiglenes follow-resume timert, és 'Kövesd a helyzetem' gomb jelenik meg followMode=false alatt navigáció közben", () => {
+    assert.match(formSrc, /onUserGestureCancelFollow=\{handleUserGestureCancelFollow\}/);
+    assert.match(
+      formSrc,
+      /const handleUserGestureCancelFollow = \(\) => \{\s*\n\s*setFollowMode\(false\);\s*\n\s*followResumeTimerRef\.current!\.onUserGesture\(\);\s*\n\s*\};/,
+    );
     assert.match(formSrc, /\{navigationMode && !followMode && \(/);
     assert.match(formSrc, /📍 Kövesd a helyzetem/);
   });

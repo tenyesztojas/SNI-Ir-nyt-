@@ -63,6 +63,20 @@ export interface RerouteGuardInput {
    * felhasználása.
    */
   restoreRecoveryActive?: boolean;
+  /**
+   * TRANSIT GPS LOSS + CAMERA FOLLOW FIX SPRINT (2026-09-21) — igaz, HA a
+   * hívó (VedettUtvonalSearchForm.tsx) transitGpsLossConfirmation.ts szerint
+   * egy transit-legen történt GPS LOST utáni, egyébként reroute-ot kiváltó
+   * deviation-re a felhasználó MÉG NEM válaszolt (lásd
+   * markTransitGpsLoss()/resolveTransitGpsLossConfirmation()). FÜGGETLEN,
+   * plusz feltétel — UGYANAZ az elv, mint transitGeometryUncertain/
+   * gpsReacquiring-nél: a globális OFF_ROUTE-küszöb és a WALK reroute-
+   * viselkedés VÁLTOZATLAN, ez csak egy ÚJABB blokkoló réteg. A hívó a
+   * felhasználó explicit "Nem" válaszára ezt false-ra állítja, ami PONTOSAN
+   * egy (a MEGLÉVŐ in-flight/cooldown guard által is védett) reroute-
+   * kísérletet enged át.
+   */
+  transitGpsLossAwaitingConfirmation?: boolean;
 }
 
 export type RerouteBlockReason =
@@ -75,7 +89,8 @@ export type RerouteBlockReason =
   | "TRANSIT_GEOMETRY_UNCERTAIN"
   | "GPS_REACQUIRING"
   | "FOREGROUND_REACQUISITION"
-  | "RESTORE_RECOVERY_ACTIVE";
+  | "RESTORE_RECOVERY_ACTIVE"
+  | "TRANSIT_GPS_LOSS_AWAITING_CONFIRMATION";
 
 export type RerouteGuardDecision =
   | { shouldReroute: true; reason: null }
@@ -95,6 +110,9 @@ export function shouldStartAutomaticReroute(
   if (input.gpsReacquiring) return { shouldReroute: false, reason: "GPS_REACQUIRING" };
   if (input.foregroundRecoveryActive) return { shouldReroute: false, reason: "FOREGROUND_REACQUISITION" };
   if (input.restoreRecoveryActive) return { shouldReroute: false, reason: "RESTORE_RECOVERY_ACTIVE" };
+  if (input.transitGpsLossAwaitingConfirmation) {
+    return { shouldReroute: false, reason: "TRANSIT_GPS_LOSS_AWAITING_CONFIRMATION" };
+  }
   if (!input.hasCurrentPosition) return { shouldReroute: false, reason: "POSITION_MISSING" };
   if (!input.hasDestination) return { shouldReroute: false, reason: "DESTINATION_MISSING" };
   if (state.inFlight) return { shouldReroute: false, reason: "REQUEST_IN_FLIGHT" };

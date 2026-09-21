@@ -150,4 +150,27 @@ describe("automatic reroute guard", () => {
     );
     assert.deepEqual(shouldStartAutomaticReroute(state, READY), { shouldReroute: true, reason: null });
   });
+
+  // TRANSIT GPS LOSS + CAMERA FOLLOW FIX SPRINT (2026-09-21) — tesztlista
+  // 1/5/7. pont: egy transit-legen történt GPS LOST utáni, MÉG megválaszolatlan
+  // megerősítő kérdés (lásd transitGpsLossConfirmation.ts) FÜGGETLENÜL
+  // blokkolja az automatikus reroute-ot, még megerősített OFF_ROUTE esetén
+  // is — UGYANAZ az elv, mint a fenti FÜGGETLEN blokkoló feltételeknél.
+  test("transitGpsLossAwaitingConfirmation=true blokkolja az automatikus reroute-ot, még megerősített OFF_ROUTE esetén is", () => {
+    const state = createInitialRerouteGuardState();
+    assert.equal(
+      shouldStartAutomaticReroute(state, { ...READY, transitGpsLossAwaitingConfirmation: true }).reason,
+      "TRANSIT_GPS_LOSS_AWAITING_CONFIRMATION",
+    );
+  });
+
+  test("transitGpsLossAwaitingConfirmation=false (a felhasználó 'Nem'-mel válaszolt) esetén PONTOSAN egy reroute engedélyezett — a globális OFF_ROUTE/reroute-viselkedés (WALK is) VÁLTOZATLAN", () => {
+    const state = createInitialRerouteGuardState();
+    assert.deepEqual(
+      shouldStartAutomaticReroute(state, { ...READY, transitGpsLossAwaitingConfirmation: false }),
+      { shouldReroute: true, reason: null },
+    );
+    // Hiányzó mező (pl. sima WALK off-route eset, ahol ez a bemenet elő sem kerül) — VÁLTOZATLAN.
+    assert.deepEqual(shouldStartAutomaticReroute(state, READY), { shouldReroute: true, reason: null });
+  });
 });

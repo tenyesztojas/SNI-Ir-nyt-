@@ -72,7 +72,13 @@ describe("Navigation lifecycle stability", () => {
 
   test("a hook explicit active paramétert kap", () => {
     assert.match(hookSrc, /active = true,/);
-    assert.match(formSrc, /navigationMode,\s*\);/);
+    // TRANSIT GPS LOSS + CAMERA FOLLOW FIX SPRINT (2026-09-21) — a hívó
+    // (VedettUtvonalSearchForm.tsx) `navigationMode` UTÁN a hook ÚJ, additív
+    // `resetToken` (routeProgressResetToken) paraméterét is átadja (a régi
+    // "navigationMode a hívás UTOLSÓ argumentuma" regex ezt a dokumentált
+    // bővítést hibásan buktatta) — az invariáns, hogy `navigationMode` a
+    // hook `active` paraméterének felel meg, VÁLTOZATLAN.
+    assert.match(formSrc, /navigationMode,\s*routeProgressResetToken,\s*\);/);
   });
 
   test("inaktív navigációban GPS-fix nem futtat route progress számítást", () => {
@@ -81,7 +87,12 @@ describe("Navigation lifecycle stability", () => {
 
   test("route vagy active session-váltás reseteli az előző progress állapotot", () => {
     assert.match(hookSrc, /previousRef\.current = null;/);
-    assert.match(hookSrc, /\[routeCoordinates, active\]/);
+    // TRANSIT GPS LOSS SPRINT (2026-09-21) — a reset-effekt SZÁNDÉKOSAN
+    // bővült egy additív `resetToken` dependencyvel (lásd useRouteNavigation.ts
+    // fejlécét: force-reset a transit-GPS-loss "Igen" válaszra) — a régi,
+    // "pontosan [routeCoordinates, active]" regex ezt a dokumentált bővítést
+    // hibásan buktatta. Az invariáns (route/active váltás resetel) VÁLTOZATLAN.
+    assert.match(hookSrc, /\[routeCoordinates, active, resetToken\]/);
   });
 
   test("az update effect active változásra is reagál", () => {

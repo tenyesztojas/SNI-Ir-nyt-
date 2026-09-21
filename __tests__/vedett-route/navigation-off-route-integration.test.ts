@@ -25,7 +25,16 @@ test("Navigation off-route production integration", async (t) => {
   });
 
   await t.test("az off-route jelzés nem indít automatikus újratervezést", () => {
-    const block = source.match(/\{navigationMode && routeProgress\.offRouteStatus === "OFF_ROUTE" && \([\s\S]*?\n\s*\)\}/)?.[0] ?? "";
+    // TRANSIT GPS LOSS + CAMERA FOLLOW FIX SPRINT (2026-09-21) — a banner
+    // feltétele kiegészült egy `!transitGpsLossConfirmationVisible` gate-tel
+    // (lásd transit-gps-loss-confirmation-integration.test.ts): amíg a
+    // megerősítő kártya látszik, ez a banner elnyomva, hogy ne legyen két,
+    // egymásnak ellentmondó üzenet egyszerre. Az invariáns (a banner MAGA
+    // nem indít fetch/reroute-ot) VÁLTOZATLAN.
+    const block =
+      source.match(
+        /\{navigationMode && routeProgress\.offRouteStatus === "OFF_ROUTE" && !transitGpsLossConfirmationVisible && \([\s\S]*?\n\s*\)\}/,
+      )?.[0] ?? "";
     assert.ok(block.length > 0);
     assert.doesNotMatch(block, /fetch\(|router\.|reroute|onClick|setDisplayedJourney/);
   });

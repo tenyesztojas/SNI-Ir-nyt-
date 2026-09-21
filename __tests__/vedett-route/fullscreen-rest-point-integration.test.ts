@@ -328,7 +328,12 @@ describe("25. pont — Navigation Mode / GPS regresszióvédelem (a fullscreen p
   test("a <VedettUtvonalMap> followMode/navigationZoom/onUserGestureCancelFollow props-jai változatlanok", () => {
     assert.match(cardSrc, /followMode=\{followMode\}/);
     assert.match(cardSrc, /navigationZoom=\{16\}/);
-    assert.match(cardSrc, /onUserGestureCancelFollow=\{\(\) => setFollowMode\(false\)\}/);
+    // TRANSIT GPS LOSS + CAMERA FOLLOW FIX SPRINT (2026-09-21) — a gesztus-
+    // megszakítás handlere mostantól handleUserGestureCancelFollow (a 4 mp-es
+    // ideiglenes follow-resume timert is elindítja, lásd followResumeTimer.ts)
+    // az inline `() => setFollowMode(false)` helyett — a PROP maga (a Map
+    // komponens felé) VÁLTOZATLANUL onUserGestureCancelFollow.
+    assert.match(cardSrc, /onUserGestureCancelFollow=\{handleUserGestureCancelFollow\}/);
   });
 
   test("'✕ Navigáció befejezése' / '📍 Kövesd a helyzetem' gombok jelen vannak, a top action bar-ban", () => {

@@ -67,11 +67,28 @@ import { mergeRealtimeUpdates } from "@/lib/vedett-route/realtimeRefresh/mergeRe
 // gpsFixUsable állapot NEM módosítja useTransitRealtimeRefresh.ts
 // visibility-return viselkedését (az egy külön, saját mechanizmus).
 import {
+  classifyGpsQuality,
   createInitialGpsFixGateState,
   evaluateGpsFixUsability,
   isGpsReacquiring,
   markVisibilityReturned,
 } from "@/lib/vedett-route/navigation/gpsFixGate";
+// TRANSIT GPS LOSS + CAMERA FOLLOW FIX SPRINT (2026-09-21) — pure modul: a
+// gpsFixGate.ts LOST minőség-jelzését ÉS a legTransition.ts BOARDED/
+// BOARDED_UNCERTAIN_GEOMETRY fázisát a hívó (lentebb) adja át, ez a modul
+// KIZÁRÓLAG a pending megerősítés-jelzőt és a rerouteGuard.ts-be illesztendő
+// blokkoló feltételt biztosítja — lásd a modul fejlécét.
+import {
+  createInitialTransitGpsLossConfirmationState,
+  markTransitGpsLoss,
+  resolveTransitGpsLossConfirmation,
+  shouldAutoClearTransitGpsLossConfirmation,
+  transitGpsLossQuestionText,
+} from "@/lib/vedett-route/navigation/transitGpsLossConfirmation";
+import {
+  createFollowResumeTimer,
+  type FollowResumeTimerController,
+} from "@/lib/vedett-route/navigation/followResumeTimer";
 import RestPointQuickAdd, { type RestPointCreatedPayload } from "./RestPointQuickAdd";
 // TELEPÜLÉS-AUTOCOMPLETE ("UX-fejlesztés..." kör, A) rész) — EGYETLEN közös
 // komponens/logika a "Város" mezőkhöz (induló + célhely), nincs duplikált
@@ -635,6 +652,30 @@ function RankedJourneyCard({
   const [navigationMode, setNavigationMode] = useState(false);
   const [followMode, setFollowMode] = useState(false);
 
+  // TRANSIT GPS LOSS + CAMERA FOLLOW FIX SPRINT (2026-09-21) — a KORÁBBI
+  // tartós manuális override ("Kövesd a helyzetem" gombig marad") mostantól
+  // IDEIGLENES: az UTOLSÓ user-gesztus után pontosan 4000 ms múlva a kamera
+  // magától visszaáll follow módba, UGYANAZZAL a MEGLÉVŐ setFollowMode(true)
+  // mechanizmussal, amit eddig is a "Kövesd a helyzetem" gomb hívott (lásd
+  // VedettUtvonalMap.tsx userCameraOverrideRef-effektjét: az KIZÁRÓLAG a
+  // followMode:true váltásra oldódik fel, ez a modul VÁLTOZATLAN). Maga az
+  // időzítés a followResumeTimer.ts keretrendszer-független, node:test
+  // mock.timers-szel közvetlenül tesztelt kontrollerében él — ez a
+  // komponens csak a MEGLÉVŐ setFollowMode-ot adja át neki `onResume`-ként.
+  const followResumeTimerRef = useRef<FollowResumeTimerController | null>(null);
+  if (!followResumeTimerRef.current) {
+    followResumeTimerRef.current = createFollowResumeTimer(() => setFollowMode(true));
+  }
+  // 11. pont (MEGLÉVŐ) — valódi felhasználói gesztus (drag/zoom/rotate/
+  // pitch) hívja. Minden ÚJABB gesztus újraindítja a 4000 ms-os timert
+  // (spec 3. pont: "restart 4000 ms") — lásd createFollowResumeTimer().
+  const handleUserGestureCancelFollow = () => {
+    setFollowMode(false);
+    followResumeTimerRef.current!.onUserGesture();
+  };
+  // Navigation end/unmount — timer cleanup (spec 3. pont).
+  useEffect(() => () => followResumeTimerRef.current!.cancel(), []);
+
   // SCREEN WAKE LOCK (2026-09-15) — aktív navigáció közben best-effort
   // ébren tartjuk a kijelzőt. A hook progressive enhancement: ha a böngésző
   // nem támogatja / megtagadja a Wake Lock API-t, a navigáció változatlanul
@@ -650,6 +691,20 @@ function RankedJourneyCard({
   const rerouteSessionRef = useRef(0);
   const [automaticRerouteStatus, setAutomaticRerouteStatus] = useState<"IDLE" | "REROUTING" | "FAILED">("IDLE");
   const [automaticRerouteMessage, setAutomaticRerouteMessage] = useState<string | null>(null);
+
+  // TRANSIT GPS LOSS + CAMERA FOLLOW FIX SPRINT (2026-09-21) — pending
+  // megerősítés-kérdés állapota (lásd transitGpsLossConfirmation.ts). Refben
+  // ÉS state-ben is él (UGYANAZ a minta, mint liveAlternativeOffer-nél): a
+  // ref a mindenkori legfrissebb értéket adja a GPS-tick effekteknek
+  // (elkerülve az elavult closure-t), a state a render-vezérelt UI-t hajtja.
+  const transitGpsLossConfirmationRef = useRef(createInitialTransitGpsLossConfirmationState());
+  const [transitGpsLossConfirmation, setTransitGpsLossConfirmation] = useState(
+    createInitialTransitGpsLossConfirmationState(),
+  );
+  // A routeProgress motor (useRouteNavigation) OFF_ROUTE-bizonyítékának
+  // explicit törléséhez — IGEN válasz esetén ennek increment-je force-reseteli
+  // a hook belső state-jét (lásd useRouteNavigation.ts resetToken paramétere).
+  const [routeProgressResetToken, setRouteProgressResetToken] = useState(0);
 
   // FOREGROUND REACQUISITION — SPRINT 8.1 (2026-09-18). `foregroundRecoveryRef`
   // a MEGLÉVŐ gpsFixGate.ts kimeneteit követi (lásd a wiring lentebb, a
@@ -697,6 +752,12 @@ function RankedJourneyCard({
     // SPRINT 8.2 — session-váltás a restore-recovery ciklust is érvényteleníti.
     restoreRecoveryRef.current = cancelForegroundRecovery(restoreRecoveryRef.current);
     setRestoreRecoveryPhase(restoreRecoveryRef.current.phase);
+    // TRANSIT GPS LOSS SPRINT (2026-09-21) — egy navigációs session-váltás
+    // (leállítás/újraindítás/session-restore) egy MÉG megválaszolatlan
+    // transit-GPS-loss kérdést is elavulttá tesz — nem maradhat "beragadva"
+    // egy már lezárt session után.
+    transitGpsLossConfirmationRef.current = resolveTransitGpsLossConfirmation();
+    setTransitGpsLossConfirmation(transitGpsLossConfirmationRef.current);
   };
 
   // SPRINT 8.2 (NAVIGATION SESSION PERSISTENCE, 2026-09-18) — EXPLICIT,
@@ -857,6 +918,7 @@ function RankedJourneyCard({
     setAutomaticRerouteMessage(null);
     setNavigationMode(false);
     setFollowMode(false);
+    followResumeTimerRef.current!.cancel(); // Navigation end — timer cleanup (spec 3. pont).
     geo.stopWatching();
     clearNavigationSession(); // SPRINT 8.2 — explicit navigáció leállítása törli a persisted sessiont.
   };
@@ -897,6 +959,7 @@ function RankedJourneyCard({
       setAutomaticRerouteMessage(null);
       setNavigationMode(false);
       setFollowMode(false);
+      followResumeTimerRef.current!.cancel(); // Navigation end (kártya-bezárás közbeni leállítás) — timer cleanup.
       geo.stopWatching();
       clearNavigationSession(); // SPRINT 8.2 — a kártya-bezárás közbeni navigáció-leállítás is törli a persisted sessiont.
     }
@@ -983,6 +1046,12 @@ function RankedJourneyCard({
   navigationModeRef.current = navigationMode;
   const hasDisplayedJourneyRef = useRef(displayedJourney.legs.length > 0);
   hasDisplayedJourneyRef.current = displayedJourney.legs.length > 0;
+  // TRANSIT GPS LOSS SPRINT (2026-09-21) — a jelenleg BOARDED/BOARDED_
+  // UNCERTAIN_GEOMETRY TRANSIT leg transitMode-ja (vagy null, ha épp nincs
+  // ilyen) — a lentebbi GPS-tick effektek ebből döntik el, hogy egy LOST
+  // klasszifikáció transit-utazás közben történt-e (lásd az értékadást a
+  // render törzsében, activeLegTransitGeometryUncertain mellett).
+  const activeBoardedTransitModeRef = useRef<string | null>(null);
 
   // COMMIT ELŐTTI CÉLZOTT KORREKCIÓ (2026-09-18) — a handleVisibilityChange
   // korábban KIZÁRÓLAG a JELENLEGI document.visibilityState-et nézte
@@ -1057,6 +1126,23 @@ function RankedJourneyCard({
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, []);
 
+  // TRANSIT GPS LOSS SPRINT (2026-09-21) — a MEGLÉVŐ GPS-fix-minőség
+  // eredményből (result) jelöli meg a pending transit-megerősítést, HA a
+  // klasszifikáció LOST ÉS épp egy BOARDED/BOARDED_UNCERTAIN_GEOMETRY
+  // transit legen vagyunk (activeBoardedTransitModeRef). Már függőben lévő
+  // kérdést NEM ír felül (lásd markTransitGpsLoss()). Mindkét lenti GPS-
+  // tick effekt (friss fix + 5 mp-es fallback-poll) ugyanezt hívja — nincs
+  // duplikált logika.
+  const registerTransitGpsLossIfNeeded = (result: { usable: boolean; freshness: "FRESH" | "STALE" | "INVALID" }) => {
+    if (classifyGpsQuality(result) !== "LOST") return;
+    if (!activeBoardedTransitModeRef.current) return;
+    transitGpsLossConfirmationRef.current = markTransitGpsLoss(
+      transitGpsLossConfirmationRef.current,
+      activeBoardedTransitModeRef.current,
+    );
+    setTransitGpsLossConfirmation(transitGpsLossConfirmationRef.current);
+  };
+
   useEffect(() => {
     const result = evaluateGpsFixUsability(gpsFixGateRef.current, currentPosition?.timestampMs ?? null, Date.now());
     gpsFixGateRef.current = result.nextState;
@@ -1064,6 +1150,7 @@ function RankedJourneyCard({
     setGpsReacquiring(isGpsReacquiring(result.nextState));
     applyForegroundRecoveryPhaseUpdate({ usable: result.usable, reacquiring: isGpsReacquiring(result.nextState) });
     applyRestoreRecoveryPhaseUpdate({ usable: result.usable, reacquiring: isGpsReacquiring(result.nextState) });
+    registerTransitGpsLossIfNeeded(result);
   }, [currentPosition?.timestampMs]);
 
   // METRO GPS LOSS + MAP CAMERA SAFETY SPRINT (2026-09-17) — a FENTI effekt
@@ -1088,6 +1175,7 @@ function RankedJourneyCard({
       setGpsReacquiring(isGpsReacquiring(result.nextState));
       applyForegroundRecoveryPhaseUpdate({ usable: result.usable, reacquiring: isGpsReacquiring(result.nextState) });
       applyRestoreRecoveryPhaseUpdate({ usable: result.usable, reacquiring: isGpsReacquiring(result.nextState) });
+      registerTransitGpsLossIfNeeded(result);
     }, 5_000);
     return () => window.clearInterval(intervalId);
   }, [navigationMode, currentPosition?.timestampMs]);
@@ -1143,7 +1231,28 @@ function RankedJourneyCard({
       routeDurationSeconds: Math.max(0, displayedJourney.totalDurationMinutes * 60),
     },
     navigationMode,
+    routeProgressResetToken,
   );
+
+  // TRANSIT GPS LOSS SPRINT (2026-09-21) — "Ha a GPS normálisan tér vissza,
+  // ne kérdezz semmit": egy pending kérdés a felhasználó válasza NÉLKÜL is
+  // csendben eltűnik, amint a GPS stabilizálódott (usable, nem reacquiring)
+  // ÉS a route-progress motor szerint NINCS (már/még) megerősített
+  // OFF_ROUTE — ez ugyanaz a három, MÁR MEGLÉVŐ jelző, amit az automatikus
+  // reroute-effekt is olvas, nincs új GPS-állapotgép.
+  useEffect(() => {
+    if (
+      shouldAutoClearTransitGpsLossConfirmation(
+        transitGpsLossConfirmation.pending,
+        gpsFixUsable,
+        gpsReacquiring,
+        routeProgress.offRouteStatus,
+      )
+    ) {
+      transitGpsLossConfirmationRef.current = resolveTransitGpsLossConfirmation();
+      setTransitGpsLossConfirmation(transitGpsLossConfirmationRef.current);
+    }
+  }, [transitGpsLossConfirmation.pending, gpsFixUsable, gpsReacquiring, routeProgress.offRouteStatus]);
 
   // ETA V2: navigáció közben a lokális route-progress motor a GPS-pozícióból
   // számolja a hátralévő geometriai arányt, ebből a hátralévő időt és ETA-t.
@@ -1323,6 +1432,15 @@ function RankedJourneyCard({
     activeLeg?.mode === "TRANSIT" &&
     isRailGuidedTransitMode(activeLeg.transitMode) &&
     classifyTransitGeometryConfidence(activeLegRange?.legCoordinates ?? null) === "WEAK";
+  // TRANSIT GPS LOSS SPRINT (2026-09-21) — a GPS-tick effektek (lentebb, a
+  // gpsFixGateRef mellett) MÁR ekkor futnak le, amikor ez a render-szintű
+  // változó MÉG nem létezne closure-ként — ezért egy reffel tükrözzük
+  // (UGYANAZ a minta, mint navigationModeRef/hasDisplayedJourneyRef-nél
+  // fent): a ref MINDEN renderben frissül, az effektek MINDIG a legfrissebb
+  // értéket olvassák, a hooks deklarációs sorrendje nem számít (React az
+  // effekteket a TELJES render-commit UTÁN futtatja).
+  activeBoardedTransitModeRef.current =
+    activeLeg?.mode === "TRANSIT" && isBoardedPhase ? activeLeg.transitMode ?? null : null;
   const activeLegStopProgress = useMemo(
     () =>
       activeLeg && activeLegRange
@@ -1459,36 +1577,54 @@ function RankedJourneyCard({
   // megerősített OFF_ROUTE állapotot engedi át. Sikertelen próbálkozás után a
   // 30 mp-es guard-cooldown védi a MOTIS-t a reroute-stormtól; ha továbbra is
   // letértünk, egy későbbi GPS-fix után újra próbálkozhat.
+  //
+  // TRANSIT GPS LOSS SPRINT (2026-09-21) — a döntést render-szinten (NEM az
+  // effekten belül) számoljuk, hogy EGYETLEN shouldStartAutomaticReroute()
+  // hívási hely maradjon a fájlban (lásd navigation-transit-geometry-safety.test.ts
+  // 10. pontja, "változatlanul EGYETLEN reroute-protokollt használ") — a
+  // megerősítő kártya láthatósága (lentebb) is EBBŐL a MÁR kiszámolt
+  // decision-ből származik, nem egy második "mi lenne, ha" hívásból.
+  const automaticRerouteDecision = shouldStartAutomaticReroute(rerouteGuardRef.current, {
+    navigationActive: navigationMode,
+    offRouteStatus: routeProgress.offRouteStatus,
+    hasCurrentPosition: currentPosition !== null && gpsFixUsable,
+    hasDestination: originalDestination !== null,
+    nowMs: Date.now(),
+    // SAFETY SPRINT (2026-09-17) — gyenge, sínhez kötött transit-geometria
+    // esetén a geometria-eltérés önmagában nem lehet automatikus
+    // újratervezés alapja (lásd rerouteGuard.ts). A globális 50 m-es
+    // OFF_ROUTE küszöb és a WALK reroute-viselkedés VÁLTOZATLAN.
+    transitGeometryUncertain: activeLegTransitGeometryUncertain,
+    // TRANSIT STATE CONTINUITY + GPS REACQUISITION SPRINT (2026-09-18) —
+    // egy LOST periódus utáni, még nem stabil GPS-fix (lásd
+    // gpsFixGate.ts isGpsReacquiring()) SOSEM lehet automatikus reroute
+    // alapja — UGYANAZ a FÜGGETLEN blokkoló elv, mint fent
+    // transitGeometryUncertain-nél. A globális OFF_ROUTE-küszöb és a
+    // WALK reroute-viselkedés VÁLTOZATLAN (routeNavigationPosition fent
+    // már null-t ad ebben az ablakban, ez itt a plusz védelmi réteg).
+    gpsReacquiring,
+    // SPRINT 8.1 (FOREGROUND REACQUISITION, 2026-09-18) — amíg a hidden->
+    // visible átmenet utáni recovery-ciklus folyamatban van (WAITING_FOR_
+    // FRESH_GPS/REACQUIRING), auto-reroute TILOS, EXPLICIT, jól naplózható
+    // reason-nel (spec 8. pont) — a globális OFF_ROUTE-küszöb és a
+    // gpsReacquiring-guard VÁLTOZATLAN, ez egy plusz védelmi réteg.
+    foregroundRecoveryActive: isForegroundRecoveryActive(foregroundRecoveryPhase),
+    // SPRINT 8.2 — restore-recovery (storage-ból helyreállított session,
+    // MÉG nincs stabil friss GPS) is FÜGGETLEN, plusz blokkoló feltétel.
+    restoreRecoveryActive: isForegroundRecoveryActive(restoreRecoveryPhase),
+    // TRANSIT GPS LOSS SPRINT (2026-09-21) — egy transit-legen történt GPS
+    // LOST utáni, még megválaszolatlan megerősítő kérdés FÜGGETLENÜL
+    // blokkolja az automatikus reroute-ot, még megerősített OFF_ROUTE
+    // esetén is (lásd transitGpsLossConfirmation.ts). A felhasználó "Nem"
+    // válasza (handleTransitGpsLossDecline lent) ezt false-ra állítja,
+    // ami újra futtatja ezt az effektet, és PONTOSAN egy reroute-kísérletet
+    // enged át (a MEGLÉVŐ in-flight/cooldown guard továbbra is védi a
+    // MOTIS-t egy esetleges reroute-stormtól).
+    transitGpsLossAwaitingConfirmation: transitGpsLossConfirmation.pending,
+  });
+
   useEffect(() => {
-    const decision = shouldStartAutomaticReroute(rerouteGuardRef.current, {
-      navigationActive: navigationMode,
-      offRouteStatus: routeProgress.offRouteStatus,
-      hasCurrentPosition: currentPosition !== null && gpsFixUsable,
-      hasDestination: originalDestination !== null,
-      nowMs: Date.now(),
-      // SAFETY SPRINT (2026-09-17) — gyenge, sínhez kötött transit-geometria
-      // esetén a geometria-eltérés önmagában nem lehet automatikus
-      // újratervezés alapja (lásd rerouteGuard.ts). A globális 50 m-es
-      // OFF_ROUTE küszöb és a WALK reroute-viselkedés VÁLTOZATLAN.
-      transitGeometryUncertain: activeLegTransitGeometryUncertain,
-      // TRANSIT STATE CONTINUITY + GPS REACQUISITION SPRINT (2026-09-18) —
-      // egy LOST periódus utáni, még nem stabil GPS-fix (lásd
-      // gpsFixGate.ts isGpsReacquiring()) SOSEM lehet automatikus reroute
-      // alapja — UGYANAZ a FÜGGETLEN blokkoló elv, mint fent
-      // transitGeometryUncertain-nél. A globális OFF_ROUTE-küszöb és a
-      // WALK reroute-viselkedés VÁLTOZATLAN (routeNavigationPosition fent
-      // már null-t ad ebben az ablakban, ez itt a plusz védelmi réteg).
-      gpsReacquiring,
-      // SPRINT 8.1 (FOREGROUND REACQUISITION, 2026-09-18) — amíg a hidden->
-      // visible átmenet utáni recovery-ciklus folyamatban van (WAITING_FOR_
-      // FRESH_GPS/REACQUIRING), auto-reroute TILOS, EXPLICIT, jól naplózható
-      // reason-nel (spec 8. pont) — a globális OFF_ROUTE-küszöb és a
-      // gpsReacquiring-guard VÁLTOZATLAN, ez egy plusz védelmi réteg.
-      foregroundRecoveryActive: isForegroundRecoveryActive(foregroundRecoveryPhase),
-      // SPRINT 8.2 — restore-recovery (storage-ból helyreállított session,
-      // MÉG nincs stabil friss GPS) is FÜGGETLEN, plusz blokkoló feltétel.
-      restoreRecoveryActive: isForegroundRecoveryActive(restoreRecoveryPhase),
-    });
+    const decision = automaticRerouteDecision;
     if (!decision.shouldReroute || !currentPosition || !originalDestination) return;
 
     const sessionId = rerouteSessionRef.current;
@@ -1548,7 +1684,43 @@ function RankedJourneyCard({
     originalDestination?.name,
     originalDestination?.lat,
     originalDestination?.lon,
+    transitGpsLossConfirmation.pending,
   ]);
+
+  // TRANSIT GPS LOSS SPRINT (2026-09-21) — a megerősítő kártya PONTOSAN
+  // akkor jelenik meg, ha a FENTI, MÁR kiszámolt automaticRerouteDecision
+  // KIZÁRÓLAG a pending transit-megerősítés miatt blokkolt (minden KORÁBBI,
+  // precedenciában előrébb álló feltétel — transitGeometryUncertain/
+  // gpsReacquiring/foregroundRecoveryActive/restoreRecoveryActive — tehát
+  // MÁR átment, lásd rerouteGuard.ts precedencia-sorrendjét). Nincs második
+  // shouldStartAutomaticReroute() hívás — EGYETLEN döntésből származik mind
+  // a tényleges reroute-indítás, mind a kártya láthatósága.
+  const transitGpsLossConfirmationVisible =
+    transitGpsLossConfirmation.pending &&
+    (automaticRerouteDecision.shouldReroute ||
+      automaticRerouteDecision.reason === "TRANSIT_GPS_LOSS_AWAITING_CONFIRMATION");
+
+  // IGEN — "még mindig a járművön vagyok": az eredeti journey/active leg
+  // MARAD, a routeProgress motor OFF_ROUTE-bizonyítéka törlődik (force-reset
+  // a resetToken increment-jével), a pending kérdés lezárul. NINCS
+  // setDisplayedJourney hívás, NINCS /plan kérés.
+  const handleTransitGpsLossConfirm = () => {
+    transitGpsLossConfirmationRef.current = resolveTransitGpsLossConfirmation();
+    setTransitGpsLossConfirmation(transitGpsLossConfirmationRef.current);
+    setRouteProgressResetToken((token) => token + 1);
+    rerouteGuardRef.current = resetRerouteGuard();
+    setAutomaticRerouteStatus("IDLE");
+    setAutomaticRerouteMessage(null);
+  };
+
+  // NEM — "már nem vagyok a járművön": a pending kérdés lezárul, a FENTI
+  // effekt a KÖVETKEZŐ rendernél (transitGpsLossConfirmation.pending: false)
+  // a MEGLÉVŐ guard-feltételek szerint pontosan egy reroute-kísérletet
+  // engedélyez az aktuális usable GPS-ről — nincs második/duplikált fetch.
+  const handleTransitGpsLossDecline = () => {
+    transitGpsLossConfirmationRef.current = resolveTransitGpsLossConfirmation();
+    setTransitGpsLossConfirmation(transitGpsLossConfirmationRef.current);
+  };
 
   // LIVE TRANSIT REALTIME REFRESH (Sprint 7.2, 2026-09-16) — a hívó (itt)
   // építi a lekérdezési kontextust a MÁR MEGLÉVŐ displayedJourney saját
@@ -1962,7 +2134,7 @@ function RankedJourneyCard({
               className={mapFullscreen ? "h-full w-full" : "h-[300px] w-full rounded border border-gray-200 sm:h-[360px] md:h-[450px]"}
               followMode={followMode}
               navigationZoom={16}
-              onUserGestureCancelFollow={() => setFollowMode(false)}
+              onUserGestureCancelFollow={handleUserGestureCancelFollow}
             />
 
             {navigationMode && navigationEta && (
@@ -1978,7 +2150,7 @@ function RankedJourneyCard({
               </div>
             )}
 
-            {navigationMode && routeProgress.offRouteStatus === "OFF_ROUTE" && (
+            {navigationMode && routeProgress.offRouteStatus === "OFF_ROUTE" && !transitGpsLossConfirmationVisible && (
               <div
                 role="status"
                 aria-live="polite"
@@ -1993,6 +2165,35 @@ function RankedJourneyCard({
                     : automaticRerouteStatus === "FAILED"
                       ? automaticRerouteMessage ?? "Az automatikus újratervezés most nem sikerült."
                       : "Az aktuális helyzeted alapján már nem az útvonalon haladsz."}
+                </div>
+              </div>
+            )}
+
+            {/* TRANSIT GPS LOSS SPRINT (2026-09-21) — nyugodt, nem-modális,
+                nem villogó megerősítő kártya (valódi <button type="button">
+                elemek, nincs auto-fókusz) — KIZÁRÓLAG akkor jelenik meg, ha
+                egy transit-legen történt GPS LOST utáni deviation egyébként
+                automatikus reroute-ot indítana (lásd
+                transitGpsLossConfirmationVisible). Amíg látszik, a FENTI
+                OFF_ROUTE banner elnyomva, hogy ne jelenjen meg egyszerre két,
+                egymásnak ellentmondó üzenet. */}
+            {navigationMode && transitGpsLossConfirmationVisible && (
+              <div
+                role="status"
+                aria-live="polite"
+                className="absolute left-1/2 top-[4.25rem] z-20 w-[calc(100%-1.5rem)] max-w-sm -translate-x-1/2 rounded-xl border border-amber-300 bg-amber-50/95 px-4 py-3 text-center shadow-lg backdrop-blur"
+              >
+                <div className="text-sm font-bold text-amber-950">
+                  {transitGpsLossQuestionText(transitGpsLossConfirmation.transitMode)}
+                </div>
+                <div className="mt-0.5 text-xs leading-snug text-amber-900">A helyzeted egy ideig nem volt elérhető.</div>
+                <div className="mt-2 flex justify-center gap-2">
+                  <button type="button" onClick={handleTransitGpsLossConfirm} className="btn-primary text-xs shadow">
+                    Igen
+                  </button>
+                  <button type="button" onClick={handleTransitGpsLossDecline} className="btn-secondary text-xs shadow">
+                    Nem
+                  </button>
                 </div>
               </div>
             )}
@@ -2198,7 +2399,15 @@ function RankedJourneyCard({
                   </span>
                 )}
                 {navigationMode && !followMode && (
-                  <button type="button" onClick={() => setFollowMode(true)} className="btn-primary text-xs shadow">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      // Explicit recenter — azonnali follow + timer cancel (spec 3. pont).
+                      followResumeTimerRef.current!.cancel();
+                      setFollowMode(true);
+                    }}
+                    className="btn-primary text-xs shadow"
+                  >
                     📍 Kövesd a helyzetem
                   </button>
                 )}
