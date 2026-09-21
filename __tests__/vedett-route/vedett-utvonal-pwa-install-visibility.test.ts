@@ -58,8 +58,14 @@ describe("SZUPERSZEDÁLT (3. kör, 2026-09-21) — ez a describe-blokk a2706ff h
 });
 
 describe("5/6/7/8) Android/iOS CTA — nincs kizárólag beforeinstallprompt-hoz kötve", () => {
-  test("Android: CTA prompt NÉLKÜL is renderel (fallback szöveg), NEM tűnik el az egész install lehetőség", () => {
-    assert.match(installSrc, /\{platform === "android" && !deferredPrompt && \(/);
+  // 7. kori spec-valtozas (2026-09-21): a korabbi allitas (a CTA prompt
+  // NELKUL is renderel egy fallback-szoveget) TEVES installalhatosagot
+  // sugallt, ezert a felhasznalo explicit keresere eltavolitottuk - lasd
+  // vedett-utvonal-pwa-install-cta-reliability.test.ts "3-4" describe
+  // blokkjat a reszletes uj elvarasert.
+  test("Android: CTA prompt NÉLKÜL a TELJES install lehetőség rejtve marad (nincs félrevezető fallback szöveg)", () => {
+    assert.doesNotMatch(installSrc, /\{platform === "android" && !deferredPrompt && \(/);
+    assert.match(installSrc, /androidAwaitingPrompt = platform === "android" && deferredPrompt === null/);
   });
 
   test("Android: van deferredPrompt esetén natív prompt() az explicit CTA-ból", () => {

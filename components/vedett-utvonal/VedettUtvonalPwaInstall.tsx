@@ -148,16 +148,24 @@ export default function VedettUtvonalPwaInstall() {
     setDeferredPrompt(null);
   }
 
-  // Desktopon (platform === "other") nincs mobil install-flow. Ez a HAROM
-  // feltétel az EGYETLEN, ami elrejtheti a CTA-t - nincs display-mode/
+  // INSTALL UX HOTFIX (2026-09-21, 5. kor) - Androidon NEM mutatunk
+  // bongeszo-menus instrukciot: az VALODI installalhatosagot hazudna,
+  // amig nincs elkapott beforeinstallprompt. Ezert az "android-var-a-
+  // beforeinstallprompt-ra" allapot IS elrejti a teljes CTA-t (csak a
+  // debug panel marad lathato ?debugPwa=1 mellett) - a komponens a
+  // hattterben tovabbra is figyeli az esemenyt, es amint megerkezik,
+  // ujrarenderel es megjelenik a natiiv gomb. Nincs display-mode/
   // referrer alapu negyedik ag (lasd a fenti ROOT CAUSE magyarazatot).
+  const androidAwaitingPrompt = platform === "android" && deferredPrompt === null;
   const hideReason: string | null = installed
     ? "appinstalled-event"
     : dismissed
       ? "dismissed-cooldown"
       : platform === "other"
         ? "desktop-platform"
-        : null;
+        : androidAwaitingPrompt
+          ? "android-awaiting-beforeinstallprompt"
+          : null;
   const ctaVisible = hideReason === null;
 
   const debugPanel = debugEnabled && debugSnapshot ? (
@@ -184,7 +192,7 @@ export default function VedettUtvonalPwaInstall() {
       <div className="border-b border-gray-100 bg-sni-brand-teal/5 px-4 py-3">
         <div className="flex items-center justify-between gap-3">
           <p className="text-sm font-medium text-gray-800">
-            Védett Útvonal telepítése
+            Telepítsd külön alkalmazásként
           </p>
           <button
             type="button"
@@ -202,14 +210,8 @@ export default function VedettUtvonalPwaInstall() {
             onClick={handleAndroidInstall}
             className="mt-2 rounded-lg bg-sni-brand-teal px-4 py-2 text-sm font-bold text-white hover:opacity-90"
           >
-            Telepítem
+            Védett Útvonal telepítése
           </button>
-        )}
-
-        {platform === "android" && !deferredPrompt && (
-          <p className="mt-2 text-xs text-gray-500">
-            Telepítéshez nyisd meg a böngésző menüjét, majd válaszd az „Alkalmazás telepítése” vagy „Hozzáadás a kezdőképernyőhöz” lehetőséget.
-          </p>
         )}
 
         {platform === "ios" && !showIosGuide && (

@@ -40,10 +40,22 @@ describe("1-2) Install component mounted mindket install surface-en", () => {
   });
 });
 
-describe("3-4) Bongeszo, beforeinstallprompt-tol fuggetlenul -> CTA SHOW", () => {
-  test("3) beforeinstallprompt NELKUL is renderel a CTA (Android fallback szoveg)", () => {
-    assert.match(installSrc, /\{platform === "android" && !deferredPrompt && \(/);
-    assert.match(installSrc, /Telepítéshez nyisd meg a böngésző menüjét/);
+describe("3-4) Android beforeinstallprompt allapotok - 7. kor (2026-09-21): NINCS tobbe bongeszo-menus fallback-szoveg", () => {
+  // 7. kori spec-valtozas: a korabbi "3-4" describe cime + 3. teszt azt
+  // allitotta, hogy a CTA beforeinstallprompt NELKUL is renderel egy
+  // Android fallback-szoveget ("Telepiteshez nyisd meg a bongeszo
+  // menujet..."). A felhasznalo 7. koros, explicit specifikacioja szerint
+  // ez a fallback-szoveg TEVES installalhatosagot sugallt, ezert
+  // ELTAVOLITASRA KERULT: Androidon, amig nincs elkapott
+  // beforeinstallprompt, a TELJES CTA (nem csak a fallback-szoveg) rejtve
+  // marad (hideReason "android-awaiting-beforeinstallprompt"), es csak a
+  // valodi esemeny beerkezese utan jelenik meg a natiiv "Vedett Utvonal
+  // telepitese" gomb.
+  test("3) Android + beforeinstallprompt NELKUL -> a TELJES CTA rejtve van, nincs bongeszo-menus fallback-szoveg", () => {
+    const installCode = stripLineComments(installSrc);
+    assert.doesNotMatch(installCode, /Telepítéshez nyisd meg a böngésző menüjét/);
+    assert.match(installSrc, /const androidAwaitingPrompt = platform === "android" && deferredPrompt === null;/);
+    assert.match(installSrc, /"android-awaiting-beforeinstallprompt"/);
   });
 
   test("4) beforeinstallprompt ESETEN a CTA a natiiv prompt()-ot ajanlja fel", () => {
@@ -51,9 +63,13 @@ describe("3-4) Bongeszo, beforeinstallprompt-tol fuggetlenul -> CTA SHOW", () =>
     assert.match(installSrc, /onClick=\{handleAndroidInstall\}/);
   });
 
-  test("a CTA lathatosaga a render logikaban NEM fugg deferredPrompt-tol (csak installed/dismissed/platform dont)", () => {
+  test("a CTA lathatosaga Androidon EXPLICIT fugg a deferredPrompt allapottol (androidAwaitingPrompt), iOS/other agakon nem valtozott", () => {
+    // 7. kor elotti allitas ("NEM fugg deferredPrompt-tol") mar NEM igaz
+    // Androidra: a felhasznalo kifejezetten kerte, hogy Androidon a
+    // deferredPrompt hianya rejtse el a teljes CTA-t (lasd a fenti 3.
+    // tesztet es a komponens fejlec-kommentjet, "5. kor" / 2026-09-21).
     assert.match(installSrc, /const hideReason: string \| null = installed/);
-    assert.doesNotMatch(installSrc, /const ctaVisible = .*deferredPrompt/);
+    assert.match(installSrc, /androidAwaitingPrompt = platform === "android" && deferredPrompt === null/);
   });
 });
 
