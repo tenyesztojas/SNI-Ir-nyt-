@@ -4,7 +4,7 @@
   "short_name": "Védett Útvonal",
   "description": "Akadálymentes, kísért tömegközlekedési útvonaltervező és navigáció.",
   "start_url": "/vedett-utvonal/app",
-  "scope": "/vedett-utvonal/",
+  "scope": "/vedett-utvonal",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#f3f4f6",

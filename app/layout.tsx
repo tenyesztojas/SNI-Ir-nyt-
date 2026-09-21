@@ -66,7 +66,7 @@ export default function RootLayout({
           suppressHydrationWarning
           dangerouslySetInnerHTML={{
             __html: isVedettUtvonalRoute
-              ? `if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('/vedett-utvonal-sw.js',{scope:'/vedett-utvonal/'}))}`
+              ? `if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('/vedett-utvonal-sw.js',{scope:'/vedett-utvonal'}))}`
               : `if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js'))}`,
           }}
         />
