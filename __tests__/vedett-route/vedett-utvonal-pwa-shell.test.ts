@@ -164,8 +164,14 @@ describe("7) Analytics — a MEGLÉVŐ GA4-et (gtag) használja, nincs új rends
 });
 
 describe("8) Install UX — Android beforeinstallprompt reuse, iOS guide reuse (nincs hamis programmatic install), standalone-ban nincs prompt", () => {
-  test("standalone-ban a Védett Útvonal install-CTA nem renderel semmit", () => {
-    assert.match(installSrc, /if \(isStandaloneDisplay\(\)\) \{\s*\n\s*setInstalled\(true\);/);
+  test("standalone-ban (SAJÁT, üres-referrer indítás esetén) a Védett Útvonal install-CTA nem renderel semmit", () => {
+    // PWA INSTALL VISIBILITY HOTFIX (2026-09-21) — a guard finomodott: a
+    // puszta isStandaloneDisplay() már NEM elég "telepítve" jelzésnek,
+    // mert az a VédettSarok PWA-ból induló handoffnál is igaz lenne (lásd
+    // vedett-utvonal-pwa-install-visibility.test.ts "ROOT CAUSE" szakaszát
+    // a teljes indoklásért). A SAJÁT (üres document.referrer) standalone
+    // indítás esetén VÁLTOZATLANUL nem jelenik meg semmi.
+    assert.match(installSrc, /if \(isStandaloneDisplay\(\) && document\.referrer === ""\) \{\s*\n\s*setInstalled\(true\);/);
   });
 
   test("Android: beforeinstallprompt elfogása in-memory state-ben, natív prompt csak explicit CTA-ból", () => {

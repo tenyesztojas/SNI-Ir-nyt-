@@ -53,7 +53,11 @@ export default function VedettUtvonalPwaInstall() {
   const [showIosGuide, setShowIosGuide] = useState(false);
 
   useEffect(() => {
-    if (isStandaloneDisplay()) {
+    // Csak a SAJÁT (Védett Útvonal) standalone indítást tekintjük "már
+    // telepítve" állapotnak: a display-mode önmagában nem különbözteti meg,
+    // hogy a jelenlegi standalone ablak a Védett Útvonal PWA-ként indult-e,
+    // vagy a VédettSarok PWA-ból navigáltunk ide (lásd a fenti kommentet).
+    if (isStandaloneDisplay() && document.referrer === "") {
       setInstalled(true);
       return;
     }
