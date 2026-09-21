@@ -124,7 +124,7 @@ export default function VedettUtvonalPwaInstall() {
 
       {platform === "android" && !deferredPrompt && (
         <p className="mt-2 text-xs text-gray-500">
-          A böngésző menüjében válaszd az "Alkalmazás telepítése" vagy "Hozzáadás a kezdőképernyőhöz" lehetőséget.
+          A böngésző menüjében válaszd az „Alkalmazás telepítése” vagy „Hozzáadás a kezdőképernyőhöz” lehetőséget.
         </p>
       )}
 
@@ -142,7 +142,7 @@ export default function VedettUtvonalPwaInstall() {
         <ol className="mt-2 space-y-1 text-xs text-gray-600">
           <li>1. Koppints a Megosztás ikonra a Safari eszköztárán.</li>
           <li>2. Görgess le, majd koppints: Hozzáadás a Főképernyőhöz.</li>
-          <li>3. Koppints a "Hozzáadás" gombra — kész!</li>
+          <li>3. Koppints a „Hozzáadás” gombra — kész!</li>
         </ol>
       )}
     </div>
