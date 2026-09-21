@@ -1,21 +1,48 @@
 "use client";
 
-// VÉDETT ÚTVONAL NAVIGATION-ONLY PWA sprint (2026-09-21), 6/9/10. pont —
-// KÜLÖN app-identitású (saját manifest, saját ikon) install-CTA a Védett
-// Útvonal PWA shellhez. UGYANAZT A MINTÁT követi, mint a MEGLÉVŐ sitewide
-// components/PWAInstallBanner.tsx (platform-detekció, beforeinstallprompt
-// elfogás in-memory state-ben, iOS instrukciós modal, nincs hamis
-// programmatic install iOS-en) — nem importál onnan kódot, mert a banner
-// forrása szó szerinti regex-tesztekkel védett (__tests__/vedett-route/
-// pwa-install-ux.test.ts), és egy megosztott modulba emelés megbontaná
-// azokat a teszteket. Ez SZÁNDÉKOS, dokumentált kompromisszum — lásd a
-// sprint zárójelentését.
+// VEDETT UTVONAL PWA INSTALL CTA - 3. kor, "megbizhatoan felfedezheto"
+// hotfix (2026-09-21).
 //
-// NINCS második install "framework": nincs saját state-management-
-// absztrakció, csak ugyanaz az egyszerű useState+useEffect minta, KÜLÖN
-// localStorage kulccsal (nem ütközik a sitewide bannerrel).
+// ROOT CAUSE a korabbi (a2706ff) verzioban: a CTA "mar telepitve" allapotat
+// egy isStandaloneDisplay() && document.referrer === "" heurisztika
+// dontotte el. Ez KRITIKUSAN HIBAS feltevesre epult: a display-mode
+// standalone media query CSAK azt mondja meg, hogy a jelenlegi ABLAK/tab
+// standalone chrome-ban fut-e - azt NEM tudja megkulonboztetni, hogy EZ A
+// KONKRET manifest (Vedett Utvonal) lett-e telepitve, vagy egy MASIK,
+// ugyanazon origin alol telepitett PWA (VedettSarok) ablaka navigalt ide.
+// A document.referrer tovabba NEM megbizhato jelzes app-identitasra (a
+// spec kifejezetten kizarja ennek hasznalatat erre a celra).
+//
+// EZERT: ez a fajl mostantol NEM probal "mar telepitve Vedett Utvonalkent"
+// allapotot kitalalni display-mode/referrer alapjan. A CTA lathatosaga
+// ROUTE/PLATFORM alapu (a hivo oldal donti el, hogy egyaltalan mountolja-e
+// - lasd app/vedett-utvonal/page.tsx es VedettUtvonalPwaShell.tsx), es
+// KIZAROLAG ket, VALODI, megbizhato jelzes rejtheti el utana:
+//   1) a felhasznalo explicit "Most nem"-et nyomott (localStorage cooldown)
+//   2) a bongeszo TENYLEGESEN kivaltotta az "appinstalled" esemenyt EBBEN
+//      a session-ben (ez egy valodi, a platform altal garantalt esemeny,
+//      NEM egy kitalalt detekcio).
+// Ha egy mar ONALLOAN telepitett Vedett Utvonal PWA-ban a CTA redundansan
+// megjelenne, az szandekos kompromisszum (lasd a hotfix specifikaciojat):
+// jobb egy redundans CTA, mint hogy egy meg nem telepitett felhasznalo
+// SOHA ne lassa a telepitesi lehetoseget.
+//
+// UGYANAZT A MINTAT koveti, mint a MEGLEVO sitewide
+// components/PWAInstallBanner.tsx (platform-detekcio, beforeinstallprompt
+// elfogas in-memory state-ben, iOS instrukcios modal, nincs hamis
+// programmatic install iOS-en) - nem importal onnan kodot, mert a banner
+// forrasa szo szerinti regex-tesztekkel vedett
+// (__tests__/vedett-route/pwa-install-ux.test.ts).
+//
+// DIAGNOSZTIKA (?debugPwa=1): a hotfix spec kifejezetten kerte, hogy a
+// kovetkezo production-hiba-jelentes ELOTT legyen egy production-safe mod
+// bebizonyitani, mi tortenik valodi telefonon. A panel ugyanazt az
+// allapotot mutatja, amit a CTA tenylegesen hasznal a dontesehez - nincs
+// kulon, parhuzamos diagnosztikai rendszer. Csak ?debugPwa=1 eseten
+// jelenik meg, nem tartalmaz erzekeny adatot (nincs GPS/Supabase/PII).
 
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { isStandaloneDisplay } from "./VedettUtvonalPwaAnalytics";
 
 type Platform = "android" | "ios" | "other";
@@ -45,27 +72,52 @@ function isDismissedWithinCooldown(): boolean {
   return Date.now() - parsed < DISMISS_COOLDOWN_MS;
 }
 
+function getActiveManifestHref(): string | null {
+  if (typeof document === "undefined") return null;
+  return document.querySelector('link[rel="manifest"]')?.getAttribute("href") ?? null;
+}
+
 export default function VedettUtvonalPwaInstall() {
+  const pathname = usePathname();
   const [platform, setPlatform] = useState<Platform>("other");
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  // "installed" MOSTANTOL kizarolag a valodi, bongeszo altal garantalt
+  // "appinstalled" esemenybol szarmazhat - lasd a fenti ROOT CAUSE
+  // magyarazatot arra, hogy miert tunt el ez korabban a display-mode/
+  // referrer heurisztika miatt.
   const [installed, setInstalled] = useState(false);
   const [dismissed, setDismissed] = useState(false);
   const [showIosGuide, setShowIosGuide] = useState(false);
+  const [debugEnabled, setDebugEnabled] = useState(false);
+  const [debugSnapshot, setDebugSnapshot] = useState<{
+    standalone: boolean;
+    navigatorStandalone: boolean | "n/a";
+    referrer: string;
+    manifestHref: string | null;
+    userAgent: string;
+  } | null>(null);
 
   useEffect(() => {
-    // Csak a SAJÁT (Védett Útvonal) standalone indítást tekintjük "már
-    // telepítve" állapotnak: a display-mode önmagában nem különbözteti meg,
-    // hogy a jelenlegi standalone ablak a Védett Útvonal PWA-ként indult-e,
-    // vagy a VédettSarok PWA-ból navigáltunk ide (lásd a fenti kommentet).
-    if (isStandaloneDisplay() && document.referrer === "") {
-      setInstalled(true);
-      return;
-    }
+    if (typeof window === "undefined") return;
+    setDebugEnabled(new URLSearchParams(window.location.search).get("debugPwa") === "1");
+    setDebugSnapshot({
+      standalone: isStandaloneDisplay(),
+      navigatorStandalone:
+        "standalone" in window.navigator
+          ? (window.navigator as Navigator & { standalone?: boolean }).standalone === true
+          : "n/a",
+      referrer: document.referrer,
+      manifestHref: getActiveManifestHref(),
+      userAgent: window.navigator.userAgent,
+    });
+  }, [pathname]);
+
+  useEffect(() => {
     if (isDismissedWithinCooldown()) {
       setDismissed(true);
-      return;
+    } else {
+      setPlatform(detectPlatform());
     }
-    setPlatform(detectPlatform());
 
     const handler = (e: Event) => {
       e.preventDefault();
@@ -96,59 +148,89 @@ export default function VedettUtvonalPwaInstall() {
     setDeferredPrompt(null);
   }
 
-  // Desktopon (platform === "other") nincs mobil install-flow — nem
-  // renderelünk semmit (ugyanaz az elv, mint a sitewide bannerben).
-  if (installed || dismissed || platform === "other") return null;
+  // Desktopon (platform === "other") nincs mobil install-flow. Ez a HAROM
+  // feltétel az EGYETLEN, ami elrejtheti a CTA-t - nincs display-mode/
+  // referrer alapu negyedik ag (lasd a fenti ROOT CAUSE magyarazatot).
+  const hideReason: string | null = installed
+    ? "appinstalled-event"
+    : dismissed
+      ? "dismissed-cooldown"
+      : platform === "other"
+        ? "desktop-platform"
+        : null;
+  const ctaVisible = hideReason === null;
+
+  const debugPanel = debugEnabled && debugSnapshot ? (
+    <div className="mx-4 mt-2 rounded-lg border border-dashed border-gray-300 bg-gray-50 p-3 font-mono text-[11px] leading-relaxed text-gray-700">
+      <p className="font-bold text-gray-900">Vedett Utvonal PWA debug (?debugPwa=1)</p>
+      <p>pathname: {pathname}</p>
+      <p>display-mode standalone: {String(debugSnapshot.standalone)}</p>
+      <p>navigator.standalone: {String(debugSnapshot.navigatorStandalone)}</p>
+      <p>document.referrer: {debugSnapshot.referrer || "(empty)"}</p>
+      <p>beforeinstallprompt captured: {String(deferredPrompt !== null)}</p>
+      <p>install component mounted: true</p>
+      <p>manifest href: {debugSnapshot.manifestHref ?? "(none found)"}</p>
+      <p>user agent: {debugSnapshot.userAgent}</p>
+      <p>detected platform: {platform}</p>
+      <p>install CTA decision: {ctaVisible ? "SHOW" : "HIDE"}</p>
+      <p>hide reason: {hideReason ?? "n/a"}</p>
+    </div>
+  ) : null;
+
+  if (!ctaVisible) return debugPanel;
 
   return (
-    <div className="border-b border-gray-100 bg-sni-brand-teal/5 px-4 py-3">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-sm font-medium text-gray-800">
-          Telepítsd a Védett Útvonalat külön alkalmazásként
-        </p>
-        <button
-          type="button"
-          onClick={dismiss}
-          aria-label="Most nem"
-          className="text-xs font-semibold text-gray-400 hover:text-gray-600"
-        >
-          Most nem
-        </button>
+    <>
+      <div className="border-b border-gray-100 bg-sni-brand-teal/5 px-4 py-3">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm font-medium text-gray-800">
+            Védett Útvonal telepítése
+          </p>
+          <button
+            type="button"
+            onClick={dismiss}
+            aria-label="Most nem"
+            className="text-xs font-semibold text-gray-400 hover:text-gray-600"
+          >
+            Most nem
+          </button>
+        </div>
+
+        {platform === "android" && deferredPrompt && (
+          <button
+            type="button"
+            onClick={handleAndroidInstall}
+            className="mt-2 rounded-lg bg-sni-brand-teal px-4 py-2 text-sm font-bold text-white hover:opacity-90"
+          >
+            Telepítem
+          </button>
+        )}
+
+        {platform === "android" && !deferredPrompt && (
+          <p className="mt-2 text-xs text-gray-500">
+            Telepítéshez nyisd meg a böngésző menüjét, majd válaszd az „Alkalmazás telepítése” vagy „Hozzáadás a kezdőképernyőhöz” lehetőséget.
+          </p>
+        )}
+
+        {platform === "ios" && !showIosGuide && (
+          <button
+            type="button"
+            onClick={() => setShowIosGuide(true)}
+            className="mt-2 rounded-lg bg-sni-brand-teal px-4 py-2 text-sm font-bold text-white hover:opacity-90"
+          >
+            Megmutatjuk, hogyan
+          </button>
+        )}
+
+        {platform === "ios" && showIosGuide && (
+          <ol className="mt-2 space-y-1 text-xs text-gray-600">
+            <li>1. Koppints a Megosztás ikonra a Safari eszköztárán.</li>
+            <li>2. Görgess le, majd koppints: Hozzáadás a Főképernyőhöz.</li>
+            <li>3. Koppints a „Hozzáadás” gombra — kész!</li>
+          </ol>
+        )}
       </div>
-
-      {platform === "android" && deferredPrompt && (
-        <button
-          type="button"
-          onClick={handleAndroidInstall}
-          className="mt-2 rounded-lg bg-sni-brand-teal px-4 py-2 text-sm font-bold text-white hover:opacity-90"
-        >
-          Telepítem
-        </button>
-      )}
-
-      {platform === "android" && !deferredPrompt && (
-        <p className="mt-2 text-xs text-gray-500">
-          A böngésző menüjében válaszd az „Alkalmazás telepítése” vagy „Hozzáadás a kezdőképernyőhöz” lehetőséget.
-        </p>
-      )}
-
-      {platform === "ios" && !showIosGuide && (
-        <button
-          type="button"
-          onClick={() => setShowIosGuide(true)}
-          className="mt-2 rounded-lg bg-sni-brand-teal px-4 py-2 text-sm font-bold text-white hover:opacity-90"
-        >
-          Megmutatjuk, hogyan
-        </button>
-      )}
-
-      {platform === "ios" && showIosGuide && (
-        <ol className="mt-2 space-y-1 text-xs text-gray-600">
-          <li>1. Koppints a Megosztás ikonra a Safari eszköztárán.</li>
-          <li>2. Görgess le, majd koppints: Hozzáadás a Főképernyőhöz.</li>
-          <li>3. Koppints a „Hozzáadás” gombra — kész!</li>
-        </ol>
-      )}
-    </div>
+      {debugPanel}
+    </>
   );
 }

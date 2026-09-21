@@ -164,14 +164,18 @@ describe("7) Analytics — a MEGLÉVŐ GA4-et (gtag) használja, nincs új rends
 });
 
 describe("8) Install UX — Android beforeinstallprompt reuse, iOS guide reuse (nincs hamis programmatic install), standalone-ban nincs prompt", () => {
-  test("standalone-ban (SAJÁT, üres-referrer indítás esetén) a Védett Útvonal install-CTA nem renderel semmit", () => {
-    // PWA INSTALL VISIBILITY HOTFIX (2026-09-21) — a guard finomodott: a
-    // puszta isStandaloneDisplay() már NEM elég "telepítve" jelzésnek,
-    // mert az a VédettSarok PWA-ból induló handoffnál is igaz lenne (lásd
-    // vedett-utvonal-pwa-install-visibility.test.ts "ROOT CAUSE" szakaszát
-    // a teljes indoklásért). A SAJÁT (üres document.referrer) standalone
-    // indítás esetén VÁLTOZATLANUL nem jelenik meg semmi.
-    assert.match(installSrc, /if \(isStandaloneDisplay\(\) && document\.referrer === ""\) \{\s*\n\s*setInstalled\(true\);/);
+  test("standalone önmagában NEM elég 'telepítve' jelzésnek (3. körös hotfix, 2026-09-21) — a display-mode/referrer alapú találgatás teljesen eltávolítva", () => {
+    // PWA INSTALL CTA MEGBÍZHATÓSÁGI HOTFIX (2026-09-21, 3. kör) — a
+    // korábbi isStandaloneDisplay()+referrer heurisztika (a2706ff) NEM
+    // tudta megbízhatóan megkülönböztetni a VédettSarok PWA-ból érkező
+    // handoffot a saját Védett Útvonal standalone indítástól (mindkettő
+    // azonos jelet ad), és a spec ezt kifejezetten kizárta app-identity
+    // detekcióként. Az "installed" állapot mostantól KIZÁRÓLAG a valódi,
+    // böngésző által garantált "appinstalled" eseményből származhat —
+    // lásd vedett-utvonal-pwa-install-cta-reliability.test.ts a teljes
+    // regressziós lefedettségért.
+    assert.doesNotMatch(installSrc, /if \(isStandaloneDisplay\(\)[^)]*\)\s*\{/);
+    assert.match(installSrc, /const installedHandler = \(\) => setInstalled\(true\);/);
   });
 
   test("Android: beforeinstallprompt elfogása in-memory state-ben, natív prompt csak explicit CTA-ból", () => {

@@ -51,20 +51,9 @@ describe("D/E) Az install CTA MOSTANTÓL mindkét felületen mountolódik", () =
   });
 });
 
-describe("I/9/10) A ROOT CAUSE javítása — a standalone-guard megkülönbözteti a saját indítást a VédettSarok PWA handoff-tól", () => {
-  test("a guard NEM önmagában isStandaloneDisplay()-re hagyatkozik — a document.referrer üres voltát is megköveteli", () => {
-    assert.match(installSrc, /if \(isStandaloneDisplay\(\) && document\.referrer === ""\) \{\s*\n\s*setInstalled\(true\);/);
-  });
-
-  test("(dokumentált viselkedés) saját Védett Útvonal standalone indítás (üres referrer) -> installed=true, CTA nincs", () => {
-    // Lásd a fenti forrás-assertion: isStandaloneDisplay() && referrer==='' -> installed.
-  });
-
-  test("(dokumentált viselkedés) VédettSarok PWA-ból érkező handoff (standalone, DE nem-üres referrer) -> installed MARAD false, a CTA a többi feltétel (platform/dismissed) szerint dönt", () => {
-    // A guard csak akkor állítja installed=true-ra, ha MINDKÉT feltétel igaz —
-    // nem-üres referrer esetén a `return` nem fut le, a függvény folytatja a
-    // platform-detekciót/beforeinstallprompt feliratkozást, tehát a CTA
-    // renderelődhet (lásd a fenti regex: csak "&&"-es, kétfeltételes ág van).
+describe("SZUPERSZEDÁLT (3. kör, 2026-09-21) — ez a describe-blokk a2706ff heurisztikáját tesztelte, amit a következő production hibajelentés megcáfolt", () => {
+  test("a display-mode/referrer alapú 'installed' találgatás TELJESEN el lett távolítva — lásd vedett-utvonal-pwa-install-cta-reliability.test.ts", () => {
+    assert.doesNotMatch(installSrc, /if \(isStandaloneDisplay\(\)[^)]*\)\s*\{/);
   });
 });
 
