@@ -31,9 +31,14 @@ test("Navigation off-route production integration", async (t) => {
     // megerősítő kártya látszik, ez a banner elnyomva, hogy ne legyen két,
     // egymásnak ellentmondó üzenet egyszerre. Az invariáns (a banner MAGA
     // nem indít fetch/reroute-ot) VÁLTOZATLAN.
+    //
+    // TRANSIT NAVIGATION HOTFIX (2026-09-21, spec 4. pont) — a feltétel
+    // TOVÁBB bővült egy `!activeLegTransitGeometryUncertain` gate-tel: a
+    // banner UGYANAZT a safety döntést hozza, mint a reroute guard (lásd
+    // transit-navigation-hotfix.test.ts).
     const block =
       source.match(
-        /\{navigationMode && routeProgress\.offRouteStatus === "OFF_ROUTE" && !transitGpsLossConfirmationVisible && \([\s\S]*?\n\s*\)\}/,
+        /\{navigationMode && routeProgress\.offRouteStatus === "OFF_ROUTE" && !transitGpsLossConfirmationVisible && !activeLegTransitGeometryUncertain && \([\s\S]*?\n\s*\)\}/,
       )?.[0] ?? "";
     assert.ok(block.length > 0);
     assert.doesNotMatch(block, /fetch\(|router\.|reroute|onClick|setDisplayedJourney/);

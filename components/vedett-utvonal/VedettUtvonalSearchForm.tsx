@@ -2150,7 +2150,18 @@ function RankedJourneyCard({
               </div>
             )}
 
-            {navigationMode && routeProgress.offRouteStatus === "OFF_ROUTE" && !transitGpsLossConfirmationVisible && (
+            {/* TRANSIT NAVIGATION HOTFIX (2026-09-21, spec 4. pont) — a
+                feltétel kiegészült egy `!activeLegTransitGeometryUncertain`
+                gate-tel: az OFF_ROUTE UI-nak UGYANAZT a safety döntést kell
+                hoznia, mint a reroute guard (lásd shouldStartAutomaticReroute()
+                transitGeometryUncertain bemenete fentebb). Egy BOARDED/
+                BOARDED_UNCERTAIN_GEOMETRY sínhez kötött, gyenge geometriájú
+                legnél a geometria-eltérés önmagában SOSEM bizonyítja a
+                letérést — korábban a guard már letiltotta az AUTOMATIKUS
+                reroute-ot, de a "Letértél az útvonalról." szöveg ATTÓL
+                FÜGGETLENÜL, tévesen megjelent (VPS-proven S40/Kelenföld
+                eset). */}
+            {navigationMode && routeProgress.offRouteStatus === "OFF_ROUTE" && !transitGpsLossConfirmationVisible && !activeLegTransitGeometryUncertain && (
               <div
                 role="status"
                 aria-live="polite"

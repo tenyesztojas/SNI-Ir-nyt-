@@ -31,7 +31,7 @@ describe("2) a megerősítő kérdés megjelenik, amikor egyébként automatikus
   test("a kártya JSX-ben transitGpsLossConfirmationVisible mögé van gate-elve, és a MEGLÉVŐ OFF_ROUTE bannert elnyomja (nincs két egymásnak ellentmondó üzenet egyszerre)", () => {
     assert.match(
       src,
-      /\{navigationMode && routeProgress\.offRouteStatus === "OFF_ROUTE" && !transitGpsLossConfirmationVisible && \(/,
+      /\{navigationMode && routeProgress\.offRouteStatus === "OFF_ROUTE" && !transitGpsLossConfirmationVisible && !activeLegTransitGeometryUncertain && \(/,
     );
     assert.match(src, /\{navigationMode && transitGpsLossConfirmationVisible && \(/);
   });

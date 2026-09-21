@@ -136,6 +136,10 @@ function mapLeg(leg: MotisLeg, molBubiRequestActive: boolean): JourneyLeg {
     geometryPrecision: leg.legGeometry?.precision,
     intermediateStops: leg.intermediateStops?.map((s) => ({ name: s.name ?? "Megálló", lat: s.lat, lon: s.lon })),
     routeColor: leg.routeColor,
+    // TRANSIT NAVIGATION HOTFIX (2026-09-21, spec 3. pont) — a raw MOTIS
+    // leg.headsign mező VÁLTOZATLANUL továbbadva (lásd types.ts JourneyLeg
+    // kommentje) — nincs normalizálás/kitalálás.
+    headsign: leg.headsign,
     // Sprint 7.2 (LIVE TRANSIT REALTIME REFRESH) — a raw MOTIS leg stabil
     // identitás-mezői, MINIMÁLISAN megőrizve (lásd types.ts JourneyLeg
     // kommentje). Csak akkor kerülnek kitöltésre, ha a MOTIS válasz

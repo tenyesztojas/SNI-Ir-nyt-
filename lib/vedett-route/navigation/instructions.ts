@@ -75,7 +75,15 @@ function stopCountDetail(leg: JourneyLeg): string | undefined {
 }
 
 function routeLabel(leg: JourneyLeg): string {
-  return leg.routeShortName ?? leg.routeLongName ?? "járat";
+  const base = leg.routeShortName ?? leg.routeLongName ?? "járat";
+  // TRANSIT NAVIGATION HOTFIX (2026-09-21, spec 3. pont) — ha a MOTIS
+  // válasz adott headsignt (jármű célállomás-kijelzője, lásd types.ts
+  // JourneyLeg.headsign kommentje), a járatszám mellé fűzzük ("S40 –
+  // Dombóvár felé"), MINDEN transit módra generikusan (BUS/TRAM/SUBWAY/
+  // RAIL/REGIONAL_RAIL) — nincs mód-specifikus ág. Hiányzó/üres headsign
+  // esetén VÁLTOZATLANUL csak a route name/number marad (biztonságos
+  // fallback, sosem kitalálva).
+  return isNonEmpty(leg.headsign) ? `${base} – ${leg.headsign} felé` : base;
 }
 
 // EGY leg -> 0-3 NavigationInstruction. `precededByTransit` jelzi, hogy a

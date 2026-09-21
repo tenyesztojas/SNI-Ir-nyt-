@@ -154,6 +154,12 @@ export interface JourneyLeg {
   geometryPrecision?: number;
   intermediateStops?: { name: string; lat?: number; lon?: number }[];
   routeColor?: string;
+  // TRANSIT NAVIGATION HOTFIX (2026-09-21, spec 3. pont) — a MOTIS válasz
+  // leg.headsign mezője (jármű célállomás-kijelzője, pl. "Dombóvár"),
+  // VÁLTOZATLANUL továbbadva. Opcionális — csak akkor kerül kitöltésre, ha
+  // a MOTIS válasz ténylegesen tartalmazta, SOHA nem kitalálva/hardcode-olva
+  // (lásd navigation/instructions.ts routeLabel()).
+  headsign?: string;
   // AKADÁLYMENTES / LÉPCSŐMENTES MVP — Task C (2026-09-11) örökség, Task C2
   // (2026-09-11) óta NEM HASZNÁLT, SZÁNDÉKOSAN ITT HAGYOTT mezők.
   //
