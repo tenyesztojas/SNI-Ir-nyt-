@@ -42,6 +42,11 @@ export default function RootLayout({
   // normál /vedett-utvonal oldal EBBŐL NEM változik.
   const pathname = headers().get("x-pathname") ?? "";
   const isVedettUtvonalPwaShell = pathname.startsWith("/vedett-utvonal/app");
+  // SW SCOPE ELKÜLÖNÍTÉS (2026-09-21) — a teljes /vedett-utvonal route-
+  // családon (nem csak az /app shell-en) a dedikált, "/vedett-utvonal/"
+  // scope-ú service worker regisztrálódik a root /sw.js ("/" scope)
+  // HELYETT, hogy a két registration ne versenyezzen ugyanazon a scope-on.
+  const isVedettUtvonalRoute = pathname.startsWith("/vedett-utvonal");
 
   return (
     <html lang="hu">
@@ -60,7 +65,9 @@ export default function RootLayout({
           nonce={nonce}
           suppressHydrationWarning
           dangerouslySetInnerHTML={{
-            __html: `if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js'))}`,
+            __html: isVedettUtvonalRoute
+              ? `if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('/vedett-utvonal-sw.js',{scope:'/vedett-utvonal/'}))}`
+              : `if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js'))}`,
           }}
         />
         {/* Akadálymentességi beállítások anti-flash: hydration előtt alkalmazza a mentett prefs-t */}
