@@ -37,18 +37,18 @@ function getCurrentChoice(v: BpInput): Choice | null {
 const OPTIONS: { key: Choice; label: string; description: string }[] = [
   {
     key: 'prefer_true',
-    label: 'Igen, ezt preferálom',
-    description: 'Ez a munkakörülmény fontos vagy kedvező számomra.',
+    label: 'Igen, ezt szeretném',
+    description: 'Ez a munkakörülmény fontos vagy jó nekem.',
   },
   {
     key: 'prefer_false',
-    label: 'Inkább nem preferálom',
-    description: 'Ez nem ideális, de elfogadható lehet.',
+    label: 'Inkább nem szeretném',
+    description: 'Ez nem az, amit szeretnék, de elfogadható lehet.',
   },
   {
     key: 'indifferent',
     label: 'Mindegy',
-    description: 'Nincs konkrét preferenciám. Bármelyik elfogadható.',
+    description: 'Nincs erős véleményem erről. Bármelyik megfelelő.',
   },
   {
     key: 'not_wanted',
@@ -77,7 +77,7 @@ export default function BooleanInput({ value, onChange, disabled, name }: Props)
 
   return (
     <fieldset className="space-y-2">
-      <legend className="sr-only">Preferencia</legend>
+      <legend className="sr-only">Válaszod</legend>
       {OPTIONS.map(opt => {
         const isSelected = current === opt.key
         return (

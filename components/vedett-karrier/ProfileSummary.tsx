@@ -20,7 +20,7 @@ export default function ProfileSummary({ summary, onBack }: Props) {
       <div className="mb-6 rounded-xl bg-teal-50 border border-teal-100 p-5">
         <h2 className="text-xl font-bold text-teal-900 mb-1">Munkaprofilom összefoglalója</h2>
         <p className="text-sm text-teal-700">
-          Ez nem diagnózis, nem teszt és nem rangsorolás. Kizárólag a saját preferenciáidat foglalja össze.
+          Ez nem diagnózis, nem teszt és nem rangsor. Csak összefoglalja, mit adtál meg.
         </p>
         <div className="mt-3 flex items-center gap-3">
           <div className="h-3 flex-1 rounded-full bg-teal-100 overflow-hidden">
@@ -37,19 +37,19 @@ export default function ProfileSummary({ summary, onBack }: Props) {
           <span className="text-sm font-semibold text-teal-700">{summary.completionPct}%</span>
         </div>
         <p className="mt-1 text-xs text-teal-600">
-          {summary.answeredCount} / {summary.totalCount} aldimenzió kitöltve
+          {summary.answeredCount} / {summary.totalCount} kérdés kitöltve
         </p>
       </div>
 
       {summary.completionPct < 20 && (
         <div className="mb-4 rounded-lg bg-yellow-50 border border-yellow-200 p-4 text-sm text-yellow-800">
-          A profil összefoglalóhoz érdemes legalább néhány dimenziót kitölteni.
+          Az összefoglalóhoz érdemes legalább néhány kérdést megválaszolni.
         </div>
       )}
 
       {filled.length === 0 ? (
         <div className="rounded-xl border border-gray-200 bg-white p-8 text-center text-gray-500">
-          <p className="text-sm">Még nem töltöttél ki egyetlen dimenziót sem.</p>
+          <p className="text-sm">Még nem válaszoltál egyetlen kérdésre sem.</p>
           <button
             type="button"
             onClick={onBack}
@@ -80,8 +80,8 @@ export default function ProfileSummary({ summary, onBack }: Props) {
           ))}
 
           <div className="rounded-lg bg-gray-50 border border-gray-200 p-4 text-xs text-gray-500">
-            Ez az összefoglaló a kitöltött preferenciáid alapján, automatikusan készül.
-            Nem diagnosztikai célt szolgál, és nem kerül megosztásra munkáltatókkal.
+            Ez az összefoglaló automatikusan készül abból, amit megadtál.
+            Nem diagnózis, és a munkáltatók nem látják.
           </div>
 
           <button

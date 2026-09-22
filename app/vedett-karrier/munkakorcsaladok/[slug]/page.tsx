@@ -1,7 +1,7 @@
 /**
- * Védett Karrier – Family Detail
+ * VĂ©dett Karrier â€“ Family Detail
  * /vedett-karrier/munkakorcsaladok/[slug]
- * Public – Light Készséghíd csak bejelentkezett usernek
+ * Public â€“ Light KĂ©szsĂ©ghĂ­d csak bejelentkezett usernek
  */
 
 import Link from 'next/link'
@@ -51,7 +51,7 @@ export default async function FamilyDetailPage(props: Props) {
       {/* Header */}
       <div className="mb-6">
         <p className="text-xs text-gray-400 mb-1">
-          <Link href="/vedett-karrier/munkakorcsaladok" className="hover:underline">← Munkakörcsaládok</Link>
+          <Link href="/vedett-karrier/munkakorcsaladok" className="hover:underline">← Munkakörtípusok</Link>
         </p>
         <h1 className="text-2xl font-bold text-gray-900">{family.name_hu}</h1>
         <p className="mt-2 text-sm text-gray-600">{family.description_hu}</p>
@@ -59,8 +59,8 @@ export default async function FamilyDetailPage(props: Props) {
 
       {/* Disclaimer */}
       <div className="mb-6 rounded-lg bg-amber-50 border border-amber-100 px-4 py-3 text-xs text-amber-700">
-        Az egyes munkakörök és munkahelyek tényleges feltételei eltérhetnek. Ez a leírás tipikus feladatmintákat
-        mutat be, nem konkrét munkahelyi adatokat.
+        Egy konkrĂ©t munkahelyen a kĂ¶rĂĽlmĂ©nyek mĂˇsok lehetnek. Ez a leĂ­rĂˇs egy tipikus pĂ©ldĂˇt mutat be,
+        nem egy valĂłdi munkahely adatait.
       </div>
 
       {/* Career interest (only for auth users) */}
@@ -78,16 +78,16 @@ export default async function FamilyDetailPage(props: Props) {
         <ul className="space-y-1.5">
           {family.typical_tasks_json.map((task, i) => (
             <li key={i} className="flex gap-2 text-sm text-gray-700">
-              <span className="text-teal-400 flex-shrink-0 mt-0.5">•</span>
+              <span className="text-teal-400 flex-shrink-0 mt-0.5">â€˘</span>
               <span>{task}</span>
             </li>
           ))}
         </ul>
       </section>
 
-      {/* Példamunkakörök */}
+      {/* PĂ©ldamunkakĂ¶rĂ¶k */}
       <section className="mb-6">
-        <h2 className="text-base font-semibold text-gray-800 mb-3">Példamunkakörök</h2>
+        <h2 className="text-base font-semibold text-gray-800 mb-3">PĂ©ldamunkakĂ¶rĂ¶k</h2>
         <div className="flex flex-wrap gap-2">
           {family.example_roles_json.map((role, i) => (
             <span key={i} className="rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-600">
@@ -97,16 +97,16 @@ export default async function FamilyDetailPage(props: Props) {
         </div>
       </section>
 
-      {/* Belépési lehetőségek */}
+      {/* BelĂ©pĂ©si lehetĹ‘sĂ©gek */}
       <section className="mb-6">
-        <h2 className="text-base font-semibold text-gray-800 mb-2">Belépési lehetőségek</h2>
+        <h2 className="text-base font-semibold text-gray-800 mb-2">BelĂ©pĂ©si lehetĹ‘sĂ©gek</h2>
         <p className="text-sm text-gray-600">{family.entry_threshold_description}</p>
       </section>
 
-      {/* Fejlődési utak */}
+      {/* FejlĹ‘dĂ©si utak */}
       {family.growth_paths_json.length > 0 && (
         <section className="mb-6">
-          <h2 className="text-base font-semibold text-gray-800 mb-3">Lehetséges fejlődési irányok</h2>
+          <h2 className="text-base font-semibold text-gray-800 mb-3">LehetsĂ©ges fejlĹ‘dĂ©si irĂˇnyok</h2>
           <div className="flex flex-wrap gap-2">
             {family.growth_paths_json.map((path, i) => (
               <span key={i} className="rounded-full border border-teal-200 bg-teal-50 px-3 py-1 text-xs text-teal-700">
@@ -117,24 +117,24 @@ export default async function FamilyDetailPage(props: Props) {
         </section>
       )}
 
-      {/* Light Készséghíd */}
+      {/* Light KĂ©szsĂ©ghĂ­d */}
       {skillBridge ? (
         <LightSkillBridgeSection bridge={skillBridge} />
       ) : (
         <div className="rounded-xl border border-dashed border-gray-200 p-5 text-sm text-gray-400 text-center">
-          <p>
-            Töltsd ki a{' '}
+          <p className="font-semibold text-gray-500">KĂ©szsĂ©geim ehhez a munkĂˇhoz</p>
+          <p className="mt-1">
+            SzeretnĂ©d megnĂ©zni, milyen kĂ©szsĂ©geid vannak ehhez a munkĂˇhoz?{' '}
+            TĂ¶ltsd ki a{' '}
             <a href="/vedett-karrier/kepessegek" className="text-sni-brand-teal hover:underline">
-              Képességtérképet
-            </a>{' '}
-            hogy megtudd, melyik készséged illik ehhez a munkakörcsaládhoz.
+              KĂ©pessĂ©gtĂ©rkĂ©pet
+            </a>.
           </p>
         </div>
       )}
 
       <div className="mt-8 text-xs text-gray-400">
-        A munkakörcsaládok feladatmintán alapulnak. Ez nem diagnosztikai eszköz és nem meghatározó arra,
-        milyen munkát vállalhatsz.
+        Fontos: Ez az oldal Ă¶tleteket ad. Nem dĂ¶nti el, hogy milyen munkĂˇt tudsz vagy nem tudsz elvĂ©gezni.
       </div>
     </div>
   )

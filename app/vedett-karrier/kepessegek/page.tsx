@@ -24,10 +24,11 @@ export default async function KepessegekPage() {
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
-      <h1 className="text-2xl font-bold text-gray-900 mb-2">Képességtérkép</h1>
+      <h1 className="text-2xl font-bold text-gray-900 mb-1">Képességtérkép</h1>
+      <p className="text-sm font-semibold text-sni-brand-teal mb-4">Mit tudok megcsinálni?</p>
       <p className="text-sm text-gray-500 mb-6">
-        Jelöld meg, milyen készségeid vannak. Ez segít megtalálni, milyen munkakörcsaládok illenek hozzád.
-        A készségeid csak te látod – munkáltatóval nem osztjuk meg automatikusan.
+        Megjelölöd, mit tudsz megcsinálni. Ez nem vizsga. Nincs jó vagy rossz válasz.
+        A válaszaidat csak te látod. A munkáltató nem látja automatikusan.
       </p>
       <SkillMapClient allSkills={allSkills} initialUserSkills={userSkills} />
     </div>

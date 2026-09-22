@@ -10,10 +10,10 @@ import Link from 'next/link'
 import type { CareerDiscoveryResult, DiscoveryReasonCode } from '@/lib/vedett-karrier/types/discovery'
 
 const REASON_LABELS: Record<DiscoveryReasonCode, string> = {
-  has_skills:      'Vannak már kapcsolódó készségeid',
-  interest_match:  'Megjelölted érdeklődési területként',
-  env_overlap:     'A munkakörnyezeti preferenciáid illenek ide',
-  trainable_skills:'Könnyen tanulható készségek szükségesek',
+  has_skills:      'Több készséged használható ebben a munkában.',
+  interest_match:  'Kapcsolódik ahhoz, ami érdekel.',
+  env_overlap:     'A munkakörülmények, amiket megadtál, illenek ide.',
+  trainable_skills:'A hiányzó készségeket könnyen megtanulhatod.',
 }
 
 interface Props {
@@ -43,7 +43,7 @@ export default function FamilyDiscoveryCard({ result }: Props) {
 
       {/* Miért mutatjuk? */}
       <div className="mb-4">
-        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Miért mutatjuk?</p>
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Miért mutatjuk ezt?</p>
         <div className="flex flex-wrap gap-1.5">
           {reason_codes.map(code => (
             <span

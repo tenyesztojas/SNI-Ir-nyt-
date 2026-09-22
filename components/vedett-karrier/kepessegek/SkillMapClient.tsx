@@ -21,10 +21,10 @@ const CATEGORY_LABELS: Record<string, string> = {
 }
 
 const PROFICIENCY_LABELS: Record<SkillProficiency, string> = {
-  learning:     'Tanulom',
-  basic:        'Alapszint',
-  intermediate: 'Közép',
-  advanced:     'Haladó',
+  learning:     'Még tanulom',
+  basic:        'Segítséggel meg tudom csinálni',
+  intermediate: 'Egyedül meg tudom csinálni',
+  advanced:     'Jól megy, sokszor csináltam',
 }
 
 interface Props {
@@ -224,7 +224,7 @@ export default function SkillMapClient({ allSkills, initialUserSkills }: Props) 
                   <div className="mt-3 border-t border-teal-100 pt-3 space-y-3">
                     {/* Proficiency */}
                     <fieldset>
-                      <legend className="text-xs font-semibold text-gray-500 mb-1">Szint</legend>
+                      <legend className="text-xs font-semibold text-gray-500 mb-1">Mennyire megy?</legend>
                       <div className="flex flex-wrap gap-2">
                         {(['learning','basic','intermediate','advanced'] as SkillProficiency[]).map(level => (
                           <label key={level} className="cursor-pointer">

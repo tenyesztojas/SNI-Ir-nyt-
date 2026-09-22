@@ -56,15 +56,15 @@ function LabeledSlider({
           type="range"
           min={min}
           max={max}
-          value={value ?? min}
+          value={value ?? Math.round((min + max) / 2)}
           onChange={e => onChange(parseInt(e.target.value, 10))}
           disabled={disabled}
           className="flex-1 accent-sni-brand-teal focus:outline-none focus-visible:ring-2 focus-visible:ring-sni-brand-teal rounded"
           aria-label={label}
           aria-valuemin={min}
           aria-valuemax={max}
-          aria-valuenow={value ?? min}
-          aria-valuetext={currentLabel ?? undefined}
+          aria-valuenow={value ?? Math.round((min + max) / 2)}
+          aria-valuetext={value == null ? 'Még nincs kiválasztva' : (currentLabel ?? undefined)}
         />
         <span className="text-xs text-gray-400 w-4 text-center">{max}</span>
       </div>
@@ -72,7 +72,7 @@ function LabeledSlider({
         <p className="mt-1 text-xs text-gray-600 italic">{currentLabel}</p>
       )}
       {value == null && (
-        <p className="mt-1 text-xs text-gray-400">Mozgasd a csúszkát a beállításhoz</p>
+        <p className="mt-1 text-xs text-gray-400">Még nem választottál. Mozgasd meg a csúszkát.</p>
       )}
     </div>
   )
@@ -88,7 +88,7 @@ export default function OrdinalInput({ comparisonType, ordinalMin, ordinalMax, o
       <div>
         <LabeledSlider
           label="Meddig kényelmes számodra?"
-          hint="preferált maximum"
+          hint="amit szeretnél"
           min={ordinalMin}
           max={ordinalMax}
           value={hi.preferred_max_value}
@@ -98,7 +98,7 @@ export default function OrdinalInput({ comparisonType, ordinalMin, ordinalMax, o
         />
         <LabeledSlider
           label="Mi az a szint, ami még elfogadható?"
-          hint="elfogadható maximum"
+          hint="ami még megfelelő"
           min={ordinalMin}
           max={ordinalMax}
           value={hi.acceptable_max_value}
@@ -115,7 +115,7 @@ export default function OrdinalInput({ comparisonType, ordinalMin, ordinalMax, o
     <div>
       <LabeledSlider
         label="Mi az ideális minimum számodra?"
-        hint="preferált minimum"
+        hint="amit szeretnél"
         min={ordinalMin}
         max={ordinalMax}
         value={rp.preferred_min_value}
@@ -129,7 +129,7 @@ export default function OrdinalInput({ comparisonType, ordinalMin, ordinalMax, o
       />
       <LabeledSlider
         label="Mi az ideális maximum számodra?"
-        hint="preferált maximum"
+        hint="amit szeretnél"
         min={ordinalMin}
         max={ordinalMax}
         value={rp.preferred_max_value}
@@ -143,7 +143,7 @@ export default function OrdinalInput({ comparisonType, ordinalMin, ordinalMax, o
       />
       <LabeledSlider
         label="Mi az elfogadható minimum?"
-        hint="elfogadható minimum"
+        hint="ami még megfelelő"
         min={ordinalMin}
         max={ordinalMax}
         value={rp.acceptable_min_value}
@@ -156,7 +156,7 @@ export default function OrdinalInput({ comparisonType, ordinalMin, ordinalMax, o
       />
       <LabeledSlider
         label="Mi az elfogadható maximum?"
-        hint="elfogadható maximum"
+        hint="ami még megfelelő"
         min={ordinalMin}
         max={ordinalMax}
         value={rp.acceptable_max_value}

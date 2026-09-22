@@ -19,7 +19,7 @@ export default function InsufficientDataBanner({ allFamilies }: Props) {
           Töltsd ki a Munkaprofilodat és a Képességtérképet
         </p>
         <p className="text-sm text-amber-700 mb-4">
-          Így személyre szabottabb felfedezési javaslatokat kaphatunk számodra.
+          Így tudunk neked jobb javaslatokat mutatni.
         </p>
         <div className="flex gap-3">
           <Link
@@ -39,7 +39,7 @@ export default function InsufficientDataBanner({ allFamilies }: Props) {
 
       {/* Browse all families */}
       <h2 className="text-base font-semibold text-gray-700 mb-4">
-        Addig is – böngéssz a munkakörcsaládok között:
+        Addig is nézd meg a munkakörtípusokat:
       </h2>
       <div className="grid gap-3 sm:grid-cols-2">
         {allFamilies.slice(0, 10).map(family => (
@@ -55,7 +55,7 @@ export default function InsufficientDataBanner({ allFamilies }: Props) {
       </div>
       <div className="mt-4">
         <Link href="/vedett-karrier/munkakorcsaladok" className="text-sm text-sni-brand-teal hover:underline">
-          Összes munkakörcsalád →
+          Összes munkakörtípus →
         </Link>
       </div>
     </div>

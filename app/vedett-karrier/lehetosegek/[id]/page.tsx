@@ -28,7 +28,7 @@ interface Props {
 export async function generateMetadata(props: Props) {
   const params = await props.params;
   const opp = await getOpportunityById(params.id).catch(() => null)
-  const title = opp?.title_override_hu ?? 'Álláslehetőség'
+  const title = opp?.title_override_hu ?? 'Munkalehetőség'
   return {
     title: `${title} – Védett Karrier`,
   }
@@ -110,13 +110,13 @@ export default async function OpportunityDetailPage(props: Props) {
 
       {/* Cím */}
       <h1 className="text-2xl font-semibold text-gray-900 mb-1">
-        {opp.title_override_hu ?? role?.title_hu ?? 'Állláslehetőség'}
+        {opp.title_override_hu ?? role?.title_hu ?? 'Munkalehetőség'}
       </h1>
 
       {/* Meta */}
       <div className="flex flex-wrap gap-4 text-sm text-gray-500 mb-6">
         {role?.job_family_slug && (
-          <span>Munkakörcsalád: <strong className="text-gray-700">{role.job_family_slug}</strong></span>
+          <span>Munkakörtípus: <strong className="text-gray-700">{role.job_family_slug}</strong></span>
         )}
         {opp.valid_from && (
           <span>Elérhető: <strong className="text-gray-700">{opp.valid_from}</strong></span>
@@ -166,7 +166,7 @@ export default async function OpportunityDetailPage(props: Props) {
       {user && role && (
         <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded">
           <p className="text-sm text-blue-800 mb-2">
-            Be vagy jelentkezve. Ha szeretnéd, megnézheted, hogyan illeszkedik ez a munkakör a Munkavállalói Profiloddal.
+            Be vagy jelentkezve. Ha szeretnéd, megnézheted, mennyire illenek hozzád ennek a munkának a körülményei.
           </p>
           <Link
             href={`/vedett-karrier/kompatibilitas/${opp.job_role_id}`}
@@ -175,7 +175,7 @@ export default async function OpportunityDetailPage(props: Props) {
             Kompatibilitási Térkép megtekintése →
           </Link>
           <p className="mt-1 text-xs text-blue-600">
-            Ez csak neked látható önértékelési eszköz – a munkáltató nem fér hozzá.
+            Ezt csak te látod. A munkáltató nem fér hozzá.
           </p>
         </div>
       )}
@@ -184,7 +184,7 @@ export default async function OpportunityDetailPage(props: Props) {
       {!user && (
         <div className="mt-6 p-4 bg-gray-50 border border-gray-200 rounded">
           <p className="text-sm text-gray-700 mb-2">
-            Bejelentkezve hozzáférhetsz a Kompatibilitási Térképhez – megmutatja, hogyan illeszkedik ez a munkakör a Munkavállalói Profiloddal.
+            Ha bejelentkezel, megnézheted a Kompatibilitási Térképet. Megmutatja, mennyire illenek hozzád ennek a munkának a körülményei.
           </p>
           <Link
             href="/belepes"

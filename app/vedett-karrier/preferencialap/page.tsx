@@ -24,7 +24,7 @@ import PreferenceDocumentViewer from './PreferenceDocumentViewer'
 import type { PreferenceDocumentRow } from '../../../lib/vedett-karrier/types/preferencialap'
 
 export const metadata = {
-  title: 'Preferencialap – Védett Karrier',
+  title: 'Munkakörülményeim – Védett Karrier',
 }
 
 export default async function PreferencialapPage() {
@@ -43,9 +43,9 @@ export default async function PreferencialapPage() {
   if (!profile) {
     return (
       <main className="max-w-xl mx-auto px-4 py-12">
-        <h1 className="text-xl font-semibold text-gray-900 mb-3">Preferencialap</h1>
+        <h1 className="text-xl font-semibold text-gray-900 mb-3">Munkakörülményeim</h1>
         <div className="p-4 bg-amber-50 border border-amber-200 rounded text-sm text-amber-800">
-          A Preferencialap elkészítéséhez szükséges, hogy kitöltsd a{' '}
+          Ehhez először töltsd ki a{' '}
           <Link href="/vedett-karrier/munkaprofil" className="underline font-medium">Munkaprofilodat</Link>.
         </div>
       </main>
@@ -64,11 +64,19 @@ export default async function PreferencialapPage() {
 
   return (
     <main className="max-w-3xl mx-auto px-4 py-10">
-      <h1 className="text-2xl font-semibold text-gray-900 mb-2">Preferencialap</h1>
+      <h1 className="text-2xl font-semibold text-gray-900 mb-1">Munkakörülményeim</h1>
+      <p className="text-sm font-semibold text-sni-brand-teal mb-4">Mit szeretnék megosztani?</p>
+
+      <div className="mb-6 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
+        <p className="font-semibold">Ezt alapból csak te látod.</p>
+        <p className="mt-1">A munkáltató nem látja.</p>
+        <p>Az adminisztrátor nem látja.</p>
+        <p className="mt-1">Te döntöd el, hogy megosztasz-e belőle valamit.</p>
+      </div>
+
       <p className="text-sm text-gray-600 mb-6">
-        A Preferencialap a saját munkavállalói preferenciáidat tartalmazza – te döntöd el, mit osztasz meg.
-        A dokumentum determinisztikus: nincs AI, mindig a profiladataidból épül fel.
-        Privát, amíg te magad meg nem osztod.
+        Ez egy rövid összefoglaló arról, milyen munkakörülmények jók neked. Nincs benne AI –
+        mindig a Munkaprofilod adataiból készül.
       </p>
 
       {/* Meglévő dokumentumok */}
@@ -88,12 +96,12 @@ export default async function PreferencialapPage() {
       {/* Új dokumentum készítő */}
       <section>
         <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide mb-3">
-          Új Preferencialap készítése
+          Új összefoglaló készítése
         </h2>
 
         {answeredCodes.length === 0 ? (
           <div className="p-4 bg-amber-50 border border-amber-200 rounded text-sm text-amber-800">
-            Még egyetlen dimenziót sem töltöttél ki a Munkafprofilban. Töltsd ki{' '}
+            Még egyetlen munkakörülményt sem töltöttél ki a Munkaprofilban. Töltsd ki{' '}
             <Link href="/vedett-karrier/munkaprofil" className="underline">itt</Link>.
           </div>
         ) : (
@@ -126,7 +134,7 @@ export default async function PreferencialapPage() {
 
             <div>
               <p className="text-sm font-medium text-gray-700 mb-3">
-                Válaszd ki, mely dimenziókat szerepled a dokumentumban:
+                Válaszd ki, mely munkakörülményeket szeretnéd szerepeltetni az összefoglalóban:
               </p>
               <div className="space-y-4">
                 {VKMM_DIMENSIONS.filter(d => d.is_active).map(dim => {
@@ -172,7 +180,7 @@ export default async function PreferencialapPage() {
                 type="submit"
                 className="px-5 py-2 bg-teal-600 text-white text-sm font-medium rounded hover:bg-teal-700 transition-colors"
               >
-                Preferencialap generálása és mentése
+                Összefoglaló elkészítése és mentése
               </button>
             </div>
           </form>

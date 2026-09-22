@@ -8,7 +8,7 @@ import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
   title: 'Munkaprofilom – Védett Karrier',
-  description: 'Töltsd ki a munkakörnyezeti preferenciaproflodat. Nem teszt, nem diagnózis – csak a saját preferenciáid.',
+  description: 'Add meg, milyen munkakörülmények jók neked. Nem teszt, nem diagnózis.',
 }
 
 export const dynamic = 'force-dynamic'
@@ -50,9 +50,10 @@ export default async function MunkaprofilPage() {
     <main className="mx-auto max-w-3xl px-4 py-8">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Munkaprofilom</h1>
+        <p className="mt-1 text-sm font-semibold text-sni-brand-teal">Milyen munkakörülmények jók nekem?</p>
         <p className="mt-1 text-sm text-gray-500">
-          Ez nem teszt, nem diagnózis és nem alkalmassági vizsgálat.
-          A saját munkakörnyezeti preferenciáidat rögzítheted itt.
+          Ez nem teszt, nem diagnózis és nem vizsga.
+          Itt megadhatod, milyen munkakörülmények jók neked.
         </p>
       </div>
       <MunkaprofilWizard initData={initData} />

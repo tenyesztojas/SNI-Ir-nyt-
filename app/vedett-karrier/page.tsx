@@ -18,7 +18,7 @@ import type { Metadata } from 'next'
 export const metadata: Metadata = {
   title: 'Védett Karrier',
   description:
-    'Találd meg, milyen munkában tudsz jól működni. Nem álláshirdetős portál – karrierprofilos rendszer, amely a munkakörnyezeti preferenciáidra épül.',
+    'Találd meg, milyen munkában tudsz jól működni. Nem állásportál. A Védett Karrier segít meghatározni, milyen munkakörnyezetben tudsz jól dolgozni.',
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -28,37 +28,43 @@ const FLOW_STEPS = [
   {
     num: '1',
     title: 'Munkaprofil',
-    desc: 'Megadod, milyen munkakörülmények illenek hozzád – zajszint, menetrend, kommunikáció, fizikai terhelés és még 47 dimenzió.',
+    subtitle: 'Milyen munkakörülmények jók nekem?',
+    desc: 'Megadod, milyen munkakörülmények jók neked. Például: zaj, munkarend, kommunikáció vagy fizikai terhelés. A profil további munkakörülményeket is megvizsgál.',
     href: '/vedett-karrier/munkaprofil',
   },
   {
     num: '2',
     title: 'Képességtérkép',
-    desc: 'Megjelölöd, milyen készségeid vannak. Nem lisensz, nem vizsga – csak az, amit ténylegesen tudsz csinálni.',
+    subtitle: 'Mit tudok megcsinálni?',
+    desc: 'Megjelölöd, mit tudsz megcsinálni. Ez nem vizsga. Nincs jó vagy rossz válasz.',
     href: '/vedett-karrier/kepessegek',
   },
   {
     num: '3',
     title: 'Karrieriránytű',
-    desc: 'A rendszer megmutatja, milyen munkakörcsaládok illenek a készségeidhez és érdeklődésedhez. Nem rangsor, nem diagnózis.',
+    subtitle: 'Milyen munkákat nézzek meg?',
+    desc: 'A rendszer megmutatja, milyen munkakörtípusok illenek a készségeidhez és az érdeklődésedhez. Ez nem vizsga, nem rangsor és nem diagnózis.',
     href: '/vedett-karrier/karrieriranytu',
   },
   {
     num: '4',
-    title: 'Munkakörcsaládok',
-    desc: '25 feladatminta-alapú munkakörcsalád: nem iparági kategória, hanem az határozza meg, mit csinálsz a munkában.',
+    title: 'Munkakörtípusok',
+    subtitle: 'Milyen feladatokat végezhetek?',
+    desc: '25 különböző munkakörtípust nézhetsz meg. A csoportosítás alapja az, hogy milyen feladatokat végzel a munkában.',
     href: '/vedett-karrier/munkakorcsaladok',
   },
   {
     num: '5',
     title: 'Kompatibilitási Térkép',
-    desc: 'Ha megnézel egy konkrét munkakört, a rendszer összeveti a munkáltató által megadott körülményeket a saját Munkaprofiloddal.',
+    subtitle: 'Mennyire illenek hozzám ennek a munkának a körülményei?',
+    desc: 'Ha megnézel egy konkrét munkakört, a rendszer összehasonlítja a munka körülményeit azzal, amit a Munkaprofilodban megadtál.',
     href: '/vedett-karrier/lehetosegek',
   },
   {
     num: '6',
-    title: 'Preferencialap',
-    desc: 'Egy rövid dokumentum, amelyen a saját munkavállalói preferenciáid szerepelnek. Te döntöd el, kivel osztod meg.',
+    title: 'Munkakörülményeim',
+    subtitle: 'Mit szeretnék megosztani?',
+    desc: 'Egy rövid összefoglaló arról, milyen munkakörülmények jók neked. Te döntöd el, hogy megosztasz-e belőle valamit.',
     href: '/vedett-karrier/preferencialap',
   },
 ]
@@ -76,8 +82,8 @@ export default function VedettKarrierLanding() {
           Találd meg, milyen munkában<br />tudsz jól működni.
         </h1>
         <p className="mx-auto mt-4 max-w-xl text-base text-blue-100 leading-relaxed">
-          Nem álláshirdetős portál. A Védett Karrier a munkakörnyezeti preferenciáidra épül —
-          megmutatja, mely munkakörök illenek a mindennapjaidhoz, és segít tájékozottan dönteni.
+          Nem állásportál. A Védett Karrier segít meghatározni, milyen munkakörnyezetben tudsz jól dolgozni.
+          Megmutatja, mely munkakörök illenek hozzád, és segít dönteni.
         </p>
 
         {/* Primary CTA */}
@@ -105,10 +111,10 @@ export default function VedettKarrierLanding() {
 
       {/* ── JOGI DISZKLÉMER ──────────────────────────────────── */}
       <div className="mt-6 rounded-2xl border border-amber-100 bg-amber-50 px-5 py-4 text-sm text-amber-800 leading-relaxed">
-        <strong>Fontos tudni:</strong> A Védett Karrier nem munkaerő-közvetítő szolgáltatás.
+        <strong>Fontos tudni:</strong> A Védett Karrier nem munkaközvetítő.
         Nem garantál munkát, választ, interjút vagy munkaviszonyt.
-        Nem alkalmassági vizsgálat és nem diagnózis.
-        A rendszer a saját preferenciáidon alapuló tájékoztató eszköz.
+        Nem vizsga és nem diagnózis.
+        A rendszer csak segít a döntésedben.
       </div>
 
       {/* ── HOW IT WORKS ─────────────────────────────────────── */}
@@ -117,7 +123,7 @@ export default function VedettKarrierLanding() {
           Hogyan működik?
         </h2>
         <p className="mt-2 text-center text-sm text-gray-500">
-          Ez nem klasszikus állásportál. A folyamat a saját preferenciáiddal kezdődik.
+          Nem klasszikus állásportál. Azzal kezded, hogy megadod, milyen munkakörülmények jók neked.
         </p>
 
         <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -133,6 +139,9 @@ export default function VedettKarrierLanding() {
               <h3 className="font-bold text-gray-800 group-hover:text-sni-brand-teal transition-colors">
                 {step.title}
               </h3>
+              <p className="mt-0.5 text-xs font-semibold text-sni-brand-teal">
+                {step.subtitle}
+              </p>
               <p className="mt-1 text-xs text-gray-500 leading-relaxed">
                 {step.desc}
               </p>
@@ -155,8 +164,8 @@ export default function VedettKarrierLanding() {
           </Link>
         </div>
         <p className="mt-1 text-sm text-gray-500">
-          Munkakör-feltérképezésen átesett befogadó munkáltatók nyitott pozíciói.
-          A Kompatibilitási Térkép eléréséhez Munkaprofil szükséges.
+          Munkáltatók által feltöltött munkalehetőségek.
+          A Kompatibilitási Térkép megnézéséhez töltsd ki a Munkaprofilodat.
         </p>
       </section>
 

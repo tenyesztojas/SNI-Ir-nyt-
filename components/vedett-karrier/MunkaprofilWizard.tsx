@@ -259,7 +259,7 @@ export default function MunkaprofilWizard({ initData }: Props) {
       {/* Progress bar */}
       <div className="mb-6">
         <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
-          <span>{currentDimIdx + 1} / {dimensions.length}. dimenzió</span>
+          <span>{currentDimIdx + 1} / {dimensions.length}. rész</span>
           <span className="font-medium">{completionPct}% kitöltve</span>
         </div>
         <div className="h-2 rounded-full bg-gray-200 overflow-hidden">
@@ -331,7 +331,7 @@ export default function MunkaprofilWizard({ initData }: Props) {
             onClick={goToPrev}
             disabled={currentDimIdx === 0 || isSaving}
             className="rounded-full border border-gray-300 px-5 py-2 text-sm text-gray-600 hover:bg-gray-50 disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-sni-brand-teal"
-            aria-label="Előző dimenzió"
+            aria-label="Előző rész"
           >
             ← Előző
           </button>
@@ -358,7 +358,7 @@ export default function MunkaprofilWizard({ initData }: Props) {
             onClick={goToNext}
             disabled={isSaving}
             className="rounded-full bg-sni-brand-teal px-6 py-2 text-sm font-semibold text-white hover:opacity-90 disabled:opacity-60 focus-visible:ring-2 focus-visible:ring-sni-brand-teal"
-            aria-label={isLast ? 'Összefoglaló megtekintése' : 'Következő dimenzió'}
+            aria-label={isLast ? 'Összefoglaló megtekintése' : 'Következő rész'}
           >
             {isLast ? 'Összefoglaló →' : 'Következő →'}
           </button>

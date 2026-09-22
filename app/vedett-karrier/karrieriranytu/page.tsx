@@ -26,10 +26,10 @@ export default async function KarrieriranytűPage() {
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
-      <h1 className="text-2xl font-bold text-gray-900 mb-2">Karrieriránytű</h1>
+      <h1 className="text-2xl font-bold text-gray-900 mb-1">Munkák, amelyeket érdemes lehet megnézned</h1>
       <p className="text-sm text-gray-500 mb-6">
-        Munkakörcsaládok, amelyek érdekesek lehetnek számodra – a készségeid és érdeklődésed alapján.
-        Ez nem rangsor és nem alkalmassági értékelés.
+        Ezeket a munkakörtípusokat a válaszaid alapján mutatjuk.
+        Ez csak segítség a kereséshez. Más munkákat is megnézhetsz.
       </p>
 
       {!output.hasEnoughData ? (

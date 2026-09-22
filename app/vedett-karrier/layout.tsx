@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 
 export const metadata = {
   title: { template: '%s – Védett Karrier', default: 'Védett Karrier' },
-  description: 'Munkakörnyezeti preferenciaprofil és karriertámogatás.',
+  description: 'Segít megtalálni, milyen munkakörnyezetben tudsz jól dolgozni.',
 }
 
 /**
@@ -32,7 +32,7 @@ export default function VedettKarrierLayout({ children }: { children: ReactNode 
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="bg-sni-brand-navy py-2 text-center text-xs font-semibold tracking-wide text-sni-brand-teal">
-        Védett Karrier — munkakörnyezeti preferenciaprofil
+        Védett Karrier
       </div>
       {children}
     </div>

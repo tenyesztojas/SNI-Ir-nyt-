@@ -47,10 +47,11 @@ export default async function MunkakorcsaladokPage() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
-      <h1 className="text-2xl font-bold text-gray-900 mb-2">Munkakörcsaládok</h1>
+      <h1 className="text-2xl font-bold text-gray-900 mb-2">Munkakörtípusok</h1>
       <p className="text-sm text-gray-500 mb-8">
-        25 feladatminta-alapú munkakörcsalád. Nem iparági kategória – hanem arra épül, mit csinálsz a munkában.
-        Egy munkakörcsalád számos iparágban megjelenhet.
+        Itt 25 munkakörtípust találsz.
+        A munkákat az alapján csoportosítottuk, hogy mit kell csinálni munka közben.
+        Ugyanaz a munkakörtípus többféle munkahelyen is előfordulhat.
       </p>
 
       {PATTERN_GROUPS.map(group => {
@@ -85,8 +86,7 @@ export default async function MunkakorcsaladokPage() {
       })}
 
       <p className="mt-8 text-xs text-gray-400">
-        A munkakörcsaládok feladatmintán alapulnak – nem diagnosztikai célt szolgálnak,
-        és nem meghatározók arra, milyen munkát vállalhatsz.
+        Ez az oldal ötleteket ad. Nem dönti el, hogy milyen munkát tudsz vagy nem tudsz elvégezni.
       </p>
     </div>
   )

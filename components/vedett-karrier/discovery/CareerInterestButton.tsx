@@ -110,7 +110,7 @@ export default function CareerInterestButton({ familySlug, familyName, currentIn
               onChange={e => setHasExp(e.target.checked)}
               className="rounded accent-sni-brand-teal"
             />
-            Van már tapasztalatom ezeken a feladatmintákon
+            Van már tapasztalatom ilyen feladatokban
           </label>
 
           {error && <p className="text-xs text-red-600" role="alert">{error}</p>}

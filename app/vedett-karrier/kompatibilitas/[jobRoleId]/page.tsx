@@ -59,22 +59,22 @@ const STATUS_CONFIG: Record<StatusKey, { label: string; badge: string; dot: stri
     dot:   'bg-teal-500',
   },
   ACCEPTABLE: {
-    label: 'Elfogadható',
+    label: 'Valószínűleg megfelelő',
     badge: 'bg-blue-50 text-blue-700 border-blue-200',
     dot:   'bg-blue-400',
   },
   CLARIFY: {
-    label: 'Érdemes tisztázni',
+    label: 'Kérdezz rá erre',
     badge: 'bg-amber-50 text-amber-700 border-amber-200',
     dot:   'bg-amber-400',
   },
   LOAD_POINT: {
-    label: 'Lehetséges terhelési pont',
+    label: 'Ez nehéz lehet neked',
     badge: 'bg-orange-50 text-orange-700 border-orange-200',
     dot:   'bg-orange-400',
   },
   UNKNOWN: {
-    label: 'Nincs elég információ',
+    label: 'Erről még nincs elég adat',
     badge: 'bg-gray-100 text-gray-500 border-gray-200',
     dot:   'bg-gray-300',
   },
@@ -86,30 +86,30 @@ const STATUS_CONFIG: Record<StatusKey, { label: string; badge: string; dot: stri
 // ─────────────────────────────────────────────────────────────────────────────
 
 const EXPLANATIONS: Record<string, string> = {
-  'employer.missing':       'Ehhez az összehasonlításhoz a munkáltató még nem adott meg adatot.',
-  'user.unknown':           'Ehhez a dimenzióhoz nem adtál meg preferenciát.',
-  'user.preference_missing':'Ehhez az összehasonlításhoz még nem töltötted ki a preferenciádat.',
-  'hi.strong_fit':          'A munkakör tényleges értéke a számodra kifejezetten preferált tartományba esik.',
-  'hi.acceptable':          'Ez az érték nem az általad preferált tartományban van, de még az általad elfogadhatónak jelölt szinten belül marad.',
-  'hi.clarify':             'Ez a körülmény az általad elfogadhatónak jelölt tartományban van, de mivel számodra különösen fontos, érdemes előre pontosítani.',
-  'hi.load_point':          'A munkakörben jellemző érték kívül esik azon a tartományon, amelyet még elfogadhatónak jelöltél.',
-  'rp.strong_fit':          'A munkakör tényleges értéke a számodra preferált tartományba esik.',
-  'rp.acceptable':          'Ez az érték nem az általad preferált tartományban van, de még az elfogadható tartományodon belül marad.',
-  'rp.clarify':             'Ez a körülmény az elfogadható tartományodban van, de fontos dimenziónál érdemes előre egyeztetni.',
-  'rp.load_point':          'A munkakörben jellemző érték kívül esik az általad elfogadhatónak jelölt tartományon.',
-  'sm.strong_fit':          'A munkakör kategóriája az általad preferált kategóriák közé esik.',
-  'sm.acceptable':          'A munkakör kategóriája nem a preferált, de az elfogadhatónak jelölt kategóriák között van.',
-  'sm.clarify':             'A kategória elfogadható számodra, de fontossága miatt érdemes előre pontosítani.',
-  'sm.load_point':          'A munkakör kategóriája kívül esik az általad elfogadhatónak jelölt körön.',
-  'bp.strong_fit':          'A munkakör ezen jellemzője egyezik a számodra preferált értékkel.',
-  'bp.indifferent':         'Erre a jellemzőre nincs erős preferenciád – mindkét értéket elfogadhatónak jelölted.',
-  'bp.acceptable':          'A munkakör ezen jellemzője nem a preferált, de elfogadható számodra.',
-  'bp.clarify':             'Ez a jellemző elfogadható, de fontossága miatt érdemes előre tisztázni.',
-  'bp.load_point':          'A munkakör ezen jellemzője kívül esik az általad elfogadhatónak jelölt értékeken.',
-  'fr.strong_fit':          'A munkakör tényleges gyakorisága a számodra preferált tartományba esik.',
-  'fr.acceptable':          'Ez a gyakoriság nem a preferált tartományodban van, de még elfogadható számodra.',
-  'fr.clarify':             'Ez a gyakoriság elfogadható, de fontossága miatt érdemes előre egyeztetni.',
-  'fr.load_point':          'A munkakörben jellemző gyakoriság kívül esik az általad elfogadhatónak jelölt tartományon.',
+  'employer.missing':       'A munkáltató ehhez még nem adott meg adatot.',
+  'user.unknown':           'Ehhez a szemponthoz nem adtál meg semmit a Munkaprofilodban.',
+  'user.preference_missing':'Ezt még nem töltötted ki a Munkaprofilodban.',
+  'hi.strong_fit':          'Ez a munkakörülmény olyan, amilyet szeretnél.',
+  'hi.acceptable':          'Ez nem pontosan az, amit szeretnél, de még megfelelő neked.',
+  'hi.clarify':             'Ez még megfelelő neked, de mivel ez fontos számodra, érdemes rákérdezni.',
+  'hi.load_point':          'Ez a munkakörülmény eltér attól, amit megfelelőnek jelöltél. Gondold át, hogy ez gondot jelent-e neked.',
+  'rp.strong_fit':          'Ez a munkakörülmény olyan, amilyet szeretnél.',
+  'rp.acceptable':          'Ez nem pontosan az, amit szeretnél, de még megfelelő neked.',
+  'rp.clarify':             'Ez még megfelelő neked, de mivel ez fontos számodra, érdemes rákérdezni.',
+  'rp.load_point':          'Ez a munkakörülmény eltér attól, amit megfelelőnek jelöltél. Gondold át, hogy ez gondot jelent-e neked.',
+  'sm.strong_fit':          'Ez a munka típusa olyan, amilyet szeretnél.',
+  'sm.acceptable':          'Ez nem pontosan az, amit szeretnél, de még megfelelő neked.',
+  'sm.clarify':             'Ez még megfelelő neked, de mivel ez fontos számodra, érdemes rákérdezni.',
+  'sm.load_point':          'Ez eltér attól, amit megfelelőnek jelöltél. Gondold át, hogy ez gondot jelent-e neked.',
+  'bp.strong_fit':          'Ez a munkakörülmény olyan, amilyet szeretnél.',
+  'bp.indifferent':         'Erre nincs erős kívánságod – mindkét lehetőséget megfelelőnek jelölted.',
+  'bp.acceptable':          'Ez nem pontosan az, amit szeretnél, de még megfelelő neked.',
+  'bp.clarify':             'Ez még megfelelő neked, de mivel ez fontos számodra, érdemes rákérdezni.',
+  'bp.load_point':          'Ez a munkakörülmény eltér attól, amit megfelelőnek jelöltél. Gondold át, hogy ez gondot jelent-e neked.',
+  'fr.strong_fit':          'Ez olyan gyakorisággal fordul elő, amilyet szeretnél.',
+  'fr.acceptable':          'Ez nem pontosan az, amit szeretnél, de még megfelelő neked.',
+  'fr.clarify':             'Ez még megfelelő neked, de mivel ez fontos számodra, érdemes rákérdezni.',
+  'fr.load_point':          'Ez a gyakoriság eltér attól, amit megfelelőnek jelöltél. Gondold át, hogy ez gondot jelent-e neked.',
 }
 
 function getExplanation(key: string): string {
@@ -208,8 +208,8 @@ export default async function KompatibilitasPage(props: Props) {
   const filter = searchParams?.filter ?? 'all'
   const filterLabel: Record<string, string> = {
     all:        'Mind',
-    load_point: 'Lehetséges terhelési pontok',
-    clarify:    'Érdemes tisztázni',
+    load_point: 'Ez nehéz lehet neked',
+    clarify:    'Kérdezz rá erre',
     important:  'Számodra különösen fontos',
   }
 
@@ -228,16 +228,20 @@ export default async function KompatibilitasPage(props: Props) {
             href={`/vedett-karrier/munkaltato/munkakorok/${role.id}`}
             className="text-xs text-gray-400 hover:text-gray-600 mt-1 inline-block"
           >
-            ← Munkakör-Térkép megtekintése
+            ← A munka körülményei
           </Link>
         </div>
 
         {/* Magyarázó szöveg */}
         <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 mb-6">
           <p className="text-xs text-blue-800">
-            <strong>Ez az összevetés azt mutatja meg,</strong> hogyan viszonyulnak a munkakör tényleges körülményei
-            a saját Munkaprofilodban megadott preferenciáidhoz.{' '}
-            <strong>Nem alkalmassági vizsgálat.</strong> Célja, hogy tájékozottan dönthess.
+            Itt összehasonlíthatod a munkát a saját igényeiddel.
+          </p>
+          <p className="mt-1 text-xs text-blue-800">
+            Megmutatjuk, mely munkakörülmények lehetnek jók neked, és mire érdemes rákérdezned.
+          </p>
+          <p className="mt-1 text-xs text-blue-800">
+            <strong>Ez nem vizsga.</strong> Nem dönti el, hogy alkalmas vagy-e a munkára.
           </p>
         </div>
 
@@ -338,16 +342,16 @@ export default async function KompatibilitasPage(props: Props) {
                       <span className="text-xs font-bold text-gray-700 uppercase tracking-wide">{dim.name_hu}</span>
                       {loadCount > 0 && (
                         <span className="text-xs bg-orange-100 text-orange-700 rounded-full px-2 py-0.5">
-                          {loadCount} terhelési pont
+                          {loadCount} nehéz pont
                         </span>
                       )}
                       {clarifyCount > 0 && (
                         <span className="text-xs bg-amber-100 text-amber-700 rounded-full px-2 py-0.5">
-                          {clarifyCount} tisztázandó
+                          {clarifyCount} kérdés
                         </span>
                       )}
                     </div>
-                    <span className="text-xs text-gray-400">{dimResults.length} aldimenzió</span>
+                    <span className="text-xs text-gray-400">{dimResults.length} szempont</span>
                   </summary>
 
                   <div className="divide-y divide-gray-100">
@@ -402,22 +406,22 @@ export default async function KompatibilitasPage(props: Props) {
           </section>
         )}
 
-        {/* Verzió info (nem score, nem rank) */}
+        {/* Összehasonlított szempontok száma (nem score, nem rank) */}
         <p className="text-xs text-gray-300 text-center mt-6">
-          Motor v{COMPATIBILITY_ENGINE_VERSION} · {results.length} aldimenzió összehasonlítva
+          {results.length} munkakörülmény összehasonlítva
         </p>
 
         {/* Lábléc – nem döntési javaslat */}
         <div className="mt-6 rounded-xl border border-gray-100 bg-white px-4 py-4 text-center">
           <p className="text-xs text-gray-500 mb-3">
-            Az összevetés a te Munkaprofilodban megadott preferenciáidon és a munkáltató VKMM adatain alapul.
-            Ez tájékoztató – nem alkalmassági vizsgálat.
+            Az összevetés a te Munkaprofilodban megadott adataidon és a munkáltató által megadott munkakörülményeken alapul.
+            Ez tájékoztató. Nem alkalmassági vizsgálat.
           </p>
           <Link
             href={`/vedett-karrier/munkaltato/munkakorok/${role.id}`}
             className="text-xs text-teal-700 hover:underline"
           >
-            Munkakör-Térkép részleteinek megtekintése →
+            A munka körülményeinek megtekintése →
           </Link>
         </div>
 
