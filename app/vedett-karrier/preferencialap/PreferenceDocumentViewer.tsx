@@ -62,7 +62,7 @@ export default function PreferenceDocumentViewer({ doc }: Props) {
       <body>
         <h1>${safeTitle}</h1>
         <div class="meta">
-          Védett Karrier – Preferencialap &nbsp;|&nbsp; Dátum: ${safeDate}
+          Védett Karrier – Munkakörülményeim &nbsp;|&nbsp; Dátum: ${safeDate}
         </div>
         <pre>${safeContent}</pre>
         <div class="footer">
@@ -99,7 +99,7 @@ export default function PreferenceDocumentViewer({ doc }: Props) {
   }
 
   const handleDelete = async () => {
-    if (!confirm('Biztosan törlöd ezt a Preferencialapot?')) return
+    if (!confirm('Biztosan törlöd ezt az összefoglalót?')) return
     setLoading(true)
     const result = await deletePreferenceDocument(doc.id)
     if (result.ok) setDeleted(true)
@@ -120,7 +120,7 @@ export default function PreferenceDocumentViewer({ doc }: Props) {
           </button>
           <div className="text-xs text-gray-400 mt-0.5">
             Frissítve: {new Date(doc.updated_at).toLocaleDateString('hu-HU')} &nbsp;·&nbsp;
-            {doc.selected_dimension_codes.length} dimenzió
+            {doc.selected_dimension_codes.length} munkakörülmény
             {isShared && <span className="ml-2 text-teal-600">● Megosztva</span>}
           </div>
         </div>

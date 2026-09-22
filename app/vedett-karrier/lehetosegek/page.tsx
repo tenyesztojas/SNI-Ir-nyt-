@@ -17,8 +17,8 @@ import { getJobRoleById } from '../../../lib/vedett-karrier/employer/data'
 import type { JobOpportunityRow } from '../../../lib/vedett-karrier/types/opportunity'
 
 export const metadata = {
-  title: 'Álláslehetőségek – Védett Karrier',
-  description: 'Aktív munkahelyi lehetőségek befogadó munkáltatóktól.',
+  title: 'Munkalehetőségek – Védett Karrier',
+  description: 'Munkáltatók által feltöltött munkalehetőségek a Védett Karrierben.',
 }
 
 function ApplicationMethodLabel({ method }: { method: JobOpportunityRow['application_method'] }) {
@@ -35,15 +35,18 @@ export default async function LehetosegekPage() {
 
   return (
     <main className="max-w-3xl mx-auto px-4 py-10">
-      <h1 className="text-2xl font-semibold text-gray-900 mb-2">Álláslehetőségek</h1>
+      <h1 className="text-2xl font-semibold text-gray-900 mb-2">Munkalehetőségek</h1>
       <p className="text-gray-600 mb-8 text-sm">
-        Ezek az aktuálisan elérhető nyitott pozíciók befogadó munkáltatóktól.
-        A Kompatibilitási Térképet a saját fiókodból érheted el, ha be vagy jelentkezve.
+        Itt olyan munkákat találsz, amelyeket munkáltatók töltöttek fel a Védett Karrierbe.
+      </p>
+      <p className="text-gray-600 mb-8 text-sm">
+        Ha elkészítetted a Munkaprofilodat, megnézheted, hogy az adott munka körülményei mennyire illenek hozzád.
+        Ehhez jelentkezz be.
       </p>
 
       {opportunities.length === 0 ? (
         <p className="text-gray-500 py-12 text-center">
-          Jelenleg nincs aktív álláslehetőség. Nézz vissza hamarosan.
+          Jelenleg nincs elérhető munkalehetőség. Nézz vissza később.
         </p>
       ) : (
         <ul className="space-y-4">

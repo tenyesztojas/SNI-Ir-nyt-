@@ -49,8 +49,8 @@ export default function CategoricalInput({ options, labels, value, onChange, dis
   return (
     <div>
       <div className="mb-2 flex gap-2 text-xs font-semibold text-gray-500">
-        <span className="w-1/2 text-center">Preferálom</span>
-        <span className="w-1/2 text-center">Elfogadható</span>
+        <span className="w-1/2 text-center">Amit szeretnél</span>
+        <span className="w-1/2 text-center">Ami még megfelelő</span>
       </div>
       <div className="space-y-2">
         {options.map(opt => {
@@ -66,14 +66,14 @@ export default function CategoricalInput({ options, labels, value, onChange, dis
                 onClick={() => togglePreferred(opt)}
                 disabled={disabled}
                 aria-pressed={isPref}
-                aria-label={`${label}: preferált ${isPref ? 'igen' : 'nem'}`}
+                aria-label={`${label}: szeretném ${isPref ? 'igen' : 'nem'}`}
                 className={`rounded-full px-3 py-1 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:ring-sni-brand-teal ${
                   isPref
                     ? 'bg-sni-brand-teal text-white'
                     : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
                 }`}
               >
-                Preferált
+                Szeretném
               </button>
               {/* Acceptable toggle */}
               <button
@@ -95,7 +95,7 @@ export default function CategoricalInput({ options, labels, value, onChange, dis
         })}
       </div>
       <p className="mt-2 text-xs text-gray-400">
-        Amit preferáltnak jelölsz, automatikusan elfogadható is lesz.
+        Amit megjelölsz, hogy szeretnéd, az automatikusan megfelelő is lesz.
       </p>
     </div>
   )

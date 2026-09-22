@@ -16,7 +16,7 @@ interface Props {
 export default function LightSkillBridgeSection({ bridge }: Props) {
   return (
     <section className="mt-6">
-      <h2 className="text-base font-semibold text-gray-800 mb-4">Készséghíd</h2>
+      <h2 className="text-base font-semibold text-gray-800 mb-4">Készségeim ehhez a munkához</h2>
 
       {/* Már megvan */}
       {bridge.alreadyHave.length > 0 && (
@@ -34,7 +34,7 @@ export default function LightSkillBridgeSection({ bridge }: Props) {
 
       {bridge.alreadyHave.length === 0 && (
         <div className="mb-4 rounded-xl border border-gray-100 bg-gray-50 p-4 text-sm text-gray-400">
-          Még nem jelöltél meg készséget, ami ehhez a munkakörcsaládhoz kapcsolódik.
+          Még nem jelöltél meg készséget, ami ehhez a munkakörtípushoz kapcsolódik.
         </div>
       )}
 
@@ -59,7 +59,7 @@ export default function LightSkillBridgeSection({ bridge }: Props) {
       </div>
 
       <p className="mt-3 text-xs text-gray-400">
-        Ez nem alkalmassági értékelés. A készséghíd csak tájékoztató jellegű.
+        Ez nem vizsga. Csak ötletet ad, mit érdemes még megtanulnod.
       </p>
     </section>
   )

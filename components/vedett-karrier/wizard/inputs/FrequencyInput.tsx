@@ -84,11 +84,11 @@ export default function FrequencyInput({ options, labels, value, onChange, disab
   return (
     <div>
       <div className="rounded-lg bg-blue-50 border border-blue-100 p-3 mb-4">
-        <p className="text-xs text-blue-700">Preferált: amit ideálisnak tartasz. Elfogadható: amivel még el tudsz lenni.</p>
+        <p className="text-xs text-blue-700">Amit szeretnél: ami neked a legjobb lenne. Ami még megfelelő: amivel még el tudsz lenni.</p>
       </div>
       <FreqSelect
-        label="Preferált minimum"
-        hint="az ideális legkevesebb"
+        label="A legkevesebb, amit szeretnél"
+        hint="amit szeretnél"
         options={options}
         labels={labels}
         value={value.preferred_min_frequency}
@@ -96,8 +96,8 @@ export default function FrequencyInput({ options, labels, value, onChange, disab
         disabled={disabled}
       />
       <FreqSelect
-        label="Preferált maximum"
-        hint="az ideális legtöbb"
+        label="A legtöbb, amit szeretnél"
+        hint="amit szeretnél"
         options={options}
         labels={labels}
         value={value.preferred_max_frequency}
@@ -105,8 +105,8 @@ export default function FrequencyInput({ options, labels, value, onChange, disab
         disabled={disabled}
       />
       <FreqSelect
-        label="Elfogadható minimum"
-        hint="még elfogadható legkevesebb"
+        label="A legkevesebb, ami még megfelelő"
+        hint="ami még megfelelő"
         options={options}
         labels={labels}
         value={value.acceptable_min_frequency}
@@ -114,8 +114,8 @@ export default function FrequencyInput({ options, labels, value, onChange, disab
         disabled={disabled}
       />
       <FreqSelect
-        label="Elfogadható maximum"
-        hint="még elfogadható legtöbb"
+        label="A legtöbb, ami még megfelelő"
+        hint="ami még megfelelő"
         options={options}
         labels={labels}
         value={value.acceptable_max_frequency}

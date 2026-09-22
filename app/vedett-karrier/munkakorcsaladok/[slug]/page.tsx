@@ -49,7 +49,7 @@ export default async function FamilyDetailPage({ params }: Props) {
       {/* Header */}
       <div className="mb-6">
         <p className="text-xs text-gray-400 mb-1">
-          <a href="/vedett-karrier/munkakorcsaladok" className="hover:underline">← Munkakörcsaládok</a>
+          <a href="/vedett-karrier/munkakorcsaladok" className="hover:underline">← Munkakörtípusok</a>
         </p>
         <h1 className="text-2xl font-bold text-gray-900">{family.name_hu}</h1>
         <p className="mt-2 text-sm text-gray-600">{family.description_hu}</p>
@@ -57,8 +57,8 @@ export default async function FamilyDetailPage({ params }: Props) {
 
       {/* Disclaimer */}
       <div className="mb-6 rounded-lg bg-amber-50 border border-amber-100 px-4 py-3 text-xs text-amber-700">
-        Az egyes munkakörök és munkahelyek tényleges feltételei eltérhetnek. Ez a leírás tipikus feladatmintákat
-        mutat be, nem konkrét munkahelyi adatokat.
+        Egy konkrét munkahelyen a körülmények mások lehetnek. Ez a leírás egy tipikus példát mutat be,
+        nem egy valódi munkahely adatait.
       </div>
 
       {/* Career interest (only for auth users) */}
@@ -120,19 +120,19 @@ export default async function FamilyDetailPage({ params }: Props) {
         <LightSkillBridgeSection bridge={skillBridge} />
       ) : (
         <div className="rounded-xl border border-dashed border-gray-200 p-5 text-sm text-gray-400 text-center">
-          <p>
+          <p className="font-semibold text-gray-500">Készségeim ehhez a munkához</p>
+          <p className="mt-1">
+            Szeretnéd megnézni, milyen készségeid vannak ehhez a munkához?{' '}
             Töltsd ki a{' '}
             <a href="/vedett-karrier/kepessegek" className="text-sni-brand-teal hover:underline">
               Képességtérképet
-            </a>{' '}
-            hogy megtudd, melyik készséged illik ehhez a munkakörcsaládhoz.
+            </a>.
           </p>
         </div>
       )}
 
       <div className="mt-8 text-xs text-gray-400">
-        A munkakörcsaládok feladatmintán alapulnak. Ez nem diagnosztikai eszköz és nem meghatározó arra,
-        milyen munkát vállalhatsz.
+        Fontos: Ez az oldal ötleteket ad. Nem dönti el, hogy milyen munkát tudsz vagy nem tudsz elvégezni.
       </div>
     </div>
   )

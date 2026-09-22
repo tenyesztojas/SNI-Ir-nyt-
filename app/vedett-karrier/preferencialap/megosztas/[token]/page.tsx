@@ -19,7 +19,7 @@ interface Props {
 export async function generateMetadata({ params }: Props) {
   const doc = await getSharedPreferenceDocument(params.token).catch(() => null)
   return {
-    title: doc ? `${doc.title_hu} – Védett Karrier` : 'Preferencialap – Védett Karrier',
+    title: doc ? `${doc.title_hu} – Védett Karrier` : 'Munkakörülményeim – Védett Karrier',
     // Noindex: a share token oldalak személyes adatot tartalmaznak,
     // nem kerülhetnek keresőindexbe.
     // Az X-Robots-Tag HTTP headert a middleware is beállítja (megbízhatóbb crawlerek számára).
@@ -37,8 +37,8 @@ export default async function SharedPreferenceDocPage({ params }: Props) {
   return (
     <main className="max-w-2xl mx-auto px-4 py-10">
       <div className="mb-6 p-3 bg-amber-50 border border-amber-200 rounded text-xs text-amber-800">
-        Ez egy munkavállalói Preferencialap – kizárólag tájékoztatásra készült.
-        Nem alkalmassági értékelés, nem rangsor. A dokumentum tulajdonosa osztotta meg veled.
+        Ez valakinek a munkakörülményekről szóló összefoglalója. Ő osztotta meg veled.
+        Ez nem alkalmassági értékelés és nem rangsor.
       </div>
 
       <h1 className="text-2xl font-semibold text-gray-900 mb-1">{doc.title_hu}</h1>
