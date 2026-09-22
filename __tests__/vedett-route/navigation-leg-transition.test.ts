@@ -296,10 +296,52 @@ describe("GPS LOSS — BOARDED/BOARDED_UNCERTAIN_GEOMETRY állapot GPS-kiesésen
     assert.deepEqual(duringLoss, state);
   });
 
-  test("WALKING/AT_BOARDING_AREA (sosem boarded) állapotból null pozíció a régi, zeroed WALKING viselkedést adja (nincs regresszió plain WALK-only journeyn)", () => {
+  // BOARDING GAP SPRINT (2026-09-22) — DÁTUMOZOTT INDOKLÁS a lenti
+  // assertion-változásra (a korábbi elvárás "AT_BOARDING_AREA -> null
+  // pozíció -> zeroed WALKING" volt). ROOT CAUSE (mobilteszt: mélyen
+  // földalatti metróállomás bejárata/peronja): a GPS gyakran MÁR az
+  // AT_BOARDING_AREA/APPROACHING_BOARDING fázisban elvész, jóval a
+  // BOARDING_CONFIRM_FIXES (3) megerősítő fix előtt — a régi viselkedés
+  // ekkor eldobta a boarding-pont-közelség bizonyítékát, zeroed WALKING-ra
+  // esett vissza (ami a mobilteszten hamis, méter-alapú gyalogos szöveget
+  // és felszállás utáni "Szállj fel" ragadást okozott), és a GPS
+  // visszatértekor (jellemzően már a következő megállónál) a
+  // bizonyítékgyűjtés nulláról indult volna újra. A legTransition.ts most
+  // az AT_BOARDING_AREA/APPROACHING_BOARDING fázisokat IS megőrzi egy GPS-
+  // kiesésen át (lásd ott "isNearBoardingPhase") — ez NEM állítja biztosra
+  // a felszállást (a phase byte-ra AT_BOARDING_AREA/APPROACHING_BOARDING
+  // marad, SOSEM válik BOARDED-dé pusztán a kiesés miatt).
+  test("AT_BOARDING_AREA állapotból null pozíció (GPS-kiesés a boarding pont közelében) MEGŐRZI az állapotot, nem esik vissza zeroed WALKING-ra", () => {
     const atBoardingArea = step(null, { position: { latitude: 0.0002, longitude: 0 } });
     assert.equal(atBoardingArea.phase, "AT_BOARDING_AREA");
     const duringLoss = step(atBoardingArea, { position: null });
+    assert.deepEqual(duringLoss, atBoardingArea);
+    // Több egymást követő null-fix (elhúzódó földalatti GPS-kiesés) sem
+    // változtat semmit.
+    const stillDuringLoss = step(duringLoss, { position: null });
+    assert.deepEqual(stillDuringLoss, atBoardingArea);
+  });
+
+  test("GPS visszatér AT_BOARDING_AREA-kiesés után: a bizonyítékgyűjtés a MEGŐRZÖTT állapotból folytatódik, nem nulláról", () => {
+    const atBoardingArea = step(null, { position: { latitude: 0.0002, longitude: 0 } }); // ~22 m
+    assert.equal(atBoardingArea.phase, "AT_BOARDING_AREA");
+    const duringLoss = step(atBoardingArea, { position: null });
+    assert.equal(duringLoss.phase, "AT_BOARDING_AREA");
+    // GPS visszatér, a user időközben ténylegesen a transit-vonal mentén
+    // haladt (felszállt) — a BOARDED-hez szükséges 3 megerősítő fix ugyanúgy
+    // felépül, mint kiesés nélkül, KIINDULVA a MEGŐRZÖTT duringLoss
+    // állapotból (nem null-ból, tehát nem nulláról).
+    let afterReturn: WalkToTransitBoundaryState = duringLoss;
+    for (const lat of [-0.00005, -0.00015, -0.00025]) {
+      afterReturn = step(afterReturn, { position: { latitude: lat, longitude: 0 } });
+    }
+    assert.equal(afterReturn.phase, "BOARDED");
+  });
+
+  test("WALKING (sosem volt boarding-pont-közelségi bizonyíték) állapotból null pozíció a régi, zeroed WALKING viselkedést adja (nincs regresszió plain WALK-only journeyn)", () => {
+    const farFromBoarding = step(null, { position: { latitude: 0.01, longitude: 0 } }); // ~1.1 km
+    assert.equal(farFromBoarding.phase, "WALKING");
+    const duringLoss = step(farFromBoarding, { position: null });
     assert.equal(duringLoss.phase, "WALKING");
     assert.equal(duringLoss.resolvedLegIndex, 0);
   });

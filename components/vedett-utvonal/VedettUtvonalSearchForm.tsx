@@ -1488,9 +1488,33 @@ function RankedJourneyCard({
         : { stops: [], reliable: false },
     [activeLeg, activeLegRange]
   );
-  const activeRemainingStops = activeLegStopProgress.reliable
-    ? resolveRemainingStops(routeProgress.matchedSegmentIndex, activeLegRange, activeLegStopProgress.stops)
-    : null;
+  // TRANSIT STATE CONTINUITY + REMAINING STOPS SPRINT (2026-09-22) — ROOT
+  // CAUSE FIX a "Utazz még 2 megállót" hibára, ami a valódi felszállás UTÁN
+  // is kiírva maradt (mobilteszt 4. hibája, Széll Kálmán tér). A
+  // resolveRemainingStops() a GLOBÁLIS routeProgress.matchedSegmentIndex-et
+  // vetíti az aktív leg tartományára — ez HELYES, amíg friss GPS-fixek
+  // érkeznek, de amikor a boundary resolver MÁR BOARDED/BOARDED_UNCERTAIN_
+  // GEOMETRY-t jelez ÉS a GPS azóta elveszett (boundaryPosition === null —
+  // ugyanaz a gpsFixUsable/gpsReacquiring-gate, mint routeNavigationPosition-
+  // nél fent), a matchedSegmentIndex STRUKTURÁLISAN befagy az utolsó élő
+  // fixnél (tipikusan a felszállás körüli pozíciónál, pl. mélyen
+  // földalatti metrón) — ekkor egy konkrét "N megálló" szám hátralévő
+  // megállóként megjelenítve FÉLREVEZETŐ, hamisan-pontos lenne (lásd a
+  // sprint korlátja: "no falsely-precise count under low confidence"),
+  // hiszen a user valójában továbbhaladt, csak nincs róla friss GPS-
+  // bizonyíték. Fix: ilyenkor NULL-t adunk át (nem egy KITALÁLT/becsült
+  // számot) — a selectActiveInstructionWithStopProgress() ekkor BYTE-RA a
+  // Sprint 2 generikus RIDE-szövegre esik vissza (lásd instructions.ts),
+  // ami NEM állít konkrét, esetleg hibás megállószámot. Amint friss,
+  // usable GPS-fix érkezik (boundaryPosition ismét nem null), a
+  // matchedSegmentIndex frissül, és a pontos szám visszatér — nincs itt
+  // semmilyen új GPS-forrás/becslés, kizárólag a MÁR MEGLÉVŐ gpsFixUsable-
+  // gate egy MÁSIK, MÁR MEGLÉVŐ deriváción (aktivRemainingStops) történő
+  // alkalmazása.
+  const activeRemainingStops =
+    activeLegStopProgress.reliable && !(isBoardedPhase && boundaryPosition === null)
+      ? resolveRemainingStops(routeProgress.matchedSegmentIndex, activeLegRange, activeLegStopProgress.stops)
+      : null;
   const activeNavigationInstruction = useMemo(
     () =>
       selectActiveInstructionWithStopProgress(navigationInstructions, {

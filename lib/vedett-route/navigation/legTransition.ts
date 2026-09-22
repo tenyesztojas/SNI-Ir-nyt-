@@ -262,8 +262,34 @@ export function resolveWalkToTransitBoundary(input: WalkToTransitBoundaryInput):
   // eredeti, zeroed WALKING viselkedés marad — ez a plain WALK-only
   // legeknél (nincs következő TRANSIT leg) a geometryActiveLegIndex-et
   // KÖVETŐ, friss resolvedLegIndex-et ad, ahogy korábban is.
+  // TRANSIT STATE CONTINUITY + BOARDING GAP SPRINT (2026-09-22) — a fenti
+  // sticky-preservation (BOARDED/BOARDED_UNCERTAIN_GEOMETRY/ARRIVED) NEM
+  // fedte le azt a mobiltesztben megfigyelt rést, amikor a GPS MÉG A
+  // FELSZÁLLÁS ELŐTT, a boarding pont ésszerű közelségében (AT_BOARDING_AREA/
+  // APPROACHING_BOARDING) vész el (pl. mélyen földalatti metróállomás
+  // bejárata/peronja), MIELŐTT a BOARDING_CONFIRM_FIXES (3) megerősítő fix
+  // összegyűlhetne. A KORÁBBI viselkedés ilyenkor a TELJES felgyűlt
+  // bizonyítékot (consecutiveTransitFitFixes/departureEvidenceFixes/
+  // transitFitStreakStartProgressMeters) eldobta és zeroed WALKING-ra esett
+  // vissza — emiatt a GPS visszatértekor (jellemzően már jóval arrébb, a
+  // következő állomásnál) a bizonyítékgyűjtés NULLÁRÓL kezdődött volna, és a
+  // felhasználó a teljes GPS-kiesés alatt egy stale, méter-alapú gyalogos
+  // szöveget látott volna, majd egy hamis "letértél"-szerű visszaesést WALK-ra.
+  // JAVÍTÁS: a sticky-preservation kört KIBŐVÍTJÜK az AT_BOARDING_AREA/
+  // APPROACHING_BOARDING fázisokra IS — ez NEM állítja biztosra a felszállást
+  // (a phase byte-ra megmarad AT_BOARDING_AREA/APPROACHING_BOARDING, SOHA nem
+  // válik BOARDED-dé csak a GPS-kiesés miatt), csak a MÁR MEGLÉVŐ, valódi GPS-
+  // fixekből származó bizonyítékot (és a felhasználó-felé mutatott,
+  // "boarding pont közelében vagy" szöveget, lásd VedettUtvonalSearchForm.tsx
+  // AT_BOARDING_AREA ága) őrzi meg a kiesés idejére, amíg genuinely friss fix
+  // nem érkezik (usable, nem reacquiring — lásd gpsFixGate.ts) és a
+  // bizonyítékgyűjtés onnan folytatódhat.
+  const isNearBoardingPhase =
+    previous?.phase === "AT_BOARDING_AREA" || previous?.phase === "APPROACHING_BOARDING";
+
   if (!position || !isFiniteNumber(position.latitude) || !isFiniteNumber(position.longitude)) {
     if (isStickyPhase && previous) return previous;
+    if (isNearBoardingPhase && previous) return previous;
     return {
       phase: "WALKING",
       resolvedLegIndex: geometryActiveLegIndex,

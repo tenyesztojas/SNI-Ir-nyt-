@@ -23,8 +23,28 @@ const formSrc = readSource("components/vedett-utvonal/VedettUtvonalSearchForm.ts
 const realtimeHookSrc = readSource("lib/hooks/useTransitRealtimeRefresh.ts");
 
 describe("Sprint 8.1 — teszt I: a manuális kamera-override-ot a foreground esemény nem törli", () => {
-  test("VedettUtvonalMap.tsx-ben NINCS visibilitychange listener (a kamera-override logika ettől független marad)", () => {
-    assert.doesNotMatch(mapSrc, /visibilitychange/);
+  // BLACK MAP AFTER FOREGROUND SPRINT (2026-09-22) — DÁTUMOZOTT INDOKLÁS a
+  // lenti assertion-változásra. A KORÁBBI teszt ("VedettUtvonalMap.tsx-ben
+  // NINCS visibilitychange listener") azt az invariánst védte, hogy a
+  // kamera-override logika FÜGGETLEN maradjon a foreground-eseményektől —
+  // ez az invariáns TARTALMILAG VÁLTOZATLAN (lásd a lenti 2. tesztet: a
+  // userCameraOverrideRef továbbra is KIZÁRÓLAG a followMode->true ágban
+  // törlődik). A mobiltesztben megfigyelt "fekete térkép app-váltás után"
+  // hiba (lásd VedettUtvonalMap.tsx fejléc-kommentje "BLACK MAP AFTER
+  // FOREGROUND SPRINT") miatt a komponens MOST kap egy `visibilitychange`
+  // listenert, ami KIZÁRÓLAG a MapLibre GL saját `map.resize()`/
+  // `map.triggerRepaint()` API-ját hívja egy valódi hidden->visible
+  // átmeneten — SOHA nem nyúl a kamerához/follow-hoz/userCameraOverrideRef-
+  // hez. A teszt ezért mostantól ezt a SZŰKEBB, valódi garanciát
+  // ellenőrzi ahelyett, hogy a listener puszta LÉTÉT tiltaná.
+  test("VedettUtvonalMap.tsx visibilitychange listenere KIZÁRÓLAG map.resize()/triggerRepaint()-et hív, SOHA nem nyúl userCameraOverrideRef-hez/followMode-hoz/kamerához", () => {
+    const handlerMatch = mapSrc.match(/const handleMapVisibilityChange = \(\) => \{[\s\S]*?\n    \};/);
+    assert.ok(handlerMatch, "megtalálható a foreground resize/repaint handler törzse");
+    assert.doesNotMatch(handlerMatch![0], /userCameraOverrideRef/);
+    assert.doesNotMatch(handlerMatch![0], /followMode/);
+    assert.doesNotMatch(handlerMatch![0], /fitBounds|flyTo|easeTo|jumpTo|setCenter|setZoom/);
+    assert.match(handlerMatch![0], /map\.resize\(\)/);
+    assert.match(handlerMatch![0], /map\.triggerRepaint\(\)/);
   });
 
   test("userCameraOverrideRef KIZÁRÓLAG a followMode->true váltáskor törlődik, nem foreground eseményen", () => {

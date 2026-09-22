@@ -27,6 +27,7 @@ import { journeyLegsToGeoJson, type JourneyLegForGeometry } from "@/lib/vedett-r
 import { MAP_STYLE_URL, MAP_ATTRIBUTION_FALLBACK } from "@/lib/vedett-route/mapStyle";
 import type { RestPointCategory } from "@/lib/rest-points/types";
 import { categoryLabelFor } from "@/lib/vedett-route/restStopFlow/categoryLabels";
+import { isGenuineForegroundTransition } from "@/lib/vedett-route/navigation/foregroundReacquisition";
 
 const MODE_COLOR: Record<string, string> = {
   WALK: "#6b7280",
@@ -261,10 +262,50 @@ export default function VedettUtvonalMap({ legs, carRouteGeometry = null, fromNa
       resizeObserver.observe(containerRef.current);
     }
 
+    // BLACK MAP AFTER FOREGROUND SPRINT (2026-09-22) — mobiltesztben
+    // megfigyelt hiba: app-váltás után (háttérbe, majd vissza) a MapLibre
+    // GL vászna (WebGL canvas) FEKETÉN marad, míg a navigációs UI/pozíció-
+    // nyíl változatlanul látszik. ROOT CAUSE: a fenti ResizeObserver
+    // KIZÁRÓLAG a konténer TÉNYLEGES pixelméret-változására figyel (lásd
+    // fejléc-komment fent) — egy háttérbe kerülő/visszatérő lapnál a
+    // konténer mérete NEM változik, ezért a ResizeObserver nem tüzel. A
+    // mobil böngészők/PWA-hostok háttérben gyakran felfüggesztik/eldobják a
+    // WebGL kontextus renderelt tartalmát (nem magát a kontextust), a
+    // vászon emiatt "üresen" (feketén) jelenik meg vissza-foregroundoláskor,
+    // amíg egy ÚJ repaint nem történik. A MapLibre GL JS SAJÁT, dokumentált
+    // API-ja erre a `map.resize()` (újraméretezi ÉS repaintel) + azt
+    // követő `map.triggerRepaint()` (egy explicit, azonnali repaint-kérés
+    // a render loop-nak) — NINCS új map-instance, NINCS fitBounds/kamera-
+    // mozgatás, NINCS route-újratervezés, a navigációs állapot (routeProgress,
+    // follow mode, marker-pozíció) teljesen érintetlen. A tényleges
+    // hidden->visible átmenetet (NEM csak a jelenlegi "visible" állapotot)
+    // a MÁR MEGLÉVŐ, pure isGenuineForegroundTransition() predikátum
+    // bizonyítja (lásd foregroundReacquisition.ts, UGYANAZ a minta, mint a
+    // GPS-reacquisition indításánál VedettUtvonalSearchForm.tsx-ben) — nincs
+    // second, duplikált visibility-state-gép, csak egy MÁSIK hívási hely,
+    // ami a MÁR MEGLÉVŐ pure helpert használja.
+    let mapVisibilityState: "visible" | "hidden" =
+      typeof document === "undefined" || document.visibilityState !== "hidden" ? "visible" : "hidden";
+    const handleMapVisibilityChange = () => {
+      if (typeof document === "undefined") return;
+      const nextState: "visible" | "hidden" = document.visibilityState === "visible" ? "visible" : "hidden";
+      const previousState = mapVisibilityState;
+      mapVisibilityState = nextState;
+      if (!isGenuineForegroundTransition(previousState, nextState)) return;
+      map.resize();
+      map.triggerRepaint();
+    };
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", handleMapVisibilityChange);
+    }
+
     mapRef.current = map;
 
     return () => {
       resizeObserver?.disconnect();
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", handleMapVisibilityChange);
+      }
       map.remove();
       mapRef.current = null;
     };
