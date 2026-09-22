@@ -76,9 +76,16 @@ describe("5) NEM — reroute exactly once (a MEGLÉVŐ, egyetlen reroute-effekte
     assert.match(src, /transitGpsLossConfirmation\.pending,\s*\]\);/);
   });
 
-  test("csak EGYETLEN /api/vedett-route/rest-stops/resume hívási hely van a fájlban (nincs duplikált fetch-kódút a 'Nem' válaszhoz)", () => {
+  test("a 'Nem' válaszhoz nincs duplikált fetch-kódút — a resume endpointnak KIZÁRÓLAG a MEGLÉVŐ automatikus reroute-effekt és az ÚJ, tőle független korábbi-járat ellenőrzés hívási helye létezik", () => {
+    // EARLIER TRANSIT DEPARTURE SPRINT (2026-09-22) — a handleTransitGpsLossDecline
+    // (fent tesztelve) VÁLTOZATLANUL nem tartalmaz fetch-et; a resume-endpoint
+    // MOST két hívási helyet enged (reroute-effekt + korábbi-járat check,
+    // lásd navigation-auto-reroute-integration.test.ts és
+    // navigation-transit-geometry-safety.test.ts frissített kommentjét) —
+    // ez a teszt csak azt zárja ki, hogy a 'Nem' válasz EGY HARMADIK,
+    // duplikált kódutat hozzon létre.
     const matches = src.match(/\/api\/vedett-route\/rest-stops\/resume/g) ?? [];
-    assert.equal(matches.length, 1, "az automatikus reroute POST endpointjának EGYETLEN hivatkozása lehet a fájlban");
+    assert.equal(matches.length, 2, "a resume endpointnak KIZÁRÓLAG a reroute-effekt és a korábbi-járat ellenőrzés hívási helye lehet a fájlban");
   });
 });
 

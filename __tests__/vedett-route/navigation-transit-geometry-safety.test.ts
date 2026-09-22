@@ -242,8 +242,18 @@ describe("10) a komponens változatlanul EGYETLEN reroute-protokollt és a rest-
   test("a transitGeometryUncertain bekötése nem hoz létre második reroute-hívást vagy client-oldali route service hívást", () => {
     const source = readFileSync("components/vedett-utvonal/VedettUtvonalSearchForm.tsx", "utf8");
     assert.match(source, /transitGeometryUncertain:\s*activeLegTransitGeometryUncertain/);
+    // EARLIER TRANSIT DEPARTURE SPRINT (2026-09-22) — a MEGLÉVŐ /rest-stops/
+    // resume végpontot EZUTÁN KÉT, legitim, egymástól FÜGGETLEN hívási hely
+    // használja: (1) a MEGLÉVŐ automatikus reroute-effekt (VÁLTOZATLAN), és
+    // (2) az ÚJ, esemény-vezérelt korábbi-járat ellenőrzés (lásd
+    // earlierDeparture.ts fejléce: "a hívó a MÁR MEGLÉVŐ ... endpointot hívja
+    // meg EGYETLEN alkalommal"). Ez NEM egy második reroute-protokoll — a
+    // reroute-DÖNTÉS (shouldStartAutomaticReroute) továbbra is EGYETLEN
+    // helyen fut (lásd lentebb), a resume-endpoint hívása a korábbi-járat
+    // ellenőrzésnél egy TELJESEN FÜGGETLEN, "van-e korábbi teljes hátralévő
+    // út" kérdést tesz fel, sosem indít automatikus reroute-ot.
     const resumeCalls = source.match(/fetch\("\/api\/vedett-route\/rest-stops\/resume"/g) ?? [];
-    assert.equal(resumeCalls.length, 1);
+    assert.equal(resumeCalls.length, 2);
     const reroutePolls = source.match(/shouldStartAutomaticReroute\(rerouteGuardRef\.current/g) ?? [];
     assert.equal(reroutePolls.length, 1);
   });

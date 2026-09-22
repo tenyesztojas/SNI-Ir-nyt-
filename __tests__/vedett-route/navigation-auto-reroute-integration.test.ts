@@ -45,8 +45,16 @@ describe("automatic navigation reroute integration", () => {
   });
 
   it("does not create a second client routing protocol", () => {
+    // EARLIER TRANSIT DEPARTURE SPRINT (2026-09-22) — a MEGLÉVŐ /rest-stops/
+    // resume végpontot MOST egy MÁSODIK, legitim hívási hely is használja
+    // (az esemény-vezérelt korábbi-járat ellenőrzés, lásd
+    // lib/vedett-route/navigation/earlierDeparture.ts) — ez UGYANAZT a
+    // MEGLÉVŐ, egyetlen szerver-oldali route-protokollt hívja, nem egy ÚJ
+    // client-oldali routing service-t (a lenti "no second protocol" ellenőrzés
+    // ezt még mindig garantálja: nincs új /navigation/reroute vagy hasonló
+    // endpoint).
     const resumeCalls = source.match(/fetch\("\/api\/vedett-route\/rest-stops\/resume"/g) ?? [];
-    assert.equal(resumeCalls.length, 1);
+    assert.equal(resumeCalls.length, 2);
     assert.doesNotMatch(source, /\/api\/vedett-route\/navigation\/reroute/);
   });
 });

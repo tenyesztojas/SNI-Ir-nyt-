@@ -85,6 +85,23 @@ import {
   shouldAutoClearTransitGpsLossConfirmation,
   transitGpsLossQuestionText,
 } from "@/lib/vedett-route/navigation/transitGpsLossConfirmation";
+// EARLIER TRANSIT DEPARTURE (2026-09-22) — pure modul (lásd a fejlécét):
+// esemény-vezérelt (NEM pollozó) ellenőrzés arra, hogy a user a tervezett
+// indulásnál KORÁBBAN ér a boarding stophoz, és van-e emiatt egy VALÓBAN
+// használható, korábbi, a MEGLÉVŐ /rest-stops/resume újratervező végpontot
+// (UGYANAZT, amit az automatikus reroute is használ) felhasználó
+// alternatíva. SOSEM vált automatikusan journey-t.
+import {
+  createInitialEarlierDepartureOfferState,
+  resetEarlierDepartureOffer,
+  startEarlierDepartureCheck,
+  shouldTriggerEarlierDepartureCheck,
+  validateEarlierDepartureCandidate,
+  resolveEarlierDepartureCandidate,
+  acceptEarlierDepartureOffer,
+  declineEarlierDepartureOffer,
+  type EarlierDepartureBoardingPhase,
+} from "@/lib/vedett-route/navigation/earlierDeparture";
 import {
   createFollowResumeTimer,
   type FollowResumeTimerController,
@@ -732,6 +749,19 @@ function RankedJourneyCard({
   const [liveAlternativeOffer, setLiveAlternativeOffer] = useState(createInitialLiveAlternativeOffer());
   const [liveAlternativePreviewOpen, setLiveAlternativePreviewOpen] = useState(false);
 
+  // EARLIER TRANSIT DEPARTURE — SPRINT (2026-09-22). Ugyanaz a ref+state
+  // páros minta, mint transitGpsLossConfirmationRef/State-nél: a ref adja a
+  // mindenkori legfrissebb értéket az effektnek (elkerülve az elavult
+  // closure-t az edge-triggered elágazásban), a state a render-vezérelt
+  // kártya UI-t hajtja. `earlierDepartureCandidateJourneyRef` a TELJES,
+  // /rest-stops/resume válaszból kapott candidate Journey-t tárolja — az
+  // EarlierDepartureOfferState.candidate maga csak egy összegző
+  // {departureIso, arrivalIso, routeLabel}, a tényleges displayedJourney-
+  // cseréhez (elfogadáskor) a teljes Journey objektum kell.
+  const earlierDepartureOfferRef = useRef(createInitialEarlierDepartureOfferState());
+  const [earlierDepartureOffer, setEarlierDepartureOffer] = useState(createInitialEarlierDepartureOfferState());
+  const earlierDepartureCandidateJourneyRef = useRef<{ fingerprint: string; journey: Journey } | null>(null);
+
   // A navigációs "session" bármely megváltozása (kártya-bezárás navigáció
   // közben, navigáció leállítása, manuális/automatikus reroute) a MEGLÉVŐ
   // rerouteSessionRef-et bumpolja — ez EGYIDEJŰLEG érvényteleníti a
@@ -758,6 +788,16 @@ function RankedJourneyCard({
     // egy már lezárt session után.
     transitGpsLossConfirmationRef.current = resolveTransitGpsLossConfirmation();
     setTransitGpsLossConfirmation(transitGpsLossConfirmationRef.current);
+    // EARLIER TRANSIT DEPARTURE (2026-09-22) — egy navigációs session-váltás
+    // (leállítás/újraindítás/session-restore/manuális vagy automatikus
+    // reroute/live-alternative elfogadás) a MÉG megválaszolatlan korábbi-
+    // járat ajánlatot és a declined-fingerprint listát is elavulttá teszi —
+    // egy ÚJ session-höz tartozó, ÚJ tervezett indulásra kell újraindulnia
+    // az ellenőrzésnek, nem maradhat "beragadva" egy már lezárt session
+    // ajánlata/elutasítása.
+    earlierDepartureOfferRef.current = resetEarlierDepartureOffer();
+    setEarlierDepartureOffer(earlierDepartureOfferRef.current);
+    earlierDepartureCandidateJourneyRef.current = null;
   };
 
   // SPRINT 8.2 (NAVIGATION SESSION PERSISTENCE, 2026-09-18) — EXPLICIT,
@@ -1938,6 +1978,163 @@ function RankedJourneyCard({
     },
   });
 
+  // EARLIER TRANSIT DEPARTURE — SPRINT (2026-09-22). A releváns (még el nem
+  // ért) TRANSIT leg és annak tervezett indulása a MÁR MEGLÉVŐ
+  // nextTransitLegForBoundary/walkToTransitBoundary infrastruktúrából jön
+  // (UGYANAZ a leg, amit a boarding-boundary resolver figyel) — nincs
+  // második "melyik a következő transit leg" logika. A boardingPhase
+  // 1:1 megegyezik a WalkToTransitPhase értékekkel (lásd legTransition.ts),
+  // ezért a walkToTransitBoundary.phase KÖZVETLENÜL átadható.
+  // JourneyLegForGeometry (navigationLegs) NEM tartalmaz departureTime/
+  // routeShortName-t (lásd geometry.ts) — a TELJES JourneyLeg-hez (a
+  // realtime-korrigált departureTime mezővel) a displayedJourney.legs
+  // UGYANAZON indexét olvassuk. Ez a MEGLÉVŐ konvenció (lásd a
+  // nextTransitLegForBoundary fenti kommentjét): legsOverride NÉLKÜL a két
+  // tömb index-re pontosan megegyezik, legsOverride alatt (rest-stop térkép
+  // böngészés) pedig a boarding-boundary/earlier-departure trigger amúgy
+  // sem releváns (nincs AT_BOARDING_AREA/APPROACHING_BOARDING fázis).
+  const earlierDepartureRelevantLeg =
+    nextTransitLegForBoundary && typeof nextTransitLegForBoundary.legIndex === "number"
+      ? displayedJourney.legs[nextTransitLegForBoundary.legIndex]
+      : undefined;
+  const earlierDeparturePlannedDepartureIso = earlierDepartureRelevantLeg?.departureTime ?? null;
+
+  useEffect(() => {
+    const shouldTrigger = shouldTriggerEarlierDepartureCheck({
+      navigationActive: navigationMode,
+      boardingPhase: walkToTransitBoundary.phase as EarlierDepartureBoardingPhase,
+      plannedDepartureIso: earlierDeparturePlannedDepartureIso,
+      nowMs: Date.now(),
+      // "MÁR kezelt" ERRE a konkrét tervezett indulásra — egy MÁR
+      // checking/offered/accepted/declined (declined fingerprint révén
+      // visszaeső idle) állapot ugyanarra a plannedDepartureIso-ra nem
+      // indít újabb /plan hívást (lásd earlierDeparture.ts fejléce).
+      alreadyHandledForThisDeparture:
+        earlierDepartureOfferRef.current.handledPlannedDepartureIso === earlierDeparturePlannedDepartureIso,
+    });
+    if (!shouldTrigger || !currentPosition || !originalDestination || !earlierDeparturePlannedDepartureIso) return;
+
+    const sessionId = rerouteSessionRef.current;
+    const attemptPosition = { lat: currentPosition.latitude, lon: currentPosition.longitude };
+    const attemptDestination = { ...originalDestination };
+    const plannedDepartureIso = earlierDeparturePlannedDepartureIso;
+    // Edge-triggered: AZONNAL "checking"-re állítjuk (és handledPlannedDepartureIso-t
+    // erre a plannedDepartureIso-ra), MIELŐTT a kérés elindulna — ez zárja ki a
+    // duplikált /plan hívást ugyanarra a tervezett indulásra (lásd a modul
+    // fejléce, UGYANAZ a minta, mint a rerouteGuard inFlight-jánál).
+    earlierDepartureOfferRef.current = startEarlierDepartureCheck(earlierDepartureOfferRef.current, plannedDepartureIso);
+    setEarlierDepartureOffer(earlierDepartureOfferRef.current);
+
+    void (async () => {
+      let candidateSummary: { departureIso: string; arrivalIso: string; routeLabel: string } | null = null;
+      let validation: ReturnType<typeof validateEarlierDepartureCandidate> = { valid: false, reason: "MISSING_DATA" };
+      try {
+        const response = await fetch("/api/vedett-route/rest-stops/resume", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            currentPosition: attemptPosition,
+            originalDestination: attemptDestination,
+            departAt: new Date().toISOString(),
+          }),
+        });
+        const data = (await response.json()) as
+          | { ok: true; journey: Journey }
+          | { ok: false; reason?: string; message?: string };
+
+        // STALE-VÉDELEM — ha időközben a navigációs session megváltozott
+        // (leállítás/reroute/live-alternative elfogadás/stb., lásd
+        // bumpNavigationSession), ez a válasz MÁR nem érvényes egy régi
+        // sessionre — csendben eldobjuk, NEM írjuk felül az újabb
+        // (esetleg már resetelt) állapotot.
+        if (rerouteSessionRef.current !== sessionId) return;
+
+        if (data.ok && data.journey) {
+          const candidateJourney = data.journey;
+          const firstTransitLeg = candidateJourney.legs.find((leg) => leg.mode === "TRANSIT");
+          const routeLabel = firstTransitLeg
+            ? `${firstTransitLeg.routeShortName ?? firstTransitLeg.routeLongName ?? "Járat"}${
+                firstTransitLeg.headsign?.trim() ? ` – ${firstTransitLeg.headsign.trim()} felé` : ""
+              }`
+            : "Korábbi járat";
+          candidateSummary = {
+            departureIso: candidateJourney.departureTime,
+            arrivalIso: candidateJourney.arrivalTime,
+            routeLabel,
+          };
+          // FULL REMAINING JOURNEY összehasonlítás — a candidate
+          // Journey.arrivalTime a candidate TELJES hátralévő útjának
+          // végső érkezése (a /rest-stops/resume natívan ezt adja, a
+          // jelenlegi pozícióból UGYANARRA az originalDestination-re), az
+          // EREDETI displayedJourney.arrivalTime-mal vetjük össze — SOSEM
+          // csak az első leg indulási idejével (spec 4. pont).
+          validation = validateEarlierDepartureCandidate({
+            candidateDepartureIso: candidateSummary.departureIso,
+            candidateArrivalIso: candidateSummary.arrivalIso,
+            plannedDepartureIso,
+            originalArrivalIso: displayedJourney.arrivalTime,
+            nowMs: Date.now(),
+          });
+          if (validation.valid) {
+            earlierDepartureCandidateJourneyRef.current = {
+              fingerprint: `${candidateSummary.departureIso}__${candidateSummary.routeLabel}`,
+              journey: candidateJourney,
+            };
+          }
+        }
+      } catch {
+        if (rerouteSessionRef.current !== sessionId) return;
+        candidateSummary = null;
+        validation = { valid: false, reason: "MISSING_DATA" };
+      }
+
+      if (rerouteSessionRef.current !== sessionId) return;
+      earlierDepartureOfferRef.current = resolveEarlierDepartureCandidate(
+        earlierDepartureOfferRef.current,
+        candidateSummary,
+        validation,
+      );
+      setEarlierDepartureOffer(earlierDepartureOfferRef.current);
+    })();
+  }, [
+    navigationMode,
+    walkToTransitBoundary.phase,
+    earlierDeparturePlannedDepartureIso,
+    currentPosition?.latitude,
+    currentPosition?.longitude,
+    originalDestination?.name,
+    originalDestination?.lat,
+    originalDestination?.lon,
+  ]);
+
+  // "Ezt választom" — az EGYETLEN hely, ahol egy korábbi-járat candidate
+  // displayedJourney-vé válhat, KIZÁRÓLAG explicit user-akció után. Stale-
+  // session ellenőrzés a MEGLÉVŐ rerouteSessionRef generation-je alapján
+  // (UGYANAZ a minta, mint handleLiveAlternativeAccept-nél).
+  const handleEarlierDepartureAccept = () => {
+    const accepted = acceptEarlierDepartureOffer(earlierDepartureOfferRef.current);
+    if (accepted.status !== "accepted") return;
+    const stored = earlierDepartureCandidateJourneyRef.current;
+    const expectedFingerprint = earlierDepartureOfferRef.current.candidate
+      ? `${earlierDepartureOfferRef.current.candidate.departureIso}__${earlierDepartureOfferRef.current.candidate.routeLabel}`
+      : null;
+    earlierDepartureOfferRef.current = resetEarlierDepartureOffer();
+    setEarlierDepartureOffer(earlierDepartureOfferRef.current);
+    earlierDepartureCandidateJourneyRef.current = null;
+    if (!stored || !expectedFingerprint || stored.fingerprint !== expectedFingerprint) return;
+    setDisplayedJourney(stored.journey);
+    bumpNavigationSession();
+  };
+
+  // "Maradok az eredetinél" — az EREDETI journey VÁLTOZATLAN marad, a
+  // candidate fingerprintje a declined listába kerül (nem ajánljuk fel
+  // újra ugyanazt, lásd earlierDeparture.ts declineEarlierDepartureOffer()).
+  const handleEarlierDepartureDecline = () => {
+    earlierDepartureOfferRef.current = declineEarlierDepartureOffer(earlierDepartureOfferRef.current);
+    setEarlierDepartureOffer(earlierDepartureOfferRef.current);
+    earlierDepartureCandidateJourneyRef.current = null;
+  };
+
   return (
     <div className="card border-2" style={{ borderColor: ranked.labels.length > 0 ? "#93c5fd" : "#e5e7eb" }}>
       <div className="flex flex-wrap items-center gap-2">
@@ -2023,7 +2220,19 @@ function RankedJourneyCard({
               ) : (
                 <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 font-medium ${transitModeBadge(leg.transitMode).className}`}>
                   <span aria-hidden>{transitModeBadge(leg.transitMode).emoji}</span>
-                  {`${transitModeLabel(leg.transitMode)} ${leg.routeShortName ?? leg.routeLongName ?? "Járat"}`.trim()}
+                  {/* TRANSIT NAVIGATION HOTFIX, HEADSIGN DEBUG KÖR (2026-09-22)
+                      — ez a leg-összegző badge (útvonal-eredménylista/kártya)
+                      a navigation/instructions.ts routeLabel()-től FÜGGETLEN
+                      render-út, ezért az abban a modulban elvégzett headsign-
+                      összekötés ide NEM vonatkozott automatikusan — ez volt a
+                      "productionben még mindig csak 'S40' látszik" root cause.
+                      Ugyanaz a MÁR MEGLÉVŐ JourneyLeg.headsign mező, ugyanaz a
+                      "route – headsign felé" formátum, generikusan minden
+                      transit módra; hiányzó headsign esetén VÁLTOZATLAN
+                      (biztonságos) fallback marad. */}
+                  {`${transitModeLabel(leg.transitMode)} ${
+                    leg.routeShortName ?? leg.routeLongName ?? "Járat"
+                  }${leg.headsign?.trim() ? ` – ${leg.headsign.trim()} felé` : ""}`.trim()}
                 </span>
               )}
               {leg.mode === "TRANSIT" && formatClockTime(leg.departureTime) ? (
@@ -2275,6 +2484,49 @@ function RankedJourneyCard({
                     onClick={handleLiveAlternativeDecline}
                   >
                     Maradok az eredetin
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* EARLIER TRANSIT DEPARTURE — SPRINT (2026-09-22). Csak explicit
+                user-akció válthatja ki a journey-cserét (5/6. pont): amíg a
+                kártya látszik, a displayedJourney/navigationMode VÁLTOZATLAN.
+                Ugyanaz a nem-takarási pozíció-sáv, mint a live-alternative és
+                OFF_ROUTE bannereknél — ezek egyszerre gyakorlatilag nem
+                jelennek meg (a trigger csak AT_BOARDING_AREA/APPROACHING_BOARDING
+                fázisban fut, ahol sem OFF_ROUTE, sem live-alternative offer
+                nem releváns még). */}
+            {navigationMode && earlierDepartureOffer.status === "offered" && earlierDepartureOffer.candidate && (
+              <div
+                role="status"
+                aria-live="polite"
+                className="absolute left-1/2 top-[4.25rem] z-20 w-[calc(100%-1.5rem)] max-w-sm -translate-x-1/2 rounded-xl border border-emerald-300 bg-emerald-50/95 px-4 py-3 shadow-lg backdrop-blur"
+              >
+                <div className="text-sm font-bold text-emerald-950">Korábbi járat elérhető</div>
+                <div className="mt-1 text-xs leading-snug text-emerald-900">{earlierDepartureOffer.candidate.routeLabel}</div>
+                <div className="mt-0.5 text-xs leading-snug text-emerald-900">
+                  Indulás:{" "}
+                  {new Date(earlierDepartureOffer.candidate.departureIso).toLocaleTimeString("hu-HU", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </div>
+                <div className="mt-0.5 text-xs leading-snug text-emerald-900">Korábban érhetsz célba.</div>
+                <div className="mt-2 flex gap-2">
+                  <button
+                    type="button"
+                    className="flex-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white"
+                    onClick={handleEarlierDepartureAccept}
+                  >
+                    Ezt választom
+                  </button>
+                  <button
+                    type="button"
+                    className="flex-1 rounded-lg border border-emerald-300 bg-white px-3 py-1.5 text-xs font-semibold text-emerald-900"
+                    onClick={handleEarlierDepartureDecline}
+                  >
+                    Maradok az eredetinél
                   </button>
                 </div>
               </div>

@@ -95,3 +95,28 @@ describe("4) OFF_ROUTE UI — ugyanaz a safety döntés, mint a reroute guard", 
     assert.match(searchFormSrc, /transitGeometryUncertain: activeLegTransitGeometryUncertain,/);
   });
 });
+
+// HEADSIGN DEBUG KÖR (2026-09-22) — a felhasználó jelezte, hogy a
+// productionben MÉG MINDIG csak "S40" látszik a 3. pont javítása után.
+// Root cause: a fenti 3. pont javítása KIZÁRÓLAG a navigation/
+// instructions.ts routeLabel()-t érintette (élő navigáció instrukció-
+// kártyák), de a járat-eredménylista/kártya leg-összegző "badge" JSX-e
+// (VedettUtvonalSearchForm.tsx) egy TŐLE FÜGGETLEN render-út, amely
+// közvetlenül routeShortName/routeLongName-ből építette a feliratot,
+// sosem kapta meg a headsignt. Ez volt a valódi, productionben látható
+// bug. Az alábbi teszt kifejezetten EZT a badge render-utat fedi le.
+describe("3b) headsign — a leg-összegző badge (eredménylista/kártya) is megkapja, nem csak a navigation instrukció", () => {
+  test("a badge JSX headsign jelenlétekor 'route – headsign felé' formátumot renderel, generikusan minden transit módra", () => {
+    assert.match(
+      searchFormSrc,
+      /\$\{transitModeLabel\(leg\.transitMode\)\} \$\{\s*leg\.routeShortName \?\? leg\.routeLongName \?\? "Járat"\s*\}\$\{leg\.headsign\?\.trim\(\) \? ` – \$\{leg\.headsign\.trim\(\)\} felé` : ""\}/,
+    );
+  });
+
+  test("headsign hiányában a badge biztonságos fallback marad — csak route name/number, nincs kitalálva", () => {
+    // Az üres/undefined headsign ágán a sablon literál nem told be semmit
+    // ("" : felteve, hogy leg.headsign?.trim() falsy) — ugyanaz a mintázat,
+    // mint a routeLabel() fallback ága.
+    assert.match(searchFormSrc, /leg\.headsign\?\.trim\(\) \? ` – \$\{leg\.headsign\.trim\(\)\} felé` : ""/);
+  });
+});
