@@ -573,12 +573,24 @@ export function selectActiveInstruction(
 // vissza (fallback).
 export function selectActiveInstructionWithStopProgress(
   instructions: readonly NavigationInstruction[],
-  options: SelectActiveInstructionOptions & { remainingStops?: RemainingStopsResult | null; onboard?: boolean; nextStopName?: string; nearAlighting?: boolean } = {}
+  options: SelectActiveInstructionOptions & { remainingStops?: RemainingStopsResult | null; onboard?: boolean; nextStopName?: string; nearAlighting?: boolean; requireAlightingConfirmation?: boolean; alightingConfirmed?: boolean } = {}
 ): ActiveNavigationInstruction {
   let base = selectActiveInstruction(instructions, options);
+  if (options.alightingConfirmed) {
+    const arrive = instructions.find(i => i.kind === "ARRIVE");
+    if (arrive) return { current: arrive, next: null };
+  }
+  // In a transit session, proximity is an invitation to confirm alighting.
+  if (options.requireAlightingConfirmation && !options.onboard) {
+    base = selectActiveInstruction(instructions, { ...options, atRouteEnd: false });
+    if (base.current?.kind === "ALIGHT") {
+      const ride = instructions.find(i => i.kind === "RIDE" && i.legIndex === options.legIndex);
+      if (ride) base = { current: { ...ride, detail: undefined }, next: base.current };
+    }
+  }
   // Once boarded, geometry thirds cannot prove alighting or final arrival.
   // The boundary resolver remains responsible for advancing to the next leg.
-  const finalDestinationReached = options.atRouteEnd && options.nearAlighting &&
+  const finalDestinationReached = !options.requireAlightingConfirmation && options.atRouteEnd && options.nearAlighting &&
     !instructions.some(i => i.legIndex > (options.legIndex ?? -1));
   if (!finalDestinationReached && (options.onboard || (options.remainingStops && (options.legPhaseFraction ?? 0) >= 1 / 3))) {
     const rideIndex = instructions.findIndex(i => i.legIndex === options.legIndex && i.kind === "RIDE");

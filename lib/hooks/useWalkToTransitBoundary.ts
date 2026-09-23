@@ -1,59 +1,40 @@
 "use client";
 
-// SPRINT 7.1 (2026-09-16) — thin, stateful React wrapper a pure
-// lib/vedett-route/navigation/legTransition.ts resolver körül. UGYANAZ a
-// minta, mint lib/hooks/useRouteNavigation.ts: reset a route/aktív-navigáció
-// váltásakor (elkerülve a "stale boarding-hiszterézis egy ÚJ útvonalon"
-// problémát), különben minden position/activeLeg-változásra újraszámol,
-// a hiszterézis-számlálót egy ref-ben tartva a fixek között.
-
 import { useEffect, useRef, useState } from "react";
-import {
-  createInitialWalkToTransitBoundaryState,
-  resolveWalkToTransitBoundary,
-} from "@/lib/vedett-route/navigation/legTransition";
-import type { WalkToTransitBoundaryInput, WalkToTransitBoundaryState } from "@/lib/vedett-route/navigation/legTransition";
+import type { WalkToTransitBoundaryInput } from "@/lib/vedett-route/navigation/legTransition";
+import { advanceTransitJourneySession, confirmJourneyAlighting, createTransitJourneySession } from "@/lib/vedett-route/navigation/transitJourneySession";
+import type { SessionTransitLeg } from "@/lib/vedett-route/navigation/transitJourneySession";
 
 export function useWalkToTransitBoundary(
   input: WalkToTransitBoundaryInput,
-  // Reset-kulcs: amikor ez változik (pl. új navigationRouteCoordinates
-  // referencia vagy navigationMode ki/be), a hiszterézis-állapot friss
-  // (createInitialWalkToTransitBoundaryState()) — ugyanaz a reset-elv, mint
-  // useRouteNavigation.ts-ben.
   resetKey: unknown,
-): WalkToTransitBoundaryState {
-  const [state, setState] = useState<WalkToTransitBoundaryState>(() => createInitialWalkToTransitBoundaryState());
-  const previousRef = useRef<WalkToTransitBoundaryState | null>(null);
-
-  const processedPositionRef = useRef(input.position);
-  const processedResetRef = useRef<unknown>(null);
-
+  transitLegs: readonly SessionTransitLeg[],
+  timestampMs: number | null,
+) {
+  const [snapshot, setSnapshot] = useState(() => ({ key: resetKey, session: createTransitJourneySession() }));
+  const snapshotRef = useRef(snapshot);
+  const { geometryActiveLegIndex, geometryActiveLegMode, position, offRouteStatus } = input;
   useEffect(() => {
-    previousRef.current = null;
-    setState(createInitialWalkToTransitBoundaryState());
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resetKey]);
+    const previous = snapshotRef.current.key === resetKey ? snapshotRef.current.session : createTransitJourneySession();
+    const session = advanceTransitJourneySession(previous, {
+      geometryActiveLegIndex, geometryActiveLegMode, position, offRouteStatus, nextTransitLeg: null, previous: null,
+    }, transitLegs, timestampMs);
+    if (session === snapshotRef.current.session && snapshotRef.current.key === resetKey) return;
+    snapshotRef.current = { key: resetKey, session };
+    setSnapshot(snapshotRef.current);
+  }, [resetKey, geometryActiveLegIndex, geometryActiveLegMode, position, offRouteStatus, transitLegs, timestampMs]);
 
-  useEffect(() => {
-    const sameFix = processedResetRef.current === resetKey && processedPositionRef.current === input.position;
-    const previous = previousRef.current;
-    // A refreshed leg object or off-route status is not a new arrival sample.
-    if (sameFix && previous && (previous.phase === "BOARDED" || previous.phase === "BOARDED_UNCERTAIN_GEOMETRY") &&
-        previous.resolvedLegIndex === input.nextTransitLeg?.legIndex) return;
-    processedPositionRef.current = input.position;
-    processedResetRef.current = resetKey;
-    const next = resolveWalkToTransitBoundary({ ...input, previous });
-    previousRef.current = next;
-    setState(next);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    resetKey,
-    input.geometryActiveLegIndex,
-    input.geometryActiveLegMode,
-    input.nextTransitLeg,
-    input.position,
-    input.offRouteStatus,
-  ]);
-
-  return state;
+  // Do not render a previous route's active ride while its reset effect is pending.
+  const session = snapshot.key === resetKey ? snapshot.session : createTransitJourneySession();
+  const scope = session.trackedLeg?.scope;
+  const confirmAlighting = () => {
+    if (!scope || snapshotRef.current.key !== resetKey) return false;
+    const previous = snapshotRef.current.session;
+    const next = confirmJourneyAlighting(previous, scope);
+    if (next === previous) return false;
+    snapshotRef.current = { key: resetKey, session: next };
+    setSnapshot(snapshotRef.current);
+    return true;
+  };
+  return { ...session.boundary, alightingReady: session.alightingReady, journeyComplete: session.journeyComplete, confirmAlighting };
 }

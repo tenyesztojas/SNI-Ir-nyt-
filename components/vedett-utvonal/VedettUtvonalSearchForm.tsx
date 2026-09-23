@@ -8,6 +8,7 @@ import { useGeolocation } from "@/lib/hooks/useGeolocation";
 import { useRouteNavigation } from "@/lib/hooks/useRouteNavigation";
 import { useWalkToTransitBoundary } from "@/lib/hooks/useWalkToTransitBoundary";
 import { resolveTransitProgress } from "@/lib/vedett-route/navigation/transitProgress";
+import { useStableTransitProgress } from "@/lib/hooks/useStableTransitProgress";
 import { useScreenWakeLock } from "@/lib/hooks/useScreenWakeLock";
 import { journeyLegsToNavigationRoute } from "@/lib/vedett-route/geometry";
 import {
@@ -1364,57 +1365,29 @@ function RankedJourneyCard({
   const geometryActiveLegIndex = resolveActiveLegIndex(routeProgress.matchedSegmentIndex, navigationRouteGeometry.legRanges);
   const geometryActiveLeg = typeof geometryActiveLegIndex === "number" ? navigationLegs[geometryActiveLegIndex] : undefined;
 
-  // SPRINT 7.1, Section B/C/E — WALK→TRANSIT BOUNDARY RESOLVER. A `geometryActiveLegIndex`
-  // (fent) KIZÁRÓLAG a globális GPS-projekcióból jön (lásd a sprint audit-
-  // riportját: ez okozta a "150 m felesleges gyaloglás" és a "WALK-on
-  // ragadás felszállás után" hibákat). Ha a geometria épp WALK-ot jelez,
-  // megkeressük a KÖVETKEZŐ TRANSIT leget és annak SAJÁT, lokális
-  // geometriáját/boarding-koordinátáját — ez a legTransition.ts pure
-  // resolver bemenete. A resolver EGY MÁSODIK, FÜGGETLEN GPS-bizonyítékot
-  // ad (nem a globális matchedSegmentIndex-et), és csak TÖBB egymást követő,
-  // konzisztens fix után finomítja az aktív leg indexét — sosem egyetlen
-  // mintából, sosem idő alapján (lásd a modul fejlécét).
-  const nextTransitLegForBoundary = useMemo(() => {
-    if (geometryActiveLeg?.mode !== "WALK" || typeof geometryActiveLegIndex !== "number") return null;
-    for (let i = geometryActiveLegIndex + 1; i < navigationLegs.length; i += 1) {
-      if (navigationLegs[i].mode === "TRANSIT") {
-        const leg = navigationLegs[i];
-        const range = navigationRouteGeometry.legRanges.find((r) => r.legIndex === i) ?? null;
-        return {
-          legIndex: i,
-          boardingCoordinate:
-            typeof leg.fromLon === "number" && typeof leg.fromLat === "number"
-              ? ([leg.fromLon, leg.fromLat] as const)
-              : null,
-          legCoordinates: range?.legCoordinates ?? null,
-          // SAFETY SPRINT (2026-09-17) — a leg NORMALIZÁLT transitMode-ja
-          // (lásd orchestrator.ts mapLeg(), JourneyLeg.transitMode), a
-          // legTransition.ts gyenge-geometriás BOARDED_UNCERTAIN_GEOMETRY
-          // fallbackjához.
-          transitMode: leg.transitMode,
-          // TRANSIT STATE CONTINUITY + ARRIVAL SPRINT (2026-09-18) — a leg
-          // SAJÁT to-koordinátája (leszállási pont) a generikus ARRIVED
-          // felismeréshez (lásd legTransition.ts), ÉS igaz/hamis jelző,
-          // hogy van-e a Journey-ben egy KÖVETKEZŐ leg ez után (az ARRIVED
-          // csak akkor léphet tovább — a végső megérkezést a MEGLÉVŐ
-          // isAtRouteEnd() jelzi, ezt a modul azt nem helyettesíti).
-          alightingCoordinate:
-            typeof leg.toLon === "number" && typeof leg.toLat === "number"
-              ? ([leg.toLon, leg.toLat] as const)
-              : null,
-          hasFollowingLeg: i + 1 < navigationLegs.length,
-        };
-      }
-    }
-    return null;
-  }, [geometryActiveLeg?.mode, geometryActiveLegIndex, navigationLegs, navigationRouteGeometry.legRanges]);
+  // Keep every transit leg available so the session can retain the boarded
+  // vehicle across map changes and collect fresh evidence after each transfer.
+  const transitLegsForBoundary = useMemo(() => navigationLegs.flatMap((leg, i) => {
+    if (leg.mode !== "TRANSIT") return [];
+    const range = navigationRouteGeometry.legRanges.find(r => r.legIndex === i);
+    const identity = displayedJourney.legs[i];
+    return [{
+      legIndex: i,
+      scope: JSON.stringify([i, identity?.tripId, identity?.fromStopId, identity?.toStopId, leg.fromLat, leg.fromLon, leg.toLat, leg.toLon]),
+      boardingCoordinate: typeof leg.fromLon === "number" && typeof leg.fromLat === "number" ? [leg.fromLon, leg.fromLat] as const : null,
+      alightingCoordinate: typeof leg.toLon === "number" && typeof leg.toLat === "number" ? [leg.toLon, leg.toLat] as const : null,
+      legCoordinates: range?.legCoordinates ?? null,
+      transitMode: leg.transitMode,
+      hasFollowingLeg: i + 1 < navigationLegs.length,
+    }];
+  }), [navigationLegs, navigationRouteGeometry.legRanges, displayedJourney.legs]);
+  const nextTransitLegForBoundary = transitLegsForBoundary.find(leg => leg.legIndex > (geometryActiveLegIndex ?? -1)) ?? null;
 
-  // Ugyanaz a reset-pont, mint a routeProgress motoré (új route vagy
-  // navigáció ki/be) — lásd useRouteNavigation.ts. Stabil objektum-referencia
-  // (useMemo), különben a hook minden renderen resetelne a hiszterézisen.
+  // Compare route contents, not array references: realtime delay updates must
+  // not erase boarding or confirmed alighting. Route/trip/mode changes reset.
   const boundaryResetKey = useMemo(
-    () => ({ coordinates: navigationRouteCoordinates, mode: navigationMode }),
-    [navigationRouteCoordinates, navigationMode],
+    () => JSON.stringify([navigationMode, navigationRouteCoordinates, transitLegsForBoundary.map(leg => leg.scope)]),
+    [navigationRouteCoordinates, navigationMode, transitLegsForBoundary],
   );
   // Stabil objektum-referencia a GPS-pozícióhoz — KIZÁRÓLAG akkor változzon,
   // ha a tényleges lat/lon/accuracy is változott, különben egy React
@@ -1442,6 +1415,8 @@ function RankedJourneyCard({
       previous: null,
     },
     boundaryResetKey,
+    transitLegsForBoundary,
+    boundaryPosition ? currentPosition?.timestampMs ?? null : null,
   );
 
   // A VÉGSŐ, a kártya/instrukciók/stop-progress által használt leg index —
@@ -1545,7 +1520,7 @@ function RankedJourneyCard({
   // Fresh gated GPS is projected onto this leg, using metric stop positions.
   // Missing fixes, weak geometry or incomplete stops suppress precise counts.
   // An explicitly empty list is a direct trip; undefined means unknown data.
-  const activeRemainingStops =
+  const candidateRemainingStops =
     (activeLegStopProgress.reliable || activeLeg?.intermediateStops?.length === 0) && !(isBoardedPhase && boundaryPosition === null)
       ? resolveTransitProgress(
           activeLegRange?.legCoordinates ?? [], activeLeg?.intermediateStops,
@@ -1553,18 +1528,25 @@ function RankedJourneyCard({
           boundaryPosition,
         )
       : null;
+  const activeRemainingStops = useStableTransitProgress(
+    JSON.stringify([boundaryResetKey, activeLegIndex, activeLeg?.intermediateStops]),
+    candidateRemainingStops,
+    boundaryPosition ? currentPosition?.timestampMs ?? null : null,
+  );
   const activeNavigationInstruction = useMemo(
     () =>
       selectActiveInstructionWithStopProgress(navigationInstructions, {
         legIndex: activeLegIndex,
         legPhaseFraction: activeLegPhaseFraction,
         atRouteEnd: activeRouteEnd,
+        requireAlightingConfirmation: activeLeg?.mode === "TRANSIT",
+        alightingConfirmed: walkToTransitBoundary.journeyComplete,
         remainingStops: activeRemainingStops,
         onboard: isBoardedPhase,
         nextStopName: activeRemainingStops?.nextStopName,
         nearAlighting: activeRemainingStops?.nearAlighting,
       }),
-    [navigationInstructions, activeLegIndex, activeLegPhaseFraction, activeRouteEnd, activeRemainingStops, isBoardedPhase]
+    [navigationInstructions, activeLegIndex, activeLegPhaseFraction, activeRouteEnd, activeRemainingStops, isBoardedPhase, activeLeg?.mode, walkToTransitBoundary.journeyComplete]
   );
   // NAVIGATION — WALK TURN-BY-TURN PROGRESS (Sprint 5, 2026-09-16). CSAK
   // akkor aktív, ha az activeLeg valóban WALK (nem érinti a
@@ -1862,6 +1844,12 @@ function RankedJourneyCard({
   // egy esetleg még alagút-előtti, stale fixről (lásd gpsFixGate.ts azonos
   // "esemény-időpont vs. fix-időpont" mintája). Nincs második/duplikált
   // fetch — ugyanaz az EGYETLEN reroute-effekt fut, mint korábban.
+  const handleJourneyAlighting = () => {
+    if (!walkToTransitBoundary.confirmAlighting()) return;
+    transitGpsLossConfirmationRef.current = resolveTransitGpsLossConfirmation();
+    setTransitGpsLossConfirmation(transitGpsLossConfirmationRef.current);
+  };
+
   const handleTransitGpsLossDecline = () => {
     transitGpsLossConfirmationRef.current = declineTransitOnboard(Date.now());
     setTransitGpsLossConfirmation(transitGpsLossConfirmationRef.current);
@@ -2690,6 +2678,12 @@ function RankedJourneyCard({
                 }}
               >
                 <div className="text-base font-bold text-sni-text">{navigationInstructionForDisplay.title}</div>
+                {walkToTransitBoundary.alightingReady && !transitGpsLossConfirmationVisible && (
+                  <div className="mt-2">
+                    <p className="text-sm text-gray-600">A leszállóhely közelében vagy. Ha már leszálltál, jelezd itt.</p>
+                    <button type="button" onClick={handleJourneyAlighting} className="btn-primary mt-2 text-sm">Leszálltam</button>
+                  </div>
+                )}
                 {navigationInstructionForDisplay.detail && (
                   <div className="mt-0.5 text-sm text-gray-600">{navigationInstructionForDisplay.detail}</div>
                 )}
