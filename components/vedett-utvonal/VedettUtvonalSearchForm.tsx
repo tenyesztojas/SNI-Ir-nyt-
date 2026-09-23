@@ -7,6 +7,7 @@ import dynamic from "next/dynamic";
 import { useGeolocation } from "@/lib/hooks/useGeolocation";
 import { useRouteNavigation } from "@/lib/hooks/useRouteNavigation";
 import { useWalkToTransitBoundary } from "@/lib/hooks/useWalkToTransitBoundary";
+import { resolveTransitProgress } from "@/lib/vedett-route/navigation/transitProgress";
 import { useScreenWakeLock } from "@/lib/hooks/useScreenWakeLock";
 import { journeyLegsToNavigationRoute } from "@/lib/vedett-route/geometry";
 import {
@@ -15,7 +16,6 @@ import {
   isAtRouteEnd,
   resolveActiveLegIndex,
   resolveLegPhaseFraction,
-  resolveRemainingStops,
   selectActiveInstructionWithStopProgress,
 } from "@/lib/vedett-route/navigation/instructions";
 // NAVIGATION — WALK TURN-BY-TURN PROGRESS (Sprint 5, 2026-09-16) — a Sprint 4
@@ -1542,32 +1542,16 @@ function RankedJourneyCard({
         : { stops: [], reliable: false },
     [activeLeg, activeLegRange]
   );
-  // TRANSIT STATE CONTINUITY + REMAINING STOPS SPRINT (2026-09-22) — ROOT
-  // CAUSE FIX a "Utazz még 2 megállót" hibára, ami a valódi felszállás UTÁN
-  // is kiírva maradt (mobilteszt 4. hibája, Széll Kálmán tér). A
-  // resolveRemainingStops() a GLOBÁLIS routeProgress.matchedSegmentIndex-et
-  // vetíti az aktív leg tartományára — ez HELYES, amíg friss GPS-fixek
-  // érkeznek, de amikor a boundary resolver MÁR BOARDED/BOARDED_UNCERTAIN_
-  // GEOMETRY-t jelez ÉS a GPS azóta elveszett (boundaryPosition === null —
-  // ugyanaz a gpsFixUsable/gpsReacquiring-gate, mint routeNavigationPosition-
-  // nél fent), a matchedSegmentIndex STRUKTURÁLISAN befagy az utolsó élő
-  // fixnél (tipikusan a felszállás körüli pozíciónál, pl. mélyen
-  // földalatti metrón) — ekkor egy konkrét "N megálló" szám hátralévő
-  // megállóként megjelenítve FÉLREVEZETŐ, hamisan-pontos lenne (lásd a
-  // sprint korlátja: "no falsely-precise count under low confidence"),
-  // hiszen a user valójában továbbhaladt, csak nincs róla friss GPS-
-  // bizonyíték. Fix: ilyenkor NULL-t adunk át (nem egy KITALÁLT/becsült
-  // számot) — a selectActiveInstructionWithStopProgress() ekkor BYTE-RA a
-  // Sprint 2 generikus RIDE-szövegre esik vissza (lásd instructions.ts),
-  // ami NEM állít konkrét, esetleg hibás megállószámot. Amint friss,
-  // usable GPS-fix érkezik (boundaryPosition ismét nem null), a
-  // matchedSegmentIndex frissül, és a pontos szám visszatér — nincs itt
-  // semmilyen új GPS-forrás/becslés, kizárólag a MÁR MEGLÉVŐ gpsFixUsable-
-  // gate egy MÁSIK, MÁR MEGLÉVŐ deriváción (aktivRemainingStops) történő
-  // alkalmazása.
+  // Fresh gated GPS is projected onto this leg, using metric stop positions.
+  // Missing fixes, weak geometry or incomplete stops suppress precise counts.
+  // An explicitly empty list is a direct trip; undefined means unknown data.
   const activeRemainingStops =
-    activeLegStopProgress.reliable && !(isBoardedPhase && boundaryPosition === null)
-      ? resolveRemainingStops(routeProgress.matchedSegmentIndex, activeLegRange, activeLegStopProgress.stops)
+    (activeLegStopProgress.reliable || activeLeg?.intermediateStops?.length === 0) && !(isBoardedPhase && boundaryPosition === null)
+      ? resolveTransitProgress(
+          activeLegRange?.legCoordinates ?? [], activeLeg?.intermediateStops,
+          { name: activeLeg?.toName ?? "", lat: activeLeg?.toLat, lon: activeLeg?.toLon },
+          boundaryPosition,
+        )
       : null;
   const activeNavigationInstruction = useMemo(
     () =>
@@ -1576,8 +1560,11 @@ function RankedJourneyCard({
         legPhaseFraction: activeLegPhaseFraction,
         atRouteEnd: activeRouteEnd,
         remainingStops: activeRemainingStops,
+        onboard: isBoardedPhase,
+        nextStopName: activeRemainingStops?.nextStopName,
+        nearAlighting: activeRemainingStops?.nearAlighting,
       }),
-    [navigationInstructions, activeLegIndex, activeLegPhaseFraction, activeRouteEnd, activeRemainingStops]
+    [navigationInstructions, activeLegIndex, activeLegPhaseFraction, activeRouteEnd, activeRemainingStops, isBoardedPhase]
   );
   // NAVIGATION — WALK TURN-BY-TURN PROGRESS (Sprint 5, 2026-09-16). CSAK
   // akkor aktív, ha az activeLeg valóban WALK (nem érinti a

@@ -573,16 +573,28 @@ export function selectActiveInstruction(
 // vissza (fallback).
 export function selectActiveInstructionWithStopProgress(
   instructions: readonly NavigationInstruction[],
-  options: SelectActiveInstructionOptions & { remainingStops?: RemainingStopsResult | null } = {}
+  options: SelectActiveInstructionOptions & { remainingStops?: RemainingStopsResult | null; onboard?: boolean; nextStopName?: string; nearAlighting?: boolean } = {}
 ): ActiveNavigationInstruction {
-  const base = selectActiveInstruction(instructions, options);
+  let base = selectActiveInstruction(instructions, options);
+  // Once boarded, geometry thirds cannot prove alighting or final arrival.
+  // The boundary resolver remains responsible for advancing to the next leg.
+  const finalDestinationReached = options.atRouteEnd && options.nearAlighting &&
+    !instructions.some(i => i.legIndex > (options.legIndex ?? -1));
+  if (!finalDestinationReached && (options.onboard || (options.remainingStops && (options.legPhaseFraction ?? 0) >= 1 / 3))) {
+    const rideIndex = instructions.findIndex(i => i.legIndex === options.legIndex && i.kind === "RIDE");
+    if (rideIndex >= 0) base = { current: { ...instructions[rideIndex], detail: undefined }, next: instructions[rideIndex + 1] ?? null };
+  }
   if (!base.current || base.current.kind !== "RIDE" || !options.remainingStops) {
     return base;
   }
 
   const display = resolveStopProgressDisplay(options.remainingStops);
   return {
-    current: { ...base.current, title: display.title, detail: undefined },
+    current: {
+      ...base.current,
+      title: options.nearAlighting ? "A leszállóhely közelében vagy. Készülj a leszállásra" : display.title,
+      detail: options.nextStopName ? `Következő megálló: ${options.nextStopName}` : undefined,
+    },
     next: base.next,
   };
 }

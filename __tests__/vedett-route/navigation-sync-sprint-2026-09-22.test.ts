@@ -191,7 +191,7 @@ describe("(B) Hátralévő megállók száma progress-alapú, és GPS-kiesés al
   test("VedettUtvonalSearchForm.tsx: BOARDED fázisban, ha nincs élő GPS-pozíció, a hátralévő-megálló szám elnyomódik (nincs hamisan-pontos, befagyott szám)", () => {
     assert.match(
       searchFormSrc,
-      /activeLegStopProgress\.reliable\s*&&\s*!\(isBoardedPhase\s*&&\s*boundaryPosition\s*===\s*null\)/,
+      /activeLegStopProgress\.reliable[^\n]*&&\s*!\(isBoardedPhase\s*&&\s*boundaryPosition\s*===\s*null\)/,
       "az activeRemainingStops derivációnak explicit el kell nyomnia a számot BOARDED + null boundaryPosition esetén"
     );
   });
@@ -203,8 +203,8 @@ describe("(B) Hátralévő megállók száma progress-alapú, és GPS-kiesés al
     const actualCallSites = searchFormSrc
       .split("\n")
       .filter((line) => !line.trim().startsWith("//"))
-      .filter((line) => /resolveRemainingStops\(/.test(line));
-    assert.equal(actualCallSites.length, 1, "resolveRemainingStops()-t a komponens pontosan egyszer hívja (nem duplikálja a logikát)");
+      .filter((line) => /resolveTransitProgress\(/.test(line));
+    assert.equal(actualCallSites.length, 1, "resolveTransitProgress()-t a komponens pontosan egyszer hívja (nem duplikálja a logikát)");
     assert.doesNotMatch(
       searchFormSrc,
       /remainingStopCount\s*[:=]/,

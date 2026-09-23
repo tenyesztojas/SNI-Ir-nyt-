@@ -25,6 +25,9 @@ export function useWalkToTransitBoundary(
   const [state, setState] = useState<WalkToTransitBoundaryState>(() => createInitialWalkToTransitBoundaryState());
   const previousRef = useRef<WalkToTransitBoundaryState | null>(null);
 
+  const processedPositionRef = useRef(input.position);
+  const processedResetRef = useRef<unknown>(null);
+
   useEffect(() => {
     previousRef.current = null;
     setState(createInitialWalkToTransitBoundaryState());
@@ -32,7 +35,14 @@ export function useWalkToTransitBoundary(
   }, [resetKey]);
 
   useEffect(() => {
-    const next = resolveWalkToTransitBoundary({ ...input, previous: previousRef.current });
+    const sameFix = processedResetRef.current === resetKey && processedPositionRef.current === input.position;
+    const previous = previousRef.current;
+    // A refreshed leg object or off-route status is not a new arrival sample.
+    if (sameFix && previous && (previous.phase === "BOARDED" || previous.phase === "BOARDED_UNCERTAIN_GEOMETRY") &&
+        previous.resolvedLegIndex === input.nextTransitLeg?.legIndex) return;
+    processedPositionRef.current = input.position;
+    processedResetRef.current = resetKey;
+    const next = resolveWalkToTransitBoundary({ ...input, previous });
     previousRef.current = next;
     setState(next);
     // eslint-disable-next-line react-hooks/exhaustive-deps
