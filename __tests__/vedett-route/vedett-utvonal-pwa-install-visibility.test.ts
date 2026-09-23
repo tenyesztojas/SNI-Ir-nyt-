@@ -19,7 +19,14 @@ const vedettManifest = JSON.parse(read("public/manifest-vedett-utvonal.json"));
 
 describe("1/12/13) Manifest — install surface-ök a Védett Útvonal identitást hordozzák, a VédettSarok identitás változatlan", () => {
   test("a normál /vedett-utvonal oldal (install surface) a Védett Útvonal manifestet exportálja", () => {
-    assert.match(normalPageSrc, /export const metadata: Metadata = \{\s*\n\s*manifest: "\/manifest-vedett-utvonal\.json",/);
+    // 2026-09-23: a metadata objektum title/description mezőkkel bővült
+    // (publikus SEO, lásd riport 3. pont) — a manifest mező továbbra is
+    // jelen van ugyanabban az export const metadata blokkban, csak már
+    // nem feltétlenül az első kulcs, ezért a regex a metadata blokkon
+    // BELÜL keresi a manifest sort, nem közvetlenül a blokk eleje után.
+    const metadataBlockMatch = normalPageSrc.match(/export const metadata: Metadata = \{[\s\S]*?\n\};/);
+    assert.ok(metadataBlockMatch, "az export const metadata blokknak léteznie kell");
+    assert.match(metadataBlockMatch![0], /manifest: "\/manifest-vedett-utvonal\.json",/);
   });
 
   test("a dedikált /vedett-utvonal/app shell is a Védett Útvonal manifestet exportálja", () => {

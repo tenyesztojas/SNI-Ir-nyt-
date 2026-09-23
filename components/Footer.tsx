@@ -32,6 +32,20 @@ export default function Footer() {
               </div>
             </div>
             <div>
+              <p className="font-bold text-gray-900">Modulok</p>
+              <div className="mt-2 flex flex-col gap-1.5">
+                <Link href="/vedett-utvonal" className="text-gray-500 hover:text-sni-brand-blue hover:underline">
+                  Védett Útvonal
+                </Link>
+                <Link href="/kozosseg" className="text-gray-500 hover:text-sni-brand-blue hover:underline">
+                  Közösség
+                </Link>
+                <Link href="/vedett-karrier" className="text-gray-500 hover:text-sni-brand-blue hover:underline">
+                  VédettKarrier
+                </Link>
+              </div>
+            </div>
+            <div>
               <p className="font-bold text-gray-900">Fiók</p>
               <div className="mt-2 flex flex-col gap-1.5">
                 <Link href="/belepes" className="text-gray-500 hover:text-sni-brand-blue hover:underline">
@@ -65,9 +79,12 @@ export default function Footer() {
           </div>
         </div>
 
-        <div className="mt-8 flex flex-col gap-1 border-t border-gray-100 pt-6 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-xs text-gray-400">© 2026 VédettSarok — Minden jog fenntartva</p>
-          <p className="text-xs text-gray-400">Nem orvosi, diagnosztikai vagy terápiás eszköz</p>
+        <div className="mt-8 border-t border-gray-100 pt-6">
+          <p className="text-base font-bold text-sni-text">VédettSarok — Itt biztonságban vagy</p>
+          <div className="mt-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-xs text-gray-400">© 2026 VédettSarok — Minden jog fenntartva</p>
+            <p className="text-xs text-gray-400">Nem orvosi, diagnosztikai vagy terápiás eszköz</p>
+          </div>
         </div>
       </div>
     </footer>

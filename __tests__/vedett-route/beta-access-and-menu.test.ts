@@ -239,17 +239,17 @@ describe("H/I/J) menü gating — HeaderClient.tsx", () => {
     );
   });
 
-  test("H/I) a 'vedett_route_beta' bejegyzés saját, admin/grant-független szabályt kap: LÁTHATÓ minden bejelentkezett felhasználónak, ha a flag be van kapcsolva; NEM látható kijelentkezett usernek, MÉG akkor sem, ha a flag be van kapcsolva", () => {
+  test("H/I) a 'vedett_route_beta' bejegyzés saját, admin/grant-független szabályt kap: LÁTHATÓ MINDENKINEK (bejelentkezve és kijelentkezve is), ha a flag be van kapcsolva — a Védett Útvonal publikus bemutatóoldalt kapott (2026-09-23), a menüpont láthatósága ettől kezdve nem függ a bejelentkezéstől", () => {
     // A filter callback nem külön named function — magát a speciális ágat
     // vizsgáljuk a teljes forrásban szöveg-mintaként, mert ez egy inline
     // arrow function egy .filter() hívásban, nem egy `function` deklaráció
     // (amit extractFunctionSource() tudna kapcsos-zárójel-mélységgel kivágni).
     const specialCaseMatch = headerClientSrc.match(
-      /if \(l\.key === "vedett_route_beta"\) \{[\s\S]*?return vedettRouteEnabled && isLoggedIn;/
+      /if \(l\.key === "vedett_route_beta"\) \{[\s\S]*?return vedettRouteEnabled;/
     );
     assert.ok(
       specialCaseMatch,
-      "a 'vedett_route_beta' kulcsnak külön, 'vedettRouteEnabled && isLoggedIn' feltételt kell visszaadnia — NEM admin/pilotAccess alapút"
+      "a 'vedett_route_beta' kulcsnak külön, 'vedettRouteEnabled' feltételt kell visszaadnia (isLoggedIn NÉLKÜL) — NEM admin/pilotAccess alapút"
     );
   });
 
@@ -299,8 +299,10 @@ describe("H/I/J) menü gating — HeaderClient.tsx", () => {
 });
 
 describe("K) szerver oldali oldal- és API-védelem — közös access guard", () => {
-  test("app/vedett-utvonal/page.tsx: kijelentkezett felhasználó redirect('/belepes')-t kap", () => {
-    assert.match(pageSrc, /if \(!user\) \{\s*redirect\("\/belepes"\);/);
+  test("app/vedett-utvonal/page.tsx: kijelentkezett felhasználó NEM kap redirect('/belepes')-t, hanem a publikus bemutatót látja, CTA-val a /belepes?next=... felé (2026-09-23 frissítés, lásd riport 3. pont)", () => {
+    assert.match(pageSrc, /if \(!user\) \{/);
+    assert.doesNotMatch(pageSrc, /if \(!user\) \{\s*redirect\("\/belepes"\);/);
+    assert.match(pageSrc, /href="\/belepes\?next=%2Fvedett-utvonal"/);
   });
 
   test("app/vedett-utvonal/page.tsx: a hozzáférési döntés a KÖZÖS VEDETT_ROUTE_ACCESS_LEVEL háromágú modellt követi (nem egy hardcode-olt, csak-grant-alapú logikát) — a döntés jelenleg (authenticated_users) minden bejelentkezett usert átenged", () => {
@@ -324,13 +326,13 @@ describe("K) szerver oldali oldal- és API-védelem — közös access guard", (
     //      / "nincs hozzáférésed" ágon a workspace SOSEM renderelődik),
     //   4) <VedettUtvonalWorkspace> renderelése — ez csak ezután jöhet.
     const enabledIdx = pageSrc.indexOf("const enabled");
-    const allowedIdx = pageSrc.indexOf("const allowed");
-    const notAllowedGuardIdx = pageSrc.indexOf("if (!allowed)");
+    const allowedIdx = pageSrc.indexOf("const hasLevelAccess");
+    const notAllowedGuardIdx = pageSrc.indexOf("if (!hasLevelAccess)");
     const workspaceIdx = pageSrc.indexOf("<VedettUtvonalWorkspace");
 
     assert.ok(enabledIdx !== -1, "az `enabled` (feature flag) state-nek léteznie kell");
-    assert.ok(allowedIdx !== -1, "az `allowed` (hozzáférési döntés) state-nek léteznie kell");
-    assert.ok(notAllowedGuardIdx !== -1, "az `if (!allowed)` korai return guard-nak léteznie kell");
+    assert.ok(allowedIdx !== -1, "a `hasLevelAccess` (hozzáférési döntés) state-nek léteznie kell");
+    assert.ok(notAllowedGuardIdx !== -1, "az `if (!hasLevelAccess)` korai return guard-nak léteznie kell");
     assert.ok(
       workspaceIdx !== -1,
       "a page.tsx-nek a <VedettUtvonalWorkspace> komponenst kell renderelnie (a Kedvenc útvonalak integráció óta ez a top-level interaktív komponens, nem közvetlenül a form)"

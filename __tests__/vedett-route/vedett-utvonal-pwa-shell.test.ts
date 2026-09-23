@@ -119,10 +119,10 @@ describe("4) Auth — UGYANAZ a Supabase session, nincs külön PWA account, ret
   });
 });
 
-describe("5) Nincs kódduplikáció — a normál /vedett-utvonal oldal VÁLTOZATLAN", () => {
-  test("a normál oldal továbbra is a saját, egyszerű redirect(\"/belepes\")-et használja (nincs return-URL logika hozzáadva — a PWA-specifikus flow nem szivárgott át)", () => {
-    assert.match(normalPageSrc, /redirect\("\/belepes"\);/);
-    assert.doesNotMatch(normalPageSrc, /next=/);
+describe("5) A normál /vedett-utvonal oldal publikus bemutatót ad kijelentkezve (2026-09-23 frissítés, lásd riport 3. pont) — a PWA shell (/vedett-utvonal/app) marad a saját, redirect-alapú flow-jánál", () => {
+  test("a normál oldal kijelentkezve NEM redirectel, hanem a /belepes?next=%2Fvedett-utvonal CTA-t kínálja fel — a PWA-specifikus dedikált shell (app/vedett-utvonal/app/page.tsx) flow-ja nem változott", () => {
+    assert.doesNotMatch(normalPageSrc, /redirect\("\/belepes"\);/);
+    assert.match(normalPageSrc, /href="\/belepes\?next=%2Fvedett-utvonal"/);
   });
 
   test("a PWA route ÉS a normál oldal is a VedettUtvonalWorkspace-t importálja (reuse, nincs lemásolt kereső/térkép komponens)", () => {

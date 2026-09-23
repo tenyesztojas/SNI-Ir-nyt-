@@ -57,11 +57,12 @@ describe("B) FŐOLDALI HERO-SZÖVEG — a specifikáció szerinti végleges tart
     );
   });
 
-  test("a törzsszöveg pontosan a specifikáció szerinti mondatot tartalmazza", () => {
+  test("a törzsszöveg pontosan a specifikáció szerinti mondatot tartalmazza (2026-09-23 frissítés: nem kizárólag budapesti, lásd riport 2. pont)", () => {
     assert.match(
       homeSrc,
-      /A Védett Útvonal autista és ADHD-s embereknek, valamint érintett családoknak\s*\n\s*segít olyan budapesti útvonalat választani, amelynél nem csak az érkezési idő számít\./
+      /A Védett Útvonal autista és ADHD-s embereknek, valamint érintett családoknak\s*\n\s*segít olyan útvonalat választani — Budapesten és azon kívül is —, amelynél nem\s*\n\s*csak az érkezési idő számít\./
     );
+    assert.doesNotMatch(homeSrc, /budapesti útvonalat választani/);
   });
 
   test("a képességlista tartalmazza mind a hat elemet, a specifikáció szerinti sorrendben, 'valós idejű forgalmi adatok' szöveggel (nem a korábbi 'valós idejű BKK-adatok')", () => {

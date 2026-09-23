@@ -88,13 +88,18 @@ export default function HeaderClient({
     if (l.key === "vedett_route_beta") {
       // PUBLIKUS, REGISZTRÁLT FELHASZNÁLÓI BÉTA (2026-09-09): a korábbi
       // zárt béta szakasz admin/pilot_access grant-ellenőrzése itt lezárult
-      // — mostantól MINDEN bejelentkezett felhasználónak látszik, ha a
-      // globális kill switch be van kapcsolva. A grant megjelenése (a lenti
-      // isAdmin || pilotAccess.includes(...) ág) NEM vonatkozik rá többé —
-      // az "vedett_route_beta" pilot_access kulcs továbbra is létezik és
+      // — mostantól MINDENKINEK látszik (bejelentkezve VAGY kijelentkezve
+      // is), ha a globális kill switch be van kapcsolva: a Védett Útvonal
+      // publikus bemutatóoldalt kapott (lásd app/vedett-utvonal/page.tsx),
+      // a tényleges keresés/navigáció pedig továbbra is csak bejelentkezve
+      // érhető el — ezt a menüpont láthatósága nem befolyásolja, az API/
+      // route-szintű auth (lib/vedett-route/access.ts) attól függetlenül
+      // érvényesül. A grant megjelenése (a lenti isAdmin ||
+      // pilotAccess.includes(...) ág) NEM vonatkozik rá többé — az
+      // "vedett_route_beta" pilot_access kulcs továbbra is létezik és
       // működik (backwards compatibility, admin/tesztelők kezelőfelülete),
       // de a menüpont láthatóságát már nem ez dönti el.
-      return vedettRouteEnabled && isLoggedIn;
+      return vedettRouteEnabled;
     }
     if (l.requiresFeatureFlag && !vedettRouteEnabled) return false;
     return isAdmin || pilotAccess.includes(l.key);

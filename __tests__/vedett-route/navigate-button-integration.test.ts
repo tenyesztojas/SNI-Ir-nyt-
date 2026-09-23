@@ -343,8 +343,9 @@ describe("L) nincs saját auth/pilot_access logika a NavigateButtonban", () => {
     assert.match(navigateButtonSrc, /<Link\s+href=\{vedettUtvonalHref\}/);
   });
 
-  test("app/vedett-utvonal/page.tsx-en a bejelentkezés-ellenőrzés VÁLTOZATLANUL a KÖZÖS getCurrentUserAndProfile()+redirect('/belepes') mintát követi — a Védett Hely integráció nem ad hozzá egy második, párhuzamos auth-ágat", () => {
-    assert.match(vedettUtvonalPageSrc, /if \(!user\) \{\s*redirect\("\/belepes"\);/);
+  test("app/vedett-utvonal/page.tsx-en a bejelentkezés-ellenőrzés VÁLTOZATLANUL a KÖZÖS getCurrentUserAndProfile() hívást használja (nem a NavigateButton/deep-link integráció hoz létre egy második, párhuzamos auth-ágat) — a kijelentkezett ág mostantól publikus bemutatót renderel redirect helyett (2026-09-23, lásd riport 3. pont)", () => {
+    assert.match(vedettUtvonalPageSrc, /const \{ user, profile \} = await getCurrentUserAndProfile\(\);/);
+    assert.match(vedettUtvonalPageSrc, /if \(!user\) \{/);
   });
 });
 

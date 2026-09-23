@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
-import { MapPin, HeartHandshake, ArrowRight, CalendarDays, ExternalLink, Compass } from "lucide-react";
+import { MapPin, HeartHandshake, ArrowRight, CalendarDays, ExternalLink, Compass, ShieldCheck, CheckCircle2, XCircle, Flag } from "lucide-react";
 import { getCategories, getApprovedPlaces, citiesFromPlaces, countriesFromPlaces, getCurrentUserAndProfile } from "@/lib/data";
 import { getUnreadNotificationCount } from "@/lib/community/data";
 import { createClient } from "@/lib/supabase/server";
@@ -46,12 +46,23 @@ export default async function HomePage() {
             VédettSarok —<br className="hidden sm:block" /> itt biztonságban vagy!
           </h1>
           <p className="mx-auto mt-5 max-w-2xl text-base text-white/80 sm:text-lg">
-            Közösségi térkép és tudástár autizmussal és ADHD-val érintett családoknak,
-            szülőknek és szakembereknek, hogy könnyebb legyen biztonságos,
-            elfogadó és kiszámítható helyeket találni.
+            Autizmus- és ADHD-barát helyek, közösség és személyre szabott útvonaltervezés
+            egyetlen, ingyenesen használható platformon.
           </p>
 
           <HeroSearchForm categories={categories} cities={cities} countries={countries} />
+
+          {vedettRouteEnabled && (
+            <div className="mt-3 flex justify-center">
+              <Link
+                href="/vedett-utvonal"
+                className="inline-flex items-center gap-2 rounded-full border border-white/30 bg-white/10 px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-white/20"
+              >
+                <Compass size={16} aria-hidden="true" />
+                Útvonalat tervezek
+              </Link>
+            </div>
+          )}
 
           {/* Közelség gomb – csak bejelentkezett usernek */}
           {user && (
@@ -96,7 +107,8 @@ export default async function HomePage() {
 
             <p className="mt-3 max-w-2xl text-sm leading-relaxed text-gray-600 sm:text-base">
               A Védett Útvonal autista és ADHD-s embereknek, valamint érintett családoknak
-              segít olyan budapesti útvonalat választani, amelynél nem csak az érkezési idő számít.
+              segít olyan útvonalat választani — Budapesten és azon kívül is —, amelynél nem
+              csak az érkezési idő számít.
             </p>
 
             {/* Round 9, B) rész — a képességlista desktopon " · "
@@ -283,6 +295,37 @@ export default async function HomePage() {
               és szeretnél-e megjelenni a térképen. Pontos lakcímet nem jelenítünk meg.
             </span>
           </div>
+        </div>
+      </section>
+
+      {/* BIZALOM / "Hogyan működik?" — az /ertekelesi-rendszer oldal rövid,
+          főoldali összefoglalója (a teljes, jogilag pontos szöveg ott
+          olvasható). Csak azt állítjuk, amit a rendszer ténylegesen tud:
+          a helyeket közösségi tapasztalatok alapján ajánlják, ez NEM
+          garancia arra, hogy egy hely mindenki számára megfelelő. */}
+      <section className="mx-auto max-w-5xl px-4 py-12 sm:px-6">
+        <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-soft sm:p-8">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="text-sni-brand-teal" size={24} aria-hidden="true" />
+            <h2 className="text-xl font-bold text-gray-900">Hogyan működik az értékelés?</h2>
+          </div>
+          <div className="mt-5 grid gap-4 sm:grid-cols-3">
+            <div className="flex items-start gap-2 text-sm text-gray-600">
+              <CheckCircle2 className="mt-0.5 shrink-0 text-sni-brand-teal" size={18} aria-hidden="true" />
+              <span>A helyeket regisztrált felhasználók közösségi, valós tapasztalatai alapján ajánljuk — nem szerkesztői minősítés.</span>
+            </div>
+            <div className="flex items-start gap-2 text-sm text-gray-600">
+              <XCircle className="mt-0.5 shrink-0 text-gray-400" size={18} aria-hidden="true" />
+              <span>Egy hely szereplése NEM jelenti azt, hogy garantáltan autizmusbarát vagy mindenki számára megfelelő.</span>
+            </div>
+            <div className="flex items-start gap-2 text-sm text-gray-600">
+              <Flag className="mt-0.5 shrink-0 text-sni-brand-teal" size={18} aria-hidden="true" />
+              <span>Ha valamit hibásnak vagy problémásnak találsz, bármelyik hely oldaláról jelezheted.</span>
+            </div>
+          </div>
+          <Link href="/ertekelesi-rendszer" className="mt-5 inline-block text-sm font-semibold text-sni-brand-teal hover:underline">
+            Az értékelési rendszer részletei →
+          </Link>
         </div>
       </section>
 

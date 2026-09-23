@@ -60,9 +60,13 @@ export default async function RolunkPage() {
         </p>
 
         <p>
-          Az első verzió célja egy egyszerűen használható, mobilbarát rendszer, ahol lehet helyet keresni, új helyet
-          beküldeni, tapasztalatot megosztani és térképen böngészni. A hosszabb távú cél egy országos, megbízható,
-          moderált adatbázis létrehozása, amely valódi segítséget ad a mindennapi döntésekhez.
+          Ma a VédettSarok már túlmutat a helykeresőn: a <strong>Védett Helyek</strong> mellett elérhető a{" "}
+          <strong>Védett Útvonal</strong>, amely a valós tömegközlekedési adatok (BKK, MÁV, Volán, MOL Bubi) mellett
+          szenzoros és személyes preferenciákat is figyelembe vevő útvonaltervezést kínál, a <strong>Közösség</strong>{" "}
+          modul, ahol szülők, érintett felnőttek és szakemberek találhatnak egymásra, valamint a{" "}
+          <strong>VédettKarrier</strong>, amely a munkakörülmények és egyéni képességek összehangolásában segít. A
+          hosszabb távú cél egy országos, megbízható, moderált adatbázis és eszközrendszer további bővítése, amely
+          valódi segítséget ad a mindennapi döntésekhez.
         </p>
 
         {/* Üzenet kiemelő doboz */}

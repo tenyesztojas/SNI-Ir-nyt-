@@ -58,9 +58,12 @@ export default function AdatkezelesiTajekoztato() {
       <h1 className="mb-2 text-3xl font-bold text-sni-text">Adatkezelési Tájékoztató</h1>
       <p className="mb-1 text-sm text-gray-500">Hatályos: 2026. augusztus 5. napjától</p>
       <div className="mb-8 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
-        <strong>Adatkezelő:</strong> [Üzemeltető teljes neve / cégneve, székhelye, cégjegyzékszáma vagy
-        nyilvántartási száma, adószáma, elérhetősége – kitöltendő]
+        <strong>Adatkezelő:</strong> 4 Nature Korlátolt Felelősségű Társaság (rövid név: 4 Nature Kft.)
         <span className="ml-1 text-gray-400">(a továbbiakban: „Adatkezelő")</span>
+        <span className="block mt-1">Székhely: 2038 Sóskút, Kőszikla utca 21.</span>
+        <span className="block">Cégjegyzékszám: 13-09-221686</span>
+        <span className="block">Adószám: 32038107-1-13</span>
+        <span className="block mt-1">Kapcsolat: <a href="mailto:kapcsolat@vedettsarok.hu" className="underline">kapcsolat@vedettsarok.hu</a></span>
       </div>
 
       <P>Jelen tájékoztató a Weboldal (a továbbiakban: „Weboldal") működésével összefüggő adatkezelésekről nyújt tájékoztatást, az Európai Parlament és a Tanács (EU) 2016/679 rendelete (a továbbiakban: „GDPR"), valamint az információs önrendelkezési jogról és az információszabadságról szóló 2011. évi CXII. törvény (a továbbiakban: „Infotv.") rendelkezéseivel összhangban. A jelen tájékoztató a Weboldal <Link href="/aszf" className="text-sni-brand-blue hover:underline">Általános Szerződési Feltételeivel (ÁSZF)</Link> együtt értelmezendő; a fogalommeghatározások tekintetében az ÁSZF-ben foglaltak az irányadók.</P>
@@ -188,7 +191,7 @@ export default function AdatkezelesiTajekoztato() {
           ]} />
         </Sub>
         <Sub n="6.2.">
-          <P>A jogok gyakorlására vonatkozó kérelmet az Adatkezelő [kapcsolattartási e-mail cím – kitöltendő] címen fogadja, és azt a GDPR-ban meghatározott határidőn (alapesetben egy hónapon) belül teljesíti.</P>
+          <P>A jogok gyakorlására vonatkozó kérelmet az Adatkezelő a <a href="mailto:kapcsolat@vedettsarok.hu" className="underline">kapcsolat@vedettsarok.hu</a> címen fogadja, és azt a GDPR-ban meghatározott határidőn (alapesetben egy hónapon) belül teljesíti.</P>
         </Sub>
         <Sub n="6.3.">
           <P>Az érintett jogosult a Nemzeti Adatvédelmi és Információszabadság Hatósághoz (NAIH, 1055 Budapest, Falk Miksa utca 9–11., www.naih.hu) panasszal fordulni, illetve jogainak megsértése esetén bírósághoz fordulni.</P>
@@ -207,51 +210,51 @@ export default function AdatkezelesiTajekoztato() {
         </Sub>
       </Section>
 
-      {/* ─── VédettMunka AT kiegészítés ─── */}
+      {/* ─── VédettKarrier AT kiegészítés ─── */}
       <div className="mt-12 mb-6 border-t-2 border-sni-brand-teal pt-8">
-        <h2 className="text-2xl font-bold text-sni-text">VédettMunka – Adatkezelési Tájékoztató kiegészítése</h2>
+        <h2 className="text-2xl font-bold text-sni-text">VédettKarrier – Adatkezelési Tájékoztató kiegészítése</h2>
         <p className="text-sm text-gray-500 mt-1">Hatályos: 2026. augusztus 30. napjától</p>
         <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          A jelen kiegészítés a VédettSarok meglévő Adatkezelési Tájékoztatójának a VédettMunka szolgáltatásra vonatkozó kiegészítése. A meglévő Tájékoztató általános rendelkezései a VédettMunka adatkezelésre is alkalmazandók, kivéve, ha a jelen kiegészítés eltérően rendelkezik.
+          A jelen kiegészítés a VédettSarok meglévő Adatkezelési Tájékoztatójának a VédettKarrier szolgáltatásra vonatkozó kiegészítése. A meglévő Tájékoztató általános rendelkezései a VédettKarrier adatkezelésre is alkalmazandók, kivéve, ha a jelen kiegészítés eltérően rendelkezik.
         </div>
       </div>
 
-      <Section id="vm-at-1" title="VM 1. A VédettMunka szolgáltatásról">
+      <Section id="vm-at-1" title="VM 1. A VédettKarrier szolgáltatásról">
         <Sub n="VM 1.1.">
-          <P>A VédettMunka a VédettSarok weboldalán vagy webapplikációjában elérhető, specializált álláshirdetési, álláskeresési, önéletrajz-készítő, állásértesítő és jelentkezéstovábbító felület.</P>
+          <P>A VédettKarrier a VédettSarok weboldalán vagy webapplikációjában elérhető, specializált álláshirdetési, álláskeresési, önéletrajz-készítő, állásértesítő és jelentkezéstovábbító felület.</P>
         </Sub>
         <Sub n="VM 1.2.">
-          <P>A VédettMunka célja, hogy könnyebben átlátható, közérthető és a munkakörülmények bemutatására külön figyelmet fordító álláskeresési lehetőséget biztosítson. A felületet különösen azok az álláskeresők is használhatják, akik számára fontos a kiszámítható, rugalmas, támogató vagy befogadó munkakörnyezet. A VédettMunka szolgáltatásai ugyanakkor nem kizárólag e személyi kör számára érhetők el.</P>
+          <P>A VédettKarrier célja, hogy könnyebben átlátható, közérthető és a munkakörülmények bemutatására külön figyelmet fordító álláskeresési lehetőséget biztosítson. A felületet különösen azok az álláskeresők is használhatják, akik számára fontos a kiszámítható, rugalmas, támogató vagy befogadó munkakörnyezet. A VédettKarrier szolgáltatásai ugyanakkor nem kizárólag e személyi kör számára érhetők el.</P>
         </Sub>
         <Sub n="VM 1.3.">
-          <P>A VédettMunka álláshirdetési és jelentkezéstovábbító felület. Nem garantál elhelyezkedést, interjúra hívást, munkáltatói válaszadást, kiválasztást vagy munkaviszony létrejöttét. A VédettSarok a jelenlegi szolgáltatási modellben nem végez automatizált jelölt-rangsorolást, alkalmassági pontozást, előszűrést, mesterséges intelligencián alapuló jelöltajánlást vagy egészségügyi adaton alapuló profilozást.</P>
+          <P>A VédettKarrier álláshirdetési és jelentkezéstovábbító felület. Nem garantál elhelyezkedést, interjúra hívást, munkáltatói válaszadást, kiválasztást vagy munkaviszony létrejöttét. A VédettSarok a jelenlegi szolgáltatási modellben nem végez automatizált jelölt-rangsorolást, alkalmassági pontozást, előszűrést, mesterséges intelligencián alapuló jelöltajánlást vagy egészségügyi adaton alapuló profilozást.</P>
         </Sub>
       </Section>
 
       <Section id="vm-at-2" title="VM 2. Adatkezelő és elérhetőségei">
         <Sub n="VM 2.1.">
-          <P>A VédettMunka szolgáltatás kapcsán kezelt személyes adatok adatkezelője a jelen Tájékoztató elején megjelölt Adatkezelő. A kapcsolattartási és panaszbejelentési e-mail-cím: kapcsolat@vedettsarok.hu (vagy az Adatkezelő által meghatározott aktuális elérhetőség). Az adatvédelmi tisztviselő elérhetősége az Adatkezelő weboldalán érhető el, amennyiben kijelölésre került.</P>
+          <P>A VédettKarrier szolgáltatás kapcsán kezelt személyes adatok adatkezelője a jelen Tájékoztató elején megjelölt Adatkezelő. A kapcsolattartási és panaszbejelentési e-mail-cím: kapcsolat@vedettsarok.hu (vagy az Adatkezelő által meghatározott aktuális elérhetőség). Az adatvédelmi tisztviselő elérhetősége az Adatkezelő weboldalán érhető el, amennyiben kijelölésre került.</P>
         </Sub>
       </Section>
 
       <Section id="vm-at-3" title="VM 3. Fogalmak">
         <Sub n="VM 3.1.">
           <LetterList items={[
-            "Álláskereső: a VédettMunka álláskeresői funkcióit használó természetes személy.",
-            "Munkáltató vagy Hirdető: a VédettMunka felületén álláshirdetést közzétevő vagy közzétenni kívánó, a VédettSarok által jóváhagyott partner.",
+            "Álláskereső: a VédettKarrier álláskeresői funkcióit használó természetes személy.",
+            "Munkáltató vagy Hirdető: a VédettKarrier felületén álláshirdetést közzétevő vagy közzétenni kívánó, a VédettSarok által jóváhagyott partner.",
             "Jelentkezés: az Álláskereső által egy konkrét álláshirdetéshez kapcsolódóan megadott személyes adat, opcionális üzenet, csatolt önéletrajz és egyéb dokumentum.",
             "Különleges adat: különösen az egészségi állapotra, fogyatékosságra, megváltozott munkaképességre, diagnózisra vagy neurodivergenciára utaló, a GDPR 9. cikke szerinti személyes adat.",
-            "Felület: a VédettSarok weboldala, webapplikációja és a VédettMunka technikai funkciói.",
+            "Felület: a VédettSarok weboldala, webapplikációja és a VédettKarrier technikai funkciói.",
           ]} />
         </Sub>
       </Section>
 
       <Section id="vm-at-4" title="VM 4. Alapelvek és különleges adatok">
         <Sub n="VM 4.1.">
-          <P>A VédettSarok a VédettMunka szolgáltatásban az adatminimalizálás, célhoz kötöttség, korlátozott tárolhatóság, átláthatóság, bizalmasság, integritás, elszámoltathatóság, valamint a beépített és alapértelmezett adatvédelem elvei szerint jár el.</P>
+          <P>A VédettSarok a VédettKarrier szolgáltatásban az adatminimalizálás, célhoz kötöttség, korlátozott tárolhatóság, átláthatóság, bizalmasság, integritás, elszámoltathatóság, valamint a beépített és alapértelmezett adatvédelem elvei szerint jár el.</P>
         </Sub>
         <Sub n="VM 4.2.">
-          <P>A VédettMunka nem kér, és a szolgáltatás használatának nem teszi feltételévé diagnózis, egészségügyi dokumentum, egészségügyi lelet, fogyatékossági igazolás, komplex minősítés, megváltozott munkaképességet igazoló dokumentum vagy más egészségi állapotra vonatkozó irat megadását vagy feltöltését.</P>
+          <P>A VédettKarrier nem kér, és a szolgáltatás használatának nem teszi feltételévé diagnózis, egészségügyi dokumentum, egészségügyi lelet, fogyatékossági igazolás, komplex minősítés, megváltozott munkaképességet igazoló dokumentum vagy más egészségi állapotra vonatkozó irat megadását vagy feltöltését.</P>
         </Sub>
         <Sub n="VM 4.3.">
           <P>Az Álláskereső ugyanakkor saját döntése alapján az önéletrajzában, üzenetében vagy más jelentkezési anyagában közölhet ilyen adatot. A VédettSarok ezt nem ösztönzi, és a Felületen jól látható figyelmeztetést helyez el arra vonatkozóan, hogy az Álláskereső ne töltsön fel egészségügyi dokumentumot vagy diagnózist, kivéve, ha annak konkrét Munkáltatóval való megosztásáról tudatosan döntött.</P>
@@ -263,7 +266,7 @@ export default function AdatkezelesiTajekoztato() {
 
       <Section id="vm-at-5" title="VM 5. Önéletrajz-készítő: kliensoldali működés">
         <Sub n="VM 5.1." title="A szolgáltatás működése">
-          <P>A VédettMunka önéletrajz-készítője a Felhasználó saját böngészőjében működik. Az önéletrajz piszkozatához megadott adatok – ideértve az opcionálisan feltöltött fényképet is – kizárólag a Felhasználó saját eszközének és böngészőjének helyi tárhelyén, a böngésző localStorage-ában tárolódnak.</P>
+          <P>A VédettKarrier önéletrajz-készítője a Felhasználó saját böngészőjében működik. Az önéletrajz piszkozatához megadott adatok – ideértve az opcionálisan feltöltött fényképet is – kizárólag a Felhasználó saját eszközének és böngészőjének helyi tárhelyén, a böngésző localStorage-ában tárolódnak.</P>
           <P>A VédettSarok az önéletrajz-készítőben megadott adatokat, az opcionális fényképet és a létrehozott PDF-et nem továbbítja a VédettSarok szerverére, adatbázisába, Supabase-tárhelyére vagy más, a VédettSarok által kezelt tartós tárhelyre.</P>
           <P>A PDF-önéletrajz a Felhasználó böngészőjében generálódik, majd közvetlenül a Felhasználó saját eszközére tölthető le. A VédettSarok a létrehozott PDF példányát nem kapja meg és nem tárolja.</P>
         </Sub>
@@ -321,7 +324,7 @@ export default function AdatkezelesiTajekoztato() {
           <P>Az Álláskereső külön, önkéntes hozzájárulással feliratkozhat heti állásértesítőre. A VédettSarok az állásértesítő céljára az Álláskereső felhasználói azonosítóját, e-mail-címét, helyszín-, kategória- és kulcsszó-szűrőjét, az értesítő aktív vagy inaktív állapotát, létrehozásának és módosításának időpontját, valamint a kézbesítéshez szükséges technikai adatokat kezeli.</P>
         </Sub>
         <Sub n="VM 8.2.">
-          <P>Az állásértesítő adatkezelésének jogalapja a GDPR 6. cikk (1) bekezdés a) pontja szerinti hozzájárulás. A hozzájárulás nem lehet előre bejelölt, és megtagadása nem érintheti hátrányosan a VédettMunka más funkcióinak használatát.</P>
+          <P>Az állásértesítő adatkezelésének jogalapja a GDPR 6. cikk (1) bekezdés a) pontja szerinti hozzájárulás. A hozzájárulás nem lehet előre bejelölt, és megtagadása nem érintheti hátrányosan a VédettKarrier más funkcióinak használatát.</P>
         </Sub>
         <Sub n="VM 8.3.">
           <P>Az Álláskereső bármikor, indokolás nélkül és ingyenesen leiratkozhat az értesítő e-mailben elhelyezett egykattintásos leiratkozási hivatkozással vagy a fiókbeállításaiban. A leiratkozás azonnal hatályos.</P>
@@ -378,7 +381,7 @@ export default function AdatkezelesiTajekoztato() {
 
       <Section id="vm-at-13" title="VM 13. Adatfeldolgozók és nemzetközi adattovábbítás">
         <Sub n="VM 13.1.">
-          <P>A VédettSarok a VédettMunka üzemeltetésében a jelenlegi technikai modellben az alábbi adatfeldolgozókat veszi igénybe:</P>
+          <P>A VédettSarok a VédettKarrier üzemeltetésében a jelenlegi technikai modellben az alábbi adatfeldolgozókat veszi igénybe:</P>
           <div className="mt-3 overflow-hidden rounded-xl border border-gray-200">
             <div className="grid grid-cols-3 bg-sni-brand-navy">
               <div className="px-3 py-2 text-xs font-bold text-white uppercase tracking-wide">Szolgáltató</div>
@@ -409,7 +412,7 @@ export default function AdatkezelesiTajekoztato() {
 
       <Section id="vm-at-14" title="VM 14. Automatizált döntéshozatal és profilozás">
         <Sub n="VM 14.1.">
-          <P>A VédettSarok a VédettMunka jelenlegi működésében nem hoz kizárólag automatizált adatkezelésen alapuló, az Álláskeresőre nézve joghatással járó vagy őt hasonlóképpen jelentősen érintő döntést. A VédettSarok különösen nem alkalmaz diagnózison, fogyatékosságon, megváltozott munkaképességen vagy feltételezett neurodivergencián alapuló automatikus rangsorolást, alkalmassági pontozást vagy előszűrést.</P>
+          <P>A VédettSarok a VédettKarrier jelenlegi működésében nem hoz kizárólag automatizált adatkezelésen alapuló, az Álláskeresőre nézve joghatással járó vagy őt hasonlóképpen jelentősen érintő döntést. A VédettSarok különösen nem alkalmaz diagnózison, fogyatékosságon, megváltozott munkaképességen vagy feltételezett neurodivergencián alapuló automatikus rangsorolást, alkalmassági pontozást vagy előszűrést.</P>
         </Sub>
         <Sub n="VM 14.2.">
           <P>Ha a VédettSarok a jövőben ilyen funkciót vagy más, magas kockázatú automatizált adatkezelést kíván bevezetni, azt csak előzetes jogi, adatvédelmi és – ahol szükséges – adatvédelmi hatásvizsgálati felülvizsgálat, megfelelő emberi felülvizsgálat és részletes érintetti tájékoztatás után vezetheti be.</P>
@@ -430,10 +433,6 @@ export default function AdatkezelesiTajekoztato() {
           <P>Az érintett panasszal fordulhat a Nemzeti Adatvédelmi és Információszabadság Hatósághoz (1055 Budapest, Falk Miksa utca 9–11.; ugyfelszolgalat@naih.hu; naih.hu), valamint bírósághoz is fordulhat.</P>
         </Sub>
       </Section>
-
-      <div className="mt-8 rounded-xl border border-gray-200 bg-gray-50 px-4 py-4 text-xs text-gray-500 italic">
-        <strong className="not-italic font-semibold text-gray-700">Jogi megjegyzés:</strong> A jelen dokumentum mintaszövegként készült, és az ÁSZF 7. és 12. pontjában rögzített Nyilvános Válasz funkcióhoz, valamint az esetleges anonimizált üzenetküldő funkcióhoz igazodóan tartalmazza a szükséges adatvédelmi rendelkezéseket. A dokumentum véglegesítése előtt – az adatfeldolgozói kör tényleges összeállítása, valamint a mindenkori jogszabályi változások figyelembevétele érdekében – elengedhetetlen ügyvéd/adatvédelmi szakjogász általi felülvizsgálat.
-      </div>
 
       {/* ─── Közösségi segítség AT kiegészítés ─── */}
       <div className="mt-12 mb-6 border-t-2 border-sni-brand-teal pt-8">
