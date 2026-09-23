@@ -63,7 +63,6 @@ export default function AdatkezelesiTajekoztato() {
         <span className="block mt-1">Székhely: 2038 Sóskút, Kőszikla utca 21.</span>
         <span className="block">Cégjegyzékszám: 13-09-221686</span>
         <span className="block">Adószám: 32038107-1-13</span>
-        <span className="block mt-1">Kapcsolat: <a href="mailto:kapcsolat@vedettsarok.hu" className="underline">kapcsolat@vedettsarok.hu</a></span>
       </div>
 
       <P>Jelen tájékoztató a Weboldal (a továbbiakban: „Weboldal") működésével összefüggő adatkezelésekről nyújt tájékoztatást, az Európai Parlament és a Tanács (EU) 2016/679 rendelete (a továbbiakban: „GDPR"), valamint az információs önrendelkezési jogról és az információszabadságról szóló 2011. évi CXII. törvény (a továbbiakban: „Infotv.") rendelkezéseivel összhangban. A jelen tájékoztató a Weboldal <Link href="/aszf" className="text-sni-brand-blue hover:underline">Általános Szerződési Feltételeivel (ÁSZF)</Link> együtt értelmezendő; a fogalommeghatározások tekintetében az ÁSZF-ben foglaltak az irányadók.</P>

@@ -46,7 +46,6 @@ export default function AszfPage() {
         <span className="block mt-1">Székhely: 2038 Sóskút, Kőszikla utca 21.</span>
         <span className="block">Cégjegyzékszám: 13-09-221686</span>
         <span className="block">Adószám: 32038107-1-13</span>
-        <span className="block mt-1">Kapcsolat: <a href="mailto:kapcsolat@vedettsarok.hu" className="underline">kapcsolat@vedettsarok.hu</a></span>
       </div>
 
       <Section id="preambulum" title="1. Preambulum, a Szolgáltatás célja és jogi minősítése">
