@@ -77,6 +77,30 @@ export interface RerouteGuardInput {
    * kísérletet enged át.
    */
   transitGpsLossAwaitingConfirmation?: boolean;
+  /**
+   * ONBOARD CONFIRMATION SPRINT (2026-09-23) — igaz, HA a hívó
+   * transitGpsLossConfirmation.ts szerint a JELENLEG AKTÍV TRANSIT leg
+   * SAJÁT tripId-jére a felhasználó KORÁBBAN már explicit IGEN-t
+   * válaszolt (status === "CONFIRMED_ONBOARD" ÉS a scope tripId-je
+   * EGYEZIK az aktív leg tripId-jével — a hívó felelős ezért az
+   * egyeztetésért, lásd isTransitOnboardScopeStale()). FÜGGETLEN, plusz
+   * blokkoló feltétel, UGYANAZ az elv, mint a többi gate-nél: egy
+   * KIZÁRÓLAG geometriai OFF_ROUTE bizonyíték a MÁR megerősített tripen
+   * SOSEM indíthat automatikus reroute-ot — nincs újra-kérdezés, nincs
+   * második /plan hívás. A globális OFF_ROUTE-küszöb és a WALK
+   * reroute-viselkedés VÁLTOZATLAN.
+   */
+  transitOnboardConfirmed?: boolean;
+  /**
+   * ONBOARD CONFIRMATION SPRINT (2026-09-23) — igaz, HA a hívó szerint egy
+   * korábbi NEM válasz (transitGpsLossConfirmation.ts declineTransitOnboard())
+   * óta MÉG NEM érkezett a válasz IDŐPONTJÁT KÖVETŐ, usable GPS fix (lásd
+   * isAwaitingFreshGpsAfterDecline()/clearAwaitingFreshGpsIfSatisfied()).
+   * UGYANAZ az "esemény-időpont vs. fix-időpont" minta, mint gpsFixGate.ts
+   * pendingReacquisitionSinceMs-e — SOHA nem enged reroute-ot egy, a NEM
+   * válasz ELŐTTI (potenciálisan alagút-előtti) állófixről.
+   */
+  awaitingFreshGpsAfterDecline?: boolean;
 }
 
 export type RerouteBlockReason =
@@ -90,7 +114,9 @@ export type RerouteBlockReason =
   | "GPS_REACQUIRING"
   | "FOREGROUND_REACQUISITION"
   | "RESTORE_RECOVERY_ACTIVE"
-  | "TRANSIT_GPS_LOSS_AWAITING_CONFIRMATION";
+  | "TRANSIT_GPS_LOSS_AWAITING_CONFIRMATION"
+  | "TRANSIT_ONBOARD_CONFIRMED"
+  | "AWAITING_FRESH_GPS_AFTER_DECLINE";
 
 export type RerouteGuardDecision =
   | { shouldReroute: true; reason: null }
@@ -106,12 +132,27 @@ export function shouldStartAutomaticReroute(
 ): RerouteGuardDecision {
   if (!input.navigationActive) return { shouldReroute: false, reason: "NAVIGATION_INACTIVE" };
   if (input.offRouteStatus !== "OFF_ROUTE") return { shouldReroute: false, reason: "NOT_CONFIRMED_OFF_ROUTE" };
+  // ONBOARD CONFIRMATION SPRINT (2026-09-23) — explicit IGEN a JELENLEG
+  // aktív trip-re a LEGERŐSEBB, legkorábban kiértékelt blokkoló bizonyíték:
+  // ha a felhasználó már megerősítette, hogy ezen a tripen van, egy pusztán
+  // geometriai OFF_ROUTE (akár "usable" geometria mellett is) SOSEM
+  // indíthat automatikus reroute-ot, függetlenül attól, hogy a geometria
+  // egyébként weak/uncertain-e.
+  if (input.transitOnboardConfirmed) return { shouldReroute: false, reason: "TRANSIT_ONBOARD_CONFIRMED" };
   if (input.transitGeometryUncertain) return { shouldReroute: false, reason: "TRANSIT_GEOMETRY_UNCERTAIN" };
   if (input.gpsReacquiring) return { shouldReroute: false, reason: "GPS_REACQUIRING" };
   if (input.foregroundRecoveryActive) return { shouldReroute: false, reason: "FOREGROUND_REACQUISITION" };
   if (input.restoreRecoveryActive) return { shouldReroute: false, reason: "RESTORE_RECOVERY_ACTIVE" };
   if (input.transitGpsLossAwaitingConfirmation) {
     return { shouldReroute: false, reason: "TRANSIT_GPS_LOSS_AWAITING_CONFIRMATION" };
+  }
+  // ONBOARD CONFIRMATION SPRINT (2026-09-23) — egy korábbi NEM válasz után
+  // MÉG NEM érkezett friss (a válasz utáni) usable GPS fix — ugyanazon a
+  // "family"-n belül, mint a fenti PENDING-gate: a NEM válasz önmagában
+  // NEM elég ok azonnal reroute-olni egy esetleg még alagút-előtti,
+  // pontatlan fixről.
+  if (input.awaitingFreshGpsAfterDecline) {
+    return { shouldReroute: false, reason: "AWAITING_FRESH_GPS_AFTER_DECLINE" };
   }
   if (!input.hasCurrentPosition) return { shouldReroute: false, reason: "POSITION_MISSING" };
   if (!input.hasDestination) return { shouldReroute: false, reason: "DESTINATION_MISSING" };

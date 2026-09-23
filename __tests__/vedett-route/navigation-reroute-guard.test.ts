@@ -173,4 +173,62 @@ describe("automatic reroute guard", () => {
     // Hiányzó mező (pl. sima WALK off-route eset, ahol ez a bemenet elő sem kerül) — VÁLTOZATLAN.
     assert.deepEqual(shouldStartAutomaticReroute(state, READY), { shouldReroute: true, reason: null });
   });
+
+  // ONBOARD CONFIRMATION SPRINT (2026-09-23) — tesztlista F/M pont: ha a
+  // felhasználó a JELENLEG AKTÍV tripre már explicit IGEN-t válaszolt
+  // (transitOnboardConfirmed=true), egy pusztán geometriai OFF_ROUTE SOSEM
+  // indíthat automatikus reroute-ot — még akkor sem, ha egyébként semmilyen
+  // más FÜGGETLEN blokkoló feltétel nem áll fenn. Ez a LEGKORÁBBAN
+  // kiértékelt plusz-feltétel (lásd shouldStartAutomaticReroute precedencia:
+  // NOT_CONFIRMED_OFF_ROUTE -> TRANSIT_ONBOARD_CONFIRMED -> ...), tehát
+  // elnyomja a transitGeometryUncertain/gpsReacquiring stb. reason-öket is.
+  test("transitOnboardConfirmed=true blokkolja az automatikus reroute-ot, még megerősített OFF_ROUTE esetén is, és megelőzi a többi reason-t", () => {
+    const state = createInitialRerouteGuardState();
+    assert.equal(
+      shouldStartAutomaticReroute(state, { ...READY, transitOnboardConfirmed: true }).reason,
+      "TRANSIT_ONBOARD_CONFIRMED",
+    );
+    assert.equal(
+      shouldStartAutomaticReroute(state, {
+        ...READY,
+        transitOnboardConfirmed: true,
+        transitGeometryUncertain: true,
+        gpsReacquiring: true,
+      }).reason,
+      "TRANSIT_ONBOARD_CONFIRMED",
+    );
+  });
+
+  test("transitOnboardConfirmed=false (vagy hiányzó) esetén a globális OFF_ROUTE/reroute-viselkedés VÁLTOZATLAN", () => {
+    const state = createInitialRerouteGuardState();
+    assert.deepEqual(
+      shouldStartAutomaticReroute(state, { ...READY, transitOnboardConfirmed: false }),
+      { shouldReroute: true, reason: null },
+    );
+    assert.deepEqual(shouldStartAutomaticReroute(state, READY), { shouldReroute: true, reason: null });
+  });
+
+  // ONBOARD CONFIRMATION SPRINT (2026-09-23) — tesztlista J/K pont: egy
+  // korábbi NEM válasz után, amíg nem érkezett a válasz IDŐPONTJÁT KÖVETŐ,
+  // usable GPS fix (awaitingFreshGpsAfterDecline=true), az automatikus
+  // reroute FÜGGETLENÜL blokkolva van — UGYANAZ az elv, mint a többi
+  // FÜGGETLEN gate-nél. A meglévő transitGpsLossAwaitingConfirmation gate
+  // UTÁN értékelődik ki (lásd precedencia a rerouteGuard.ts-ben), de
+  // mindkettő önmagában is blokkol.
+  test("awaitingFreshGpsAfterDecline=true blokkolja az automatikus reroute-ot, még megerősített OFF_ROUTE esetén is", () => {
+    const state = createInitialRerouteGuardState();
+    assert.equal(
+      shouldStartAutomaticReroute(state, { ...READY, awaitingFreshGpsAfterDecline: true }).reason,
+      "AWAITING_FRESH_GPS_AFTER_DECLINE",
+    );
+  });
+
+  test("awaitingFreshGpsAfterDecline=false (friss fix már megérkezett) esetén a globális OFF_ROUTE/reroute-viselkedés VÁLTOZATLAN", () => {
+    const state = createInitialRerouteGuardState();
+    assert.deepEqual(
+      shouldStartAutomaticReroute(state, { ...READY, awaitingFreshGpsAfterDecline: false }),
+      { shouldReroute: true, reason: null },
+    );
+    assert.deepEqual(shouldStartAutomaticReroute(state, READY), { shouldReroute: true, reason: null });
+  });
 });
