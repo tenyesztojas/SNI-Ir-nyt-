@@ -5,7 +5,7 @@ import { ATTRIBUTE_LABELS, deriveAttributesFromJobPost } from "@/lib/vedettmunka
 import type { JobPost } from "@/lib/vedettmunka/types";
 import AllasokFilterClient from "./AllasokFilterClient";
 
-export const metadata = { title: "Lehetőségek keresése – VédettKarrier" };
+export const metadata = { title: "Lehetőségek keresése – Védett Karrier" };
 export const dynamic = "force-dynamic";
 
 const LOC_LABEL: Record<string, string> = {

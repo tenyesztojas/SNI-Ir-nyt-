@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getMyJobAlert } from "@/lib/vedettmunka/data";
 import ErtesitoClient from "./ErtesitoClient";
 
-export const metadata = { title: "Lehetőségfigyelő – VédettKarrier" };
+export const metadata = { title: "Lehetőségfigyelő – Védett Karrier" };
 export const dynamic = "force-dynamic";
 
 export default async function ErtesitoPage({

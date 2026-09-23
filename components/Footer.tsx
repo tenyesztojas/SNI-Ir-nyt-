@@ -41,7 +41,7 @@ export default function Footer() {
                   Közösség
                 </Link>
                 <Link href="/vedett-karrier" className="text-gray-500 hover:text-sni-brand-blue hover:underline">
-                  VédettKarrier
+                  Védett Karrier
                 </Link>
               </div>
             </div>

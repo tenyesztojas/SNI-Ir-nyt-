@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { CheckCircle2, XCircle } from "lucide-react";
 
-export const metadata = { title: "Karrierpartner-információk – VédettKarrier" };
+export const metadata = { title: "Karrierpartner-információk – Védett Karrier" };
 
 export default function MunkaltatokPage() {
   return (
@@ -13,7 +13,7 @@ export default function MunkaltatokPage() {
 
       <div className="mt-6 space-y-6 text-base leading-relaxed text-gray-800">
         <p>
-          A <strong>VédettKarrier</strong> a VédettSarok webapplikáció karrier- és lehetőségkereső funkciója.
+          A <strong>Védett Karrier</strong> a VédettSarok webapplikáció karrier- és lehetőségkereső funkciója.
           Olyan rugalmas munkákat, megbízásokat és lehetőségeket gyűjtünk össze, amelyek jobban illeszkedhetnek
           kiszámíthatóbb, tervezhetőbb családi mindennapokhoz.
         </p>
@@ -71,7 +71,7 @@ export default function MunkaltatokPage() {
         <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-800">
           <strong>Fontos:</strong> A VédettSarok nem munkaerő-közvetítő szolgáltatás.
           Nem garantál elhelyezkedést, munkáltatói választ, interjút vagy jogviszony létrejöttét.
-          A VédettKarrier a karrierpartner lehetőségkártyáit mutatja meg, és a jelentkezéseket technikailag továbbítja.
+          A Védett Karrier a karrierpartner lehetőségkártyáit mutatja meg, és a jelentkezéseket technikailag továbbítja.
         </div>
       </div>
 

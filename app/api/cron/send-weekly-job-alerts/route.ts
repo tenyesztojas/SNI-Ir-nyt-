@@ -137,7 +137,7 @@ export async function GET(request: Request) {
     const html = `
       <div style="font-family:sans-serif;max-width:600px;margin:0 auto;color:#1a1a2e">
         <div style="background:#123A5C;padding:24px 32px;border-radius:12px 12px 0 0">
-          <h1 style="color:#34D8C3;font-size:20px;margin:0">VédettKarrier</h1>
+          <h1 style="color:#34D8C3;font-size:20px;margin:0">Védett Karrier</h1>
           <p style="color:#e2e8f0;font-size:14px;margin:6px 0 0">Heti lehetőségfigyelő</p>
         </div>
         <div style="background:#fff;padding:24px 32px;border:1px solid #e5e7eb;border-top:none">
@@ -152,7 +152,7 @@ export async function GET(request: Request) {
         </div>
         <div style="background:#f9fafb;padding:16px 32px;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px">
           <p style="font-size:11px;color:#888;margin:0">
-            Ezt az értesítőt azért kaptad, mert feliratkoztál a VédettKarrier heti lehetőségfigyelőjére.<br>
+            Ezt az értesítőt azért kaptad, mert feliratkoztál a Védett Karrier heti lehetőségfigyelőjére.<br>
             <a href="${unsubUrl}" style="color:#888">Leiratkozás egy kattintással</a> ·
             <a href="${baseUrl}/vedettmunka/ertesito" style="color:#888">Beállítások módosítása</a>
           </p>
@@ -160,9 +160,9 @@ export async function GET(request: Request) {
       </div>`;
 
     const { error: emailError } = await resend.emails.send({
-      from: "VédettKarrier <ertesito@vedettsarok.hu>",
+      from: "Védett Karrier <ertesito@vedettsarok.hu>",
       to: userEmail,
-      subject: `[VédettKarrier] ${matching.length} új lehetőség az elmúlt héten`,
+      subject: `[Védett Karrier] ${matching.length} új lehetőség az elmúlt héten`,
       html,
     });
 

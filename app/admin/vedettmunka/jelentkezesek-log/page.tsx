@@ -20,7 +20,7 @@ export default async function JelentkezesekLogPage() {
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
-      <Link href="/admin/vedettmunka" className="text-sm text-sni-brand-blue hover:underline">← VédettKarrier admin</Link>
+      <Link href="/admin/vedettmunka" className="text-sm text-sni-brand-blue hover:underline">← Védett Karrier admin</Link>
       <h1 className="mt-3 text-2xl font-bold text-sni-text">Érdeklődési/Jelentkezési napló ({logs.length})</h1>
       <p className="mt-1 text-xs text-gray-400">
         Csak technikai adatok tárolódnak. Csatolt dokumentum tartalma nem kerül mentésre.

@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getMyEmployer } from "@/lib/vedettmunka/data";
 import MunkaltatoiRegForm from "./MunkaltatoiRegForm";
 
-export const metadata = { title: "Karrierpartner jelentkezés – VédettKarrier" };
+export const metadata = { title: "Karrierpartner jelentkezés – Védett Karrier" };
 export const dynamic = "force-dynamic";
 
 export default async function MunkaltatoiRegPage() {

@@ -65,7 +65,7 @@ interface PilotLink {
 const PILOT_LINKS: PilotLink[] = [
   { key: "vedett-jelzes",     href: "/vedett-jelzes",            label: "Védett Jelzés",  requiresFeatureFlag: false },
   { key: "vedett-partner",    href: "/szolgaltato/regisztracio", label: "Védett Partner", requiresFeatureFlag: false },
-  { key: "vedettmunka",       href: "/vedett-karrier",           label: "VédettKarrier",  requiresFeatureFlag: false },
+  { key: "vedettmunka",       href: "/vedett-karrier",           label: "Védett Karrier",  requiresFeatureFlag: false },
   { key: "vedett_route_beta", href: "/vedett-utvonal",           label: "Védett Útvonal", requiresFeatureFlag: true },
 ];
 

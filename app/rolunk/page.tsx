@@ -64,7 +64,7 @@ export default async function RolunkPage() {
           <strong>Védett Útvonal</strong>, amely a valós tömegközlekedési adatok (BKK, MÁV, Volán, MOL Bubi) mellett
           szenzoros és személyes preferenciákat is figyelembe vevő útvonaltervezést kínál, a <strong>Közösség</strong>{" "}
           modul, ahol szülők, érintett felnőttek és szakemberek találhatnak egymásra, valamint a{" "}
-          <strong>VédettKarrier</strong>, amely a munkakörülmények és egyéni képességek összehangolásában segít. A
+          <strong>Védett Karrier</strong>, amely a munkakörülmények és egyéni képességek összehangolásában segít. A
           hosszabb távú cél egy országos, megbízható, moderált adatbázis és eszközrendszer további bővítése, amely
           valódi segítséget ad a mindennapi döntésekhez.
         </p>

@@ -196,33 +196,33 @@ export default function AszfPage() {
         <Sub n="15.2."><P>A jelen ÁSZF a Weboldal Felhasználója és az Üzemeltető közötti teljes megállapodást tartalmazza a Weboldal használatával kapcsolatban.</P></Sub>
       </Section>
 
-      {/* ─── VédettKarrier ÁSZF-kiegészítés ─── */}
+      {/* ─── Védett Karrier ÁSZF-kiegészítés ─── */}
       <div className="mt-12 mb-6 border-t-2 border-sni-brand-teal pt-8">
-        <h2 className="text-2xl font-bold text-sni-text">VédettKarrier – ÁSZF-kiegészítés</h2>
+        <h2 className="text-2xl font-bold text-sni-text">Védett Karrier – ÁSZF-kiegészítés</h2>
         <p className="text-sm text-gray-500 mt-1">Hatályos: 2026. augusztus 30. napjától</p>
         <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          A jelen kiegészítés a VédettSarok meglévő Általános Szerződési Feltételeinek a VédettKarrier álláshirdetési, álláskeresési, önéletrajz-készítő, állásértesítő és jelentkezéstovábbító szolgáltatásra vonatkozó kiegészítése. A meglévő ÁSZF általános rendelkezései a VédettKarrier szolgáltatásra is alkalmazandók, kivéve, ha a jelen kiegészítés eltérően rendelkezik.
+          A jelen kiegészítés a VédettSarok meglévő Általános Szerződési Feltételeinek a Védett Karrier álláshirdetési, álláskeresési, önéletrajz-készítő, állásértesítő és jelentkezéstovábbító szolgáltatásra vonatkozó kiegészítése. A meglévő ÁSZF általános rendelkezései a Védett Karrier szolgáltatásra is alkalmazandók, kivéve, ha a jelen kiegészítés eltérően rendelkezik.
         </div>
       </div>
 
-      <Section id="vm-aszf-1" title="VM 1. A VédettKarrier szolgáltatás jellege">
+      <Section id="vm-aszf-1" title="VM 1. A Védett Karrier szolgáltatás jellege">
         <Sub n="VM 1.1.">
-          <P>A VédettKarrier a VédettSarok által biztosított specializált álláshirdetési, álláskeresési, önéletrajz-készítő, állásértesítő és jelentkezéstovábbító szolgáltatás.</P>
+          <P>A Védett Karrier a VédettSarok által biztosított specializált álláshirdetési, álláskeresési, önéletrajz-készítő, állásértesítő és jelentkezéstovábbító szolgáltatás.</P>
         </Sub>
         <Sub n="VM 1.2.">
-          <P>A VédettKarrier a jelenlegi működési modellben nem épít kereshető önéletrajz-adatbázist, nem teszi általánosan hozzáférhetővé az Álláskeresők önéletrajzát a Munkáltatók számára, nem végez automatikus előszűrést vagy jelöltajánlást, és nem garantálja a munkaviszony létrejöttét.</P>
+          <P>A Védett Karrier a jelenlegi működési modellben nem épít kereshető önéletrajz-adatbázist, nem teszi általánosan hozzáférhetővé az Álláskeresők önéletrajzát a Munkáltatók számára, nem végez automatikus előszűrést vagy jelöltajánlást, és nem garantálja a munkaviszony létrejöttét.</P>
         </Sub>
         <Sub n="VM 1.3.">
-          <P>A VédettKarrier jelenleg az Álláskeresők számára díjmentesen használható. Online fizetési funkció jelenleg nem érhető el. Fizetős hirdetési vagy online fizetési szolgáltatás bevezetése esetén a VédettSarok külön díjtáblázatot, megrendelési és számlázási feltételeket, valamint adatkezelési tájékoztatást tesz közzé.</P>
+          <P>A Védett Karrier jelenleg az Álláskeresők számára díjmentesen használható. Online fizetési funkció jelenleg nem érhető el. Fizetős hirdetési vagy online fizetési szolgáltatás bevezetése esetén a VédettSarok külön díjtáblázatot, megrendelési és számlázási feltételeket, valamint adatkezelési tájékoztatást tesz közzé.</P>
         </Sub>
       </Section>
 
       <Section id="vm-aszf-2" title="VM 2. Álláskeresői fiók és használat">
         <Sub n="VM 2.1.">
-          <P>A VédettKarrier egyes funkciói regisztrációhoz kötöttek. Az Álláskereső köteles a regisztráció során valós, pontos és naprakész adatokat megadni, a fiók belépési adatait bizalmasan kezelni, valamint a jogosulatlan hozzáférés gyanúját haladéktalanul jelezni a VédettSaroknak.</P>
+          <P>A Védett Karrier egyes funkciói regisztrációhoz kötöttek. Az Álláskereső köteles a regisztráció során valós, pontos és naprakész adatokat megadni, a fiók belépési adatait bizalmasan kezelni, valamint a jogosulatlan hozzáférés gyanúját haladéktalanul jelezni a VédettSaroknak.</P>
         </Sub>
         <Sub n="VM 2.2.">
-          <P>Az Álláskereső köteles a VédettKarrier szolgáltatást rendeltetésszerűen használni, és nem jogosult más személy nevében, annak felhatalmazása nélkül jelentkezést küldeni, önéletrajzot készíteni, adatot megadni vagy dokumentumot feltölteni.</P>
+          <P>Az Álláskereső köteles a Védett Karrier szolgáltatást rendeltetésszerűen használni, és nem jogosult más személy nevében, annak felhatalmazása nélkül jelentkezést küldeni, önéletrajzot készíteni, adatot megadni vagy dokumentumot feltölteni.</P>
         </Sub>
         <Sub n="VM 2.3.">
           <P>Az Álláskereső felel azért, hogy az általa megadott vagy feltöltött információk a legjobb tudomása szerint valósak, pontosak, naprakészek, nem jogsértők, és nem sértik harmadik személy személyiségi jogát, szerzői jogát, üzleti titkát vagy más jogos érdekét.</P>
@@ -231,7 +231,7 @@ export default function AszfPage() {
 
       <Section id="vm-aszf-3" title="VM 3. Önéletrajz-készítő">
         <Sub n="VM 3.1.">
-          <P>A VédettKarrier önéletrajz-készítője a Felhasználó által megadott adatokból a Felhasználó saját böngészőjében PDF-önéletrajzot állít össze. A VédettSarok nem garantálja, hogy a létrejött dokumentum minden Munkáltató informatikai rendszerében, eszközén vagy nyomtatási környezetében változatlan formában jelenik meg.</P>
+          <P>A Védett Karrier önéletrajz-készítője a Felhasználó által megadott adatokból a Felhasználó saját böngészőjében PDF-önéletrajzot állít össze. A VédettSarok nem garantálja, hogy a létrejött dokumentum minden Munkáltató informatikai rendszerében, eszközén vagy nyomtatási környezetében változatlan formában jelenik meg.</P>
         </Sub>
         <Sub n="VM 3.2.">
           <P>Az önéletrajz tartalmi, szakmai, nyelvi és jogi megfelelőségéért az Álláskereső felel. A VédettSarok nem ellenőrzi, nem hitelesíti és nem garantálja az önéletrajzban szereplő adatok valóságtartalmát.</P>
@@ -243,7 +243,7 @@ export default function AszfPage() {
 
       <Section id="vm-aszf-4" title="VM 4. Jelentkezés és adattovábbítás">
         <Sub n="VM 4.1.">
-          <P>A VédettKarrier az Álláskereső által kiválasztott álláshirdetéshez kapcsolódó jelentkezést az Álláskereső kérése alapján továbbítja a megnevezett Munkáltatónak.</P>
+          <P>A Védett Karrier az Álláskereső által kiválasztott álláshirdetéshez kapcsolódó jelentkezést az Álláskereső kérése alapján továbbítja a megnevezett Munkáltatónak.</P>
         </Sub>
         <Sub n="VM 4.2.">
           <P>A technikai visszaigazolás kizárólag azt tanúsítja, hogy a VédettSarok rendszere a jelentkezés fogadását vagy továbbítását megkísérelte, illetve a kézbesítés technikai állapotáról információt kapott. Nem jelenti azt, hogy a Munkáltató a jelentkezést megnyitotta, elolvasta, megvizsgálta, elfogadta vagy az Álláskeresőt kiválasztotta.</P>
@@ -255,7 +255,7 @@ export default function AszfPage() {
 
       <Section id="vm-aszf-5" title="VM 5. Különleges adatokkal kapcsolatos szabály">
         <Sub n="VM 5.1.">
-          <P>A VédettKarrier nem kér diagnózist, egészségügyi dokumentumot, fogyatékossági igazolást vagy megváltozott munkaképességet igazoló iratot az Álláskeresőtől.</P>
+          <P>A Védett Karrier nem kér diagnózist, egészségügyi dokumentumot, fogyatékossági igazolást vagy megváltozott munkaképességet igazoló iratot az Álláskeresőtől.</P>
         </Sub>
         <Sub n="VM 5.2.">
           <P>Az Álláskereső kizárólag saját tudatos döntése alapján csatolhat olyan dokumentumot, amely különleges adatot tartalmazhat. Az Álláskereső tudomásul veszi, hogy az ilyen dokumentum az általa kiválasztott Munkáltató részére is továbbításra kerülhet.</P>
@@ -267,7 +267,7 @@ export default function AszfPage() {
 
       <Section id="vm-aszf-6" title="VM 6. Munkáltatói regisztráció és jóváhagyás">
         <Sub n="VM 6.1.">
-          <P>A VédettKarrier felületén hirdetést kizárólag a VédettSarok által előzetesen jóváhagyott Munkáltató tehet közzé.</P>
+          <P>A Védett Karrier felületén hirdetést kizárólag a VédettSarok által előzetesen jóváhagyott Munkáltató tehet közzé.</P>
         </Sub>
         <Sub n="VM 6.2.">
           <P>A Munkáltató köteles valós és naprakész cégadatokat, kapcsolattartási adatokat, valamint saját adatkezelési tájékoztatójának működő URL-jét megadni. A Munkáltató adatkezelési tájékoztatójának hiánya, elérhetetlensége vagy nyilvánvaló hiányossága esetén a VédettSarok a Munkáltatói regisztrációt vagy a hirdetés közzétételét megtagadhatja, illetve a hirdetést felfüggesztheti.</P>
@@ -306,7 +306,7 @@ export default function AszfPage() {
 
       <Section id="vm-aszf-9" title="VM 9. Tiltott tartalmak és magatartások">
         <Sub n="VM 9.1.">
-          <P>A VédettKarrier felületén tilos olyan hirdetést, tartalmat vagy jelentkezést közzétenni, továbbítani vagy használni, amely:</P>
+          <P>A Védett Karrier felületén tilos olyan hirdetést, tartalmat vagy jelentkezést közzétenni, továbbítani vagy használni, amely:</P>
           <LetterList items={[
             "jogszabályba, jóerkölcsbe vagy harmadik személy jogába ütközik;",
             "hamis, megtévesztő vagy lényeges körülményt elhallgató;",
@@ -331,7 +331,7 @@ export default function AszfPage() {
 
       <Section id="vm-aszf-11" title="VM 11. Szellemi tulajdon">
         <Sub n="VM 11.1.">
-          <P>A VédettSarok Felületének, szoftverének, arculatának, szövegeinek, grafikai elemeinek, adatbázisának és más tartalmainak szerzői vagy más szellemi tulajdonjogai a VédettSarokot vagy a megfelelő jogosultat illetik meg. A Munkáltató a hirdetés feltöltésével nem kizárólagos, a szolgáltatás teljesítéséhez szükséges felhasználási engedélyt ad tartalmainak a VédettKarrier felületén történő közzétételéhez.</P>
+          <P>A VédettSarok Felületének, szoftverének, arculatának, szövegeinek, grafikai elemeinek, adatbázisának és más tartalmainak szerzői vagy más szellemi tulajdonjogai a VédettSarokot vagy a megfelelő jogosultat illetik meg. A Munkáltató a hirdetés feltöltésével nem kizárólagos, a szolgáltatás teljesítéséhez szükséges felhasználási engedélyt ad tartalmainak a Védett Karrier felületén történő közzétételéhez.</P>
         </Sub>
       </Section>
 

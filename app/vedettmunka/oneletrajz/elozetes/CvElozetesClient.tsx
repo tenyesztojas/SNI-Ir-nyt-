@@ -168,10 +168,10 @@ export default function CvElozetesClient() {
           <p className="font-semibold mb-1">A bemutatkozó lapról</p>
           <p className="text-xs">
             A bemutatkozó lap adatai a <strong>böngésződben kerülnek feldolgozásra</strong>.
-            A VédettKarrier nem menti őket szerveroldali dokumentum-adatbázisba. A letöltött PDF-et a saját eszközödön tárolod.
+            A Védett Karrier nem menti őket szerveroldali dokumentum-adatbázisba. A letöltött PDF-et a saját eszközödön tárolod.
           </p>
           <p className="mt-1 text-xs text-blue-700">
-            A VédettKarrier nem kér diagnózist, egészségügyi dokumentumot, fogyatékossági igazolást vagy gyermekre vonatkozó adatot.
+            A Védett Karrier nem kér diagnózist, egészségügyi dokumentumot, fogyatékossági igazolást vagy gyermekre vonatkozó adatot.
             Kérjük, ilyen adatot ne adj meg és ne tölts fel.
           </p>
         </div>
@@ -331,7 +331,7 @@ export default function CvElozetesClient() {
         {/* Adatvédelmi szöveg */}
         <div className="print:hidden mt-4 rounded-xl bg-amber-50 px-4 py-3 text-xs text-amber-800">
           <strong>Amit érdemes tudni:</strong> A bemutatkozó lapot mentsd el saját eszközödre.
-          A VédettKarrier nem tárolja tartósan a bemutatkozó lapodat és nem épít belőle kereshető dokumentum-adatbázist.
+          A Védett Karrier nem tárolja tartósan a bemutatkozó lapodat és nem épít belőle kereshető dokumentum-adatbázist.
         </div>
       </div>
     </>

@@ -98,7 +98,7 @@ export async function POST(request: Request) {
     const tipus = (formData.get("tipus") as string | null) === "erdeklodes" ? "érdeklődés" : "jelentkezés";
 
     const htmlBody = `
-      <h2 style="color:#123A5C">Új ${tipus} – VédettKarrier</h2>
+      <h2 style="color:#123A5C">Új ${tipus} – Védett Karrier</h2>
       <p><strong>Lehetőség:</strong> ${jobTitle}</p>
       <p><strong>Karrierpartner:</strong> ${companyName}</p>
       <hr>
@@ -107,18 +107,18 @@ export async function POST(request: Request) {
       ${message ? `<p><strong>Üzenet:</strong></p><p style="white-space:pre-wrap">${message.replace(/</g, "&lt;")}</p>` : ""}
       <hr>
       <p style="font-size:12px;color:#888">
-        Ez a ${tipus} a VédettKarrier felületen keresztül érkezett.<br>
+        Ez a ${tipus} a Védett Karrier felületen keresztül érkezett.<br>
         A felhasználó az adattovábbítási hozzájárulást megadta.<br>
         ${cvFilename ? "A felhasználó által csatolt dokumentum mellékelve." : "Nem érkezett csatolt dokumentum."}<br>
-        A VédettKarrier technikai platformként továbbítja az adatokat – nem tárolja a bemutatkozó lapot tartósan, és nem munkaerő-közvetítő szolgáltatás.
+        A Védett Karrier technikai platformként továbbítja az adatokat – nem tárolja a bemutatkozó lapot tartósan, és nem munkaerő-közvetítő szolgáltatás.
       </p>
     `;
 
     const { error: emailError } = await resend.emails.send({
-      from: "VédettKarrier <noreply@vedettsarok.hu>",
+      from: "Védett Karrier <noreply@vedettsarok.hu>",
       to: applicationEmail,
       replyTo: email,
-      subject: `[VédettKarrier] Új ${tipus}: ${jobTitle} – ${name}`,
+      subject: `[Védett Karrier] Új ${tipus}: ${jobTitle} – ${name}`,
       html: htmlBody,
       attachments: attachments.length > 0 ? attachments : undefined,
     });

@@ -1,7 +1,7 @@
 export const PILOT_MODULES = [
   { key: "vedett-jelzes",   label: "Védett Jelzés"  },
   { key: "vedett-partner",  label: "Védett Partner" },
-  { key: "vedettmunka",     label: "Védett Munka"    },
+  { key: "vedettmunka",     label: "Védett Karrier"  },
   // ZÁRT BÉTA HOZZÁFÉRÉS (2026-09-09) — a kulcs értéke szándékosan
   // megegyezik a lib/vedett-route/config.ts VEDETT_ROUTE_BETA_FEATURE_KEY
   // konstansával; NE módosítsd az egyiket a másik nélkül.

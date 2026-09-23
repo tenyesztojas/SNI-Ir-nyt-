@@ -216,11 +216,11 @@ export default function CvSzerkesztoClient() {
         <p className="text-xs">
           A bemutatkozó lap adatai és az opcionálisan feltöltött fénykép a{" "}
           <strong>böngésződben kerülnek feldolgozásra</strong>.
-          A VédettKarrier nem menti őket szerveroldali dokumentum-adatbázisba.
+          A Védett Karrier nem menti őket szerveroldali dokumentum-adatbázisba.
           A PDF-et letöltés után a saját eszközödön tárolod.
         </p>
         <p className="mt-2 text-xs text-blue-700">
-          A VédettKarrier nem kér diagnózist, egészségügyi dokumentumot, fogyatékossági igazolást
+          A Védett Karrier nem kér diagnózist, egészségügyi dokumentumot, fogyatékossági igazolást
           vagy gyermekre vonatkozó adatot. Kérjük, ilyen adatot ne írj be és ne tölts fel.
         </p>
       </div>

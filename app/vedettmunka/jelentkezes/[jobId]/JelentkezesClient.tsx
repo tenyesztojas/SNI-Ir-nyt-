@@ -197,9 +197,9 @@ export default function JelentkezesClient({
         )}
 
         <p className="mb-3">
-          A VédettKarrier technikai platformként továbbítja a megadott adataidat
+          A Védett Karrier technikai platformként továbbítja a megadott adataidat
           {!isErdeklodes && " és csatolt bemutatkozó lapodat"}
-          {" "}kizárólag a megjelölt hirdető partner részére. A VédettKarrier nem tárolja tartósan a bemutatkozó lapodat,
+          {" "}kizárólag a megjelölt hirdető partner részére. A Védett Karrier nem tárolja tartósan a bemutatkozó lapodat,
           nem munkaerő-közvetítő szolgáltatás, és nem garantál elhelyezkedést vagy partneri válaszadást.
           A hirdető partner a fogadástól kezdve önálló adatkezelőként jár el.
         </p>
@@ -207,7 +207,7 @@ export default function JelentkezesClient({
         <label className="mt-2 flex items-start gap-2">
           <input type="checkbox" name="data_forwarding_consent" required className="mt-0.5 rounded" />
           <span>
-            Kérem, hogy a VédettKarrier a jelen {isErdeklodes ? "érdeklődésben" : "jelentkezésben"} megadott adataimat
+            Kérem, hogy a Védett Karrier a jelen {isErdeklodes ? "érdeklődésben" : "jelentkezésben"} megadott adataimat
             {!isErdeklodes && " és a csatolt bemutatkozó lapomat"}
             {" "}kizárólag a(z) <strong>{companyName}</strong> részére, a(z) <strong>{jobTitle}</strong>{" "}
             lehetőséghez kapcsolódóan továbbítsa. Tudomásul veszem, hogy a továbbítást követően

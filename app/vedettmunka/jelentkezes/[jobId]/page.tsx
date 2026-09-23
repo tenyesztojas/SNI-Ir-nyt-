@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getPublishedJobById } from "@/lib/vedettmunka/data";
 import JelentkezesClient from "./JelentkezesClient";
 
-export const metadata = { title: "Jelentkezés – VédettKarrier" };
+export const metadata = { title: "Jelentkezés – Védett Karrier" };
 export const dynamic = "force-dynamic";
 
 export default async function JelentkezesPage({

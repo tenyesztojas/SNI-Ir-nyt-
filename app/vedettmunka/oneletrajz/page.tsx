@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { FileText, Download, Shield } from "lucide-react";
 
-export const metadata = { title: "Bemutatkozó lap készítő – VédettKarrier" };
+export const metadata = { title: "Bemutatkozó lap készítő – Védett Karrier" };
 
 export default function OneletrajzPage() {
   return (
@@ -11,7 +11,7 @@ export default function OneletrajzPage() {
       </div>
       <h1 className="text-2xl font-extrabold text-sni-brand-navy">Bemutatkozó lap készítő</h1>
       <p className="mt-3 text-gray-600 leading-relaxed">
-        Készíts egyszerű, átlátható bemutatkozó lapot, amit csatolhatsz egy VédettKarrier lehetőséghez.
+        Készíts egyszerű, átlátható bemutatkozó lapot, amit csatolhatsz egy Védett Karrier lehetőséghez.
         Kérdésekre válaszolsz, mi pedig összerakjuk a dokumentumot. A végén PDF-ként mentheted le.
       </p>
 
@@ -62,7 +62,7 @@ export default function OneletrajzPage() {
       </div>
 
       <div className="mt-8 rounded-xl bg-amber-50 px-4 py-3 text-xs text-amber-800 text-left">
-        <strong>Fontos:</strong> A VédettKarrier bemutatkozó lap készítője segít PDF-dokumentumot készíteni.
+        <strong>Fontos:</strong> A Védett Karrier bemutatkozó lap készítője segít PDF-dokumentumot készíteni.
         Mentsd el saját eszközödre. A VédettSarok nem tárolja tartósan a bemutatkozó lapodat.
         Nincs CV-adatbázis.
       </div>

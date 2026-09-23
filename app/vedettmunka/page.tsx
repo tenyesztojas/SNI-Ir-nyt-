@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import ErtesitoCta from "./ErtesitoCta";
 
 export const metadata = {
-  title: "VédettKarrier – Rugalmas munkák és lehetőségek",
+  title: "Védett Karrier – Rugalmas munkák és lehetőségek",
 };
 
 export const dynamic = "force-dynamic";
@@ -28,7 +28,7 @@ export default async function VedettMunkaPage() {
       {/* ── HERO ─────────────────────────────────────────────── */}
       <div className="rounded-3xl bg-gradient-to-br from-sni-brand-navy to-sni-brand-blue px-8 py-14 text-center text-white">
         <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-sni-brand-teal">
-          VédettKarrier
+          Védett Karrier
         </p>
         <h1 className="text-3xl font-extrabold leading-tight sm:text-4xl">
           Találj olyan munkát,<br />amely jobban illik a családod mindennapjaihoz.
@@ -63,7 +63,7 @@ export default async function VedettMunkaPage() {
       <div className="mt-6 rounded-2xl border border-amber-100 bg-amber-50 px-5 py-4 text-sm text-amber-800 leading-relaxed">
         <strong>Fontos tudni:</strong> A VédettSarok nem munkaerő-közvetítő szolgáltatás.
         Nem garantál munkát, választ, interjút vagy munkaviszonyt.
-        A VédettKarrier lehetőségeket mutat meg, bemutatkozó lap készítésében segít,
+        A Védett Karrier lehetőségeket mutat meg, bemutatkozó lap készítésében segít,
         és a jelentkezésedet technikailag továbbítja a hirdető partnernek.
       </div>
 
@@ -163,7 +163,7 @@ export default async function VedettMunkaPage() {
         <div>
           <h3 className="font-bold text-sni-brand-navy">Bemutatkozó lap készítő</h3>
           <p className="mt-1 text-sm text-gray-600">
-            Készíts egyszerű, átlátható bemutatkozó lapot, amit csatolhatsz egy VédettKarrier lehetőséghez.
+            Készíts egyszerű, átlátható bemutatkozó lapot, amit csatolhatsz egy Védett Karrier lehetőséghez.
             Az adataid a böngésződben maradnak, mi nem tároljuk.
           </p>
           <Link
@@ -214,7 +214,7 @@ export default async function VedettMunkaPage() {
         <section className="mt-8 rounded-2xl bg-sni-brand-navy p-6 text-white">
           <h2 className="text-lg font-extrabold">Van rugalmas munkád vagy megbízásod?</h2>
           <p className="mt-2 text-sm text-blue-100 leading-relaxed">
-            A VédettKarrier olyan partnerekkel dolgozik együtt, akik pontosan, érthetően írják le a munkakörülményeket,
+            A Védett Karrier olyan partnerekkel dolgozik együtt, akik pontosan, érthetően írják le a munkakörülményeket,
             és nyitottak arra, hogy rugalmas, előre tervezhető lehetőséget kínáljanak.
           </p>
           <div className="mt-5 flex flex-wrap gap-3">

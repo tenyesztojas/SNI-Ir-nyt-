@@ -1,6 +1,6 @@
 import KarrieriranytClient from "./KarrieriranytClient";
 
-export const metadata = { title: "Karrieriránytű – VédettKarrier" };
+export const metadata = { title: "Karrieriránytű – Védett Karrier" };
 
 export default function KarrieriranytPage() {
   return (
