@@ -238,3 +238,39 @@ export interface MotisPlanParams {
 export type MotisPlanResult =
   | { ok: true; data: MotisPlanResponse }
   | { ok: false; reason: "routing_engine_unavailable" | "routing_error" | "timeout"; message: string; status?: number };
+
+// SPRINT 9 (DIRECT TRIP REALTIME LOOKUP, 2026-09-23) — GET /api/v6/trip
+// paraméterei/válasza. Ez a végpont EGY, MÁR AZONOSÍTOTT fizikai trip élő
+// realtime állapotát adja vissza (tripId szerint), NEM egy route-tervezési
+// keresés — lásd lib/vedett-route/realtimeRefresh/extractUpdates.ts fejléce
+// a TELJES trip span vs. user saját sub-leg-je közti, élő VPS-teszttel
+// bizonyított különbségről.
+//
+// A tripId-nek a MOTIS válaszban (pl. egy /api/v6/plan leg.tripId
+// mezőjében) TÉNYLEGESEN megfigyelt, TELJES, normalizált formát kell
+// követnie — ezt a kliens/route handler SOHA nem alakítja át, nem rövidíti,
+// nem egészíti ki: pontosan azt az értéket küldi tovább, amit a JourneyLeg
+// már ma is tárol (lásd orchestrator.ts mapLeg() tripId mezője).
+export interface MotisTripParams {
+  tripId: string;
+}
+
+// A GET /api/v6/trip válasz ALAKJA megegyezik a /plan egy itinerary-jével
+// (lásd MOTIS forráskód: journey_to_response() ugyanazt a konvertert
+// használja mindkét végponton) — újrafelhasználjuk a MÁR bizonyított
+// MotisItinerary típust, nincs duplikált/spekulatív alak.
+export type MotisTripResponse = MotisItinerary;
+
+export type MotisTripResult =
+  | { ok: true; data: MotisTripResponse }
+  | {
+      ok: false;
+      // "not_found": a MOTIS 4xx-et adott ismeretlen/érvénytelen tripId-re
+      // (pl. rövid/rossz formátumú tripId esetén megfigyelt "invalid
+      // tripId tag" hiba) — a hívó ezt is, és minden más nem-ok esetet is
+      // KIZÁRÓLAG csendes no-op-ként kezel, soha nem hibaüzenetként a
+      // felhasználó felé, soha nem "cancelled"-ként.
+      reason: "not_found" | "routing_engine_unavailable" | "routing_error" | "timeout";
+      message: string;
+      status?: number;
+    };

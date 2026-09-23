@@ -1,34 +1,40 @@
-// Sprint 7.2 (LIVE TRANSIT REALTIME REFRESH) — buildRealtimeRefreshRequest()
-// PURE request-builder tesztjei, ugyanaz a hálózat-mentes elv, mint
-// rest-stop-reroute-request.test.ts-nél.
+// SPRINT 9 (DIRECT TRIP REALTIME LOOKUP, 2026-09-23) — DÁTUMOZOTT
+// KORREKCIÓ. Ez a fájl korábban (Sprint 7.2) buildRealtimeRefreshRequest()-
+// et tesztelte, ami egy MotisPlanParams-ot épített egy /plan re-query-hez.
+// Mivel a realtime-refresh SOHA nem hív /plan-t (lásd
+// lib/vedett-route/realtimeRefresh/buildRequest.ts fejléce), ez a modul
+// mostantól KIZÁRÓLAG dedupeRealtimeRefreshTripIds()-t exportálja — ezt a
+// PURE, tripId-nkénti deduplikáló logikát teszteli ez a fájl.
 //   node --test __tests__/vedett-route/realtime-refresh-request.test.ts
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildRealtimeRefreshRequest } from "../../lib/vedett-route/realtimeRefresh/buildRequest.ts";
+import { dedupeRealtimeRefreshTripIds } from "../../lib/vedett-route/realtimeRefresh/buildRequest.ts";
+import type { RealtimeRefreshIdentity } from "../../lib/vedett-route/realtimeRefresh/extractUpdates.ts";
 
-test("a fromPlace/toPlace a Journey SAJÁT origin/destination koordinátáiból épül, a departAt a Journey saját indulási idejéből", () => {
-  const params = buildRealtimeRefreshRequest({
-    from: { lat: 47.5, lon: 19.05 },
-    to: { lat: 47.51, lon: 19.06 },
-    departAt: "2026-09-16T21:55:00.000Z",
-  });
-  assert.equal(params.fromPlace, "47.5,19.05");
-  assert.equal(params.toPlace, "47.51,19.06");
-  assert.equal(params.time, "2026-09-16T21:55:00.000Z");
+test("egyetlen identitás -> egyelemű tripId-lista", () => {
+  const legs: RealtimeRefreshIdentity[] = [{ tripId: "TRIP_1" }];
+  assert.deepEqual(dedupeRealtimeRefreshTripIds(legs), ["TRIP_1"]);
 });
 
-test("numItineraries alapértelmezetten 3, felülírható", () => {
-  const context = { from: { lat: 47.5, lon: 19.05 }, to: { lat: 47.51, lon: 19.06 }, departAt: "2026-09-16T21:55:00.000Z" };
-  assert.equal(buildRealtimeRefreshRequest(context).numItineraries, 3);
-  assert.equal(buildRealtimeRefreshRequest(context, 1).numItineraries, 1);
+test("[12] azonos tripId két különböző TRANSIT lábon -> a tripId a deduplikált listában csak EGYSZER szerepel", () => {
+  const legs: RealtimeRefreshIdentity[] = [
+    { tripId: "TRIP_1", fromStopId: "A", toStopId: "B" },
+    { tripId: "TRIP_1", fromStopId: "B", toStopId: "C" },
+  ];
+  assert.deepEqual(dedupeRealtimeRefreshTripIds(legs), ["TRIP_1"]);
 });
 
-test("a visszaadott objektum kizárólag a hivatalos MOTIS mezőket tartalmazza", () => {
-  const params = buildRealtimeRefreshRequest({
-    from: { lat: 47.5, lon: 19.05 },
-    to: { lat: 47.51, lon: 19.06 },
-    departAt: "2026-09-16T21:55:00.000Z",
-  });
-  assert.deepEqual(Object.keys(params).sort(), ["fromPlace", "numItineraries", "time", "toPlace"]);
+test("több, különböző tripId sorrend-megőrzően, egyedi bejegyzésenként szerepel", () => {
+  const legs: RealtimeRefreshIdentity[] = [{ tripId: "TRIP_A" }, { tripId: "TRIP_B" }, { tripId: "TRIP_A" }, { tripId: "TRIP_C" }];
+  assert.deepEqual(dedupeRealtimeRefreshTripIds(legs), ["TRIP_A", "TRIP_B", "TRIP_C"]);
+});
+
+test("üres tripId-jű bejegyzést kihagyja", () => {
+  const legs: RealtimeRefreshIdentity[] = [{ tripId: "" }, { tripId: "TRIP_1" }];
+  assert.deepEqual(dedupeRealtimeRefreshTripIds(legs), ["TRIP_1"]);
+});
+
+test("üres lista -> üres eredmény, nincs hiba", () => {
+  assert.deepEqual(dedupeRealtimeRefreshTripIds([]), []);
 });

@@ -1800,7 +1800,18 @@ function RankedJourneyCard({
     if (!navigationMode) return null;
     const transitLegIdentities = displayedJourney.legs
       .filter((leg) => leg.mode === "TRANSIT" && leg.tripId)
-      .map((leg) => ({ tripId: leg.tripId as string, routeId: leg.routeId }));
+      .map((leg) => ({
+        tripId: leg.tripId as string,
+        routeId: leg.routeId,
+        // SPRINT 9 (DIRECT TRIP REALTIME LOOKUP, 2026-09-23) — a realtime-
+        // refresh mostantól GET /api/v6/trip hívásokból vágja ki a user
+        // saját boarding/alighting szakaszát a teljes fizikai trip span-
+        // jéből (lásd realtimeRefresh/extractUpdates.ts) — ehhez a
+        // JourneyLeg SAJÁT fromStopId/toStopId-je kell, VÁLTOZATLANUL
+        // továbbadva.
+        fromStopId: leg.fromStopId,
+        toStopId: leg.toStopId,
+      }));
     if (transitLegIdentities.length === 0) return null;
     if (firstLeg?.fromLat === undefined || firstLeg?.fromLon === undefined) return null;
     if (lastLeg?.toLat === undefined || lastLeg?.toLon === undefined) return null;

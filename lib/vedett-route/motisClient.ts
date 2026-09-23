@@ -34,7 +34,7 @@
 
 import { getRouteServiceConfig, getLegacyDirectMotisBaseUrl } from "./config.ts";
 import { vedettRouteLog } from "./logger.ts";
-import type { MotisPlanParams, MotisPlanResponse, MotisPlanResult } from "./motisTypes.ts";
+import type { MotisPlanParams, MotisPlanResponse, MotisPlanResult, MotisTripParams, MotisTripResponse, MotisTripResult } from "./motisTypes.ts";
 import { isValidStreetRoutePoint, parseMotisStreetRouteResponse } from "./motisStreetRoute.ts";
 import type { MotisStreetRouteResult, StreetRoutePoint } from "./motisStreetRoute.ts";
 
@@ -261,6 +261,106 @@ export async function fetchMotisPlan(params: MotisPlanParams): Promise<MotisPlan
   }
 
   return { ok: true, data: outcome.json as MotisPlanResponse };
+}
+
+// SPRINT 9 (DIRECT TRIP REALTIME LOOKUP, 2026-09-23) — GET /api/v6/trip
+// kliens: EGY, MÁR AZONOSÍTOTT fizikai trip élő realtime állapotát kérdezi le
+// tripId szerint — NEM egy /api/v6/plan route-tervezési kérés. Ugyanazt a
+// base-URL feloldást (resolveRouteTarget: route service elsőbbséggel,
+// legacy direct fejlesztői fallback), auth-fejléc-mintát és egyetlen-retry-
+// hálózati-hibán stratégiát használja, mint fetchMotisPlan() fent — NINCS
+// duplikált MOTIS config/base-URL logika. Szerver-oldali KIZÁRÓLAG,
+// ugyanúgy mint fetchMotisPlan() és fetchMotisWalkingRoute() — a böngésző
+// SOHA nem hívja közvetlenül a MOTIS-t.
+//
+// A tripId-t VÁLTOZATLANUL, átalakítás/rövidítés/kiegészítés NÉLKÜL adjuk
+// tovább (lásd motisTypes.ts MotisTripParams kommentje) — SOHA nem
+// "javítjuk ki"/egészítjük ki a formátumot itt, mert az egy kitalált/
+// bizonytalan identitás-transzformáció lenne.
+function buildTripQuery(params: MotisTripParams): URLSearchParams {
+  const q = new URLSearchParams();
+  q.set("tripId", params.tripId);
+  return q;
+}
+
+export async function fetchMotisTrip(params: MotisTripParams): Promise<MotisTripResult> {
+  const target = resolveRouteTarget();
+
+  if (!target) {
+    vedettRouteLog("routing_engine_unavailable", "warn", { reason: "route_service_not_configured", api: "trip" });
+    return {
+      ok: false,
+      reason: "routing_engine_unavailable",
+      message: "A realtime trip-lekérdezés átmenetileg nem érhető el.",
+    };
+  }
+
+  const query = buildTripQuery(params).toString();
+  const url = `${target.baseUrl}/api/v6/trip?${query}`;
+  const timeoutMs = DEFAULT_TIMEOUT_MS;
+  const headers = target.mode === "route_service" ? buildHeaders(target) : undefined;
+
+  const outcome =
+    target.mode === "route_service"
+      ? await fetchWithSingleRetryOnNetworkError(url, headers, timeoutMs)
+      : await performFetch(url, headers, timeoutMs);
+
+  if (outcome.timeoutError) {
+    vedettRouteLog("timeout", "error", { mode: target.mode, api: "trip" });
+    return {
+      ok: false,
+      reason: "timeout",
+      message: "A realtime trip-lekérdezés átmenetileg nem érhető el.",
+    };
+  }
+
+  if (outcome.networkError) {
+    vedettRouteLog("routing_engine_unavailable", "error", { mode: target.mode, reason: "network_error", api: "trip" });
+    return {
+      ok: false,
+      reason: "routing_engine_unavailable",
+      message: "A realtime trip-lekérdezés átmenetileg nem érhető el.",
+    };
+  }
+
+  if (outcome.parseError) {
+    vedettRouteLog("malformed_response", "error", { mode: target.mode, status: outcome.status, api: "trip" });
+    return {
+      ok: false,
+      reason: "routing_error",
+      status: outcome.status,
+      message: "A MOTIS trip-válasz hibás alakú.",
+    };
+  }
+
+  if (!outcome.ok) {
+    if (outcome.status === 404 || outcome.status === 400) {
+      // Ismeretlen/érvénytelen tripId (pl. a user élő VPS-tesztjében
+      // megfigyelt "invalid tripId tag" egy rövid/rossz formátumú
+      // tripId-re) — SOHA nem kezeljük hibáként a felhasználó felé, a
+      // hívó (route.ts) csendes no-op-ra futtatja.
+      vedettRouteLog("routing_error", "warn", { mode: target.mode, status: outcome.status, api: "trip", reason: "trip_not_found_or_invalid" });
+      return {
+        ok: false,
+        reason: "not_found",
+        status: outcome.status,
+        message: "A trip nem található.",
+      };
+    }
+    if (outcome.status === 401 || outcome.status === 403) {
+      vedettRouteLog("routing_error", "error", { mode: target.mode, status: outcome.status, reason: "route_service_auth_failed", api: "trip" });
+    } else {
+      vedettRouteLog("routing_error", "error", { mode: target.mode, status: outcome.status, api: "trip" });
+    }
+    return {
+      ok: false,
+      reason: "routing_error",
+      status: outcome.status,
+      message: "A MOTIS trip-lekérdezés hibát adott vissza.",
+    };
+  }
+
+  return { ok: true, data: outcome.json as MotisTripResponse };
 }
 
 // NEARBY TRANSIT ACCESS BACKEND sprint (2026-09-17, folytatás) — MOTIS
