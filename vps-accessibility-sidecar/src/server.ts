@@ -49,6 +49,7 @@ import { timingSafeEqual } from "node:crypto";
 import { getLoadedDataset, pollDatasetOnce, startPolling } from "./activeIndexStore.js";
 import { selectPathwaySubgraph, type PathwayQuery } from "./stationSubgraph.js";
 import { findNearbyStops, parseNearbyStopsRequest } from "./nearbyStops.js";
+import { findStationsByName, parseStationSearchRequest } from "./stationSearch.js";
 import type { StopAccessibilityIndexEntry, TripAccessibilityIndexEntry } from "./lib/accessibilityIndex.js";
 
 // --- Konfiguráció (env-alapú, spec 9/19. pont) -------------------------
@@ -321,6 +322,59 @@ async function handleNearbyStops(req: IncomingMessage, res: ServerResponse): Pro
   sendJson(res, 200, { ok: true, status: "ok", stops });
 }
 
+async function handleStationSearch(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  if (!isAuthorized(req)) {
+    sendJson(res, 401, { ok: false, error: "UNAUTHORIZED" });
+    return;
+  }
+
+  let rawBody: string;
+  try {
+    rawBody = await readBody(req);
+  } catch (err) {
+    if (err instanceof Error && err.message === "BODY_TOO_LARGE") {
+      sendJson(res, 413, { ok: false, error: "BODY_TOO_LARGE" });
+      return;
+    }
+    sendJson(res, 400, { ok: false, error: "BODY_READ_FAILED" });
+    return;
+  }
+
+  let parsedBody: unknown;
+  try {
+    parsedBody = JSON.parse(rawBody);
+  } catch {
+    sendJson(res, 400, { ok: false, error: "MALFORMED_JSON" });
+    return;
+  }
+
+  const parsedRequest = parseStationSearchRequest(parsedBody);
+  if ("error" in parsedRequest) {
+    sendJson(res, 400, { ok: false, error: parsedRequest.error });
+    return;
+  }
+  const { dataset, query, limit } = parsedRequest;
+
+  if (!configuredDatasets().includes(dataset)) {
+    // Ismeretlen dataset -- UGYANAZ a fail-safe kezeles, mint /lookup es
+    // /nearby-stops eseten: sosem crash, a kliens ezt egyertelmu 404-kent kapja.
+    sendJson(res, 404, { ok: false, error: "UNKNOWN_DATASET" });
+    return;
+  }
+
+  const loaded = getLoadedDataset(dataset);
+  if (!loaded) {
+    // A dataset ismert, de a sidecaron meg nincs betoltve generation --
+    // UGYANAZ a "nem hiba, csak nincs adat" szemantika, mint /lookup-nal
+    // es /nearby-stops-nal.
+    sendJson(res, 200, { ok: true, status: "unavailable", stops: [] });
+    return;
+  }
+
+  const stops = findStationsByName(loaded.index, dataset, query, limit);
+  sendJson(res, 200, { ok: true, status: "ok", stops });
+}
+
 export function createAccessibilitySidecarServer() {
   return createServer((req, res) => {
     void (async () => {
@@ -337,6 +391,10 @@ export function createAccessibilitySidecarServer() {
         }
         if (req.method === "POST" && path === "/nearby-stops") {
           await handleNearbyStops(req, res);
+          return;
+        }
+        if (req.method === "POST" && path === "/station-search") {
+          await handleStationSearch(req, res);
           return;
         }
         sendJson(res, 404, { ok: false, error: "NOT_FOUND" });

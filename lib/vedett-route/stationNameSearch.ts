@@ -51,6 +51,7 @@
 import { normalizeForPrefixMatch } from "./addressAutocompleteMapbox.ts";
 import type { AccessibilityIndex } from "./accessibilityIndex.ts";
 import type { TransitProviderId } from "./types.ts";
+import { lookupStationCandidatesFromSidecar, type StationSearchSidecarCandidate } from "./accessibilityLookupClient.ts";
 
 // TÁMOGATOTT MAGYAR ÁLLOMÁS/MEGÁLLÓ SZINONIMÁK (spec szerint, szó szerint
 // felsorolva) — accent/case-toleránsan, TELJES SZÓ egyezéssel (nem
@@ -74,6 +75,59 @@ export const STATION_SYNONYM_WORDS = [
 const NORMALIZED_STATION_SYNONYMS = new Set(
   STATION_SYNONYM_WORDS.map((word) => normalizeForPrefixMatch(word)),
 );
+
+// SIDECAR DATASET ROUTING HINT (2026-09-24, "VPS sidecar allomas-kereses"
+// sprint) -- melyik LIVE VPS sidecar dataset(ek)et erdemes megkerdezni egy
+// adott szinonima-szohoz. Szandekosan a MAR MEGLEVO matchedSynonyms
+// eredmenyre epul (nem uj parsolas) -- egy vasut-jellegu szo (vasutallomas/
+// vonatallomas/palyaudvar/allomas) a "mavgtfs" datasetre mutat, egy
+// busz-jellegu szo (buszallomas/buszpalyaudvar) a "volangtfs"-re, a tobbi
+// (metro/HEV/megallo/megallohely -- BKK jellegu) a "bkkgtfs"-re. NINCS
+// varos-/helynev semmilyen formaban ebben a tablaban.
+const STATION_SYNONYM_TO_SIDECAR_DATASET: Record<string, string[]> = {
+  [normalizeForPrefixMatch("vasútállomás")]: ["mavgtfs"],
+  [normalizeForPrefixMatch("vonatállomás")]: ["mavgtfs"],
+  [normalizeForPrefixMatch("pályaudvar")]: ["mavgtfs"],
+  [normalizeForPrefixMatch("állomás")]: ["mavgtfs"],
+  [normalizeForPrefixMatch("buszpályaudvar")]: ["volangtfs"],
+  [normalizeForPrefixMatch("buszállomás")]: ["volangtfs"],
+  [normalizeForPrefixMatch("megállóhely")]: ["bkkgtfs"],
+  [normalizeForPrefixMatch("megálló")]: ["bkkgtfs"],
+  [normalizeForPrefixMatch("metró")]: ["bkkgtfs"],
+  [normalizeForPrefixMatch("HÉV")]: ["bkkgtfs"],
+};
+
+// A JELENLEG ismert sidecar dataset-ek BOVITHETO, de MINDIG hatarolt
+// listaja -- ha egy keresesben NINCS felismert szinonima-szo (vagy a
+// felismert szo(ak) nem kepezodnek le egyertelmuen egy datasetre), a
+// kereses ezt a HATAROLT (jelenleg haromelemu), NEM a jovoben
+// vegtelenul bovulo halmazt kerdezi le -- soha nem egy dinamikusan
+// novekvo/korlatlan fan-outot.
+const ALL_KNOWN_SIDECAR_DATASETS = ["bkkgtfs", "mavgtfs", "volangtfs"] as const;
+
+/**
+ * A normalizeStationQuery() mar felismert szinonima-szavai alapjan
+ * eldonti, mely sidecar dataset(ek)et erdemes megkerdezni. Ha nincs
+ * felismert szinonima, VAGY a felismert szo(ak) egyike sem kepezodik le
+ * ismert datasetre, a HATAROLT (nem korlatlan) ALL_KNOWN_SIDECAR_DATASETS
+ * halmazt adja vissza -- soha nem varos-/helynev alapjan dont.
+ */
+export function resolveSidecarDatasetHints(normalization: StationQueryNormalization): string[] {
+  if (normalization.matchedSynonyms.length === 0) {
+    return [...ALL_KNOWN_SIDECAR_DATASETS];
+  }
+  const datasets = new Set<string>();
+  for (const word of normalization.matchedSynonyms) {
+    const cleaned = word.replace(/^[,.;:!?]+/, "").replace(/[,.;:!?]+$/, "");
+    const normalized = normalizeForPrefixMatch(cleaned);
+    const hint = STATION_SYNONYM_TO_SIDECAR_DATASET[normalized];
+    if (hint) {
+      for (const dataset of hint) datasets.add(dataset);
+    }
+  }
+  if (datasets.size === 0) return [...ALL_KNOWN_SIDECAR_DATASETS];
+  return Array.from(datasets);
+}
 
 export interface StationQueryNormalization {
   /** Az eredeti, csak trim-elt keresési szöveg. */
@@ -286,10 +340,46 @@ export const DEFAULT_MERGED_RESULT_LIMIT = 16;
  * providert, SOSEM dob hibát, SOSEM állítja meg a többi provider
  * feldolgozását.
  */
+// SIDECAR-FORRASU (VPS, elo GTFS) TALALATOK BEEPITESE (2026-09-24, "VPS
+// sidecar allomas-kereses" sprint) -- a fenti, .vedett-cache-alapu
+// helyi-index utat EZ NEM VALTJA FEL, hanem KIEGESZITI: a lokalis/dev/teszt
+// hasznalatra a MEGLEVO loadIndex-ut valtozatlan marad (fallback), DE a
+// production korrektsege MAR NEM fugg tole -- lasd a sprint jelentes
+// "PRODUCTION DATA" pontjat. A `sidecarSearch` fuggveny INJEKTALT
+// fuggoseg (ugyanaz a minta, mint `loadIndex`), alapertelmezesben a VALODI
+// VPS sidecar klienst hivja (lookupStationCandidatesFromSidecar,
+// accessibilityLookupClient.ts) -- igy a MEGLEVO ket hivo (address-search/
+// search route.ts) SEMMILYEN modositas NELKUL automatikusan athalad ezen az
+// uton, tesztekben viszont egy stub injektalhato.
+export type SidecarStationSearchFn = (
+  query: string,
+  dataset: string,
+) => Promise<StationSearchSidecarCandidate[] | null>;
+
+async function defaultSidecarStationSearch(query: string, dataset: string): Promise<StationSearchSidecarCandidate[] | null> {
+  return lookupStationCandidatesFromSidecar(query, dataset);
+}
+
+/**
+ * Egy sidecar dataset-kulcshoz tartozo provider/candidate-tipus leves,
+ * UGYANAZZAL a "vasut -> transit_station, busz -> transit_stop" elvvel,
+ * mint a MEGLEVO STATION_PROVIDERS tablaban (mav_rail/mav_bus). A "bkkgtfs"
+ * (es barmely ismeretlen dataset) a "BKK" providerre/"transit_stop"
+ * tipusra esik vissza -- ez a mezo KIZAROLAG UI-megjelenites/tipus-
+ * cimkezes celjabol letezik, a routing/klasszifikacios logikat nem
+ * befolyasolja.
+ */
+function sidecarDatasetToStationConfig(dataset: string): { provider: TransitProviderId; type: "transit_station" | "transit_stop" } {
+  if (dataset === "mavgtfs") return { provider: "MAV_RAIL", type: "transit_station" };
+  if (dataset === "volangtfs") return { provider: "MAV_BUS", type: "transit_stop" };
+  return { provider: "BKK", type: "transit_stop" };
+}
+
 export async function findGtfsStationCandidates(
   query: string,
   loadIndex: AccessibilityIndexLoader,
   limit: number = DEFAULT_STATION_CANDIDATE_LIMIT,
+  sidecarSearch: SidecarStationSearchFn = defaultSidecarStationSearch,
 ): Promise<GtfsStationCandidate[]> {
   const normalization = normalizeStationQuery(query);
   if (normalizeForPrefixMatch(normalization.coreQuery).length < MIN_CORE_QUERY_LENGTH_FOR_STATION_MATCH) {
@@ -297,6 +387,9 @@ export async function findGtfsStationCandidates(
   }
 
   const collected: GtfsStationCandidate[] = [];
+
+  // 1) MEGLEVO helyi (.vedett-cache) index-alapu ut -- valtozatlan,
+  // fallback/dev celra megmarad.
   for (const provider of STATION_PROVIDERS) {
     let index: AccessibilityIndex | null;
     try {
@@ -306,6 +399,55 @@ export async function findGtfsStationCandidates(
     }
     if (!index) continue;
     collected.push(...matchGtfsStopsByQuery(normalization, index, provider, limit));
+  }
+
+  // 2) UJ: VPS sidecar-alapu ut -- ez adja a valodi production talalatokat
+  // (lasd a sprint jelentes NETWORK PATH/PRODUCTION DATA pontjait). Csak a
+  // relevans, HATAROLT dataset-halmazt kerdezi le (resolveSidecarDatasetHints),
+  // egy-egy hatarolt HTTP hivassal datasetenkent, parhuzamosan. TOBB
+  // candidate eseten NEM valogatunk automatikusan egyet -- mindegyik
+  // bekerul az egyesitett listaba, a meglevo dedup/rank/limit logika alá.
+  const normalizedTargets = [
+    normalizeForPrefixMatch(normalization.coreQuery),
+    normalizeForPrefixMatch(normalization.originalQuery),
+  ];
+  const sidecarQueryText = normalization.coreQuery.length > 0 ? normalization.coreQuery : normalization.originalQuery;
+  const datasetHints = resolveSidecarDatasetHints(normalization);
+  const sidecarResults = await Promise.all(
+    datasetHints.map(async (dataset) => {
+      try {
+        const stops = await sidecarSearch(sidecarQueryText, dataset);
+        return { dataset, stops: stops ?? [] };
+      } catch {
+        // Fail-safe (spec): a sidecar kliens SOHA nem dob, de ez a
+        // vedelmi halo akkor is all, ha egy jovobeli valtoztatas ezt
+        // megtorne -- egy sidecar-hiba SOSEM allithatja meg a tobbi
+        // dataset/forras feldolgozasat.
+        return { dataset, stops: [] as StationSearchSidecarCandidate[] };
+      }
+    }),
+  );
+
+  for (const { dataset, stops } of sidecarResults) {
+    const config = sidecarDatasetToStationConfig(dataset);
+    for (const stop of stops) {
+      if (typeof stop.lat !== "number" || typeof stop.lon !== "number") continue;
+      if (!Number.isFinite(stop.lat) || !Number.isFinite(stop.lon)) continue;
+      const normalizedName = normalizeForPrefixMatch(stop.name ?? "");
+      if (!normalizedName) continue;
+      const rank = bestRankAgainstTargets(normalizedName, normalizedTargets);
+      if (!rank) continue;
+      collected.push({
+        type: config.type,
+        source: "gtfs",
+        provider: config.provider,
+        id: stop.stopId,
+        label: stop.name ?? stop.stopId,
+        lat: stop.lat,
+        lon: stop.lon,
+        rank,
+      });
+    }
   }
 
   collected.sort((a, b) => {

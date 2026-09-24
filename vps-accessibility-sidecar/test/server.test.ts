@@ -267,3 +267,81 @@ test("POST /nearby-stops: helyes koordinátára station-dedupolt candidate-et ad
   assert.equal(body.stops[0].stopId, "PLATFORM_A", "a klaszteren belül a legközelebbi platform (PLATFORM_A) a reprezentáns");
   assert.ok(Number.isInteger(body.stops[0].distanceMeters));
 });
+
+// STATION NAME SEARCH backend sprint (2026-09-24) -- POST /station-search
+// HTTP-szintu tesztek. Ujrahasznalja a fentebb ("helyes koordinatara
+// station-dedupolt candidate-et ad" teszt altal) mar aktivalt, koordinatakat
+// TARTALMAZO bkkgtfs generaciot (PLATFORM_A/PLATFORM_B, parent_station
+// STATION_X) -- ez a teszt-fajl a node:test alapertelmezett sorrendjeben
+// (definicios sorrend) fut, tehat ez a szakasz MAR az aktivalt generaciot
+// latja.
+test("POST /station-search: auth fejlec nelkul 401-et ad", async () => {
+  const res = await fetch(`${baseUrl}/station-search`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ dataset: "bkkgtfs", query: "Platform" }),
+  });
+  assert.equal(res.status, 401);
+});
+
+test("POST /station-search: rossz Bearer tokennel 401-et ad", async () => {
+  const res = await fetch(`${baseUrl}/station-search`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: "Bearer nem-ez-a-jo-token" },
+    body: JSON.stringify({ dataset: "bkkgtfs", query: "Platform" }),
+  });
+  assert.equal(res.status, 401);
+});
+
+test("POST /station-search: ismeretlen dataset 404-et ad (fail-safe, UGYANAZ mint /lookup es /nearby-stops eseten)", async () => {
+  const res = await fetch(`${baseUrl}/station-search`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${AUTH_TOKEN}` },
+    body: JSON.stringify({ dataset: "mavgtfs", query: "Platform" }),
+  });
+  assert.equal(res.status, 404);
+});
+
+test("POST /station-search: malformed JSON body 400-at ad, nem 500-at", async () => {
+  const res = await fetch(`${baseUrl}/station-search`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${AUTH_TOKEN}` },
+    body: "{ nem: valid json",
+  });
+  assert.equal(res.status, 400);
+});
+
+test("POST /station-search: hianyzo query mezo 400-at ad", async () => {
+  const res = await fetch(`${baseUrl}/station-search`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${AUTH_TOKEN}` },
+    body: JSON.stringify({ dataset: "bkkgtfs" }),
+  });
+  assert.equal(res.status, 400);
+});
+
+test("POST /station-search: helyes tokennel es nevre a station-dedupolt, deterministikusan rendezett candidate-listat adja", async () => {
+  const res = await fetch(`${baseUrl}/station-search`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${AUTH_TOKEN}` },
+    body: JSON.stringify({ dataset: "bkkgtfs", query: "Platform" }),
+  });
+  assert.equal(res.status, 200);
+  const body = (await res.json()) as { ok: boolean; status: string; stops: { stopId: string; name?: string; parentStation?: string; dataset: string }[] };
+  assert.equal(body.status, "ok");
+  // PLATFORM_A es PLATFORM_B egyarant STATION_X ala tartozik -> station-szinten EGY candidate marad.
+  assert.equal(body.stops.length, 1);
+  assert.equal(body.stops[0].parentStation, "STATION_X");
+  assert.equal(body.stops[0].stopId, "PLATFORM_A", "azonos rangu/nevhosszu talalatok kozott a lexikografikusan korabbi nev a reprezentans");
+  assert.equal(body.stops[0].dataset, "bkkgtfs");
+});
+
+test("POST /station-search: a valasz SOSEM tartalmazza a Bearer tokent/secretet", async () => {
+  const res = await fetch(`${baseUrl}/station-search`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${AUTH_TOKEN}` },
+    body: JSON.stringify({ dataset: "bkkgtfs", query: "Platform" }),
+  });
+  const text = await res.text();
+  assert.equal(text.includes(AUTH_TOKEN), false);
+});

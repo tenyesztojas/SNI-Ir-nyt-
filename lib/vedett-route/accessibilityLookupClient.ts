@@ -347,3 +347,109 @@ export async function lookupNearbyStops(
     clearTimeout(timeoutHandle);
   }
 }
+
+// STATION NAME SEARCH sprint (2026-09-24) -- a sidecar UJ POST
+// /station-search endpointjanak klienese. UGYANAZT a halozati utat
+// (config.baseUrl/config.authToken -- lasd getAccessibilitySidecarConfig())
+// hasznalja, mint lookupAccessibilityIndexForItineraries()/lookupNearbyStops()
+// -- NEM vezet be uj URL-semat/uj auth-mechanizmust. A body-alak (egyetlen
+// `dataset: string` mezo) SZANDEKOSAN a MEGLEVO /nearby-stops konvenciot
+// koveti (nem egy uj, tomb-alapu multi-dataset alakot) -- egy tobb
+// dataset-re kiterjedo keresest a hivo (findGtfsStationCandidates(),
+// lasd stationNameSearch.ts) tobb, hatarolt szamu, parhuzamos hivassal
+// old meg, egy-egy dataset-enkent.
+//
+// UGYANAZ a fail-safe szerzodes, mint a fenti ket fuggvenynel: SOHA nem
+// dob kivetelt, minden hibaagon (nincs konfiguralva, timeout, halozati
+// hiba, malformed JSON/body, nem "ok"/"unavailable" alak) `null`-t ad
+// vissza. Szerver-oldali-only modul (nincs "use client"/böngeszo-import
+// ez a fajlban), a Bearer token SOHA nem kerul a bongeszohoz -- lasd a
+// modul fejlece "N+1 ELKERULESE"/fail-safe bekezdeseit, amik erre a
+// fuggvenyre is ervenyesek. Legfeljebb EGY kiserlet -- nincs automatikus
+// retry (a hivo oldal, ha tobb dataset-et akar lekerdezni, tobb, kulon
+// hivast indit, nem ez a fuggveny ismetli onmagat).
+export interface StationSearchSidecarCandidate {
+  stopId: string;
+  name?: string;
+  lat: number;
+  lon: number;
+  dataset: string;
+  parentStation?: string;
+  locationType?: number;
+}
+
+interface StationSearchSidecarResponseBody {
+  ok?: boolean;
+  status?: "ok" | "unavailable";
+  stops?: StationSearchSidecarCandidate[];
+}
+
+function isValidStationSearchResponse(body: unknown): body is StationSearchSidecarResponseBody {
+  if (!body || typeof body !== "object") return false;
+  const b = body as StationSearchSidecarResponseBody;
+  if (b.status !== "ok" && b.status !== "unavailable") return false;
+  if (b.status === "ok" && !Array.isArray(b.stops)) return false;
+  return true;
+}
+
+export async function lookupStationCandidatesFromSidecar(
+  query: string,
+  dataset: string
+): Promise<StationSearchSidecarCandidate[] | null> {
+  const config = getAccessibilitySidecarConfig();
+  if (!config) {
+    vedettRouteLog("routing_error", "info", { reason: "accessibility_sidecar_not_configured" });
+    return null;
+  }
+  if (!query || query.trim().length === 0 || !dataset) return null;
+
+  const controller = new AbortController();
+  const timeoutHandle = setTimeout(() => controller.abort(), config.timeoutMs);
+  try {
+    const response = await fetch(`${config.baseUrl.replace(/\/+$/, "")}/station-search`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${config.authToken}`,
+      },
+      body: JSON.stringify({ dataset, query }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      vedettRouteLog("routing_error", "warn", {
+        reason: "station_search_lookup_http_error",
+        status: response.status,
+      });
+      return null;
+    }
+
+    let body: unknown;
+    try {
+      body = await response.json();
+    } catch {
+      vedettRouteLog("routing_error", "warn", { reason: "station_search_lookup_malformed_json" });
+      return null;
+    }
+
+    if (!isValidStationSearchResponse(body)) {
+      vedettRouteLog("routing_error", "warn", { reason: "station_search_lookup_malformed_body" });
+      return null;
+    }
+
+    if (body.status === "unavailable") {
+      vedettRouteLog("routing_error", "info", { reason: "station_search_lookup_dataset_unavailable" });
+      return null;
+    }
+
+    return body.stops ?? [];
+  } catch (err) {
+    vedettRouteLog("routing_error", "warn", {
+      reason: "station_search_lookup_failed",
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return null;
+  } finally {
+    clearTimeout(timeoutHandle);
+  }
+}

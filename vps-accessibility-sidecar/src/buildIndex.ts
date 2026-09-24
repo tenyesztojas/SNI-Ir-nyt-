@@ -59,6 +59,15 @@ import {
 // miatt — spec 19. pont).
 const DATASET_PROVIDERS: Record<string, TransitProviderId> = {
   bkkgtfs: "BKK",
+  // STATION NAME SEARCH sprint (2026-09-24) -- MAV/Volan dataset regiszterek
+  // hozzaadasa a MEGLEVO buildIndex -> generation-hash -> atomic
+  // active-pointer -> poll-reload pipeline-hoz, a BKK bejegyzes VALTOZATLAN
+  // hagyasaval, UGYANAZZAL a mintaval (lasd resolveProvider() lent -- egy
+  // itt nem regisztralt dataset biztonsagosan a sajat dataset-kulcsara esik
+  // vissza, tehat ez a bovites soha nem szukseges a mukodeshez, csak
+  // ember-olvashato diagnosztikat ad a manifest.provider mezonek).
+  mavgtfs: "MAV_RAIL",
+  volangtfs: "VOLAN",
 };
 
 function resolveProvider(dataset: string): TransitProviderId {
