@@ -485,18 +485,18 @@ describe("selectActiveInstructionWithStopProgress — BOARD/RIDE/ALIGHT + stop-p
     assert.equal(active.current?.kind, "BOARD");
   });
 
-  test("8/9/10/11 megjelenítve — a RIDE instrukció címe a hátralévő megállók számát mutatja, végül a leszállás-figyelmeztetést", () => {
+  test("8/9/10/11 megjelenítve — a RIDE instrukció címe a hátralévő megállók számát mutatja, végül a leszállás-figyelmeztetést (headsign UI: a route label — itt M2 — előtagként megmarad)", () => {
     const instructions = buildNavigationInstructions({ legs: THREE_LEG_JOURNEY });
     const atStart = selectActiveInstructionWithStopProgress(instructions, { legIndex: 1, legPhaseFraction: 0.5, remainingStops: resolveRemainingStops(0, legRange, stops) });
     assert.equal(atStart.current?.kind, "RIDE");
-    assert.equal(atStart.current?.title, "Utazz még 4 megállót");
+    assert.equal(atStart.current?.title, "M2 · Utazz még 4 megállót");
 
     const afterA = selectActiveInstructionWithStopProgress(instructions, { legIndex: 1, legPhaseFraction: 0.5, remainingStops: resolveRemainingStops(2, legRange, stops) });
-    assert.equal(afterA.current?.title, "Utazz még 3 megállót");
+    assert.equal(afterA.current?.title, "M2 · Utazz még 3 megállót");
 
     const afterC = selectActiveInstructionWithStopProgress(instructions, { legIndex: 1, legPhaseFraction: 0.5, remainingStops: resolveRemainingStops(4, legRange, stops) });
     assert.equal(afterC.current?.kind, "RIDE", "a VALÓS ALIGHT csak a leg-vég fázisban/route-endnél legyen current");
-    assert.equal(afterC.current?.title, "A következő megállónál szállj le");
+    assert.equal(afterC.current?.title, "M2 · A következő megállónál szállj le");
   });
 
   test("15) ALIGHT nem aktiválódik túl korán — a stop-progress a RIDE CÍMÉT írja át, de nem lép a valódi ALIGHT elé", () => {

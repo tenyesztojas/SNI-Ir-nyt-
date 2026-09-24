@@ -47,6 +47,13 @@ export interface NavigationInstruction {
   legIndex: number;
   targetLat?: number;
   targetLon?: number;
+  // Onboard RIDE display (Sprint: headsign UI) — a route's short/long name
+  // and its headsign (JourneyLeg.headsign, the vehicle's own destination
+  // sign), carried from the SAME leg data routeLabel() already reads at
+  // build time. Never invented, never geocoded — undefined when the
+  // underlying JourneyLeg field is missing, exactly like routeLabel().
+  routeName?: string;
+  headsign?: string;
 }
 
 // A buildNavigationInstructions() KIZÁRÓLAG a `legs` mezőt használja — a
@@ -181,6 +188,8 @@ function instructionsForLeg(leg: JourneyLeg, legIndex: number, precededByTransit
     legIndex,
     targetLat: leg.toLat,
     targetLon: leg.toLon,
+    routeName: isNonEmpty(leg.routeShortName) ? leg.routeShortName : (isNonEmpty(leg.routeLongName) ? leg.routeLongName : undefined),
+    headsign: isNonEmpty(leg.headsign) ? leg.headsign : undefined,
   });
 
   if (!followedByTransit) {
@@ -481,6 +490,18 @@ export function resolveRemainingStops(
 // Rövid, konkrét, egyszerre EGY fő teendő (autizmusbarát UX, lásd a
 // modul UI-oldali fejléceit VedettUtvonalSearchForm.tsx-ben) — SOHA nem
 // "Még 1 megálló", helyette a konkrétabb "A következő megállónál szállj le".
+// Pure helper: onboard RIDE display prefix, from the SAME route name /
+// headsign already carried on the RIDE instruction (see instructionsForLeg())
+// — never a new data source, never guessed. Undefined when neither piece of
+// real data is available, so callers fall back to the plain stop-progress
+// text unchanged (no regression when there is nothing to show).
+function ridePrefix(routeName: string | undefined, headsign: string | undefined): string | undefined {
+  if (routeName && headsign) return `${routeName} · ${headsign} felé`;
+  if (routeName) return routeName;
+  if (headsign) return `${headsign} felé`;
+  return undefined;
+}
+
 export function resolveStopProgressDisplay(remaining: RemainingStopsResult): { title: string } {
   if (remaining.atFinalStop) {
     return { title: "A következő megállónál szállj le" };
@@ -601,10 +622,16 @@ export function selectActiveInstructionWithStopProgress(
   }
 
   const display = resolveStopProgressDisplay(options.remainingStops);
+  const stopText = options.nearAlighting ? "A leszállóhely közelében vagy. Készülj a leszállásra" : display.title;
+  // Onboard RIDE title still leads with the concrete instruction (stop count
+  // / alighting warning) — the route+headsign, when known, is prefixed in
+  // front of it so BOTH stay visible ("S40 · Székesfehérvár felé · Utazz
+  // még 2 megállót"), instead of the route label disappearing once onboard.
+  const prefix = ridePrefix(base.current.routeName, base.current.headsign);
   return {
     current: {
       ...base.current,
-      title: options.nearAlighting ? "A leszállóhely közelében vagy. Készülj a leszállásra" : display.title,
+      title: prefix ? `${prefix} · ${stopText}` : stopText,
       detail: options.nextStopName ? `Következő megálló: ${options.nextStopName}` : undefined,
     },
     next: base.next,
