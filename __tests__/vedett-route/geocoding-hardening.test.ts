@@ -379,9 +379,9 @@ describe("17. eset — regresszióvédelem: meglévő ágak (CURRENT_LOCATION, K
     );
   });
 
-  test("a MANUAL (szabadszöveges) cím-ág továbbra is a geocodeAddress()-en megy át", () => {
-    assert.match(routeSrc, /: geocodeAddress\(from as string\)/);
-    assert.match(routeSrc, /: geocodeAddress\(to as string\)/);
+  test("a MANUAL (szabadszöveges) cím-ág továbbra is a geocodeAddress()-en megy át (immár a resolveManualFieldOrStation() GTFS-állomás-felismerésen ÁT, fallbackként, 2026-09-24 submit-path javítás)", () => {
+    assert.match(routeSrc, /: resolveManualFieldOrStation\(from as string, getAccessibilityIndex, geocodeAddress\)/);
+    assert.match(routeSrc, /: resolveManualFieldOrStation\(to as string, getAccessibilityIndex, geocodeAddress\)/);
   });
 
   test("a böngésző továbbra sem hívja a MOTIS-t közvetlenül — a route.ts szerver oldalon importálja a searchVedettRoutes()-t, nincs kliens-oldali MOTIS URL/fetch a form komponensben", () => {

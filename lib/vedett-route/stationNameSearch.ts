@@ -103,17 +103,26 @@ export function normalizeStationQuery(query: string): StationQueryNormalization 
   const trimmed = query.trim();
   const words = trimmed.split(/\s+/).filter((w) => w.length > 0);
   const matchedSynonyms: string[] = [];
-  const coreWords = words.filter((word) => {
-    // A szó végi írásjeleket (pl. vessző) is toleráljuk az egyezésnél,
-    // de magát a szót változatlanul tartjuk meg/dobjuk el.
-    const normalized = normalizeForPrefixMatch(word.replace(/[,.;:!?]+$/g, ""));
+  const cleanedWords: string[] = [];
+  for (const word of words) {
+    // SUBMIT-PATH JAVÍTÁS (2026-09-24, "Martonvásár + vasútállomás split
+    // mezős submit" production hiba) — a submit-time searchRequestBuilder.ts
+    // buildStructuredAddressString() a Város + Cím/hely mezőket VESSZŐVEL
+    // összefűzve küldi a szervernek (pl. "Martonvásár, vasútállomás"). A
+    // szó végi/eleji írásjeleket (pl. ez a vessző) LEVÁGJUK a megtartott
+    // szóból is, nem csak az egyezés-vizsgálatnál — különben a coreQuery
+    // "Martonvásár," maradna (vesszővel), ami SOHA nem egyezne pontosan a
+    // GTFS stop_name "Martonvásár" normalizált alakjával (lásd
+    // matchGtfsStopsByQuery bestRankAgainstTargets "exact" ága).
+    const cleaned = word.replace(/^[,.;:!?]+/, "").replace(/[,.;:!?]+$/, "");
+    const normalized = normalizeForPrefixMatch(cleaned);
     if (NORMALIZED_STATION_SYNONYMS.has(normalized)) {
       matchedSynonyms.push(word);
-      return false;
+      continue;
     }
-    return true;
-  });
-  const coreQuery = coreWords.join(" ").trim();
+    if (cleaned.length > 0) cleanedWords.push(cleaned);
+  }
+  const coreQuery = cleanedWords.join(" ").trim();
   return {
     originalQuery: trimmed,
     coreQuery: coreQuery.length > 0 ? coreQuery : trimmed,
@@ -362,4 +371,148 @@ export function mergeAddressAndStationResults(
     source: "mapbox",
   }));
   return [...stationUnified, ...addressUnified].slice(0, limit);
+}
+
+// SUBMIT-PATH ÁLLOMÁS-FELOLDÁS (2026-09-24, "Martonvásár + vasútállomás
+// split mezős submit" production hiba javítása)
+//
+// ROOT CAUSE: a korábbi (2026-09-24, autocomplete) sprint a GTFS
+// állomás-keresést KIZÁRÓLAG a /api/admin/vedett-utvonal/address-search
+// (autocomplete/suggest) végpontra kötötte be. A TÉNYLEGES routing-submit
+// ("Útvonal keresése" gomb) egy TELJESEN MÁS végpontot
+// (/api/admin/vedett-utvonal/search) és egy TELJESEN MÁS feloldási ágat
+// hív: ha a user nem választott autocomplete-javaslatot (tehát nincs
+// fromCoordinates/toCoordinates), a kliens a Város+Irányítószám/kerület+
+// Cím-vagy-hely mezőket EGY VESSZŐVEL ELVÁLASZTOTT STRING-GÉ fűzi össze
+// (lásd searchRequestBuilder.ts buildStructuredAddressString(), pl.
+// "Martonvásár, vasútállomás") és ezt a stringet KÖZVETLENÜL a Nominatim-
+// alapú geocodeAddress()-nek (geocode.ts) adja — ez a réteg NEM ismeri a
+// GTFS stop-adatot, ezért egy valós állomásnév-keresés itt "address_not_found"
+// ("Nem találtuk ezt a címet.") hibára futott, FÜGGETLENÜL attól, hogy az
+// autocomplete-réteg már helyesen fel tudta volna oldani.
+//
+// JAVÍTÁS: resolveStationCandidatesToOutcome() egy TISZTA, a route.ts
+// által hívott döntési függvény — a MÁR MEGLÉVŐ findGtfsStationCandidates()
+// eredményét alakítja "egyértelmű EXACT találat" / "több találat, válasszon
+// a felhasználó" / "nincs találat, menjen a normál geocode" kimenetre. A
+// route.ts ezt a normál geocodeAddress() ELÉ kapcsolja, DE KIZÁRÓLAG akkor,
+// ha normalizeStationQuery(query).hasStationHint === true (tehát a szöveg
+// tartalmaz egy felismert állomás/megálló szinonima-szót) — ez a
+// konzervatív kapu biztosítja, hogy egy sima, szinonima-szó NÉLKÜLI
+// cím-keresés (a normál regressziós eset) SOHA ne fusson át ezen az ágon,
+// tehát a meglévő cím-keresés nem sérülhet. A "több találat" ágat a
+// route.ts a MÁR LÉTEZŐ "address_ambiguous" hibaágra/UI-ra képezi le
+// (lásd route.ts fejléce "ADDRESS_AMBIGUOUS" szakasza és
+// VedettUtvonalSearchForm.tsx ambiguousOriginCandidates/
+// ambiguousDestinationCandidates state-je) — NINCS új, station-specifikus
+// UI, a meglévő "válassz a listából" mechanizmus szolgálja ki mindkét
+// esetet, origin ÉS destination oldalon szimmetrikusan (a Promise.all
+// mindkét ágon UGYANEZT a resolvert hívja).
+export interface StationResolvedGeocodeResult {
+  name: string;
+  lat: number;
+  lon: number;
+  quality: "EXACT";
+}
+
+export interface StationResolvedAmbiguousCandidate {
+  displayName: string;
+  lat: number;
+  lon: number;
+  secondary?: string;
+}
+
+export type StationResolutionOutcome =
+  | { kind: "none" }
+  | { kind: "single"; result: StationResolvedGeocodeResult }
+  | { kind: "ambiguous"; candidates: StationResolvedAmbiguousCandidate[] };
+
+/**
+ * A findGtfsStationCandidates() eredményének (tiszta, szinkron) döntéssé
+ * alakítása. Nulla találat -> "none" (a hívó a normál geocodeAddress()-re
+ * esik vissza). Pontosan egy találat -> "single", a MEGLÉVŐ GeocodeResult-
+ * alakkal kompatibilis EXACT eredmény (a route.ts ezt közvetlenül a
+ * geocodeAddress() helyére teheti, nem geokódol újra). Több találat ->
+ * "ambiguous", a MEGLÉVŐ GeocodePlaceCandidate/AmbiguousGeocodeResult
+ * alakkal kompatibilis lista (displayName/lat/lon/secondary) — a
+ * `secondary` mező egy egyszerű, magyar típusjelző ("vasútállomás"/
+ * "autóbusz-megálló"), SOSEM nyers GTFS/OSM adat.
+ */
+export function resolveStationCandidatesToOutcome(candidates: GtfsStationCandidate[]): StationResolutionOutcome {
+  if (candidates.length === 0) return { kind: "none" };
+  if (candidates.length === 1) {
+    const candidate = candidates[0];
+    return { kind: "single", result: { name: candidate.label, lat: candidate.lat, lon: candidate.lon, quality: "EXACT" } };
+  }
+  return {
+    kind: "ambiguous",
+    candidates: candidates.map((candidate) => ({
+      displayName: candidate.label,
+      lat: candidate.lat,
+      lon: candidate.lon,
+      secondary: candidate.type === "transit_station" ? "vasútállomás" : "autóbusz-megálló",
+    })),
+  };
+}
+
+// A route.ts (routing-submit végpont) MEGLÉVŐ Nominatim-alapú
+// geocodeAddress()/AmbiguousGeocodeResult típusaival kompatibilis
+// generikus alak — SZÁNDÉKOSAN NEM importáljuk közvetlenül a geocode.ts
+// típusait ide (a stationNameSearch.ts modul ettől a réteg-től
+// FÜGGETLEN marad, csak a hívó — route.ts — illeszti össze a kettőt),
+// hanem egy STRUKTURÁLISAN kompatibilis, minimális alakot definiálunk.
+export interface ManualFieldGeocodeResult {
+  name: string;
+  lat: number;
+  lon: number;
+  quality: "EXACT" | "APPROXIMATE";
+  houseNumberNotResolved?: true;
+  resolvedStreet?: string;
+  resolvedCity?: string;
+}
+export interface ManualFieldAmbiguousResult {
+  ambiguous: true;
+  candidates: StationResolvedAmbiguousCandidate[];
+}
+export type ManualFieldGeocodeFallback = (
+  query: string,
+) => Promise<ManualFieldGeocodeResult | ManualFieldAmbiguousResult | null>;
+
+/**
+ * A submit-time ("Útvonal keresése" gomb) MANUAL from/to mező feloldása —
+ * ez a route.ts (/api/admin/vedett-utvonal/search) által TÉNYLEGESEN
+ * hívott függvény, a fenti fejléc szerinti root cause javítása.
+ *
+ * `loadIndex` és `geocodeFallback` INJEKTÁLT függőségek (nem itt vannak
+ * hardkódolva) — ez teszi lehetővé, hogy ezt a FÜGGVÉNYT (nem csak a
+ * belső darabjait külön-külön) node --test alól, next/server és valódi
+ * Nominatim-hívás NÉLKÜL, közvetlen függvényhívással tesztelhessük,
+ * pontosan a production-ben átcsúszott integrációs réteget lefedve.
+ *
+ * KAPU: kizárólag akkor fut a GTFS-illesztés, ha
+ * normalizeStationQuery(query).hasStationHint === true — egy szinonima
+ * NÉLKÜLI, sima cím-keresés SOSEM éri el ezt az ágat (a `geocodeFallback`
+ * hívódik közvetlenül), tehát a meglévő cím-keresés viselkedése
+ * garantáltan változatlan marad ezekre a lekérdezésekre.
+ */
+export async function resolveManualFieldOrStation(
+  query: string,
+  loadIndex: AccessibilityIndexLoader,
+  geocodeFallback: ManualFieldGeocodeFallback,
+): Promise<ManualFieldGeocodeResult | ManualFieldAmbiguousResult | null> {
+  const normalization = normalizeStationQuery(query);
+  if (normalization.hasStationHint) {
+    const stationCandidates = await findGtfsStationCandidates(query, loadIndex);
+    const outcome = resolveStationCandidatesToOutcome(stationCandidates);
+    if (outcome.kind === "single") {
+      return { name: outcome.result.name, lat: outcome.result.lat, lon: outcome.result.lon, quality: "EXACT" };
+    }
+    if (outcome.kind === "ambiguous") {
+      return { ambiguous: true, candidates: outcome.candidates };
+    }
+    // outcome.kind === "none" -> nincs GTFS állomás-találat, a normál
+    // cím/POI geokódolás fut (lásd lent) — a station-hint önmagában
+    // SOSEM blokkolja/módosítja a normál geocode-ágat.
+  }
+  return geocodeFallback(query);
 }

@@ -173,14 +173,17 @@ describe("TASK B — „Aktuális helyzetem” mint indulási pont", () => {
     // A cast (`} as GeocodeResult)`) egy 2026-09-12 körüli típusszigorítás
     // (lásd geocode.ts GeocodeResult exportja) — a régi, a castot NEM
     // toleráló regex ezért törékennyé vált. Az invariáns MAGA (fromCoordinates
-    // esetén SOSEM fut le geocodeAddress, a MANUAL ág pedig VÁLTOZATLANUL
-    // geocodeAddress(from as string)-t hív) nem módosult; ugyanazt a
+    // esetén SOSEM fut le geocodeAddress/station-lookup) nem módosult; ugyanazt a
     // robusztus, cast-toleráns mintát használjuk, mint a
     // c41-ambiguous-and-origin-label.test.ts "C) MAP_PICKED origin" blokkja.
+    // SUBMIT-PATH ÁLLOMÁS-FELOLDÁS (2026-09-24) — a MANUAL ág immár
+    // resolveManualFieldOrStation()-t hív (a geocodeAddress()-t fallbackként
+    // MAGA kapja meg és hívja meg, ha nincs GTFS-találat) a korábbi direkt
+    // geocodeAddress(from as string) hívás helyett.
     assert.match(
       routeSrc,
-      /fromCoordinates\s*\n\s*\? Promise\.resolve\(\{[\s\S]*?\}(?:\s*as\s*GeocodeResult)?\)\s*\n\s*: geocodeAddress\(from as string\),/,
-      "fromCoordinates esetén a geocodeAddress() hívást teljesen ki kell hagyni, és a MANUAL ág (: geocodeAddress(from as string)) VÁLTOZATLAN kell maradjon"
+      /fromCoordinates\s*\n\s*\? Promise\.resolve\(\{[\s\S]*?\}(?:\s*as\s*GeocodeResult)?\)\s*\n\s*: resolveManualFieldOrStation\(from as string, getAccessibilityIndex, geocodeAddress\),/,
+      "fromCoordinates esetén a geocodeAddress() hívást teljesen ki kell hagyni, és a MANUAL ág (: resolveManualFieldOrStation(from as string, getAccessibilityIndex, geocodeAddress)) az ÚJ, egyenértékű szerződést kell kövesse"
     );
 
     // A visszaadott objektum tartalma (Promise.resolve, name-fallback,

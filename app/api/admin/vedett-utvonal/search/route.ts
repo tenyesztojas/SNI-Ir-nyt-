@@ -19,6 +19,8 @@ import { buildRouteCacheKey, getCached, setCached } from "@/lib/vedett-route/rou
 import type { OrchestratedSearchResult } from "@/lib/vedett-route/types";
 import type { OrchestratorErrorResult } from "@/lib/vedett-route/orchestrator";
 import { vedettRouteLog } from "@/lib/vedett-route/logger";
+import { resolveManualFieldOrStation } from "@/lib/vedett-route/stationNameSearch";
+import { getAccessibilityIndex } from "@/lib/vedett-route/providers/staticFileProvider";
 
 export async function POST(request: Request) {
   const auth = await requireVedettRouteAccess();
@@ -78,13 +80,28 @@ export async function POST(request: Request) {
   // ez SOHA nem jelenhet meg egy MAP_PICKED/jelölt-választás eredményeként,
   // mert a kliens ilyenkor MINDIG küld fromName-et (lásd
   // VedettUtvonalSearchForm.tsx originFields).
+  // SUBMIT-PATH ÁLLOMÁS-FELOLDÁS (2026-09-24, split city+place mezős
+  // autocomplete-választás nélküli submit production hiba javítása —
+  // lásd lib/vedett-route/stationNameSearch.ts
+  // resolveManualFieldOrStation() fejléce a teljes root cause-hoz). A
+  // korábbi (autocomplete) sprint a GTFS állomás-keresést kizárólag a
+  // /address-search végpontra kötötte be — ez a végpont (a TÉNYLEGES
+  // routing-submit) MANUAL from/to string mezőket eddig KÖZVETLENÜL a
+  // geocodeAddress()-nek (Nominatim) adta, ami NEM ismeri a GTFS
+  // stop-adatot. A resolveManualFieldOrStation() a MÁR MEGLÉVŐ, az
+  // autocomplete által is használt GTFS-illesztő logikát kapcsolja a
+  // geocodeAddress() ELÉ, KIZÁRÓLAG ha a szövegben van felismert
+  // állomás/megálló szinonima-szó — egy sima cím-keresés (szinonima
+  // nélkül) SOSEM éri el ezt az ágat. Origin ÉS destination oldalon
+  // UGYANEZT a függvényt hívja a lenti Promise.all — nincs
+  // település- vagy útvonal-specifikus külön logika.
   const [fromGeo, toGeo] = await Promise.all([
     fromCoordinates
       ? Promise.resolve({ name: fromName ?? "Jelenlegi hely", lat: fromCoordinates.latitude, lon: fromCoordinates.longitude, quality: "EXACT" as const } as GeocodeResult)
-      : geocodeAddress(from as string),
+      : resolveManualFieldOrStation(from as string, getAccessibilityIndex, geocodeAddress),
     toCoordinates
       ? Promise.resolve({ name: toName ?? "Kiválasztott cél", lat: toCoordinates.latitude, lon: toCoordinates.longitude, quality: "EXACT" as const } as GeocodeResult)
-      : geocodeAddress(to as string),
+      : resolveManualFieldOrStation(to as string, getAccessibilityIndex, geocodeAddress),
   ]);
 
   // ADDRESS_NOT_FOUND — nincs ELFOGADHATÓ Nominatim-találat SEMMILYEN

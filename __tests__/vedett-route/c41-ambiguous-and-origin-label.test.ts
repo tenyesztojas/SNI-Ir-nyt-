@@ -185,9 +185,16 @@ describe("C) MAP_PICKED origin — a koordináta autoritatív marad, NINCS build
     // tette. Az invariáns MAGA (fromCoordinates esetén SOSEM fut le
     // geocodeAddress) változatlan — a regexet ehhez igazítottuk, nem a
     // forráskódot a regexhez.
+    // SUBMIT-PATH ÁLLOMÁS-FELOLDÁS (2026-09-24) — a MANUAL ág immár
+    // resolveManualFieldOrStation()-t hív (amely a GTFS-jelöltek hiányában
+    // MAGA hívja meg a geocodeAddress()-t fallbackként) a korábbi direkt
+    // geocodeAddress(from as string) hívás helyett — az invariáns (a
+    // fromCoordinates ág SOSEM fut geocode/station-lookupot) nem sérül,
+    // a regexet ehhez az ÚJ, de egyenértékű MANUAL-ág szerződéshez
+    // igazítottuk.
     assert.match(
       routeSrc,
-      /fromCoordinates\s*\n\s*\? Promise\.resolve\(\{[\s\S]*?\}(?:\s*as\s*GeocodeResult)?\)\s*\n\s*: geocodeAddress\(from as string\),/
+      /fromCoordinates\s*\n\s*\? Promise\.resolve\(\{[\s\S]*?\}(?:\s*as\s*GeocodeResult)?\)\s*\n\s*: resolveManualFieldOrStation\(from as string, getAccessibilityIndex, geocodeAddress\),/
     );
   });
 });
