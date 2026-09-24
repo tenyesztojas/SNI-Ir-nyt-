@@ -5,6 +5,7 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import {
+  EARLIER_DEPARTURE_GPS_FALLBACK_MAX_LEAD_MINUTES,
   EARLIER_DEPARTURE_MIN_LEAD_MINUTES,
   acceptEarlierDepartureOffer,
   candidateFingerprint,
@@ -74,8 +75,8 @@ describe("15) boarded user -> no alternative search", () => {
   });
 });
 
-describe("16) WALK -> no alternative search", () => {
-  test("NOT_APPLICABLE (pl. WALK-only leg) nem trigger", () => {
+describe("16) WALK -> no alternative search (a GPS-fallback időablakon KÍVÜL)", () => {
+  test("NOT_APPLICABLE (pl. WALK-only leg), DE a tervezett boarding még messze (14 perc, a fallback ablakon kívül) -> nem trigger", () => {
     assert.equal(
       shouldTriggerEarlierDepartureCheck({
         navigationActive: true,
@@ -86,6 +87,182 @@ describe("16) WALK -> no alternative search", () => {
       }),
       false,
     );
+  });
+});
+
+// GPS-FALLBACK EARLIER DEPARTURE TRIGGER (2026-09-24, CONFIRMED GAP FIX) —
+// a fázis-alapú trigger (fent) KIZÁRÓLAG GPS-proximity fázisban
+// (AT_BOARDING_AREA/APPROACHING_BOARDING) armolódott; ha a GPS gyenge/
+// eltűnik a boarding környezetben, a fázis WALKING/NOT_APPLICABLE marad, és
+// a korábbi járat keresése korábban SOHA nem indult el. Az alábbi tesztek
+// KIZÁRÓLAG a shouldTriggerEarlierDepartureCheck() pure trigger-logikáját
+// fedik le — a candidate maga TOVÁBBRA IS a MEGLÉVŐ
+// validateEarlierDepartureCandidate()/resolveEarlierDepartureCandidate()
+// láncon megy át (lásd a fenti [5]-[14] teszteket, változatlanok), és a
+// hívó (VedettUtvonalSearchForm.tsx) SOHA nem vált automatikusan
+// displayedJourney-t — ezt maga a modul (acceptEarlierDepartureOffer
+// KIZÁRÓLAG explicit user-akcióra) garantálja, változatlanul.
+describe("[A] GPS phase APPROACHING_BOARDING/AT_BOARDING_AREA: a MEGLÉVŐ trigger továbbra is működik (regresszió)", () => {
+  test("APPROACHING_BOARDING + elegendő lead time -> trigger, GPS-fallback nélkül is", () => {
+    assert.equal(
+      shouldTriggerEarlierDepartureCheck({
+        navigationActive: true,
+        boardingPhase: "APPROACHING_BOARDING",
+        plannedDepartureIso: iso(14), // JÓVAL a fallback ablakon (3-6 perc) kívül, DE GPS-fázis alapján mégis trigger
+        nowMs: NOW,
+        alreadyHandledForThisDeparture: false,
+      }),
+      true,
+    );
+  });
+
+  test("AT_BOARDING_AREA + elegendő lead time -> trigger, GPS-fallback nélkül is", () => {
+    assert.equal(
+      shouldTriggerEarlierDepartureCheck({
+        navigationActive: true,
+        boardingPhase: "AT_BOARDING_AREA",
+        plannedDepartureIso: iso(14),
+        nowMs: NOW,
+        alreadyHandledForThisDeparture: false,
+      }),
+      true,
+    );
+  });
+});
+
+describe("[B] GPS phase WALKING/NOT_APPLICABLE, DE a tervezett boarding a fallback ablakban van -> fallback armolható", () => {
+  test(`WALKING + ${EARLIER_DEPARTURE_MIN_LEAD_MINUTES}-${EARLIER_DEPARTURE_GPS_FALLBACK_MAX_LEAD_MINUTES} perc közötti lead time -> trigger (GPS-fallback)`, () => {
+    assert.equal(
+      shouldTriggerEarlierDepartureCheck({
+        navigationActive: true,
+        boardingPhase: "WALKING",
+        plannedDepartureIso: iso(EARLIER_DEPARTURE_MIN_LEAD_MINUTES + 1),
+        nowMs: NOW,
+        alreadyHandledForThisDeparture: false,
+      }),
+      true,
+    );
+  });
+
+  test("NOT_APPLICABLE + a fallback ablakban lévő lead time -> trigger (GPS-fallback)", () => {
+    assert.equal(
+      shouldTriggerEarlierDepartureCheck({
+        navigationActive: true,
+        boardingPhase: "NOT_APPLICABLE",
+        plannedDepartureIso: iso(EARLIER_DEPARTURE_GPS_FALLBACK_MAX_LEAD_MINUTES),
+        nowMs: NOW,
+        alreadyHandledForThisDeparture: false,
+      }),
+      true,
+    );
+  });
+});
+
+describe("[C] planned boarding még túl messze (a fallback ablak felett) -> fallback NEM armolódik", () => {
+  test("WALKING + a fallback max lead time FELETTI előretartás -> nem trigger", () => {
+    assert.equal(
+      shouldTriggerEarlierDepartureCheck({
+        navigationActive: true,
+        boardingPhase: "WALKING",
+        plannedDepartureIso: iso(EARLIER_DEPARTURE_GPS_FALLBACK_MAX_LEAD_MINUTES + 1),
+        nowMs: NOW,
+        alreadyHandledForThisDeparture: false,
+      }),
+      false,
+    );
+  });
+
+  test("NOT_APPLICABLE + a MIN_LEAD alatti (túl közeli) előretartás -> nem trigger (ugyanaz a floor, mint a GPS-ágon)", () => {
+    assert.equal(
+      shouldTriggerEarlierDepartureCheck({
+        navigationActive: true,
+        boardingPhase: "NOT_APPLICABLE",
+        plannedDepartureIso: iso(EARLIER_DEPARTURE_MIN_LEAD_MINUTES - 1),
+        nowMs: NOW,
+        alreadyHandledForThisDeparture: false,
+      }),
+      false,
+    );
+  });
+});
+
+describe("[D] user már BOARDED (vagy BOARDED_UNCERTAIN_GEOMETRY/ARRIVED) -> fallback NEM armolódik, még a fallback ablakban sem", () => {
+  test("BOARDED/BOARDED_UNCERTAIN_GEOMETRY/ARRIVED a fallback ablakban lévő lead time-mal is nem trigger", () => {
+    for (const boardingPhase of ["BOARDED", "BOARDED_UNCERTAIN_GEOMETRY", "ARRIVED"] as const) {
+      assert.equal(
+        shouldTriggerEarlierDepartureCheck({
+          navigationActive: true,
+          boardingPhase,
+          plannedDepartureIso: iso(EARLIER_DEPARTURE_MIN_LEAD_MINUTES + 1),
+          nowMs: NOW,
+          alreadyHandledForThisDeparture: false,
+        }),
+        false,
+        boardingPhase,
+      );
+    }
+  });
+});
+
+describe("[E] in-flight/cooldown/dedup: a GPS-fallback ágon is ugyanaz az alreadyHandledForThisDeparture dedup véd", () => {
+  test("WALKING, fallback ablakban, DE alreadyHandledForThisDeparture=true -> nem trigger (nincs párhuzamos/spam check)", () => {
+    assert.equal(
+      shouldTriggerEarlierDepartureCheck({
+        navigationActive: true,
+        boardingPhase: "WALKING",
+        plannedDepartureIso: iso(EARLIER_DEPARTURE_MIN_LEAD_MINUTES + 1),
+        nowMs: NOW,
+        alreadyHandledForThisDeparture: true,
+      }),
+      false,
+    );
+  });
+
+  test("WALKING, fallback ablakban, DE navigationActive=false -> nem trigger", () => {
+    assert.equal(
+      shouldTriggerEarlierDepartureCheck({
+        navigationActive: false,
+        boardingPhase: "WALKING",
+        plannedDepartureIso: iso(EARLIER_DEPARTURE_MIN_LEAD_MINUTES + 1),
+        nowMs: NOW,
+        alreadyHandledForThisDeparture: false,
+      }),
+      false,
+    );
+  });
+});
+
+describe("[F] már elment candidate -> a MEGLÉVŐ validateEarlierDepartureCandidate() nem ajánlja fel (regresszió, GPS-fallback esetén is ugyanaz a guard védi)", () => {
+  test("candidateDepartureIso <= nowMs -> DEPARTURE_NOT_IN_FUTURE, függetlenül attól, hogy a checket a GPS-ág vagy a fallback-ág indította", () => {
+    const result = validateEarlierDepartureCandidate({
+      candidateDepartureIso: iso(-1), // már elment
+      candidateArrivalIso: iso(50),
+      plannedDepartureIso: iso(4),
+      originalArrivalIso: iso(64),
+      nowMs: NOW,
+    });
+    assert.deepEqual(result, { valid: false, reason: "DEPARTURE_NOT_IN_FUTURE" });
+  });
+
+  test("candidateDepartureIso pontosan a jelenben (nowMs) -> szintén DEPARTURE_NOT_IN_FUTURE (nem csak a múltra véd)", () => {
+    const result = validateEarlierDepartureCandidate({
+      candidateDepartureIso: iso(0),
+      candidateArrivalIso: iso(50),
+      plannedDepartureIso: iso(4),
+      originalArrivalIso: iso(64),
+      nowMs: NOW,
+    });
+    assert.deepEqual(result, { valid: false, reason: "DEPARTURE_NOT_IN_FUTURE" });
+  });
+});
+
+describe("[G] semmilyen candidate nem vált automatikusan journey-t (regresszió, GPS-fallback esetén is ugyanaz a state-machine védi)", () => {
+  test("egy valid candidate resolveEarlierDepartureCandidate() után KIZÁRÓLAG 'offered', SOHA nem 'accepted' automatikusan", () => {
+    const state = startEarlierDepartureCheck(createInitialEarlierDepartureOfferState(), iso(EARLIER_DEPARTURE_MIN_LEAD_MINUTES + 1));
+    const candidate = { departureIso: iso(1), arrivalIso: iso(50), routeLabel: "Z30 – Martonvásár felé" };
+    const offered = resolveEarlierDepartureCandidate(state, candidate, { valid: true });
+    assert.equal(offered.status, "offered");
+    assert.notEqual(offered.status, "accepted");
   });
 });
 

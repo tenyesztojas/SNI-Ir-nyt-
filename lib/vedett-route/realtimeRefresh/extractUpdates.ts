@@ -29,6 +29,7 @@
 
 import { computeDelayMinutes } from "../orchestrator.ts";
 import type { MotisItinerary, MotisLeg, MotisPlace } from "../motisTypes.ts";
+import { vedettRouteRealtimeRefreshDebugLog } from "../logger.ts";
 
 export interface RealtimeRefreshIdentity {
   tripId: string;
@@ -71,23 +72,41 @@ function findStopById(stops: readonly MotisPlace[], stopId: string | undefined):
   return stops.find((stop) => stop.stopId === stopId);
 }
 
-// EGYETLEN /trip válasz (egy tripId-hez tartozó, teljes fizikai trip) +
-// EGYETLEN kért identitás -> legfeljebb egy RealtimeLegUpdate. A hívó
-// (extractRealtimeUpdatesFromTrips lent) tripId-nkénti Map-ből adja át a
-// megfelelő választ minden identitásra.
-export function extractSubLegRealtimeUpdate(
+// REALTIME DIAGNOSTIC LOGGING (2026-09-24) — PURE reason-classification a
+// no-op ágakra, KIZÁRÓLAG a MÁR MEGLÉVŐ (alább változatlan) branch-eket
+// tükrözve — NEM új matching/merge szemantika, NEM új no-op ág, csak a
+// MEGLÉVŐ döntések megnevezése a diagnosztikai logging (route.ts,
+// extractRealtimeUpdatesFromTrips lent) számára. Side-effect-mentes, ezért
+// külön, console-mentesen tesztelhető.
+export type RealtimeRefreshOutcomeReason =
+  | "TRIP_NOT_FOUND" // nincs /trip válasz erre a tripId-re (MOTIS not_found/timeout/routing_error/hiányzó Map-bejegyzés), VAGY maga az identitás tripId nélküli
+  | "STOP_RANGE_NOT_FOUND" // hiányzik a fromStopId/toStopId a kérésből, VAGY egyik sem található meg a /trip válasz teljes megálló-sorozatában
+  | "IDENTITY_MISMATCH" // a /trip válasz legs-jei között nincs a kért (tripId, opcionális routeId) identitásra pontosan illeszkedő leg
+  | "NO_REALTIME_DATA" // megvan a trip + a sub-leg határpontjai, DE a user saját boarding/alighting megállóján nincs jelenthető (departure/arrival) idő
+  | "UPDATED"; // sikeres frissítés (cancelled-ág is ide tartozik)
+
+export interface RealtimeRefreshOutcome {
+  reason: RealtimeRefreshOutcomeReason;
+  update: RealtimeLegUpdate | null;
+}
+
+// A TÉNYLEGES kivágási/döntési logika — extractSubLegRealtimeUpdate (lent)
+// ennek VÉKONY wrappere (return classify(...).update), a viselkedés/
+// visszatérési érték BYTE-RA MEGEGYEZIK a korábbival, csak a reason is
+// elérhető lett a hívó (extractRealtimeUpdatesFromTrips) számára.
+export function classifyRealtimeSubLegOutcome(
   tripResponse: MotisItinerary | null | undefined,
   identity: RealtimeRefreshIdentity
-): RealtimeLegUpdate | null {
-  if (!identity.tripId) return null;
+): RealtimeRefreshOutcome {
+  if (!identity.tripId) return { reason: "TRIP_NOT_FOUND", update: null };
   // Sub-leg-kivágáshoz MINDKÉT határpont-stopId kötelező — enélkül nincs
   // biztonságos mód a teljes trip span-jéből a user saját szakaszát
   // kivágni, ezért inkább no-op, mint egy hibás (teljes-trip) idő.
-  if (!identity.fromStopId || !identity.toStopId) return null;
-  if (!tripResponse) return null;
+  if (!identity.fromStopId || !identity.toStopId) return { reason: "STOP_RANGE_NOT_FOUND", update: null };
+  if (!tripResponse) return { reason: "TRIP_NOT_FOUND", update: null };
 
   const tripLeg = (tripResponse.legs ?? []).find((leg) => matchesTripIdentity(leg, identity));
-  if (!tripLeg) return null;
+  if (!tripLeg) return { reason: "IDENTITY_MISMATCH", update: null };
 
   const stopSequence: MotisPlace[] = [
     ...(tripLeg.from ? [tripLeg.from] : []),
@@ -98,7 +117,7 @@ export function extractSubLegRealtimeUpdate(
   const toStop = findStopById(stopSequence, identity.toStopId);
   // Nem találtunk pontosan egyező stopId-t a válasz megálló-sorozatában —
   // csendes no-op, SOHA nem közelítünk a legközelebbi stophoz.
-  if (!fromStop || !toStop) return null;
+  if (!fromStop || !toStop) return { reason: "STOP_RANGE_NOT_FOUND", update: null };
 
   if (tripLeg.cancelled === true) {
     // PROVEN cancellation — ugyanaz az elsőbbségi szabály, mint Sprint
@@ -106,10 +125,13 @@ export function extractSubLegRealtimeUpdate(
     // teljes-trip-szintű cancelled mezőjéből (a MOTIS a teljes fizikai
     // trip törlését jelzi, ami a benne lévő minden sub-leget érinti).
     return {
-      tripId: identity.tripId,
-      routeId: identity.routeId,
-      realtime: Boolean(tripLeg.realTime),
-      cancelled: true,
+      reason: "UPDATED",
+      update: {
+        tripId: identity.tripId,
+        routeId: identity.routeId,
+        realtime: Boolean(tripLeg.realTime),
+        cancelled: true,
+      },
     };
   }
 
@@ -175,7 +197,7 @@ export function extractSubLegRealtimeUpdate(
     realTime: realtime,
   };
 
-  return {
+  const update: RealtimeLegUpdate = {
     tripId: identity.tripId,
     routeId: identity.routeId,
     departureTime,
@@ -190,6 +212,25 @@ export function extractSubLegRealtimeUpdate(
     // esetén ír felül" logikája változatlanul működjön.
     cancelled: undefined,
   };
+  // NO_REALTIME_DATA: megvan a trip + a sub-leg határpontjai, DE a user
+  // saját boarding/alighting megállóján NINCS jelenthető (departure/
+  // arrival) idő — ettől MÉG ugyanaz az update-objektum kerül vissza
+  // (csak scheduled* mezőkkel, ha vannak), a reason KIZÁRÓLAG a
+  // diagnosztikai logolást tájékoztatja, a visszaadott update-et NEM
+  // változtatja meg.
+  const reason: RealtimeRefreshOutcomeReason = departureTime || arrivalTime ? "UPDATED" : "NO_REALTIME_DATA";
+  return { reason, update };
+}
+
+// VÉKONY wrapper classifyRealtimeSubLegOutcome() felett — a viselkedés/
+// visszatérési érték VÁLTOZATLAN (a korábbi extractSubLegRealtimeUpdate()-
+// tel byte-ra megegyezik), csak a reason-classification lett kiemelve
+// (lásd fent) a diagnosztikai logging számára.
+export function extractSubLegRealtimeUpdate(
+  tripResponse: MotisItinerary | null | undefined,
+  identity: RealtimeRefreshIdentity
+): RealtimeLegUpdate | null {
+  return classifyRealtimeSubLegOutcome(tripResponse, identity).update;
 }
 
 // Több identitás + tripId -> /trip-válasz Map alapján állítja elő a teljes
@@ -198,6 +239,12 @@ export function extractSubLegRealtimeUpdate(
 // eredménnyel tért vissza, vagy a tripId-t nem is kérdeztük le) ugyanúgy
 // csendes no-op-ot eredményez az adott identitásra, mint egy sikeres, de
 // nem egyező válasz.
+//
+// DIAGNOSZTIKAI LOGGING (2026-09-24) — TISZTÁN megfigyelő réteg: a
+// classifyRealtimeSubLegOutcome() eredményét (tripId/routeId/fromStopId/
+// toStopId/reason) logolja a VEDETT_ROUTE_REALTIME_REFRESH_DEBUG env
+// flaggel gate-elve (lásd logger.ts) — a matching/merge szemantikát, a
+// visszaadott updates-tömböt NEM módosítja.
 export function extractRealtimeUpdatesFromTrips(
   identities: readonly RealtimeRefreshIdentity[],
   tripResponsesByTripId: ReadonlyMap<string, MotisItinerary | null>
@@ -205,8 +252,25 @@ export function extractRealtimeUpdatesFromTrips(
   const updates: RealtimeLegUpdate[] = [];
   for (const identity of identities) {
     if (!identity.tripId) continue;
-    const update = extractSubLegRealtimeUpdate(tripResponsesByTripId.get(identity.tripId) ?? null, identity);
-    if (update) updates.push(update);
+    const outcome = classifyRealtimeSubLegOutcome(tripResponsesByTripId.get(identity.tripId) ?? null, identity);
+    vedettRouteRealtimeRefreshDebugLog("sub_leg_outcome", {
+      tripId: identity.tripId,
+      routeId: identity.routeId,
+      fromStopId: identity.fromStopId,
+      toStopId: identity.toStopId,
+      reason: outcome.reason,
+      ...(outcome.update
+        ? {
+            scheduledDepartureTime: outcome.update.scheduledDepartureTime,
+            scheduledArrivalTime: outcome.update.scheduledArrivalTime,
+            departureTime: outcome.update.departureTime,
+            arrivalTime: outcome.update.arrivalTime,
+            realtime: outcome.update.realtime,
+            cancelled: outcome.update.cancelled,
+          }
+        : {}),
+    });
+    if (outcome.update) updates.push(outcome.update);
   }
   return updates;
 }

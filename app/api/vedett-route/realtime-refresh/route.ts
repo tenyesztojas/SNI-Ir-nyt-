@@ -51,6 +51,7 @@ import { dedupeRealtimeRefreshTripIds } from "@/lib/vedett-route/realtimeRefresh
 import { extractRealtimeUpdatesFromTrips } from "@/lib/vedett-route/realtimeRefresh/extractUpdates";
 import { fetchMotisTrip } from "@/lib/vedett-route/motisClient";
 import { rateLimiter } from "@/lib/rate-limit";
+import { vedettRouteRealtimeRefreshDebugLog } from "@/lib/vedett-route/logger";
 import type { MotisItinerary } from "@/lib/vedett-route/motisTypes";
 
 // Konzervatív, a 30 mp-es kliens-oldali polling intervallumhoz illesztett
@@ -96,6 +97,17 @@ export async function POST(request: Request) {
       // egy másik tripId-t helyette, soha nem jelez cancelled/off-route
       // állapotot pusztán a hiányzó adat miatt.
       tripResponsesByTripId.set(tripId, result.ok ? result.data : null);
+      // DIAGNOSZTIKAI LOGGING (2026-09-24) — TISZTÁN megfigyelő réteg,
+      // KIZÁRÓLAG a VEDETT_ROUTE_REALTIME_REFRESH_DEBUG flag mögött (lásd
+      // logger.ts): melyik tripId-re kértünk MOTIS /trip lekérdezést, és a
+      // motisClient milyen result.reason-t adott vissza sikertelen esetben
+      // (a motisClient saját, tripId nélküli logjait EGÉSZÍTI KI, nem
+      // helyettesíti). A viselkedést/no-op szemantikát NEM módosítja.
+      vedettRouteRealtimeRefreshDebugLog("motis_trip_fetch", {
+        tripId,
+        ok: result.ok,
+        reason: result.ok ? undefined : result.reason,
+      });
     })
   );
 

@@ -45,6 +45,23 @@ export const EARLIER_DEPARTURE_MIN_LEAD_MINUTES = 3;
  */
 export const EARLIER_DEPARTURE_MIN_IMPROVEMENT_MINUTES = 1;
 
+/**
+ * GPS-FALLBACK ELIGIBILITY WINDOW (2026-09-24, CONFIRMED GAP FIX) — a
+ * fázis-alapú trigger (shouldTriggerEarlierDepartureCheck alább) KIZÁRÓLAG
+ * GPS-proximity fázisban (AT_BOARDING_AREA/APPROACHING_BOARDING, lásd
+ * legTransition.ts) armolódott — ha a GPS gyenge/eltűnik a boarding
+ * környezetben, a fázis WALKING/NOT_APPLICABLE marad, és a korábbi járat
+ * keresése SOHA nem indult el (élő audit által azonosított, konfirmált
+ * gap). Ez a konstans NEM egy új, önálló időablak — KIZÁRÓLAG a MEGLÉVŐ
+ * EARLIER_DEPARTURE_MIN_LEAD_MINUTES-ből származtatott, SZŰK felső határ
+ * (duplázva), hogy a GPS nélküli fallback KIZÁRÓLAG a ténylegesen
+ * boarding-közeli időszakban (MIN_LEAD..2×MIN_LEAD, azaz kb. 3-6 perccel a
+ * tervezett indulás előtt) armolódjon — SOHA nem a teljes gyaloglás alatt,
+ * és SOHA nem folyamatos pollingként (lásd lent, ugyanaz az egyszeri,
+ * esemény-vezérelt/edge-triggered check-indítás, mint a GPS-alapú ágon).
+ */
+export const EARLIER_DEPARTURE_GPS_FALLBACK_MAX_LEAD_MINUTES = EARLIER_DEPARTURE_MIN_LEAD_MINUTES * 2;
+
 export interface EarlierDepartureTriggerInput {
   navigationActive: boolean;
   /** A walkToTransitBoundary/legTransition.ts MÁR MEGLÉVŐ fázisa a KÖVETKEZŐ/aktuális TRANSIT legre. */
@@ -73,13 +90,36 @@ function parseTimeMs(iso: string | null | undefined): number | null {
 export function shouldTriggerEarlierDepartureCheck(input: EarlierDepartureTriggerInput): boolean {
   if (!input.navigationActive) return false;
   if (input.alreadyHandledForThisDeparture) return false;
-  if (input.boardingPhase !== "AT_BOARDING_AREA" && input.boardingPhase !== "APPROACHING_BOARDING") return false;
 
   const plannedMs = parseTimeMs(input.plannedDepartureIso);
   if (plannedMs === null) return false;
-
   const leadMinutes = (plannedMs - input.nowMs) / 60_000;
-  return leadMinutes >= EARLIER_DEPARTURE_MIN_LEAD_MINUTES;
+
+  if (input.boardingPhase === "AT_BOARDING_AREA" || input.boardingPhase === "APPROACHING_BOARDING") {
+    return leadMinutes >= EARLIER_DEPARTURE_MIN_LEAD_MINUTES;
+  }
+
+  // GPS-FALLBACK (CONFIRMED GAP, 2026-09-24) — KIZÁRÓLAG akkor armolódik,
+  // ha a GPS-proximity fázis egyáltalán NEM állapítható meg (WALKING —
+  // normál gyaloglás, nincs boarding-jelzés — vagy NOT_APPLICABLE — nincs
+  // elég geometriai adat), ÉS a tervezett indulásig hátralévő idő a SZŰK,
+  // MEGLÉVŐ konstansokból származtatott boarding-közeli ablakban van (lásd
+  // EARLIER_DEPARTURE_GPS_FALLBACK_MAX_LEAD_MINUTES fent). BOARDED/
+  // BOARDED_UNCERTAIN_GEOMETRY/ARRIVED fázisban (a user MÁR felszállt vagy
+  // megérkezett) ez az ág SOHA nem fut le (lásd lent, "return false" —
+  // ezekre a fázisokra a fenti feltétel hamis, ide esnek). A visszaadott
+  // "true" KIZÁRÓLAG a MEGLÉVŐ candidate-check-et engedélyezi (ugyanaz a
+  // /rest-stops/resume hívás + validateEarlierDepartureCandidate() lánc,
+  // mint a GPS-alapú ágon) — SEMMIT nem állít a user tényleges GPS-
+  // pozíciójáról/boarding-állapotáról, NEM vált automatikusan journey-t.
+  if (input.boardingPhase === "WALKING" || input.boardingPhase === "NOT_APPLICABLE") {
+    return (
+      leadMinutes >= EARLIER_DEPARTURE_MIN_LEAD_MINUTES &&
+      leadMinutes <= EARLIER_DEPARTURE_GPS_FALLBACK_MAX_LEAD_MINUTES
+    );
+  }
+
+  return false;
 }
 
 export interface EarlierDepartureCandidateInput {

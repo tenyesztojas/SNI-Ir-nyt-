@@ -47,7 +47,18 @@ export type VedettRouteLogEvent =
   // nélkül) EZ AZ EVENT SOHA nem kerül logolásra. A hívó (lásd
   // VedettUtvonalSearchForm.tsx foregroundReacquisition.ts wiring) KIZÁRÓLAG
   // checkpoint/phase/generation-t ad át — SOHA GPS-koordinátát.
-  | "foreground_reacquisition_debug";
+  | "foreground_reacquisition_debug"
+  // REALTIME REFRESH DIAGNOSTIC LOGGING (2026-09-24). Kizárólag
+  // vedettRouteRealtimeRefreshDebugLog() hívja, KIZÁRÓLAG amikor
+  // process.env.VEDETT_ROUTE_REALTIME_REFRESH_DEBUG === "true" (lásd
+  // vedettRouteRealtimeRefreshDebugLog() lent) — normál productionben
+  // (flag nélkül) EZ AZ EVENT SOHA nem kerül logolásra. A hívók (lásd
+  // app/api/vedett-route/realtime-refresh/route.ts és
+  // realtimeRefresh/extractUpdates.ts) KIZÁRÓLAG tripId/routeId/
+  // fromStopId/toStopId/reason-kódot és menetrendi/realtime ISO
+  // időbélyegeket adnak át — SOHA user identityt, auth tokent, GPS-
+  // koordinátát vagy teljes request body-t.
+  | "realtime_refresh_debug";
 
 export function vedettRouteLog(
   event: VedettRouteLogEvent,
@@ -92,4 +103,20 @@ export function vedettRouteNearbyDebugLog(checkpoint: string, details: Record<st
 export function vedettRouteForegroundDebugLog(checkpoint: string, details: Record<string, unknown>) {
   if (process.env.VEDETT_ROUTE_FOREGROUND_DEBUG !== "true") return;
   vedettRouteLog("foreground_reacquisition_debug", "info", { checkpoint, ...details });
+}
+
+// REALTIME REFRESH DIAGNOSTIC LOGGING GATE (2026-09-24) — kizárólag a
+// POST /api/vedett-route/realtime-refresh pipeline checkpointjait
+// (MOTIS /trip lekérdezés kimenetele, sub-leg kivágás eredménye) logolja,
+// KIZÁRÓLAG amikor a VEDETT_ROUTE_REALTIME_REFRESH_DEBUG env változó
+// PONTOSAN "true" (alapértelmezés: KI, production zajmentes marad, amíg
+// valaki explicit be nem kapcsolja egy konkrét éles teszthez). SOSEM
+// logol user identityt, auth tokent, pontos GPS-koordinátát vagy teljes
+// request body-t — a hívók (route.ts/extractUpdates.ts) KIZÁRÓLAG
+// tripId/routeId/fromStopId/toStopId/reason-kódot és menetrendi/realtime
+// ISO időbélyegeket adnak át, a redact() biztonsági háló ettől
+// függetlenül továbbra is aktív.
+export function vedettRouteRealtimeRefreshDebugLog(checkpoint: string, details: Record<string, unknown>) {
+  if (process.env.VEDETT_ROUTE_REALTIME_REFRESH_DEBUG !== "true") return;
+  vedettRouteLog("realtime_refresh_debug", "info", { checkpoint, ...details });
 }

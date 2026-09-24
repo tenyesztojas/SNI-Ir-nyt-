@@ -17,6 +17,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  classifyRealtimeSubLegOutcome,
   extractRealtimeUpdatesFromTrips,
   extractSubLegRealtimeUpdate,
   type RealtimeRefreshIdentity,
@@ -235,4 +236,71 @@ test("üres identitás-lista esetén üres frissítés-lista jön vissza, nincs 
 test("üres tripId-jű identitás bejegyzést kihagyja (nincs bizonytalan párosítás)", () => {
   const updates = extractRealtimeUpdatesFromTrips([{ tripId: "", fromStopId: "a", toStopId: "b" }], new Map([["", tripResponse()]]));
   assert.deepEqual(updates, []);
+});
+
+// REALTIME DIAGNOSTIC LOGGING (2026-09-24) — a PURE reason-classification
+// helper (classifyRealtimeSubLegOutcome) célzott tesztje, a TÉNYLEGESEN
+// létező no-op ágakra (nem console/logger-mockolás — lásd a modul fejlécét:
+// a logging KIZÁRÓLAG erre a helperre épül, ugyanazt az update-et adja
+// vissza, mint extractSubLegRealtimeUpdate, byte-ra megegyezően).
+test("[reason] hiányzó /trip válasz (null) -> TRIP_NOT_FOUND, update: null", () => {
+  const outcome = classifyRealtimeSubLegOutcome(null, KOSSUTH_TO_DELI);
+  assert.deepEqual(outcome, { reason: "TRIP_NOT_FOUND", update: null });
+});
+
+test("[reason] hiányzó fromStopId/toStopId a kérésben -> STOP_RANGE_NOT_FOUND, update: null", () => {
+  const outcome = classifyRealtimeSubLegOutcome(tripResponse(), { tripId: KOSSUTH_TO_DELI.tripId });
+  assert.deepEqual(outcome, { reason: "STOP_RANGE_NOT_FOUND", update: null });
+});
+
+test("[reason] nem egyező fromStopId a válasz megálló-sorozatában -> STOP_RANGE_NOT_FOUND, update: null", () => {
+  const outcome = classifyRealtimeSubLegOutcome(tripResponse(), { ...KOSSUTH_TO_DELI, fromStopId: "bkkgtfs_STOP_UNKNOWN" });
+  assert.deepEqual(outcome, { reason: "STOP_RANGE_NOT_FOUND", update: null });
+});
+
+test("[reason] eltérő tripId (nincs illeszkedő leg a /trip válaszban) -> IDENTITY_MISMATCH, update: null", () => {
+  const outcome = classifyRealtimeSubLegOutcome(tripResponse(), { ...KOSSUTH_TO_DELI, tripId: "OTHER_TRIP" });
+  assert.deepEqual(outcome, { reason: "IDENTITY_MISMATCH", update: null });
+});
+
+test("[reason] mindkét oldalon jelen lévő, DE eltérő routeId -> IDENTITY_MISMATCH, update: null", () => {
+  const outcome = classifyRealtimeSubLegOutcome(tripResponse(), { ...KOSSUTH_TO_DELI, routeId: "bkkgtfs_OTHER_ROUTE" });
+  assert.deepEqual(outcome, { reason: "IDENTITY_MISMATCH", update: null });
+});
+
+test("[reason] megvan a trip + a sub-leg stopjai, DE nincs jelenthető határponti idő -> NO_REALTIME_DATA, update NEM null", () => {
+  const trip = tripResponse();
+  trip.legs[0].intermediateStops = [{ name: "Kossuth Lajos tér", stopId: "bkkgtfs_STOP_KOSSUTH" }]; // nincs departure mező
+  trip.legs[0].to = { name: "Déli pályaudvar", stopId: "bkkgtfs_STOP_DELI" }; // nincs arrival mező
+  const outcome = classifyRealtimeSubLegOutcome(trip, KOSSUTH_TO_DELI);
+  assert.equal(outcome.reason, "NO_REALTIME_DATA");
+  assert.ok(outcome.update);
+  assert.equal(outcome.update!.realtime, false);
+});
+
+test("[reason] sikeres sub-leg kivágás, van jelenthető idő -> UPDATED, update NEM null", () => {
+  const outcome = classifyRealtimeSubLegOutcome(tripResponse(), KOSSUTH_TO_DELI);
+  assert.equal(outcome.reason, "UPDATED");
+  assert.ok(outcome.update);
+  assert.equal(outcome.update!.departureTime, "2026-09-23T06:57:00Z");
+});
+
+test("[reason] proven cancellation -> UPDATED, update.cancelled === true", () => {
+  const outcome = classifyRealtimeSubLegOutcome(tripResponse({ cancelled: true }), KOSSUTH_TO_DELI);
+  assert.equal(outcome.reason, "UPDATED");
+  assert.equal(outcome.update?.cancelled, true);
+});
+
+test("[reason] classifyRealtimeSubLegOutcome().update MEGEGYEZIK extractSubLegRealtimeUpdate() visszatérésével minden ágon", () => {
+  const cases: Array<[MotisItinerary | null, RealtimeRefreshIdentity]> = [
+    [null, KOSSUTH_TO_DELI],
+    [tripResponse(), { tripId: KOSSUTH_TO_DELI.tripId }],
+    [tripResponse(), { ...KOSSUTH_TO_DELI, tripId: "OTHER_TRIP" }],
+    [tripResponse(), { ...KOSSUTH_TO_DELI, fromStopId: "bkkgtfs_STOP_UNKNOWN" }],
+    [tripResponse(), KOSSUTH_TO_DELI],
+    [tripResponse({ cancelled: true }), KOSSUTH_TO_DELI],
+  ];
+  for (const [trip, identity] of cases) {
+    assert.deepEqual(classifyRealtimeSubLegOutcome(trip, identity).update, extractSubLegRealtimeUpdate(trip, identity));
+  }
 });
