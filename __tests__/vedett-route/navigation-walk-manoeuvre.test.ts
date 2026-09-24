@@ -17,6 +17,7 @@ import {
   detectWalkManoeuvres,
   turnDeltaDegrees,
   MIN_BEARING_ARM_METERS,
+  MIN_BOUNDARY_BEARING_ARM_METERS,
   MIN_MANOEUVRE_SPACING_METERS,
   MIN_TURN_ANGLE_DEGREES,
 } from "../../lib/vedett-route/navigation/walkManoeuvre.ts";
@@ -299,5 +300,49 @@ describe("detectWalkManoeuvres — geometry fallback", () => {
     ]);
     const manoeuvres = detectWalkManoeuvres(path);
     assert.deepEqual(manoeuvres.map((m) => m.kind), ["START", "ARRIVE"]);
+  });
+});
+
+// BUGFIX REGRESSION (2026-09-24) — valós M2 gyalogos megközelítési hiba:
+// egy éles kanyar közvetlen a WALK leg VÉGE (érkezés/beszállás) vagy ELEJE
+// előtt/után korábban NÉMÁN kiesett, mert a MIN_BEARING_ARM_METERS (12m)
+// kar nem fért ki a leg-határig. Lásd walkManoeuvre.ts
+// MIN_BOUNDARY_BEARING_ARM_METERS fejléce.
+describe("detectWalkManoeuvres — leg-határ közeli kanyar (bugfix)", () => {
+  test("24) éles 90°-os kanyar KÖZVETLEN a leg VÉGE előtt (< MIN_BEARING_ARM_METERS, de >= MIN_BOUNDARY_BEARING_ARM_METERS) -> a TURN nem veszik el", () => {
+    const path = buildPath(ORIGIN, [
+      { bearing: 0, distance: 80, step: 15 },
+      { bearing: 90, distance: MIN_BEARING_ARM_METERS - 4, step: 5 }, // 8m — kevesebb, mint a 12m-es kar
+    ]);
+    const manoeuvres = detectWalkManoeuvres(path);
+    assert.deepEqual(manoeuvres.map((m) => m.kind), ["START", "TURN_RIGHT", "ARRIVE"]);
+    assert.ok(Math.abs((manoeuvres[1].turnAngleDegrees ?? NaN) - 90) < 1);
+  });
+
+  test("25) éles 90°-os kanyar KÖZVETLEN a leg ELEJE után (< MIN_BEARING_ARM_METERS) -> a TURN nem veszik el", () => {
+    const path = buildPath(ORIGIN, [
+      { bearing: 0, distance: MIN_BEARING_ARM_METERS - 4, step: 5 }, // 8m
+      { bearing: 90, distance: 80, step: 15 },
+    ]);
+    const manoeuvres = detectWalkManoeuvres(path);
+    assert.deepEqual(manoeuvres.map((m) => m.kind), ["START", "TURN_RIGHT", "ARRIVE"]);
+  });
+
+  test("26) kanyar a leg végéhez a MIN_BOUNDARY_BEARING_ARM_METERS alatti távolságra -> továbbra sem talál ki fordulást (nincs elég geometria)", () => {
+    const path = buildPath(ORIGIN, [
+      { bearing: 0, distance: 80, step: 15 },
+      { bearing: 90, distance: MIN_BOUNDARY_BEARING_ARM_METERS - 1, step: 1 }, // 2m — a boundary-minimum alatt
+    ]);
+    const manoeuvres = detectWalkManoeuvres(path);
+    assert.deepEqual(manoeuvres.map((m) => m.kind), ["START", "ARRIVE"]);
+  });
+
+  test("27) WALK->TRANSIT boundary szimuláció: rövid, egyenes utolsó szakasz a kanyar után -> az utolsó valódi kanyar megmarad, nincs hamis extra TURN", () => {
+    const path = buildPath(ORIGIN, [
+      { bearing: 0, distance: 100, step: 15 },
+      { bearing: -70, distance: 10, step: 5 }, // éles bal kanyar közvetlen a beszállás/érkezés előtt
+    ]);
+    const manoeuvres = detectWalkManoeuvres(path);
+    assert.deepEqual(manoeuvres.map((m) => m.kind), ["START", "TURN_LEFT", "ARRIVE"]);
   });
 });

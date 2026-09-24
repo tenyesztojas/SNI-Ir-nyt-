@@ -76,6 +76,27 @@ export const MIN_MANOEUVRE_SPACING_METERS = 20;
 // rajtuk).
 export const MIN_SEGMENT_METERS = 1;
 
+// BUGFIX (2026-09-24, valós M2 gyalogos megközelítési hiba): a
+// findBearingReferenceBefore()/findBearingReferenceAfter() a candidate
+// előtti/utáni MIN_BEARING_ARM_METERS (12m) kart keresi — de ha a
+// candidate a LEG GEOMETRIÁJÁNAK ELEJÉHEZ/VÉGÉHEZ 12 méternél közelebb
+// van (pl. egy valódi kanyar közvetlen a bejárat/állomás-megközelítés
+// előtt, a WALK leg-határhoz közel), a keresés a tömb szélére ér ANÉLKÜL,
+// hogy elérné a 12m-t, és korábban null-t adott vissza — így a candidate
+// EGÉSZBEN kiesett az értékelésből, még akkor is, ha valódi, éles
+// (>=MIN_TURN_ANGLE_DEGREES) kanyar volt. Ez néma manőver-vesztést
+// okozott pontosan ott, ahol a leggyakoribb: a leg végén, közvetlen az
+// érkezés (állomás-bejárat/beszállás) előtt.
+//
+// JAVÍTÁS: ha a tömb szélére érünk a teljes kar (12m) elérése előtt, a
+// TÉNYLEGESEN elérhető, valós geometriai VÉGPONTOT (index 0, ill.
+// coords.length - 1) használjuk referenciaként — ez NEM kitalált pont,
+// hanem maga a leg valós geometriai vége/eleje —, DE csak akkor, ha az
+// addig megtett kumulatív távolság eléri ezt a (12 méternél kisebb)
+// minimumot. Ez alatt a bearing megbízhatatlan lenne (GPS/OSM-zaj), ezért
+// ott TOVÁBBRA IS null-t adunk vissza (nincs kitalálva semmi).
+export const MIN_BOUNDARY_BEARING_ARM_METERS = 3;
+
 const DEG_TO_RAD = Math.PI / 180;
 const RAD_TO_DEG = 180 / Math.PI;
 
@@ -123,6 +144,11 @@ function findBearingReferenceBefore(coords: readonly NavigationCoordinate[], can
     cumulative += haversineMeters(coords[j], coords[j + 1]);
     if (cumulative >= armMeters) return j;
   }
+  // LEG-HATÁR FALLBACK (lásd MIN_BOUNDARY_BEARING_ARM_METERS fejléce): a
+  // teljes kar nem fért ki a leg elejéig, de a ténylegesen megtett
+  // távolság még mindig elég egy megbízható bearinghez -> a valós
+  // geometriai KEZDŐPONTOT (index 0) használjuk referenciaként.
+  if (cumulative >= MIN_BOUNDARY_BEARING_ARM_METERS) return 0;
   return null;
 }
 
@@ -133,6 +159,9 @@ function findBearingReferenceAfter(coords: readonly NavigationCoordinate[], cand
     cumulative += haversineMeters(coords[j - 1], coords[j]);
     if (cumulative >= armMeters) return j;
   }
+  // LEG-HATÁR FALLBACK — ugyanaz, mint findBearingReferenceBefore()-nál,
+  // csak a leg VÉGPONTJÁVAL (coords.length - 1).
+  if (cumulative >= MIN_BOUNDARY_BEARING_ARM_METERS) return coords.length - 1;
   return null;
 }
 
