@@ -12,6 +12,8 @@ import {
   type MapboxGeocodingFeature,
   type MapboxSearchBoxSuggestion,
 } from "@/lib/vedett-route/addressAutocompleteMapbox";
+import { findGtfsStationCandidates, mergeAddressAndStationResults } from "@/lib/vedett-route/stationNameSearch";
+import { getAccessibilityIndex } from "@/lib/vedett-route/providers/staticFileProvider";
 
 const MAPBOX_SEARCHBOX_SUGGEST_URL = "https://api.mapbox.com/search/searchbox/v1/suggest";
 const MAPBOX_GEOCODING_URL = "https://api.mapbox.com/search/geocode/v6/forward";
@@ -35,6 +37,17 @@ export async function POST(request: Request) {
 
   const accessToken = process.env.MAPBOX_ACCESS_TOKEN;
   if (!accessToken) return NextResponse.json([]);
+
+  // ÁLLOMÁS/MEGÁLLÓ NÉV FELISMERÉS (2026-09-24, "állomás- és megállónevek
+  // felismerése" sprint) — a MEGLÉVŐ, admin GTFS feltöltésből épülő,
+  // helyi accessibility-index cache-t (staticFileProvider.ts
+  // getAccessibilityIndex(), lásd stationNameSearch.ts fejléce) használjuk
+  // GTFS stop/station NÉV-keresésre. Ez FÜGGETLEN a Mapbox hívásoktól
+  // (nincs hálózati kérés, csak helyi fájl-olvasás), ezért a lenti THREE
+  // sikeres-találat ágon (strukturált cím / Search Box / Geocoding v6
+  // fallback) EGYSÉGESEN összefésüljük a cím/POI találatokkal — SOSEM
+  // dob hibát, hiányzó feltöltés esetén egyszerűen üres tömböt ad.
+  const stationCandidates = await findGtfsStationCandidates(q, getAccessibilityIndex);
 
   /*
    * 0) HÁZSZÁMOS CÍM — Geocoding v6 Structured Input
@@ -76,7 +89,7 @@ export async function POST(request: Request) {
           5,
         );
         if (structuredSuggestions.length > 0) {
-          return NextResponse.json(structuredSuggestions);
+          return NextResponse.json(mergeAddressAndStationResults(structuredSuggestions, stationCandidates));
         }
       }
     } catch {
@@ -138,7 +151,7 @@ export async function POST(request: Request) {
       );
 
       if (suggestions.length > 0) {
-        return NextResponse.json(suggestions);
+        return NextResponse.json(mergeAddressAndStationResults(suggestions, stationCandidates));
       }
     }
   }
@@ -185,6 +198,6 @@ export async function POST(request: Request) {
   const features = (data as { features?: MapboxGeocodingFeature[] } | null)?.features ?? [];
 
   return NextResponse.json(
-    processMapboxGeocodingFeatures(features, q, city, postalOrDistrict, 5),
+    mergeAddressAndStationResults(processMapboxGeocodingFeatures(features, q, city, postalOrDistrict, 5), stationCandidates),
   );
 }

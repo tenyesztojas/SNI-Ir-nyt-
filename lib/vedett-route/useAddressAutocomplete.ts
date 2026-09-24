@@ -35,6 +35,14 @@ export type AddressSuggestion = {
   postcode?: string;
   district?: string;
   sessionToken?: string;
+  // ÁLLOMÁS/MEGÁLLÓ NÉV FELISMERÉS (2026-09-24) — opcionális típus/forrás
+  // diszkriminátor (lásd lib/vedett-route/stationNameSearch.ts
+  // UnifiedPlaceSearchResult). Hiánya (régi cím/POI találat) a MEGLÉVŐ
+  // "address" viselkedéssel egyenértékű — ez egy visszafelé kompatibilis
+  // bővítés, NEM egy második, párhuzamos suggestion-alak.
+  type?: "address" | "transit_station" | "transit_stop";
+  source?: "mapbox" | "gtfs";
+  provider?: string;
 };
 
 export const ADDRESS_AUTOCOMPLETE_MIN_CHARS = 3;
