@@ -1475,6 +1475,29 @@ function RankedJourneyCard({
     activeLeg?.mode === "TRANSIT" &&
     isRailGuidedTransitMode(activeLeg.transitMode) &&
     classifyTransitGeometryConfidence(activeLegRange?.legCoordinates ?? null) === "WEAK";
+  // BOARDING-WINDOW TRANSIT GEOMETRY SAFETY FIX (2026-09-24) — a fenti
+  // activeLegTransitGeometryUncertain KIZÁRÓLAG akkor igaz, ha az aktív leg
+  // MÁR TRANSIT. Az APPROACHING_BOARDING/AT_BOARDING_AREA fázisban (lásd
+  // walkToTransitBoundary.phase) az aktív leg MÉG WALK — ha ekközben a
+  // departureEvidenceFixes SOSEM gyűjt össze 3 fixet (a jármű elindulásakor
+  // elveszik a GPS), a fázis itt ragad, és a WALK-leg geometriájából
+  // származó OFF_ROUTE indokolatlanul automatikus reroute-ot indítana,
+  // miközben a KÖVETKEZŐ (nextTransitLegForBoundary) sínhez/vezetett
+  // pályához kötött leg SAJÁT geometriája bizonyítottan "weak". Ugyanazt a
+  // MEGLÉVŐ isRailGuidedTransitMode()/classifyTransitGeometryConfidence()
+  // regisztert/küszöböt használjuk, csak a NEXT transit legre — nincs új
+  // mérés, nincs BOARDED-re állítás, nincs új guard-mechanizmus.
+  const pendingBoardingNextTransitGeometryUncertain =
+    (walkToTransitBoundary.phase === "APPROACHING_BOARDING" || walkToTransitBoundary.phase === "AT_BOARDING_AREA") &&
+    activeLeg?.mode === "WALK" &&
+    nextTransitLegForBoundary !== null &&
+    isRailGuidedTransitMode(nextTransitLegForBoundary.transitMode) &&
+    classifyTransitGeometryConfidence(nextTransitLegForBoundary.legCoordinates) === "WEAK";
+  // A rerouteGuard MEGLÉVŐ TRANSIT_GEOMETRY_UNCERTAIN reason-jét használjuk
+  // fel mindkét esetre (aktív TRANSIT leg weak geometriája ÉS a fenti
+  // boarding-ablakos next-leg eset) — nincs új reason-kód.
+  const transitGeometryUncertainForReroute =
+    activeLegTransitGeometryUncertain || pendingBoardingNextTransitGeometryUncertain;
   // TRANSIT GPS LOSS SPRINT (2026-09-21) — a GPS-tick effektek (lentebb, a
   // gpsFixGateRef mellett) MÁR ekkor futnak le, amikor ez a render-szintű
   // változó MÉG nem létezne closure-ként — ezért egy reffel tükrözzük
@@ -1687,7 +1710,7 @@ function RankedJourneyCard({
     // esetén a geometria-eltérés önmagában nem lehet automatikus
     // újratervezés alapja (lásd rerouteGuard.ts). A globális 50 m-es
     // OFF_ROUTE küszöb és a WALK reroute-viselkedés VÁLTOZATLAN.
-    transitGeometryUncertain: activeLegTransitGeometryUncertain,
+    transitGeometryUncertain: transitGeometryUncertainForReroute,
     // TRANSIT STATE CONTINUITY + GPS REACQUISITION SPRINT (2026-09-18) —
     // egy LOST periódus utáni, még nem stabil GPS-fix (lásd
     // gpsFixGate.ts isGpsReacquiring()) SOSEM lehet automatikus reroute

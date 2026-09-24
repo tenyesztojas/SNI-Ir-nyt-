@@ -241,7 +241,7 @@ describe("9) a guard meglévő elsőbbségi sorrendje (navigáció/OFF_ROUTE) ME
 describe("10) a komponens változatlanul EGYETLEN reroute-protokollt és a rest-stop /resume végpontot használja", () => {
   test("a transitGeometryUncertain bekötése nem hoz létre második reroute-hívást vagy client-oldali route service hívást", () => {
     const source = readFileSync("components/vedett-utvonal/VedettUtvonalSearchForm.tsx", "utf8");
-    assert.match(source, /transitGeometryUncertain:\s*activeLegTransitGeometryUncertain/);
+    assert.match(source, /transitGeometryUncertain:\s*transitGeometryUncertainForReroute/);
     // EARLIER TRANSIT DEPARTURE SPRINT (2026-09-22) — a MEGLÉVŐ /rest-stops/
     // resume végpontot EZUTÁN KÉT, legitim, egymástól FÜGGETLEN hívási hely
     // használja: (1) a MEGLÉVŐ automatikus reroute-effekt (VÁLTOZATLAN), és
@@ -256,5 +256,124 @@ describe("10) a komponens változatlanul EGYETLEN reroute-protokollt és a rest-
     assert.equal(resumeCalls.length, 2);
     const reroutePolls = source.match(/shouldStartAutomaticReroute\(rerouteGuardRef\.current/g) ?? [];
     assert.equal(reroutePolls.length, 1);
+  });
+});
+
+
+// 11) BOARDING-ABLAK: WALK AKTÍV, DE A KÖVETKEZŐ SÍNES LEG GEOMETRIÁJA WEAK -
+// ROOT CAUSE FIX (2026-09-24): amíg a fázis APPROACHING_BOARDING/
+// AT_BOARDING_AREA-nál ragad (a departureEvidenceFixes sosem gyűlik össze
+// 3 fixre, mert a GPS a jármű indulásakor elveszik), az aktív leg MÉG WALK
+// — ez a helper UGYANAZT a logikát reprodukálja, mint a component
+// pendingBoardingNextTransitGeometryUncertain számítása (real
+// isRailGuidedTransitMode/classifyTransitGeometryConfidence-t hívva), hogy
+// a valódi rerouteGuard.shouldStartAutomaticReroute()-tal együtt, végponttól
+// végpontig ellenőrizhető legyen a blokkolás.
+function computePendingBoardingNextTransitGeometryUncertain(
+  phase: string,
+  activeLegMode: "WALK" | "TRANSIT" | "RENTAL",
+  nextTransitLeg: { transitMode: string; legCoordinates: readonly unknown[] | null } | null,
+): boolean {
+  return (
+    (phase === "APPROACHING_BOARDING" || phase === "AT_BOARDING_AREA") &&
+    activeLegMode === "WALK" &&
+    nextTransitLeg !== null &&
+    isRailGuidedTransitMode(nextTransitLeg.transitMode) &&
+    classifyTransitGeometryConfidence(nextTransitLeg.legCoordinates) === "WEAK"
+  );
+}
+
+const WEAK_REGIONAL_RAIL_NEXT_LEG = {
+  transitMode: "REGIONAL_RAIL",
+  legCoordinates: [[0, 0], [0, -0.02]] as const, // S40-szerű, 2-pontos
+};
+const USABLE_REGIONAL_RAIL_NEXT_LEG = {
+  transitMode: "REGIONAL_RAIL",
+  legCoordinates: [[0, 0], [0, -0.01], [0, -0.02]] as const,
+};
+const WEAK_BUS_NEXT_LEG = {
+  transitMode: "BUS",
+  legCoordinates: [[0, 0], [0, -0.02]] as const,
+};
+
+describe("11) boarding-ablak (WALK aktív + APPROACHING_BOARDING/AT_BOARDING_AREA + weak sínes next-leg) blokkolja az automatikus reroute-ot", () => {
+  test("1) APPROACHING_BOARDING + REGIONAL_RAIL next-leg + WEAK geometria + OFF_ROUTE -> blokkolva, TRANSIT_GEOMETRY_UNCERTAIN", () => {
+    const uncertain = computePendingBoardingNextTransitGeometryUncertain(
+      "APPROACHING_BOARDING",
+      "WALK",
+      WEAK_REGIONAL_RAIL_NEXT_LEG,
+    );
+    assert.equal(uncertain, true);
+    const decision = shouldStartAutomaticReroute(createInitialRerouteGuardState(), {
+      ...READY_OFF_ROUTE,
+      transitGeometryUncertain: uncertain,
+    });
+    assert.deepEqual(decision, { shouldReroute: false, reason: "TRANSIT_GEOMETRY_UNCERTAIN" });
+  });
+
+  test("2) AT_BOARDING_AREA + REGIONAL_RAIL next-leg + WEAK geometria + OFF_ROUTE -> blokkolva, TRANSIT_GEOMETRY_UNCERTAIN", () => {
+    const uncertain = computePendingBoardingNextTransitGeometryUncertain(
+      "AT_BOARDING_AREA",
+      "WALK",
+      WEAK_REGIONAL_RAIL_NEXT_LEG,
+    );
+    assert.equal(uncertain, true);
+    const decision = shouldStartAutomaticReroute(createInitialRerouteGuardState(), {
+      ...READY_OFF_ROUTE,
+      transitGeometryUncertain: uncertain,
+    });
+    assert.deepEqual(decision, { shouldReroute: false, reason: "TRANSIT_GEOMETRY_UNCERTAIN" });
+  });
+
+  test("3) normál WALK, nincs boarding-kontextus (WALKING fázis) + OFF_ROUTE -> a meglévő reroute VÁLTOZATLANUL engedélyezett", () => {
+    const uncertain = computePendingBoardingNextTransitGeometryUncertain(
+      "WALKING",
+      "WALK",
+      WEAK_REGIONAL_RAIL_NEXT_LEG,
+    );
+    assert.equal(uncertain, false);
+    const decision = shouldStartAutomaticReroute(createInitialRerouteGuardState(), {
+      ...READY_OFF_ROUTE,
+      transitGeometryUncertain: uncertain,
+    });
+    assert.deepEqual(decision, { shouldReroute: true, reason: null });
+  });
+
+  test("4) APPROACHING_BOARDING + BUS next-leg (nem sínhez kötött) -> nincs indokolatlan blokk", () => {
+    const uncertain = computePendingBoardingNextTransitGeometryUncertain(
+      "APPROACHING_BOARDING",
+      "WALK",
+      WEAK_BUS_NEXT_LEG,
+    );
+    assert.equal(uncertain, false);
+    const decision = shouldStartAutomaticReroute(createInitialRerouteGuardState(), {
+      ...READY_OFF_ROUTE,
+      transitGeometryUncertain: uncertain,
+    });
+    assert.deepEqual(decision, { shouldReroute: true, reason: null });
+  });
+
+  test("5) APPROACHING_BOARDING + REGIONAL_RAIL next-leg + USABLE geometria -> nincs indokolatlan WEAK-geometry blokk", () => {
+    const uncertain = computePendingBoardingNextTransitGeometryUncertain(
+      "APPROACHING_BOARDING",
+      "WALK",
+      USABLE_REGIONAL_RAIL_NEXT_LEG,
+    );
+    assert.equal(uncertain, false);
+    const decision = shouldStartAutomaticReroute(createInitialRerouteGuardState(), {
+      ...READY_OFF_ROUTE,
+      transitGeometryUncertain: uncertain,
+    });
+    assert.deepEqual(decision, { shouldReroute: true, reason: null });
+  });
+
+  test("a component forrása ténylegesen a phase/nextTransitLegForBoundary alapján számolja ki és köti be a bővített feltételt", () => {
+    const source = readFileSync("components/vedett-utvonal/VedettUtvonalSearchForm.tsx", "utf8");
+    assert.match(
+      source,
+      /walkToTransitBoundary\.phase === "APPROACHING_BOARDING" \|\| walkToTransitBoundary\.phase === "AT_BOARDING_AREA"/,
+    );
+    assert.match(source, /pendingBoardingNextTransitGeometryUncertain/);
+    assert.match(source, /activeLegTransitGeometryUncertain \|\| pendingBoardingNextTransitGeometryUncertain/);
   });
 });

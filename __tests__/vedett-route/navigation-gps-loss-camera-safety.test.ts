@@ -135,8 +135,19 @@ describe("11) GPS LOST transit közben — a reroute-döntés bemenete VÁLTOZAT
 });
 
 describe("12) 32fcc12 (weak transit geometry safety) regresszió nélkül", () => {
-  test("a transitGeometryUncertain bekötés a reroute-guard hívásban megmaradt", () => {
-    assert.match(formSrc, /transitGeometryUncertain:\s*activeLegTransitGeometryUncertain/);
+  test("a transitGeometryUncertain bekötés a reroute-guard hívásban megmaradt (2026-09-24 óta a bővített transitGeometryUncertainForReroute-on keresztül)", () => {
+    // BOARDING-WINDOW TRANSIT GEOMETRY SAFETY FIX (2026-09-24) — a reroute
+    // guard immár a bővített transitGeometryUncertainForReroute jelzőt kapja
+    // meg transitGeometryUncertain néven (lásd 11/12. teszt lentebb a
+    // navigation-transit-geometry-safety.test.ts-ben a teljes bekötésért).
+    assert.match(formSrc, /transitGeometryUncertain:\s*transitGeometryUncertainForReroute/);
+    // A bővítés NEM veszítette el a 32fcc12 safety védelmet: a
+    // transitGeometryUncertainForReroute definíciója OR-ral tartalmazza a
+    // MEGLÉVŐ activeLegTransitGeometryUncertain ágat.
+    assert.match(
+      formSrc,
+      /const transitGeometryUncertainForReroute =\s*\n\s*activeLegTransitGeometryUncertain \|\| pendingBoardingNextTransitGeometryUncertain;/,
+    );
   });
 
   test("a BOARDED_UNCERTAIN_GEOMETRY fázis és a TRANSIT_GEOMETRY_UNCERTAIN block reason továbbra is exportált", () => {

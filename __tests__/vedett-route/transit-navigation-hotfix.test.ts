@@ -91,8 +91,23 @@ describe("4) OFF_ROUTE UI — ugyanaz a safety döntés, mint a reroute guard", 
     );
   });
 
-  test("a reroute guard bemenete (shouldStartAutomaticReroute) is ugyanazt a jelzőt olvassa — a két döntés egy forrásból származik", () => {
-    assert.match(searchFormSrc, /transitGeometryUncertain: activeLegTransitGeometryUncertain,/);
+  test("a reroute guard bemenete (shouldStartAutomaticReroute) is ugyanabból az activeLegTransitGeometryUncertain jelzőből származik — a két döntés egy forrásból ered", () => {
+    // BOARDING-WINDOW TRANSIT GEOMETRY SAFETY FIX (2026-09-24) — a reroute
+    // guard hívása azóta a bővített transitGeometryUncertainForReroute
+    // jelzőt kapja (activeLegTransitGeometryUncertain OR
+    // pendingBoardingNextTransitGeometryUncertain), nem a puszta
+    // activeLegTransitGeometryUncertain-t. A safety invariáns (a guard NEM
+    // veszíthet a korábbi védelemből) így igazolható: a bekötés
+    // transitGeometryUncertainForReroute-ra mutat, ÉS annak definíciója
+    // OR-ral tartalmazza az activeLegTransitGeometryUncertain ágat is —
+    // tehát az OFF_ROUTE banner (fent) és a reroute guard még mindig ugyanazt
+    // az aktív-leg jelzőt hordozza, csak a guard emellett a boarding-ablakos
+    // esetet is lefedi.
+    assert.match(searchFormSrc, /transitGeometryUncertain: transitGeometryUncertainForReroute,/);
+    assert.match(
+      searchFormSrc,
+      /const transitGeometryUncertainForReroute =\s*\n\s*activeLegTransitGeometryUncertain \|\| pendingBoardingNextTransitGeometryUncertain;/,
+    );
   });
 });
 
