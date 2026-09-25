@@ -37,11 +37,28 @@ export async function POST(request: Request) {
 
   const { from, fromCoordinates, fromName, to, toCoordinates, toName, weights, stepFreeRequired, molBubiEnabled, bikePropulsion } = parsed.data;
   const departAt = parsed.data.departAt ?? new Date().toISOString();
+  // ARRIVE-BY TERVEZÉS (2026-09-24) — lásd types.ts JourneySearchRequest.
+  // timeMode kommentje. Hiányzó/undefined esetén "DEPART_AT" — ez a
+  // JELENLEGI, VÁLTOZATLAN viselkedés, BYTE-RA kompatibilis a timeMode
+  // nélküli (régi) kérésekkel. UGYANAZ az "?? alapérték" mintázat, mint a
+  // lenti stepFree/molBubi mezőknél.
+  const timeMode = parsed.data.timeMode ?? "DEPART_AT";
 
-  // Múltbeli időpont ellenőrzése (31. pont: routing tesztek).
+  // Múltbeli időpont ellenőrzése (31. pont: routing tesztek). ARRIVE_BY
+  // esetén a `departAt` az érkezési HATÁRIDŐT jelenti — egy múltbeli
+  // határidő ugyanúgy értelmetlen (nem lehet a múltban megérkezni), ezért
+  // UGYANAZ a numerikus feltétel véd mindkét módban, csak a felhasználónak
+  // mutatott üzenet mód-specifikus.
   if (new Date(departAt).getTime() < Date.now() - 60_000) {
     return NextResponse.json(
-      { ok: false, reason: "invalid_request", message: "Az indulási időpont nem lehet a múltban." },
+      {
+        ok: false,
+        reason: "invalid_request",
+        message:
+          timeMode === "ARRIVE_BY"
+            ? "Az érkezési időpont nem lehet a múltban."
+            : "Az indulási időpont nem lehet a múltban.",
+      },
       { status: 400 }
     );
   }
@@ -255,6 +272,7 @@ export async function POST(request: Request) {
     toLon: toGeo.lon,
     departAtMinute: departAt.slice(0, 16),
     weights: weights ?? null,
+    timeMode,
     stepFreeRequired: stepFree,
     // MOL BUBI PHASE 1 — Bubi preferencia is a cache-kulcs része (lásd
     // routeCache.ts), különben egy más Bubi-preferenciával cache-elt válasz
@@ -276,6 +294,7 @@ export async function POST(request: Request) {
       stepFreeRequired: stepFree,
       molBubiEnabled: molBubi,
       bikePropulsion: propulsion,
+      timeMode,
     },
     weights
   );

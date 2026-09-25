@@ -559,6 +559,19 @@ export async function searchVedettRoutes(
   // (Bubi nélküli) kérés BYTE-RA változatlan marad.
   const bubiMotisParams = request.molBubiEnabled ? buildBubiMotisParams(request.bikePropulsion) : undefined;
 
+  // ARRIVE-BY TERVEZÉS (2026-09-24) — a `timeMode === "ARRIVE_BY"` esetén a
+  // MOTIS NATÍV `arriveBy=true` (backward/érkezés-alapú keresés) paraméterét
+  // küldjük (lásd motisTypes.ts MotisPlanParams.arriveBy és motisClient.ts
+  // buildQuery() — ez egy hivatalos, dokumentált MOTIS/OTP-kompatibilis
+  // /api/v6/plan paraméter, NEM találgatás). `time` mezőt VÁLTOZATLANUL,
+  // UGYANÚGY küldjük (request.departAt) — arriveBy=true esetén a MOTIS ezt
+  // az értéket érkezési határidőként értelmezi. DEPART_AT/hiányzó timeMode
+  // esetén ez undefined, tehát a lenti 3 fetchMotisPlan() hívás EGYIKE sem
+  // kap `arriveBy` paramétert — a normál (indulás-alapú) kérés BYTE-RA
+  // változatlan marad.
+  const arriveBy = request.timeMode === "ARRIVE_BY";
+  const arriveByParams = arriveBy ? { arriveBy: true as const } : undefined;
+
   // A geokódolt hely (Nominatim) "name" mezője a TELJES cím (pl. "Széll
   // Kálmán tér, Margit-negyed, Országút, II. kerület, Budapest, ..."), a
   // MOTIS viszont a valódi megálló RÖVID nevét adja (pl. "Széll Kálmán
@@ -574,7 +587,7 @@ export async function searchVedettRoutes(
   };
 
   const [defaultResult, calmerResult, serviceAlerts, nearbyJourneys] = await Promise.all([
-    fetchMotisPlan({ fromPlace, toPlace, time: request.departAt, numItineraries: 6, ...stepFreeMotisParams, ...bubiMotisParams }),
+    fetchMotisPlan({ fromPlace, toPlace, time: request.departAt, numItineraries: 6, ...stepFreeMotisParams, ...bubiMotisParams, ...arriveByParams }),
     fetchMotisPlan({
       fromPlace,
       toPlace,
@@ -583,6 +596,7 @@ export async function searchVedettRoutes(
       transitModes: ["BUS", "TRAM", "RAIL", "COACH"],
       ...stepFreeMotisParams,
       ...bubiMotisParams,
+      ...arriveByParams,
     }),
     fetchServiceAlertsSafely(),
     // NEARBY TRANSIT ACCESS SPRINT (2026-09-18) — a normál MOTIS hívásokkal
@@ -591,7 +605,21 @@ export async function searchVedettRoutes(
     // klasszifikáció a NYERS MOTIS legs-eket igényli (StepFreeLegLike), amit
     // egy nearby WALK-access-szel bővített candidate nem tud megbízhatóan
     // adni — a normál step-free viselkedés emiatt BYTE-RA változatlan marad.
-    request.stepFreeRequired ? Promise.resolve<Journey[]>([]) : fetchNearbyTransitAccessJourneys(request, displayNames),
+    // ARRIVE-BY TERVEZÉS (2026-09-24) — UGYANEZEN okból (spec 4. pont: "NE
+    // találj ki journey-t") az arrive-by keresés is kimarad: a nearby-transit
+    // expansion (fetchNearbyTransitAccessJourneys) a `request.departAt`-ot
+    // KIZÁRÓLAG indulás-alapú (originalDepartAt) walking-route-hívásként
+    // értelmezi, NEM ismeri az érkezési-határidő szemantikát — egy itt
+    // generált candidate ARRIVE_BY módban tévesen "elérhetőnek" tűnhetne,
+    // holott nincs bizonyítva, hogy a kívánt határidőig megérkezik. Az
+    // eredeti `request.stepFreeRequired ? ... : fetchNearbyTransitAccessJourneys`
+    // kifejezés SZÁNDÉKOSAN szó szerint változatlan marad (lásd
+    // nearby-transit-journey-candidates.test.ts "production wiring audit"
+    // forrás-ellenőrzése) — az arriveBy-ág egy KÜLÖN, megelőző rövidzárként
+    // került elé, nem a meglévő feltétel módosításával.
+    arriveBy
+      ? Promise.resolve<Journey[]>([])
+      : request.stepFreeRequired ? Promise.resolve<Journey[]>([]) : fetchNearbyTransitAccessJourneys(request, displayNames),
   ]);
 
   if (!defaultResult.ok && !calmerResult.ok) {
@@ -634,12 +662,11 @@ export async function searchVedettRoutes(
       // Lásd a fenti "STEP_FREE_MOTIS_PARAMS" fejléc-komment — a fallback
       // SOHA nem eshet vissza csendben FOOT profilra: pontosan ugyanazt a
       // stepFreeMotisParams-ot kapja, mint a két normál kérés fentebb.
-      // Ugyanez az elv a Bubi paraméterekre is: a fallback SOHA nem eshet
-      // vissza csendben "Bubi nélküli" keresésre, ha a felhasználó
-      // molBubiEnabled=true-t kért (lásd buildBubiMotisParams() fenti
-      // kommentje).
+      // Ugyanez az elv a Bubi/arrive-by paraméterekre is (lásd
+      // buildBubiMotisParams()/arriveByParams fenti kommentje).
       ...stepFreeMotisParams,
       ...bubiMotisParams,
+      ...arriveByParams,
     });
 
     if (fallbackResult.ok) {
@@ -668,7 +695,42 @@ export async function searchVedettRoutes(
   // molBubiRequestActive context EBBŐL a keresésből (request.molBubiEnabled)
   // származik, SOHA nem a visszakapott legekből találgatva.
   const molBubiRequestActive = Boolean(request.molBubiEnabled);
-  const journeys = rawItineraries.map((it) => mapMotisItineraryToJourney(it, displayNames, molBubiRequestActive));
+  let journeys = rawItineraries.map((it) => mapMotisItineraryToJourney(it, displayNames, molBubiRequestActive));
+
+  // ARRIVE-BY TERVEZÉS (2026-09-24, spec 4. pont: "csak olyan journey
+  // elfogadható aminek arrivalTime <= requested arrive-by") — VÉDEKEZŐ,
+  // alkalmazásoldali biztonsági szűrő a MOTIS natív arriveBy=true válasza
+  // FÖLÖTT: a MOTIS-tól kapott itineraryk elvileg már mind a kért
+  // határidőig érkeznek (backward search szemantika), de ez a hard filter
+  // garantálja, hogy SOHA ne kerüljön ki egy azt túllépő journey. NEM
+  // módosít journey-adatot, KIZÁRÓLAG szűr — a `rawItineraries` és
+  // `journeys` PÁRBAN, ugyanazzal az index-listával szűrve marad
+  // konzisztens egymással (ugyanaz a szabály, mint a lenti step-free
+  // ágnál: a rawItineraryByFingerprint index-alapú párosítás emiatt nem
+  // sérül). DEPART_AT/hiányzó timeMode esetén ez az ág változatlanul
+  // kimarad, `journeys`/`rawItineraries` BYTE-RA változatlan marad.
+  if (arriveBy) {
+    const deadlineMs = new Date(request.departAt).getTime();
+    const keepIdx: number[] = [];
+    journeys.forEach((journey, idx) => {
+      if (new Date(journey.arrivalTime).getTime() <= deadlineMs) keepIdx.push(idx);
+    });
+    vedettRouteLog("routing_error", "info", {
+      reason: "arrive_by_deadline_filter_applied",
+      candidateCount: journeys.length,
+      eligibleCount: keepIdx.length,
+    });
+    rawItineraries = keepIdx.map((idx) => rawItineraries[idx]);
+    journeys = keepIdx.map((idx) => journeys[idx]);
+    if (journeys.length === 0) {
+      vedettRouteLog("routing_error", "info", { reason: "no_arrive_by_itineraries" });
+      return {
+        ok: false,
+        reason: "no_route_found",
+        message: "Nem található olyan útvonal, amely a megadott időpontig megérkezik.",
+      };
+    }
+  }
 
   // AKADÁLYMENTES / LÉPCSŐMENTES MVP (2026-09-11, Task C2) — a lentebbi
   // klasszifikáció a NYERS MOTIS legs-eket igényli (stopId/tripId/

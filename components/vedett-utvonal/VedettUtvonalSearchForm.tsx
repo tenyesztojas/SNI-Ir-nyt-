@@ -3248,6 +3248,12 @@ export default function VedettUtvonalSearchForm({
   );
   const [when, setWhen] = useState<"now" | "scheduled">("now");
   const [datetime, setDatetime] = useState("");
+  // ARRIVE-BY TERVEZÉS (2026-09-24) — explicit mód-state, csak akkor
+  // releváns, ha when === "scheduled" (a "Most" indulás mindig DEPART_AT
+  // marad, "érkezz eddig MOST" nem értelmezhető kérés). Alapérték
+  // "DEPART_AT" — a JELENLEGI, VÁLTOZATLAN indulás-alapú keresés, egyszerre
+  // csak EGY mód aktív (nincs kétértelmű boolean, lásd handleSubmit lent).
+  const [timeMode, setTimeMode] = useState<"DEPART_AT" | "ARRIVE_BY">("DEPART_AT");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<SearchApiResponse | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -3822,6 +3828,11 @@ export default function VedettUtvonalSearchForm({
         ...originFields,
         ...destinationFields,
         departAt: when === "now" ? new Date().toISOString() : new Date(datetime).toISOString(),
+        // ARRIVE-BY TERVEZÉS (2026-09-24) — "Most" indulás esetén MINDIG
+        // "DEPART_AT" megy (a mód-választó ekkor nincs is megjelenítve,
+        // lásd fent), byte-kompatibilis a korábbi (timeMode nélküli)
+        // kéréssel. "Időpont" esetén a felhasználó explicit választása.
+        timeMode: when === "now" ? "DEPART_AT" : timeMode,
         weights,
         // AKADÁLYMENTES / LÉPCSŐMENTES MVP (2026-09-11) — mindig explicit
         // boolean-ként megy (nem csak igaz esetén), hogy a szerver oldali
@@ -4175,6 +4186,33 @@ export default function VedettUtvonalSearchForm({
               />
             )}
           </div>
+          {/* ARRIVE-BY TERVEZÉS (2026-09-24) — a mód-választó KIZÁRÓLAG
+              when === "scheduled" esetén jelenik meg (a "Most" indulásnak
+              nincs értelmezhető érkezési-határidő változata). Egyszerre
+              csak egy mód aktív, nincs modal, nincs automatikus váltás —
+              autizmusbarát, rövid magyar felirat. */}
+          {when === "scheduled" && (
+            <div className="mt-1 flex items-center gap-3">
+              <label className="flex items-center gap-1 text-sm">
+                <input
+                  type="radio"
+                  checked={timeMode === "DEPART_AT"}
+                  onChange={() => setTimeMode("DEPART_AT")}
+                  disabled={disabled}
+                />{" "}
+                Indulás ekkor
+              </label>
+              <label className="flex items-center gap-1 text-sm">
+                <input
+                  type="radio"
+                  checked={timeMode === "ARRIVE_BY"}
+                  onChange={() => setTimeMode("ARRIVE_BY")}
+                  disabled={disabled}
+                />{" "}
+                Érkezés eddig
+              </label>
+            </div>
+          )}
         </div>
 
         <div

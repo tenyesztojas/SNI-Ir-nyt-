@@ -58,6 +58,11 @@ export const journeySearchSchema = z
     toCoordinates: routeOriginCoordinatesSchema.optional(),
     toName: z.string().trim().min(1).max(200).optional(),
     departAt: z.string().datetime().optional(),
+    // ARRIVE-BY TERVEZÉS (2026-09-24) — lásd types.ts JourneySearchRequest.
+    // timeMode kommentje. Hiányzó/undefined esetén a route.ts "DEPART_AT"-ot
+    // alkalmaz — UGYANAZ a "nincs zod .default(), hogy hiányzó és explicit
+    // alapérték egyformán viselkedjen" mintázat, mint a stepFreeRequired-nél.
+    timeMode: z.enum(["DEPART_AT", "ARRIVE_BY"]).optional(),
     weights: personalizationWeightsSchema,
     // AKADÁLYMENTES / LÉPCSŐMENTES MVP (2026-09-11, Task C) — explicit,
     // opcionális felhasználói preferencia (lásd lib/vedett-route/types.ts

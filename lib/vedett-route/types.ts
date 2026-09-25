@@ -232,7 +232,17 @@ export interface Journey {
 export interface JourneySearchRequest {
   from: { name: string; lat: number; lon: number };
   to: { name: string; lat: number; lon: number };
-  departAt: string; // ISO timestamp
+  departAt: string; // ISO timestamp — timeMode="ARRIVE_BY" esetén ez a
+  // KÍVÁNT ÉRKEZÉSI HATÁRIDŐ (nem indulási idő), lásd timeMode lent.
+  // ARRIVE-BY TERVEZÉS (2026-09-24) — explicit, egyértelmű mód-mező
+  // (SOSEM kétértelmű boolean, lásd feature-riport kérése). Hiányzó/
+  // undefined esetén a route.ts/orchestrator.ts "DEPART_AT"-ként kezeli
+  // — ez a JELENLEGI, VÁLTOZATLAN indulási-idő viselkedés, BYTE-RA
+  // kompatibilis a korábbi (timeMode nélküli) kérésekkel. "ARRIVE_BY"
+  // esetén az orchestrator.ts a MOTIS natív `arriveBy=true` (backward
+  // search) paraméterét küldi, és a `departAt` mezőt érkezési
+  // határidőként értelmezi — lásd orchestrator.ts searchVedettRoutes().
+  timeMode?: "DEPART_AT" | "ARRIVE_BY";
   // AKADÁLYMENTES / LÉPCSŐMENTES MVP (2026-09-11, Task C) — explicit
   // felhasználói preferencia, NEM marketingcímke/garancia (lásd
   // accessibility.ts fejléce). Alapérték: false. Ha false (vagy hiányzik),
