@@ -56,7 +56,6 @@ import { isVedettRouteFeatureEnabled, VEDETT_ROUTE_ACCESS_LEVEL } from "@/lib/ve
 import { hasVedettRouteBetaAccess } from "@/lib/vedett-route/access";
 import { routeDestinationDeepLinkSchema } from "@/lib/vedett-route/schemas";
 import VedettUtvonalWorkspace from "@/components/vedett-utvonal/VedettUtvonalWorkspace";
-import VedettUtvonalPwaInstall from "@/components/vedett-utvonal/VedettUtvonalPwaInstall";
 import type { Metadata } from "next";
 
 // Lásd app/admin/vedett-utvonal/page.tsx fejlécét — ugyanaz a build-time
@@ -66,20 +65,10 @@ import type { Metadata } from "next";
 // hogy elvégezze (a felhasználó session-je csak runtime-ban ismert).
 export const dynamic = "force-dynamic";
 
-// PWA INSTALL VISIBILITY HOTFIX (2026-09-21) - ez az oldal "install
-// surface": innen is telepitheto a Vedett Utvonal kulon PWA-kent (lasd
-// VedettUtvonalPwaInstall lent). Emiatt a manifest ITT is a Vedett Utvonal
-// sajat identitasat (name/icon/start_url) kell, hogy hordozza - NEM a
-// root layout globalis VedettSarok manifestjet (public/manifest.json,
-// VALTOZATLAN marad minden MAS route-on). A Header/Footer/site-navigacio
-// EBBOL NEM valtozik - azok a root layout.tsx pathname-gate-jetol
-// fuggenek (csak a dedikalt /vedett-utvonal/app shell rejti el oket),
-// ez az oldal TOVABBRA IS a normal VedettSarok layout resze.
 export const metadata: Metadata = {
   title: "Védett Útvonal — közösségi közlekedési navigáció",
   description:
     "A Védett Útvonal az érkezési idő mellett az egyéni és szenzoros preferenciákat is figyelembe vevő útvonaltervező, valós BKK, MÁV, Volán és MOL Bubi adatokkal.",
-  manifest: "/manifest-vedett-utvonal.json",
 };
 
 function parseDeepLinkDestination(
@@ -231,12 +220,6 @@ export default async function VedettUtvonalPage({
         A Védett Útvonal jelenleg tesztelés alatt áll. Az útvonal- és pihenőpont-adatok
         pontatlanok lehetnek.
       </p>
-
-      {/* PWA INSTALL VISIBILITY HOTFIX (2026-09-21) — a telepítési
-          lehetőség itt, a normál oldalon is látható (nem csak a dedikált
-          /vedett-utvonal/app shellben), és NEM blokkolja a lenti
-          navigáció/kereső használatát. */}
-      <VedettUtvonalPwaInstall />
 
       <div className="mt-6 space-y-6">
         {/* Kedvenc útvonalak (2026-09-09) — a lista a kereső FÖLÖTT jelenik

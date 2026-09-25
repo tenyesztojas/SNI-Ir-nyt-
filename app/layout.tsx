@@ -34,19 +34,17 @@ export default function RootLayout({
   // Az itt lévő custom inline scriptek kézzel kapják meg.
   const nonce = headers().get("x-nonce") ?? undefined;
 
-  // VÉDETT ÚTVONAL NAVIGATION-ONLY PWA sprint (2026-09-21) — a middleware
-  // állítja be (lásd middleware.ts x-pathname header). A Védett Útvonal PWA
-  // shell (/vedett-utvonal/app) nem kapja meg a sitewide Header/Footer/
-  // PWAInstallBanner/PWASessionTracker-t: azokat a saját, dedikált shell-je
-  // (VedettUtvonalPwaShell) helyettesíti. A VédettSarok PWA identitása és a
-  // normál /vedett-utvonal oldal EBBŐL NEM változik.
+  // A Védett Útvonal PWA-verziót véglegesen elvetettük (2026-09-25
+  // cleanup) — a dedikált shell (VedettUtvonalPwaShell) és a saját scope-ú
+  // service worker (public/vedett-utvonal-sw.js) törölve lettek. A
+  // /vedett-utvonal/app route mostantól csak a normál /vedett-utvonal
+  // oldalra irányít (lásd app/vedett-utvonal/app/page.tsx), ezért ez a
+  // pathname-gate a Header/Footer/PWAInstallBanner/PWASessionTracker
+  // elrejtéséhez a gyakorlatban már sosem aktiválódik (a redirect előbb
+  // lefut) — VÁLTOZATLANUL hagyva, hogy ne kelljen a middleware.ts
+  // x-pathname header-logikáját is módosítani ehhez a célzott cleanuphoz.
   const pathname = headers().get("x-pathname") ?? "";
   const isVedettUtvonalPwaShell = pathname.startsWith("/vedett-utvonal/app");
-  // SW SCOPE ELKÜLÖNÍTÉS (2026-09-21) — a teljes /vedett-utvonal route-
-  // családon (nem csak az /app shell-en) a dedikált, "/vedett-utvonal/"
-  // scope-ú service worker regisztrálódik a root /sw.js ("/" scope)
-  // HELYETT, hogy a két registration ne versenyezzen ugyanazon a scope-on.
-  const isVedettUtvonalRoute = pathname.startsWith("/vedett-utvonal");
 
   return (
     <html lang="hu">
@@ -65,9 +63,7 @@ export default function RootLayout({
           nonce={nonce}
           suppressHydrationWarning
           dangerouslySetInnerHTML={{
-            __html: isVedettUtvonalRoute
-              ? `if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('/vedett-utvonal-sw.js',{scope:'/vedett-utvonal'}))}`
-              : `if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js'))}`,
+            __html: `if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js'))}`,
           }}
         />
         {/* Akadálymentességi beállítások anti-flash: hydration előtt alkalmazza a mentett prefs-t */}
