@@ -48,6 +48,29 @@ import { resolveNavigationRealtimeInfo } from "@/lib/vedett-route/navigation/rea
 // lásd useNavigationSpeechPreference()) és a beszéd-dedupe.
 import { buildAnnouncement } from "@/lib/vedett-route/navigation/speechAnnouncer";
 import { useNavigationSpeech, useNavigationSpeechPreference } from "@/lib/hooks/useNavigationSpeech";
+// NAVIGATION — INSTRUCTION ICON MODEL (2026-09-25) — a MEGLÉVŐ canonical
+// navigationInstructionForDisplay.kind + az aktív leg transitMode-ja + az
+// aktív WALK-manőver kind-ja (mindhárom MÁR kiszámolt, lásd lent) -> egy
+// diszkrét ikon-kulcs (lib/vedett-route/navigation/instructionIcon.ts, pure,
+// determinisztikus, nincs GPS-alapú következtetés). A tényleges SVG-térkép
+// (NAVIGATION_ICON_COMPONENTS lent) a MEGLÉVŐ lucide-react függőségből épül
+// — nincs új npm csomag.
+import { resolveInstructionIcon, type NavigationIconType } from "@/lib/vedett-route/navigation/instructionIcon";
+import {
+  ArrowUp,
+  ArrowLeft,
+  ArrowRight,
+  Bus,
+  TramFront,
+  TrainFrontTunnel,
+  TrainFront,
+  Bike,
+  LogIn,
+  LogOut,
+  ArrowLeftRight,
+  Flag,
+  Navigation as NavigationGenericIcon,
+} from "lucide-react";
 // NAVIGATION — WALK→TRANSIT BOUNDARY + TRANSFER TIMING (Sprint 7.1,
 // 2026-09-16). Lásd a modulok fejlécét: a MEGLÉVŐ geometriai activeLegIndex-
 // et FINOMÍTJA (nem helyettesíti egy második state machine-nel), és a MÁR
@@ -399,6 +422,50 @@ const TRANSIT_MODE_BADGE: Record<string, { emoji: string; className: string }> =
 
 function transitModeBadge(mode?: string): { emoji: string; className: string } {
   return (mode && TRANSIT_MODE_BADGE[mode]) || { emoji: "🚏", className: "bg-gray-100 text-gray-700" };
+}
+
+// NAVIGATION — INSTRUCTION ICON MODEL (2026-09-25) — a
+// lib/vedett-route/navigation/instructionIcon.ts pure resolver diszkrét
+// NavigationIconType kulcsához tartozó SVG-komponens-térkép (MEGLÉVŐ
+// lucide-react függőség, lásd fenti import — nincs új csomag). A kártya
+// mellett a szöveg REDUNDÁNS információját jelöli (a szöveg marad az
+// elsődleges, screen reader-olvasott forrás), ezért MINDEN ikon
+// aria-hidden. "walk-generic"/"generic" egy semleges nyíl (U-turn/
+// ismeretlen manőver esetén — lásd instructionIcon.ts fejléce: U-turn
+// NINCS a meglévő adatmodellben megkülönböztetve).
+const NAVIGATION_ICON_COMPONENTS: Record<NavigationIconType, typeof ArrowUp> = {
+  "walk-straight": ArrowUp,
+  "walk-left": ArrowLeft,
+  "walk-right": ArrowRight,
+  "walk-generic": NavigationGenericIcon,
+  "transit-bus": Bus,
+  "transit-tram": TramFront,
+  "transit-subway": TrainFrontTunnel,
+  "transit-rail": TrainFront,
+  "transit-generic": Bus,
+  "action-boarding": LogIn,
+  "action-alighting": LogOut,
+  "action-transfer": ArrowLeftRight,
+  "action-arrival": Flag,
+  bike: Bike,
+  generic: NavigationGenericIcon,
+};
+
+// A kártya nagyobb, jól látható ikonja — nem tolakodó (nincs animáció/
+// villogás), nem nyomja el a szöveget (fix méret, a title/detail mellett,
+// nem helyette). aria-hidden, mert a szöveg (title/detail) hordozza a
+// TÉNYLEGES, screen reader-nek szánt információt — az ikon KIZÁRÓLAG
+// vizuális megerősítés.
+function NavigationInstructionIcon({ type }: { type: NavigationIconType }) {
+  const Icon = NAVIGATION_ICON_COMPONENTS[type];
+  return (
+    <span
+      aria-hidden="true"
+      className="flex h-9 w-9 flex-none items-center justify-center rounded-full bg-sni-blue text-sni-bluedark"
+    >
+      <Icon size={20} strokeWidth={2.25} />
+    </span>
+  );
 }
 
 // Egy gyalogló láb végpontja gyakran egy valódi megálló/állomás (pl. "Széll
@@ -1651,6 +1718,19 @@ function RankedJourneyCard({
   const navigationInstructionForDisplay = (restStopMapState.active && restStopMapState.legsOverride) || automaticRerouteStatus === "REROUTING"
     ? null
     : activeNavigationInstructionWithWalkProgress;
+  // NAVIGATION — INSTRUCTION ICON MODEL (2026-09-25) — UGYANEBBŐL a
+  // navigationInstructionForDisplay-ből (kind) + a MÁR MEGLÉVŐ aktív leg
+  // transitMode-jából (RIDE esetén) + a MÁR MEGLÉVŐ aktív WALK-manőver
+  // kind-jából (WALK esetén, lásd activeWalkProgress fentebb) vezetjük le
+  // az ikont — nincs önálló/GPS-alapú következtetés, csak olvasás a már
+  // kiszámolt mezőkből (lásd instructionIcon.ts fejléce).
+  const navigationInstructionIconType = navigationInstructionForDisplay
+    ? resolveInstructionIcon({
+        kind: navigationInstructionForDisplay.kind,
+        transitMode: activeLeg?.transitMode,
+        walkManoeuvreKind: activeWalkProgress?.currentManoeuvre?.kind,
+      })
+    : null;
   // NAVIGATION — NEXT-INSTRUCTION PREVIEW (Sprint 6, 2026-09-16). A
   // `navigationInstructionForDisplay`-t adjuk át `current`-ként — ez UGYANAZ
   // az érték, ami a kártya cím-szövegét is meghatározza, tehát a REROUTING/
@@ -2750,7 +2830,10 @@ function RankedJourneyCard({
                   right: "calc(3.5rem + env(safe-area-inset-right, 0px))",
                 }}
               >
-                <div className="text-base font-bold text-sni-text">{navigationInstructionForDisplay.title}</div>
+                <div className="flex items-center justify-center gap-2">
+                  {navigationInstructionIconType && <NavigationInstructionIcon type={navigationInstructionIconType} />}
+                  <div className="min-w-0 text-base font-bold text-sni-text">{navigationInstructionForDisplay.title}</div>
+                </div>
                 {walkToTransitBoundary.alightingReady && !transitGpsLossConfirmationVisible && (
                   <div className="mt-2">
                     <p className="text-sm text-gray-600">A leszállóhely közelében vagy. Ha már leszálltál, jelezd itt.</p>
