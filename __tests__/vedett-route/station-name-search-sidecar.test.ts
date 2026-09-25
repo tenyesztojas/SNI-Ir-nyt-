@@ -229,6 +229,37 @@ describe("findGtfsStationCandidates — PRODUCTION-PATH: helyi .vedett-cache HI�
     assert.equal(results.length, 2);
   });
 
+  test("E) AZONOS NEVŰ találat KÉT KÜLÖNBÖZŐ dataset/providerből -- mindkettő megmarad, a provider-cimke ÉS a koordináták nem keverednek (dedup kulcs providerenkénti, nem csak névre épül)", async () => {
+    // Szándékosan UGYANAZ a stop_name ("Deák Ferenc tér") két KÜLÖNBÖZŐ
+    // sidecar dataset-ből (mavgtfs ÉS bkkgtfs), ELTÉRŐ koordinátával --
+    // ez reprodukálja azt a valós helyzetet, amikor egy MÁV és egy BKK
+    // rekord véletlenül azonos nevű, de FIZIKAILAG más pont. A dedup
+    // kulcs (`${provider}:${normalizedName}`, lásd dedupeStationCandidates)
+    // providerenkénti, ezért egyik találat sem nyelheti el a másikat.
+    const crossProviderStub: SidecarStationSearchFn = async (_query, dataset) => {
+      if (dataset === "mavgtfs") {
+        return [{ stopId: "MAV1", name: "Deák Ferenc tér", lat: 47.1, lon: 18.1, dataset: "mavgtfs" }];
+      }
+      if (dataset === "bkkgtfs") {
+        return [{ stopId: "BKK1", name: "Deák Ferenc tér", lat: 47.5, lon: 19.05, dataset: "bkkgtfs" }];
+      }
+      return [];
+    };
+    const results = await findGtfsStationCandidates("Deák Ferenc tér", productionLikeNullLoader, 8, crossProviderStub);
+    assert.equal(results.length, 2, "mindkét provider találatának meg kell maradnia, egyik sem nyelheti el a másikat");
+
+    const mav = results.find((r) => r.provider === "MAV_RAIL");
+    const bkk = results.find((r) => r.provider === "BKK");
+    assert.ok(mav, "a MAV_RAIL (mavgtfs) találatnak jelen kell lennie");
+    assert.ok(bkk, "a BKK (bkkgtfs) találatnak jelen kell lennie");
+    assert.equal(mav!.id, "MAV1");
+    assert.equal(mav!.lat, 47.1);
+    assert.equal(mav!.lon, 18.1);
+    assert.equal(bkk!.id, "BKK1");
+    assert.equal(bkk!.lat, 47.5);
+    assert.equal(bkk!.lon, 19.05);
+  });
+
   test("sidecar által visszaadott, a query-re nem illeszkedő nevet (védekező, elvileg sosem fordulhat elő) kiszűri, sosem dob", async () => {
     const noisyStub: SidecarStationSearchFn = async () => [
       { stopId: "IRRELEVANT", name: "Teljesen Más Hely", lat: 47.0, lon: 18.0, dataset: "bkkgtfs" },

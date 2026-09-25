@@ -190,6 +190,17 @@ export function findStationsByName(
     if (!stop.stopName) continue;
     if (typeof stop.latitude !== "number" || typeof stop.longitude !== "number") continue;
     if (!Number.isFinite(stop.latitude) || !Number.isFinite(stop.longitude)) continue;
+    // LOCATION_TYPE JAVÍTÁS (2026-09-25, célzott regressziós teszt által
+    // reprodukált hiba): a GTFS spec szerint egy location_type=2 sor egy
+    // állomás-bejárat/kijárat, SOSEM önálló utazási cél -- a spec ehhez
+    // KÖTELEZŐ parent_station-t írna elő, de a parser (accessibilityIndex.ts)
+    // ezt nem kényszeríti ki, így egy hiányos/hibás feed-sor (parent_station
+    // nélküli location_type=2 bejegyzés) a station-szintű (parent_station
+    // alapú) dedup alól kibújva külön candidate-ként jelenhetne meg. Ezért
+    // a location_type=2 rekordokat MINDIG kizárjuk a névillesztésből,
+    // FÜGGETLENÜL attól, hogy van-e parent_station-juk -- nincs
+    // entrance/exit-specifikus UI, egyszerűen sosem önálló találat.
+    if (stop.locationType === 2) continue;
 
     const normalizedName = normalizeStationSearchText(stop.stopName);
     if (!normalizedName) continue;

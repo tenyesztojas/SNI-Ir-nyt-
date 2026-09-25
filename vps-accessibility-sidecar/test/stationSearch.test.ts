@@ -171,6 +171,24 @@ describe("findStationsByName — illesztés", () => {
     assert.deepEqual(findStationsByName(index, "bkkgtfs", "   ", 8), []);
   });
 
+  test("LOCATION_TYPE regresszió: egy location_type=2 (bejárat/kijárat) rekord, HIÁNYZÓ parent_station-nal (hibás/hiányos GTFS adat), NEM jelenhet meg önálló utazási célként egy valódi állomás mellett", () => {
+    // Ez a GTFS spec szerint hibás bemenet (a location_type=2 sornak
+    // KÖTELEZŐ lenne parent_station-t hordoznia), de a parser (lásd
+    // accessibilityIndex.ts buildAccessibilityIndexFromGtfsZip()) ezt nem
+    // kényszeríti ki -- egy ilyen hiányos feed-sor simán bekerül a
+    // stopsById-be. Cél: findStationsByName ekkor is CSAK a valódi
+    // station-szintű (locationType=1) rekordot adja vissza, a bejárat/
+    // kijárat rekordot SOSEM önálló, külön candidate-ként.
+    const index = indexFrom([
+      stop({ stopId: "STATION_X", stopName: "Deák Ferenc tér", latitude: 47.4979, longitude: 19.0546, locationType: 1 }),
+      stop({ stopId: "EXIT_Y", stopName: "Deák Ferenc tér", latitude: 47.4981, longitude: 19.0549, locationType: 2 }),
+    ]);
+    const result = findStationsByName(index, "bkkgtfs", "Deák Ferenc tér", 8);
+    assert.equal(result.length, 1, "a bejárat/kijárat rekord nem hozhat létre külön candidate-et a valódi állomás mellett");
+    assert.equal(result[0].stopId, "STATION_X");
+    assert.notEqual(result[0].locationType, 2, "location_type=2 rekord sosem lehet önálló utazási cél");
+  });
+
   test("a válasz mezői a dokumentált alakot követik (stopId/name/lat/lon/dataset/parentStation/locationType)", () => {
     const index = indexFrom([
       stop({ stopId: "S1", parentStation: "PARENT1", stopName: "Faluhely", latitude: 47.1, longitude: 18.4, locationType: 0 }),
