@@ -39,6 +39,15 @@ import { resolveInstructionPreview } from "@/lib/vedett-route/navigation/instruc
 // MEGLÉVŐ JourneyLeg.realtime/delayMinutes/cancelled mezők navigációs
 // megjelenítése. Nincs új adatforrás, nincs Sensory Data V2.
 import { resolveNavigationRealtimeInfo } from "@/lib/vedett-route/navigation/realtimeInfo";
+// NAVIGATION — HANGOS (TTS) NAVIGÁCIÓ (2026-09-25) — a MEGLÉVŐ canonical
+// navigationInstructionForDisplay (lásd lent) title/detail szövegéből épít
+// egy Web Speech API felolvasást, dedupe-olva (lásd
+// lib/vedett-route/navigation/speechAnnouncer.ts fejléce: a TTS NEM
+// navigációs döntéshozó, csak a MÁR meglévő instrukciót mondja ki). Nincs
+// új navigációs state machine — csak egy BE/KI preferencia (perzisztált,
+// lásd useNavigationSpeechPreference()) és a beszéd-dedupe.
+import { buildAnnouncement } from "@/lib/vedett-route/navigation/speechAnnouncer";
+import { useNavigationSpeech, useNavigationSpeechPreference } from "@/lib/hooks/useNavigationSpeech";
 // NAVIGATION — WALK→TRANSIT BOUNDARY + TRANSFER TIMING (Sprint 7.1,
 // 2026-09-16). Lásd a modulok fejlécét: a MEGLÉVŐ geometriai activeLegIndex-
 // et FINOMÍTJA (nem helyettesíti egy második state machine-nel), és a MÁR
@@ -1674,6 +1683,47 @@ function RankedJourneyCard({
     ? resolveNavigationTransferTiming(displayedJourney.legs, activeLegIndex)
     : { currentArrival: null, nextDeparture: null };
 
+  // NAVIGATION — HANGOS (TTS) NAVIGÁCIÓ (2026-09-25), spec "4. DEDUPE"
+  // pontja: a beszéd-identitás a canonical instruction stabil `id`-jéből
+  // (lásd instructions.ts) épül, egy OPCIONÁLIS, szintén nem-GPS-zajos
+  // "subState" darabbal — SOSEM a pontos hátralévő méter/megállószámból
+  // (az minden GPS fixnél változna, spam-elné a felolvasást). Két, MÁR
+  // MEGLÉVŐ, diszkrét (nem folytonos) jelet vezetünk be ide:
+  //   - AT_BOARDING_AREA: a WALK leg boarding-proximity felülírása (lásd
+  //     activeNavigationInstructionWithWalkProgress fent) — enélkül a
+  //     manőver-alapú kulcs változatlan maradna, pedig a szöveg (és a
+  //     valós állapot) érdemben más;
+  //   - a WALK manőver saját kind+segmentIndex+phase hármasa — EZ a
+  //     forduló-azonosító (nem a folyamatosan csökkenő "X m múlva"
+  //     távolságszöveg), lásd walkManoeuvre.ts/walkManoeuvreProgress.ts;
+  //   - NEAR_ALIGHTING: az onboard RIDE instrukció leszállás-közeli
+  //     állapota (lásd instructions.ts selectActiveInstructionWithStopProgress
+  //     nearAlighting ága) — a sima "Utazz még N megállót" szövegtől
+  //     ELTÉRŐEN ez egy VALÓS, egyszeri figyelmeztetést érdemel.
+  const speechSubState =
+    navigationInstructionForDisplay?.kind === "WALK" && walkToTransitBoundary.phase === "AT_BOARDING_AREA"
+      ? "AT_BOARDING_AREA"
+      : activeLegIsWalk && activeWalkProgress?.currentManoeuvre && activeWalkProgress.phase
+        ? `${activeWalkProgress.currentManoeuvre.kind}-${activeWalkProgress.currentManoeuvre.segmentIndex}-${activeWalkProgress.phase}`
+        : navigationInstructionForDisplay?.kind === "RIDE" && activeRemainingStops?.nearAlighting
+          ? "NEAR_ALIGHTING"
+          : undefined;
+  const navigationSpeechAnnouncement = useMemo(
+    () => buildAnnouncement(navigationInstructionForDisplay, speechSubState),
+    [navigationInstructionForDisplay, speechSubState]
+  );
+  const [navigationSpeechPreference, setNavigationSpeechPreference] = useNavigationSpeechPreference();
+  useNavigationSpeech({
+    enabled: navigationSpeechPreference && navigationMode,
+    announcement: navigationSpeechAnnouncement,
+    // Elfogadott reroute -> ÚJ navigációs kontextus (lásd
+    // useNavigationSpeech resetKey kommentje): a rerouteSessionRef UGYANAZ
+    // a generation-számláló, amit a hívó máshol (pl. liveAlternativeOffer,
+    // automatikus reroute) staleness-guardként már használ — nincs új
+    // számláló bevezetve.
+    resetKey: rerouteSessionRef.current,
+  });
+
   const lastLeg = displayedJourney.legs.length > 0 ? displayedJourney.legs[displayedJourney.legs.length - 1] : undefined;
   const originalDestination =
     lastLeg && lastLeg.toLat !== undefined && lastLeg.toLon !== undefined
@@ -2767,6 +2817,23 @@ function RankedJourneyCard({
                     {activeRealtimeInfo.phrase}
                   </div>
                 )}
+                {/* NAVIGATION — HANGOS (TTS) NAVIGÁCIÓ (2026-09-25) —
+                    egyszerű, nem domináns BE/KI kapcsoló, billentyűzettel
+                    használható (natív <button>, role="switch"), a jelenlegi
+                    kártya-layoutot nem módosítja (csak egy kis sor a
+                    realtime-sor alatt). A választás böngésző-refresh után
+                    is megmarad (lásd useNavigationSpeechPreference()). */}
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={navigationSpeechPreference}
+                  aria-label={navigationSpeechPreference ? "Hangos navigáció kikapcsolása" : "Hangos navigáció bekapcsolása"}
+                  onClick={() => setNavigationSpeechPreference(!navigationSpeechPreference)}
+                  className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-medium text-gray-600"
+                >
+                  <span aria-hidden="true">{navigationSpeechPreference ? "🔊" : "🔈"}</span>
+                  Hangos navigáció: {navigationSpeechPreference ? "be" : "ki"}
+                </button>
               </div>
             )}
 
