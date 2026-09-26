@@ -86,11 +86,18 @@ export async function getMyFamilies(
           (m: {
             user_id: string;
             role: string;
-            profiles: { display_name?: string } | null;
+            // A Supabase/PostgREST embed EGY-tömbként infereli a
+            // kapcsolt relációt (nincs Database generic típus a
+            // szerver kliensen, lásd lib/supabase/server.ts), NEM
+            // egyetlen nullable objektumként — egy family_members sor
+            // pontosan egy profiles sorhoz kapcsolódik (user_id FK),
+            // ezért itt az első (és egyetlen) elemet vesszük.
+            profiles: { display_name?: string }[] | null;
           }) => ({
             userId: m.user_id,
             role: m.role as FamilyRole,
-            displayName: m.profiles?.display_name ?? "Ismeretlen felhasználó",
+            displayName:
+              m.profiles?.[0]?.display_name ?? "Ismeretlen felhasználó",
           })
         );
 
@@ -98,12 +105,21 @@ export async function getMyFamilies(
         .filter((fc: { family_id: string }) => fc.family_id === f.id)
         .map(
           (fc: {
-            child_profiles: {
-              id: string;
-              first_name: string;
-              birth_year: number | null;
-            } | null;
-          }) => fc.child_profiles
+            // Ugyanaz az ok, mint a profiles embed-nél fent: a
+            // Supabase/PostgREST embed egy-tömbként infereli a
+            // kapcsolt relációt, NEM egyetlen nullable objektumként —
+            // egy family_children sor pontosan egy child_profiles
+            // sorhoz kapcsolódik (child_id FK), ezért itt az első (és
+            // egyetlen) elemet vesszük, null-ra esve, ha a reláció
+            // hiányzik vagy üres.
+            child_profiles:
+              | {
+                  id: string;
+                  first_name: string;
+                  birth_year: number | null;
+                }[]
+              | null;
+          }) => fc.child_profiles?.[0] ?? null
         )
         .filter(
           (
