@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { UserCircle } from "lucide-react";
+import { UserCircle, Users, ArrowRight } from "lucide-react";
 import { getCurrentUserAndProfile, getOwnPlaces, getOwnReviews } from "@/lib/data";
 import { signOutAction } from "@/lib/actions/auth";
+import { hasFamilyBetaAccess } from "@/lib/family/config";
 import ProfileNameForm from "@/components/ProfileNameForm";
 import PasswordChangeForm from "@/components/PasswordChangeForm";
 
@@ -70,6 +71,24 @@ export default async function ProfilePage() {
           newsletterSubscribed={profile?.newsletterSubscribed ?? true}
         />
       </div>
+
+      {hasFamilyBetaAccess(profile) && (
+        <Link
+          href="/csalad"
+          className="mt-8 flex items-center justify-between gap-3 rounded-2xl border border-gray-100 bg-white p-6 shadow-soft"
+        >
+          <div className="flex items-center gap-3">
+            <Users className="text-sni-brand-blue" size={28} />
+            <div>
+              <h2 className="text-lg font-bold text-gray-900">Család</h2>
+              <p className="text-sm text-gray-500">
+                Családtagok és gyermekprofilok kezelése.
+              </p>
+            </div>
+          </div>
+          <ArrowRight className="text-sni-brand-blue" size={20} />
+        </Link>
+      )}
 
       <PasswordChangeForm />
 
