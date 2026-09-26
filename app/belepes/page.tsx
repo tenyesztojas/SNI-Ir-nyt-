@@ -5,6 +5,7 @@ import { useFormState, useFormStatus } from "react-dom";
 import { LogIn, Mail, ChevronDown, Users } from "lucide-react";
 import { signInAction, signUpAction, AuthActionState } from "@/lib/actions/auth";
 import { safeReturnPath } from "@/lib/pwa/safeReturnPath";
+import GoogleLoginButton from "@/components/auth/GoogleLoginButton";
 
 function SubmitButton({ label }: { label: string }) {
   const { pending } = useFormStatus();
@@ -43,8 +44,19 @@ export default function LoginPage({
         Lépj be e-maillel vagy regisztrálj új fiókot.
       </p>
 
+      {/* Közösségi belépés (Google) */}
+      <div className="mt-6 flex flex-col gap-3">
+        <GoogleLoginButton />
+      </div>
+
+      <div className="mt-5 flex items-center gap-3">
+        <div className="h-px flex-1 bg-gray-200" />
+        <span className="text-xs font-medium uppercase tracking-wide text-gray-400">vagy</span>
+        <div className="h-px flex-1 bg-gray-200" />
+      </div>
+
       {/* E-mailes belépés */}
-      <div className="mt-6">
+      <div className="mt-5">
         <button
           onClick={() => setShowEmail((v) => !v)}
           className="flex w-full items-center justify-between rounded-2xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-700 shadow-soft hover:border-sni-brand-teal/40"

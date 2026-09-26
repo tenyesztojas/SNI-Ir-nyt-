@@ -1,9 +1,19 @@
 "use client";
 
+import { createClient } from "@/lib/supabase/client";
+
 export default function GoogleLoginButton() {
+  async function handleLogin() {
+    const supabase = createClient();
+    await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: { redirectTo: `${window.location.origin}/auth/callback` },
+    });
+  }
+
   return (
-    <a
-      href="/api/auth/google"
+    <button
+      onClick={handleLogin}
       className="flex w-full items-center justify-center gap-3 rounded-full border border-gray-200 bg-white px-6 py-3.5 text-base font-semibold text-gray-700 shadow-sm transition-all duration-200 hover:bg-gray-50 hover:shadow-md active:scale-95"
     >
       <svg width="20" height="20" viewBox="0 0 48 48" aria-hidden={true}>
@@ -13,6 +23,6 @@ export default function GoogleLoginButton() {
         <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
       </svg>
       Belépés Google-fiókkal
-    </a>
+    </button>
   );
 }

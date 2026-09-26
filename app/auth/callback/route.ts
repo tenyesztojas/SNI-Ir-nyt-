@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { generateDisplayName } from "@/lib/utils/display-name";
 
 const POPUP_MESSAGE = "supabase:auth_complete";
+const KNOWN_OAUTH_PROVIDERS = ["github", "google", "facebook"];
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
@@ -15,7 +16,13 @@ export async function GET(request: Request) {
 
     if (!error && data.user) {
       const user = data.user;
-      const isGitHub = user.app_metadata?.provider === "github";
+      // Supabase natív OAuth (Google, Facebook, GitHub) esetén a provider
+      // nevét a session app_metadata.provider mezője adja vissza.
+      const rawProvider = user.app_metadata?.provider;
+      const provider = KNOWN_OAUTH_PROVIDERS.includes(rawProvider ?? "")
+        ? (rawProvider as string)
+        : null;
+      const isGitHub = provider === "github";
 
       const { data: profile } = await supabase
         .from("profiles")
@@ -30,10 +37,10 @@ export async function GET(request: Request) {
 
       const updatePayload: Record<string, unknown> = {
         last_login_at: new Date().toISOString(),
-        auth_provider: isGitHub ? "github" : "email",
+        auth_provider: provider ?? "email",
       };
 
-      if (isGitHub && isGenericName) {
+      if (provider && isGenericName) {
         updatePayload.display_name = generateDisplayName();
       }
 
