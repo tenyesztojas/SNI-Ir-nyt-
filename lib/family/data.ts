@@ -32,6 +32,37 @@ export type FamilyView = {
   children: FamilyChildView[];
 };
 
+// ────────────────────────────────────────────────────────────────
+// Type boundary: PostgREST beágyazott (embedded) reláció normalizálása
+// ────────────────────────────────────────────────────────────────
+// A lenti két lekérdezés (family_members -> profiles,
+// family_children -> child_profiles) mindkét esetben egy to-one
+// (many-to-one) FK-relációt ágyaz be: egy family_members sor PONTOSAN
+// egy profiles sorhoz kapcsolódik (user_id FK), egy family_children
+// sor PONTOSAN egy child_profiles sorhoz (child_id FK). Egy ilyen
+// to-one FK-nál a PostgREST FUTÁSIDŐBEN egyetlen objektumot (vagy
+// null-t) ad vissza — tömböt csak a FORDÍTOTT irányú (to-many)
+// beágyazásnál adna. A Supabase JS kliens (itt nincs Database
+// generic, lásd lib/supabase/server.ts) fordítási időben viszont
+// TÖMBKÉNT infereli ezt — ez a fordítási idő/futásidő eltérés okozta
+// a korábbi regressziót (a kód a hibás compile-time típushoz lett
+// igazítva, nem a valós runtime shape-hez).
+//
+// Ez a helper EGYETLEN, jól elkülönített type boundary-n kezeli ezt
+// az eltérést — a FamilyView/FamilyMemberView/FamilyChildView
+// alkalmazásmodell és a lenti mapping-logika ettől független, mindig
+// egyetlen (vagy null) kapcsolt sorral dolgozik. Robusztus mindhárom
+// lehetséges alakra: objektum, null/undefined, vagy (ha egy jövőbeli
+// PostgREST/Supabase verzió vagy egy teszt-környezet mégis tömbként
+// adná) egyelemű (vagy üres) tömb. Nincs `any`, nincs `as any`, nincs
+// `@ts-ignore`/`@ts-expect-error`.
+function normalizeToOneRelation<T>(value: T | T[] | null | undefined): T | null {
+  if (Array.isArray(value)) {
+    return value.length > 0 ? value[0] : null;
+  }
+  return value ?? null;
+}
+
 export async function getMyFamilies(
   userId: string
 ): Promise<{ families: FamilyView[]; error?: string }> {
@@ -86,19 +117,25 @@ export async function getMyFamilies(
           (m: {
             user_id: string;
             role: string;
-            // A Supabase/PostgREST embed EGY-tömbként infereli a
-            // kapcsolt relációt (nincs Database generic típus a
-            // szerver kliensen, lásd lib/supabase/server.ts), NEM
-            // egyetlen nullable objektumként — egy family_members sor
-            // pontosan egy profiles sorhoz kapcsolódik (user_id FK),
-            // ezért itt az első (és egyetlen) elemet vesszük.
-            profiles: { display_name?: string }[] | null;
-          }) => ({
-            userId: m.user_id,
-            role: m.role as FamilyRole,
-            displayName:
-              m.profiles?.[0]?.display_name ?? "Ismeretlen felhasználó",
-          })
+            // A Supabase kliens (Database generic nélkül) ezt a
+            // to-one embedet fordítási időben tömbként infereli, a
+            // PostgREST futásidőben viszont egyetlen objektumot (vagy
+            // null-t) ad vissza — lásd a normalizeToOneRelation()
+            // megjegyzését fent. Itt ezért mindkét alakot elfogadjuk,
+            // és a normalizálást a helperre bízzuk, NEM egy `[0]`
+            // indexeléssel.
+            profiles:
+              | { display_name?: string }[]
+              | { display_name?: string }
+              | null;
+          }) => {
+            const profile = normalizeToOneRelation(m.profiles);
+            return {
+              userId: m.user_id,
+              role: m.role as FamilyRole,
+              displayName: profile?.display_name ?? "Ismeretlen felhasználó",
+            };
+          }
         );
 
       const children: FamilyChildView[] = (childrenRes.data ?? [])
@@ -106,20 +143,22 @@ export async function getMyFamilies(
         .map(
           (fc: {
             // Ugyanaz az ok, mint a profiles embed-nél fent: a
-            // Supabase/PostgREST embed egy-tömbként infereli a
-            // kapcsolt relációt, NEM egyetlen nullable objektumként —
-            // egy family_children sor pontosan egy child_profiles
-            // sorhoz kapcsolódik (child_id FK), ezért itt az első (és
-            // egyetlen) elemet vesszük, null-ra esve, ha a reláció
-            // hiányzik vagy üres.
+            // family_children -> child_profiles is to-one FK-reláció,
+            // futásidőben egyetlen objektum (vagy null), nem tömb —
+            // lásd normalizeToOneRelation().
             child_profiles:
               | {
                   id: string;
                   first_name: string;
                   birth_year: number | null;
                 }[]
+              | {
+                  id: string;
+                  first_name: string;
+                  birth_year: number | null;
+                }
               | null;
-          }) => fc.child_profiles?.[0] ?? null
+          }) => normalizeToOneRelation(fc.child_profiles)
         )
         .filter(
           (
