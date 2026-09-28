@@ -14,6 +14,7 @@
 // instrukciók) ettől FÜGGETLENÜL teljesen működik tovább.
 
 import { useEffect, useRef, useState } from "react";
+import { normalizeHungarianTransitSpeech } from "@/lib/vedett-route/navigation/hungarianSpeechNormalizer";
 import {
   INITIAL_SPEECH_ANNOUNCER_STATE,
   invalidateSpeechAnnouncerState,
@@ -144,7 +145,7 @@ export function useNavigationSpeech({ enabled, announcement, resetKey }: UseNavi
     const synth = getSpeechSynthesis();
     if (!synth) return;
     synth.cancel();
-    const utterance = new window.SpeechSynthesisUtterance(announcement.text);
+    const utterance = new window.SpeechSynthesisUtterance(normalizeHungarianTransitSpeech(announcement.text));
     // Rögzített magyar nyelv — SOSE hardcode-olt voice név (a böngésző saját
     // alapértelmezett hu-HU hangját választja, ha van neki).
     utterance.lang = "hu-HU";
