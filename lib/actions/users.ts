@@ -39,7 +39,7 @@ export async function adminCreateUser(input: {
     await admin
       .from("profiles")
       .upsert(
-        { id: data.user.id, display_name: input.displayName.trim(), role: "member" },
+        { id: data.user.id, display_name: input.displayName.trim(), role: "user" },
         { onConflict: "id" }
       );
   }
@@ -85,7 +85,7 @@ export async function deleteUser(userId: string): Promise<{ error?: string }> {
 
 export async function changeUserRole(
   userId: string,
-  role: "admin" | "member"
+  role: "admin" | "user"
 ): Promise<{ error?: string }> {
   const isAdmin = await isCurrentUserAdmin();
   if (!isAdmin) return { error: "Nincs jogosultságod." };

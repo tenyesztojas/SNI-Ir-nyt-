@@ -28,7 +28,7 @@ export default function UserActions({ userId, displayName, email, role, isSelf }
   }
 
   async function handleRoleToggle() {
-    const newRole = role === "admin" ? "member" : "admin";
+    const newRole = role === "admin" ? "user" : "admin";
     const label = newRole === "admin" ? "adminná teszed" : "visszaváltod taggá";
     if (!window.confirm(`Biztosan ${label}?\n\n${displayName} (${email})`)) return;
     setLoading(true);

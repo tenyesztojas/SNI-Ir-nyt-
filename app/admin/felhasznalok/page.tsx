@@ -117,7 +117,7 @@ export default async function AdminUsersPage() {
                       userId={p.id}
                       displayName={p.display_name ?? ""}
                       email={auth?.email ?? ""}
-                      role={p.role ?? "member"}
+                      role={p.role ?? "user"}
                       isSelf={p.id === currentUser?.id}
                     />
                   </td>
