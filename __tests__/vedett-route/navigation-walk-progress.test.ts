@@ -17,6 +17,7 @@ import {
   TURN_NOW_DISTANCE_METERS,
   buildWalkInstructionText,
   cumulativeDistanceToVertex,
+  isZeroDistanceWalkInstruction,
   resolveDistanceAlongLegMeters,
   resolveLegLocalMatchedSegmentIndex,
   resolveManoeuvrePhase,
@@ -220,6 +221,36 @@ describe("WALK instrukció szöveg (sprint specifikáció 6. pontja)", () => {
   test("balkanyar, NOW", () => {
     const m = manoeuvre({ kind: "TURN_LEFT", distanceFromStartMeters: 300, turnAngleDegrees: -90 });
     assert.equal(buildWalkInstructionText(m, "NOW", 5), "Fordulj balra");
+  });
+});
+
+describe("5/6) 'Haladj tovább 0 métert' védelem (production hiba, 2026-10-01)", () => {
+  test("5) ARRIVE-jellegű (kanyar-irány nélküli) manőver, 0 méteres hátralévő távolság -> SOHA ne legyen renderelhető/felolvasható instrukció", () => {
+    const arrive = manoeuvre({ kind: "ARRIVE", distanceFromStartMeters: 400 });
+    assert.equal(isZeroDistanceWalkInstruction(arrive, 0), true);
+  });
+
+  test("5b) negatív (upstream-hibás) hátralévő távolság is <= 0-nak számít — sosem jut ki a felhasználóhoz", () => {
+    const arrive = manoeuvre({ kind: "ARRIVE", distanceFromStartMeters: 400 });
+    assert.equal(isZeroDistanceWalkInstruction(arrive, -5), true);
+  });
+
+  test("5c) kerekítve 0-ra eső kicsi (pl. 2 méteres) hátralévő távolság is védett (roundNavigationDistanceMeters(2) === 0)", () => {
+    const arrive = manoeuvre({ kind: "ARRIVE", distanceFromStartMeters: 400 });
+    assert.equal(roundNavigationDistanceMeters(2), 0);
+    assert.equal(isZeroDistanceWalkInstruction(arrive, 2), true);
+  });
+
+  test("6) normál, pozitív távolságú ARRIVE instrukció változatlanul működik — NEM védett, a 'Haladj tovább 20 métert' szöveg megmarad", () => {
+    const arrive = manoeuvre({ kind: "ARRIVE", distanceFromStartMeters: 400 });
+    assert.equal(isZeroDistanceWalkInstruction(arrive, 20), false);
+    assert.equal(buildWalkInstructionText(arrive, "NOW", 20), "Haladj tovább 20 métert");
+  });
+
+  test("6b) kanyar-instrukció (TURN_RIGHT/TURN_LEFT) SOSE esik a 0 méteres védelem alá, akkor sem, ha a hátralévő távolság kerekítve 0", () => {
+    const turn = manoeuvre({ kind: "TURN_RIGHT", distanceFromStartMeters: 100, turnAngleDegrees: 90 });
+    assert.equal(isZeroDistanceWalkInstruction(turn, 0), false);
+    assert.equal(buildWalkInstructionText(turn, "NOW", 0), "Fordulj jobbra");
   });
 });
 

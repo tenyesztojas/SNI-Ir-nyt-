@@ -170,7 +170,7 @@ export function roundNavigationDistanceMeters(meters: number): number {
 // magyar szöveg, streetName/utcanév NÉLKÜL (lásd walkManoeuvre.ts korlátait).
 // ============================================================================
 
-function turnDirectionLabel(kind: WalkManoeuvre["kind"]): "jobbra" | "balra" | null {
+export function turnDirectionLabel(kind: WalkManoeuvre["kind"]): "jobbra" | "balra" | null {
   if (kind === "TURN_RIGHT") return "jobbra";
   if (kind === "TURN_LEFT") return "balra";
   return null;
@@ -191,4 +191,26 @@ export function buildWalkInstructionText(
   // ARRIVE (vagy egy jövőbeli, ezen sprintben nem használt CONTINUE) —
   // nincs kanyar-irány, csak "haladj tovább" a leg hátralévő hosszára.
   return `Haladj tovább ${roundedDistance} métert`;
+}
+
+// ÉRTELMETLEN "0 MÉTERES" HALADJ-TOVÁBB VÉDELEM (production hiba,
+// 2026-10-01) — igaz, HA buildWalkInstructionText() ezekkel a
+// bemenetekkel egy kanyar-irány NÉLKÜLI (ARRIVE-jellegű), <= 0 méteres
+// "Haladj tovább X métert" szöveget adna. Egy <= 0 méteres mozgási
+// instrukció SOHA nem jelenhet meg/hangozhat el (lásd a hívó
+// VedettUtvonalSearchForm.tsx WALK-progress felülírását, ami ilyenkor a
+// canonical navigációs instrukciót jeleníti meg a manőver-alapú felülírás
+// HELYETT). Ha a 0 m azért keletkezett, mert a felhasználó valóban
+// érdemben letért az útvonaltól (pl. a route-progress clamp miatt a
+// leg-lokális távolság a leg végére "ugrott"), az ettől TELJESEN FÜGGETLEN,
+// MEGLÉVŐ off-route/reroute mechanizmus (rerouteGuard.ts) a saját, valós
+// GPS-eltérés-küszöbe alapján egyébként is elindul — ez a függvény NEM egy
+// második, párhuzamos reroute-döntés, kizárólag az értelmetlen szöveg
+// megjelenését akadályozza meg.
+export function isZeroDistanceWalkInstruction(
+  manoeuvre: WalkManoeuvre,
+  distanceToCurrentMeters: number,
+): boolean {
+  if (turnDirectionLabel(manoeuvre.kind)) return false;
+  return roundNavigationDistanceMeters(distanceToCurrentMeters) <= 0;
 }

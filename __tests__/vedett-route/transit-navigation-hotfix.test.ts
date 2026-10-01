@@ -56,30 +56,74 @@ describe("3) headsign — upstream MOTIS mező végigvezetve a normalizáción",
     assert.match(typesSrc, /headsign\?: string;/);
   });
 
-  test("headsign jelenlétekor a BOARD/RIDE cím 'route – headsign felé' formátumot kap", () => {
+  test("headsign jelenlétekor a BOARD/RIDE cím 'route [jármű] – headsign felé' formátumot kap", () => {
+    // JÁRATSZÁM + JÁRMŰTÍPUS HOTFIX (2026-10-01) — a transitLeg() fixture
+    // transitMode-ja REGIONAL_RAIL, ezért a label mostantól a route-szám
+    // mellé a "vonat" jármű-szót is tartalmazza (lásd instructions.ts
+    // transitVehicleNoun()) — ez a label-bővítés, NEM a headsign-formátum,
+    // ami változatlan.
     const instructions = buildNavigationInstructions({
       legs: [transitLeg({ headsign: "Dombóvár" })],
     });
     const board = instructions.find((i) => i.kind === "BOARD");
     const ride = instructions.find((i) => i.kind === "RIDE");
-    assert.equal(board?.title, "Szállj fel: S40 – Dombóvár felé");
-    assert.equal(ride?.title, "Utazz a S40 – Dombóvár felé járattal");
+    assert.equal(board?.title, "Szállj fel: S40 vonat – Dombóvár felé");
+    assert.equal(ride?.title, "Utazz a S40 vonat – Dombóvár felé járattal");
   });
 
-  test("headsign hiányában biztonságos fallback — csak a route name/number, nincs kitalálva", () => {
+  test("headsign hiányában biztonságos fallback — csak a route name/number + jármű-szó, nincs kitalálva", () => {
     const instructions = buildNavigationInstructions({ legs: [transitLeg({ headsign: undefined })] });
     const board = instructions.find((i) => i.kind === "BOARD");
-    assert.equal(board?.title, "Szállj fel: S40");
+    assert.equal(board?.title, "Szállj fel: S40 vonat");
   });
 
   test("generikus minden transit módra — BUS/TRAM/SUBWAY/RAIL/REGIONAL_RAIL egyaránt kapja a headsignt, nincs mód-specifikus ág", () => {
+    // A jármű-szó (lásd instructions.ts transitVehicleNoun()) módonként
+    // eltérő, DE a headsign-formátum ("route [jármű] – headsign felé")
+    // ugyanúgy generikus mind az öt módra — nincs mód-specifikus elágazás
+    // a headsign-összekötésben, csak a jármű-szó választása mód-függő.
+    const expectedVehicleNoun: Record<string, string> = {
+      BUS: "busz",
+      TRAM: "villamos",
+      SUBWAY: "metró",
+      RAIL: "vonat",
+      REGIONAL_RAIL: "vonat",
+    };
     for (const transitMode of ["BUS", "TRAM", "SUBWAY", "RAIL", "REGIONAL_RAIL"]) {
       const instructions = buildNavigationInstructions({
         legs: [transitLeg({ transitMode, routeShortName: "X1", headsign: "Célpont" })],
       });
       const board = instructions.find((i) => i.kind === "BOARD");
-      assert.equal(board?.title, "Szállj fel: X1 – Célpont felé", `transitMode=${transitMode}`);
+      assert.equal(board?.title, `Szállj fel: X1 ${expectedVehicleNoun[transitMode]} – Célpont felé`, `transitMode=${transitMode}`);
     }
+  });
+});
+
+describe("JÁRATSZÁM + JÁRMŰTÍPUS production hiba (2026-10-01) — pontos riport-esetek", () => {
+  test("1) '7' + BUS + Albertfalva vasútállomás -> vizuálisan buszként azonosítható", () => {
+    const instructions = buildNavigationInstructions({
+      legs: [transitLeg({ transitMode: "BUS", routeShortName: "7", headsign: "Albertfalva vasútállomás" })],
+    });
+    const board = instructions.find((i) => i.kind === "BOARD");
+    assert.equal(board?.title, "Szállj fel: 7 busz – Albertfalva vasútállomás felé");
+    assert.match(board!.title, /\bbusz\b/);
+  });
+
+  test("2) '56A' + TRAM + Móricz Zsigmond körtér M -> vizuálisan villamosként azonosítható, a canonical 'M' megállónév-rész VÁLTOZATLAN", () => {
+    const instructions = buildNavigationInstructions({
+      legs: [transitLeg({ transitMode: "TRAM", routeShortName: "56A", headsign: "Móricz Zsigmond körtér M" })],
+    });
+    const board = instructions.find((i) => i.kind === "BOARD");
+    assert.equal(board?.title, "Szállj fel: 56A villamos – Móricz Zsigmond körtér M felé");
+    assert.match(board!.title, /\bvillamos\b/);
+  });
+
+  test("a jármű-szó KIZÁRÓLAG a transitMode-ból jön, SOHA a routeShortName alakjából (betűs járatszám BUS módon is 'busz' marad)", () => {
+    const instructions = buildNavigationInstructions({
+      legs: [transitLeg({ transitMode: "BUS", routeShortName: "56A", headsign: "Célpont" })],
+    });
+    const board = instructions.find((i) => i.kind === "BOARD");
+    assert.equal(board?.title, "Szállj fel: 56A busz – Célpont felé");
   });
 });
 

@@ -59,14 +59,18 @@ describe("onboard RIDE title — route label + headsign + hátralévő megálló
     // korai-return ágán megy át, változatlanul.
     const result = selectActiveInstructionWithStopProgress(instructions, { legIndex: 0, legPhaseFraction: 0 });
     assert.equal(result.current?.kind, "BOARD");
-    assert.equal(result.current?.title, "Szállj fel: S40 – Székesfehérvár felé");
+    // JÁRATSZÁM + JÁRMŰTÍPUS HOTFIX (2026-10-01) — a transitLeg() fixture
+    // transitMode-ja REGIONAL_RAIL, ezért routeLabel() a route-szám mellé a
+    // "vonat" jármű-szót is tartalmazza (lásd instructions.ts
+    // transitVehicleNoun()).
+    assert.equal(result.current?.title, "Szállj fel: S40 vonat – Székesfehérvár felé");
   });
 
   test("4) remainingStops NÉLKÜL nincs regresszió — a RIDE a Sprint 2 (geometry-thirds) kimenetét adja, változatlan title-lal", () => {
     const instructions = buildNavigationInstructions({ legs: [transitLeg({ headsign: "Székesfehérvár" })] });
     const result = selectActiveInstructionWithStopProgress(instructions, { legIndex: 0, onboard: true });
     assert.equal(result.current?.kind, "RIDE");
-    assert.equal(result.current?.title, "Utazz a S40 – Székesfehérvár felé járattal");
+    assert.equal(result.current?.title, "Utazz a S40 vonat – Székesfehérvár felé járattal");
   });
 
   test("headsign/route label nélküli leg esetén a régi, sima 'Utazz még N megállót' szöveg marad (nincs regresszió, nincs '· ' prefix a semmiből)", () => {

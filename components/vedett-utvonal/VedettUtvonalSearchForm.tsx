@@ -28,6 +28,7 @@ import { detectWalkManoeuvres } from "@/lib/vedett-route/navigation/walkManoeuvr
 import {
   buildWalkInstructionText,
   cumulativeDistanceToVertex,
+  isZeroDistanceWalkInstruction,
   resolveDistanceAlongLegMeters,
   resolveWalkProgress,
 } from "@/lib/vedett-route/navigation/walkManoeuvreProgress";
@@ -1691,17 +1692,32 @@ function RankedJourneyCard({
   // Ez NEM váltja a leget (a geometria még WALK-ot mutat), csak a SZÖVEGET
   // finomítja — a resolvedLegIndex-alapú BOARDED váltás továbbra is a
   // konzisztens, több-fixes bizonyíték után történik (lásd fentebb).
+  // ÉRTELMETLEN "0 MÉTERES" HALADJ-TOVÁBB VÉDELEM (production hiba,
+  // 2026-10-01, lásd walkManoeuvreProgress.ts isZeroDistanceWalkInstruction()
+  // fejléce) — ha a manőver-alapú szöveg egy kanyar-irány nélküli, <= 0
+  // méteres "Haladj tovább 0 métert" lenne, EZT a felülírást elhagyjuk, és
+  // a canonical navigációs instrukció marad látható/felolvasható (ugyanaz
+  // az ág, mint amikor nincs megbízható manőver-progress). Az esetleges
+  // VALÓDI letérést a MEGLÉVŐ, ettől független off-route/reroute mechanizmus
+  // (rerouteGuard.ts) kezeli — ez a feltétel nem indít/blokkol reroute-ot,
+  // csak a megjelenített/felolvasott szöveget védi.
+  const walkProgressInstructionText =
+    activeWalkProgress?.currentManoeuvre &&
+    activeWalkProgress.phase &&
+    !isZeroDistanceWalkInstruction(activeWalkProgress.currentManoeuvre, activeWalkProgress.distanceToCurrentMeters ?? 0)
+      ? buildWalkInstructionText(
+          activeWalkProgress.currentManoeuvre,
+          activeWalkProgress.phase,
+          activeWalkProgress.distanceToCurrentMeters ?? 0
+        )
+      : null;
   const activeNavigationInstructionWithWalkProgress =
     activeLegIsWalk && walkToTransitBoundary.phase === "AT_BOARDING_AREA" && activeNavigationInstruction.current
       ? { ...activeNavigationInstruction.current, title: "Már a beszállási pont közelében vagy", detail: undefined }
-      : activeNavigationInstruction.current?.kind === "WALK" && activeWalkProgress?.currentManoeuvre && activeWalkProgress.phase
+      : activeNavigationInstruction.current?.kind === "WALK" && walkProgressInstructionText
         ? {
             ...activeNavigationInstruction.current,
-            title: buildWalkInstructionText(
-              activeWalkProgress.currentManoeuvre,
-              activeWalkProgress.phase,
-              activeWalkProgress.distanceToCurrentMeters ?? 0
-            ),
+            title: walkProgressInstructionText,
           }
         : activeNavigationInstruction.current;
   // REST STOP KOMPATIBILITÁS — amíg egy rest-stop-indított útvonal

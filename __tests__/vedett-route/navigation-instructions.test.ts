@@ -86,16 +86,21 @@ describe("buildNavigationInstructions — egyszerű gyalogos Journey", () => {
 });
 
 describe("buildNavigationInstructions — tömegközlekedési leg -> BOARD/RIDE/ALIGHT", () => {
-  test("2) egy TRANSIT leg -> BOARD (Szállj fel: M2, detail: honnan), RIDE (Utazz a M2 járattal), ALIGHT (Szállj le: Keleti pályaudvar)", () => {
+  test("2) egy TRANSIT leg -> BOARD (Szállj fel: M2 metró, detail: honnan), RIDE (Utazz a M2 metró járattal), ALIGHT (Szállj le: Keleti pályaudvar)", () => {
+    // JÁRATSZÁM + JÁRMŰTÍPUS HOTFIX (2026-10-01) — a transitLeg() fixture
+    // transitMode-ja SUBWAY, ezért a routeLabel() a route-szám mellé a
+    // "metró" jármű-szót is tartalmazza (lásd instructions.ts
+    // transitVehicleNoun()) — ez a label-bővítés, a headsign-nélküli
+    // fallback-formátum egyébként változatlan.
     const legs = [transitLeg()];
     const instructions = buildNavigationInstructions({ legs });
     const [start, board, ride, alight, arrive] = instructions;
     assert.equal(start.kind, "START");
     assert.equal(board.kind, "BOARD");
-    assert.equal(board.title, "Szállj fel: M2");
+    assert.equal(board.title, "Szállj fel: M2 metró");
     assert.equal(board.detail, "Deák Ferenc tér");
     assert.equal(ride.kind, "RIDE");
-    assert.equal(ride.title, "Utazz a M2 járattal");
+    assert.equal(ride.title, "Utazz a M2 metró járattal");
     assert.equal(alight.kind, "ALIGHT");
     assert.equal(alight.title, "Szállj le: Keleti pályaudvar");
     assert.equal(arrive.kind, "ARRIVE");
@@ -118,10 +123,15 @@ describe("buildNavigationInstructions — tömegközlekedési leg -> BOARD/RIDE/
   });
 
   test("routeShortName hiányában routeLongName, majd generikus 'járat' fallback — SOSEM kitalált vonalnév", () => {
+    // A transitLeg() fixture transitMode-ja SUBWAY, ezért a jármű-szó
+    // ("metró") itt is megjelenik a routeLongName mellett — attól
+    // függetlenül, hogy a routeLongName szövege maga is tartalmazza a
+    // "metró" szót (lásd instructions.ts transitVehicleNoun(): KIZÁRÓLAG
+    // a transitMode-ból jön, SOHA a route-szöveg alakjából).
     const longNameOnly = buildNavigationInstructions({
       legs: [transitLeg({ routeShortName: undefined, routeLongName: "2-es metró" })],
     });
-    assert.equal(longNameOnly.find((i) => i.kind === "BOARD")?.title, "Szállj fel: 2-es metró");
+    assert.equal(longNameOnly.find((i) => i.kind === "BOARD")?.title, "Szállj fel: 2-es metró metró");
 
     const neitherName = buildNavigationInstructions({
       legs: [transitLeg({ routeShortName: undefined, routeLongName: undefined })],
@@ -159,7 +169,7 @@ describe("buildNavigationInstructions — több leg, sorrend és TRANSFER", () =
     assert.deepEqual(instructions.map((i) => i.kind), ["START", "BOARD", "RIDE", "TRANSFER", "RIDE", "ALIGHT", "ARRIVE"]);
     const transfer = instructions.find((i) => i.kind === "TRANSFER");
     assert.equal(transfer?.title, "Szállj át a következő járatra");
-    assert.equal(transfer?.detail, "Következő járat: M3");
+    assert.equal(transfer?.detail, "Következő járat: M3 metró");
   });
 
   test("Bubi/kerékpár leg csak akkor kap BIKE_* eseményt, ha a mode RENTAL — normál WALK/TRANSIT legek sosem", () => {

@@ -81,8 +81,42 @@ function stopCountDetail(leg: JourneyLeg): string | undefined {
   return `${count} megálló`;
 }
 
+// JÁRATSZÁM + JÁRMŰTÍPUS HOTFIX (production hiba, 2026-10-01) — a jármű
+// típusát KIZÁRÓLAG a már meglévő JourneyLeg.transitMode mezőből olvassuk
+// (lásd types.ts), SOHA nem következtetünk rá a routeShortName/
+// routeLongName alakjából (pl. "56A"), pontosan a hibajegy tiltása szerint.
+// Ismeretlen/hiányzó transitMode esetén (vagy olyan mód, amire jelenleg
+// nincs egyértelmű magyar production-megfelelő, pl. COACH) undefined —
+// a label NEM bővül kitalált jármű-szóval, biztonságos fallback (lásd a
+// modul fejlécének "inkább hagyd el, mint hogy becsüld" elve).
+function transitVehicleNoun(transitMode: string | undefined): string | undefined {
+  switch (transitMode) {
+    case "BUS":
+      return "busz";
+    case "TRAM":
+      return "villamos";
+    case "SUBWAY":
+      return "metró";
+    case "RAIL":
+    case "REGIONAL_RAIL":
+      return "vonat";
+    case "TROLLEYBUS":
+      return "trolibusz";
+    default:
+      return undefined;
+  }
+}
+
 function routeLabel(leg: JourneyLeg): string {
-  const base = leg.routeShortName ?? leg.routeLongName ?? "járat";
+  const routeNumber = leg.routeShortName ?? leg.routeLongName;
+  const vehicleNoun = transitVehicleNoun(leg.transitMode);
+  // Ha van route-szám, a jármű-szót MELLÉ fűzzük ("7 busz", "56A villamos") —
+  // ez a canonical vizuális szöveg, amit a hungarianSpeechNormalizer.ts már
+  // meglévő "{szám} busz"/villamos-mintái (lásd ott) felolvasáskor tovább
+  // alakítanak ("hetes busz", "ötvenhatos A villamos"). Route-szám hiányában
+  // VÁLTOZATLAN a korábbi "járat" fallback — nincs kitalált jármű-szó egy
+  // nemlétező route-szám mellé.
+  const base = routeNumber ? (vehicleNoun ? `${routeNumber} ${vehicleNoun}` : routeNumber) : "járat";
   // TRANSIT NAVIGATION HOTFIX (2026-09-21, spec 3. pont) — ha a MOTIS
   // válasz adott headsignt (jármű célállomás-kijelzője, lásd types.ts
   // JourneyLeg.headsign kommentje), a járatszám mellé fűzzük ("S40 –
