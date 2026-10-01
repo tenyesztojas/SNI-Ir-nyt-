@@ -295,9 +295,17 @@ export async function updateGuardianChildScheduleAccessAction(
 
   const childId = String(formData.get("childId") ?? "").trim();
   const guardianUserId = String(formData.get("guardianUserId") ?? "").trim();
-  const canViewSchedule = String(formData.get("canViewSchedule") ?? "") === "true";
-  let canManageSchedule =
-    String(formData.get("canManageSchedule") ?? "") === "true";
+  // PRODUCTION HOTFIX (2026-10-01) — a checkbox-ok MOST már maguk a
+  // beküldött mezők (lásd GuardianChildScheduleAccessRow.tsx), natív
+  // böngésző checkbox-szemantikával: bejelölve a mező JELEN VAN a
+  // FormData-ban, kijelölés nélkül HIÁNYZIK belőle. Ezért a jelenlétet
+  // (`has`), NEM egy konkrét string-érték egyezést ("=== 'true'")
+  // ellenőrzünk — korábban egy KÜLÖN, React state-et "value" propon
+  // keresztül tükröző hidden-input páros hordozta ezt az információt, és
+  // production proof igazolta, hogy ez a tükrözés elszakadhatott a
+  // látható checkbox állapotától a mentés pillanatában.
+  const canViewSchedule = formData.has("canViewSchedule");
+  let canManageSchedule = formData.has("canManageSchedule");
 
   if (!childId) return { error: "Hiányzó gyermek azonosító." };
   if (!guardianUserId) return { error: "Hiányzó gondviselő azonosító." };

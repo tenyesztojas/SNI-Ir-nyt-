@@ -30,6 +30,19 @@ function SaveButton() {
 // ki — a szerveroldali action (lib/actions/family.ts
 // updateGuardianChildScheduleAccessAction) ugyanezt a szabályt
 // FÜGGETLENÜL is kikényszeríti, tehát ez nem az egyetlen védelmi vonal.
+//
+// PRODUCTION HOTFIX (2026-10-01) — a checkbox-ok korábban NEM maguk
+// voltak a beküldött form-mezők: csak egy KÜLÖN, a React state-et
+// "value" propon keresztül tükröző <input type="hidden"> páros hordozta
+// a "canViewSchedule"/"canManageSchedule" nevet. Production proof (DB
+// readback) igazolta, hogy ez a tükrözés a mentés pillanatában nem
+// mindig esett egybe a látható checkbox állapotával — a beküldött érték
+// "false" maradt bejelölt checkbox mellett is. A JAVÍTÁS: a checkbox-ok
+// MOST már MAGUK a beküldött mezők (name="canViewSchedule"/
+// "canManageSchedule", value="true"), natív böngésző-szemantikával:
+// bejelölve a mező JELEN VAN a FormData-ban ("true" értékkel),
+// kijelölés nélkül HIÁNYZIK belőle — nincs köztes, React-renderelésre
+// szoruló tükör-mező, amely elszakadhatna a látható állapottól.
 export default function GuardianChildScheduleAccessRow({
   guardianUserId,
   childId,
@@ -59,12 +72,6 @@ export default function GuardianChildScheduleAccessRow({
     >
       <input type="hidden" name="childId" value={childId} />
       <input type="hidden" name="guardianUserId" value={guardianUserId} />
-      <input type="hidden" name="canViewSchedule" value={String(canViewSchedule)} />
-      <input
-        type="hidden"
-        name="canManageSchedule"
-        value={String(canManageSchedule)}
-      />
 
       <span className="text-sm font-medium text-gray-700">{childFirstName}</span>
 
@@ -72,6 +79,8 @@ export default function GuardianChildScheduleAccessRow({
         <label className="flex items-center gap-2 text-sm text-gray-700">
           <input
             type="checkbox"
+            name="canViewSchedule"
+            value="true"
             checked={canViewSchedule}
             onChange={(event) => {
               const checked = event.target.checked;
@@ -91,6 +100,8 @@ export default function GuardianChildScheduleAccessRow({
         <label className="flex items-center gap-2 text-sm text-gray-700">
           <input
             type="checkbox"
+            name="canManageSchedule"
+            value="true"
             checked={canManageSchedule}
             onChange={(event) => {
               const checked = event.target.checked;
