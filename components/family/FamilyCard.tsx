@@ -1,6 +1,7 @@
 import type { FamilyView } from "@/lib/family/data";
 import AddChildForm from "@/components/family/AddChildForm";
 import ChildCard from "@/components/family/ChildCard";
+import ChildScheduleSection from "@/components/family/ChildScheduleSection";
 import GuardianManagement from "@/components/family/GuardianManagement";
 
 const ROLE_LABEL: Record<string, string> = {
@@ -39,11 +40,22 @@ export default function FamilyCard({ family }: { family: FamilyView }) {
         ) : (
           <div className="mt-3 flex flex-col gap-3">
             {family.children.map((child) => (
-              <ChildCard
-                key={child.id}
-                child={child}
-                canEdit={family.myRole === "owner"}
-              />
+              <div key={child.id}>
+                <ChildCard child={child} canEdit={family.myRole === "owner"} />
+                {/* Napirend create/edit/delete: owner-családnál mindig
+                    true, guardian-családnál a SAJÁT aktív
+                    can_manage_schedule jogosultság dönt (lásd
+                    FamilyChildView.canManageSchedule felépítését
+                    lib/family/data.ts getMyFamilies()-ében, és a
+                    hozzá tartozó RLS-t a
+                    20261001_family_schedule_authorization_completion.sql
+                    migrációban). Ez a UI-gate csak kozmetikai; a
+                    valódi védelmet a backend RLS/RPC adja. */}
+                <ChildScheduleSection
+                  child={child}
+                  canManage={child.canManageSchedule}
+                />
+              </div>
             ))}
           </div>
         )}

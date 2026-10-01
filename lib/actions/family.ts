@@ -259,3 +259,196 @@ export async function revokeGuardianInvitationAction(
   return { success: true };
 }
 
+function parseDaysOfWeek(formData: FormData): number[] {
+  return formData
+    .getAll("daysOfWeek")
+    .map((value) => Number(value))
+    .filter((value) => Number.isInteger(value));
+}
+
+export async function createChildScheduleItemAction(
+  _prevState: FamilyActionState,
+  formData: FormData
+): Promise<FamilyActionState> {
+  const { user, profile } = await getCurrentUserAndProfile();
+  if (!user) return { error: "Nem vagy bejelentkezve." };
+  if (!hasFamilyBetaAccess(profile)) {
+    return { error: "Ez a funkció még nem elérhető a fiókodhoz." };
+  }
+
+  const childId = String(formData.get("childId") ?? "").trim();
+  const title = String(formData.get("title") ?? "").trim();
+  const descriptionRaw = String(formData.get("description") ?? "").trim();
+  const scheduleType = String(formData.get("scheduleType") ?? "").trim();
+  const timeLocal = String(formData.get("timeLocal") ?? "").trim();
+  const arrivalTimeRaw = String(formData.get("arrivalTimeLocal") ?? "").trim();
+  const startDateRaw = String(formData.get("startDate") ?? "").trim();
+  const originLabelRaw = String(formData.get("originLabel") ?? "").trim();
+  const destinationLabelRaw = String(formData.get("destinationLabel") ?? "").trim();
+
+  if (!childId) return { error: "Hiányzó gyermek azonosító." };
+  if (!title) return { error: "A megnevezés megadása kötelező." };
+  if (scheduleType !== "one_time" && scheduleType !== "recurring") {
+    return { error: "Érvénytelen napirend-típus." };
+  }
+  if (!timeLocal) return { error: "A kezdési idő megadása kötelező." };
+  if (scheduleType === "one_time" && !startDateRaw) {
+    return { error: "Egyszeri napirendi elemhez a dátum megadása kötelező." };
+  }
+  const daysOfWeek = scheduleType === "recurring" ? parseDaysOfWeek(formData) : [];
+  if (scheduleType === "recurring" && daysOfWeek.length === 0) {
+    return { error: "Ismétlődő napirendi elemhez legalább egy nap kiválasztása kötelező." };
+  }
+
+  const supabase = createClient();
+  // KIZÁRÓLAG a meglévő create_child_schedule_item(...) RPC — nincs
+  // kliensoldali/szerver akcióbeli direkt INSERT a
+  // child_schedule_items táblára. Az RPC saját maga ellenőrzi az
+  // owner(+family_db_beta)/explicit can_manage_schedule-jogosultságú
+  // guardian/admin jogosultságot (lásd
+  // supabase/migrations/20260927_guardian_child_permission_hardening_v1.sql)
+  // és a schedule-specifikus validációt (title, days_of_week,
+  // dátumok, koordinátapár) — a fentiek csak a leggyorsabb,
+  // kliensoldali visszajelzéshez szükséges, a backenddel KONZISZTENS
+  // minimális mezőellenőrzések, nincs új szabály kitalálva.
+  const { error } = await supabase.rpc("create_child_schedule_item", {
+    p_child_id: childId,
+    p_title: title,
+    p_schedule_type: scheduleType,
+    p_time_local: timeLocal,
+    p_description: descriptionRaw || null,
+    p_start_date: scheduleType === "one_time" ? startDateRaw : null,
+    p_arrival_time_local: arrivalTimeRaw || null,
+    p_days_of_week: scheduleType === "recurring" ? daysOfWeek : null,
+    p_origin_label: originLabelRaw || null,
+    p_destination_label: destinationLabelRaw || null,
+  });
+
+  if (error) {
+    return {
+      error: friendlyRpcError(
+        error,
+        "Nem sikerült létrehozni a napirendi elemet. Próbáld újra."
+      ),
+    };
+  }
+
+  revalidatePath("/csalad");
+  return { success: true, childId };
+}
+
+export async function updateChildScheduleItemAction(
+  _prevState: FamilyActionState,
+  formData: FormData
+): Promise<FamilyActionState> {
+  const { user, profile } = await getCurrentUserAndProfile();
+  if (!user) return { error: "Nem vagy bejelentkezve." };
+  if (!hasFamilyBetaAccess(profile)) {
+    return { error: "Ez a funkció még nem elérhető a fiókodhoz." };
+  }
+
+  const itemId = String(formData.get("itemId") ?? "").trim();
+  const title = String(formData.get("title") ?? "").trim();
+  const descriptionRaw = String(formData.get("description") ?? "").trim();
+  const scheduleType = String(formData.get("scheduleType") ?? "").trim();
+  const timeLocal = String(formData.get("timeLocal") ?? "").trim();
+  const arrivalTimeRaw = String(formData.get("arrivalTimeLocal") ?? "").trim();
+  const startDateRaw = String(formData.get("startDate") ?? "").trim();
+  const originLabelRaw = String(formData.get("originLabel") ?? "").trim();
+  const destinationLabelRaw = String(formData.get("destinationLabel") ?? "").trim();
+  const isActiveRaw = String(formData.get("isActive") ?? "true").trim();
+
+  if (!itemId) return { error: "Hiányzó napirendi elem azonosító." };
+  if (!title) return { error: "A megnevezés megadása kötelező." };
+  if (scheduleType !== "one_time" && scheduleType !== "recurring") {
+    return { error: "Érvénytelen napirend-típus." };
+  }
+  if (!timeLocal) return { error: "A kezdési idő megadása kötelező." };
+  if (scheduleType === "one_time" && !startDateRaw) {
+    return { error: "Egyszeri napirendi elemhez a dátum megadása kötelező." };
+  }
+  const daysOfWeek = scheduleType === "recurring" ? parseDaysOfWeek(formData) : [];
+  if (scheduleType === "recurring" && daysOfWeek.length === 0) {
+    return { error: "Ismétlődő napirendi elemhez legalább egy nap kiválasztása kötelező." };
+  }
+
+  const supabase = createClient();
+  // KIZÁRÓLAG a meglévő update_child_schedule_item(...) RPC — ugyanaz
+  // az elv, mint a create actionnél: a jogosultság-ellenőrzés és a
+  // schedule-specifikus validáció teljes egészében az RPC-ben történik.
+  const { error } = await supabase.rpc("update_child_schedule_item", {
+    p_id: itemId,
+    p_title: title,
+    p_schedule_type: scheduleType,
+    p_time_local: timeLocal,
+    p_description: descriptionRaw || null,
+    p_start_date: scheduleType === "one_time" ? startDateRaw : null,
+    p_arrival_time_local: arrivalTimeRaw || null,
+    p_days_of_week: scheduleType === "recurring" ? daysOfWeek : null,
+    p_origin_label: originLabelRaw || null,
+    p_destination_label: destinationLabelRaw || null,
+    p_is_active: isActiveRaw !== "false",
+  });
+
+  if (error) {
+    return {
+      error: friendlyRpcError(
+        error,
+        "Nem sikerült menteni a napirendi elemet. Próbáld újra."
+      ),
+    };
+  }
+
+  revalidatePath("/csalad");
+  return { success: true };
+}
+
+export async function deleteChildScheduleItemAction(
+  _prevState: FamilyActionState,
+  formData: FormData
+): Promise<FamilyActionState> {
+  const { user, profile } = await getCurrentUserAndProfile();
+  if (!user) return { error: "Nem vagy bejelentkezve." };
+  if (!hasFamilyBetaAccess(profile)) {
+    return { error: "Ez a funkció még nem elérhető a fiókodhoz." };
+  }
+
+  const itemId = String(formData.get("itemId") ?? "").trim();
+  if (!itemId) return { error: "Hiányzó napirendi elem azonosító." };
+
+  // Nincs dedikált delete RPC — a MEGLÉVŐ
+  // "child_schedule_items_delete_via_family_owner" RLS policy (lásd
+  // supabase/migrations/20260927_guardian_child_permission_hardening_v1.sql)
+  // már önmagában biztonságosan lefedi a DELETE jogosultságot (owner +
+  // family_db_beta, VAGY explicit can_manage_schedule jogosultságú
+  // aktív guardian, VAGY admin) — a feladat is kifejezetten ezt kéri,
+  // ha az RLS már biztonságosan lefedi, nincs szükség új RPC-re.
+  // FONTOS: ha RLS blokkolja, a DELETE NEM hibát ad, hanem csendben 0
+  // sort érint — ezért a .select("id")-t explicit ellenőrizzük
+  // (ugyanaz a minta, mint updateChildAction-ben).
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("child_schedule_items")
+    .delete()
+    .eq("id", itemId)
+    .select("id");
+
+  if (error) {
+    return {
+      error: friendlyRpcError(
+        error,
+        "Nem sikerült törölni a napirendi elemet. Próbáld újra."
+      ),
+    };
+  }
+  if (!data || data.length === 0) {
+    return {
+      error:
+        "Nincs jogosultságod ehhez a törléshez, vagy a napirendi elem nem található.",
+    };
+  }
+
+  revalidatePath("/csalad");
+  return { success: true };
+}
+

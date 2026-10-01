@@ -18,10 +18,39 @@ export type FamilyMemberView = {
   displayName: string;
 };
 
+export type ScheduleType = "one_time" | "recurring";
+
+export type ChildScheduleItemView = {
+  id: string;
+  title: string;
+  description: string | null;
+  scheduleType: ScheduleType;
+  startDate: string | null;
+  endDate: string | null;
+  timeLocal: string;
+  arrivalTimeLocal: string | null;
+  daysOfWeek: number[] | null;
+  originLabel: string | null;
+  destinationLabel: string | null;
+  isActive: boolean;
+};
+
 export type FamilyChildView = {
   id: string;
   firstName: string;
   birthYear: number | null;
+  // Owner-családoknál MINDIG true. Guardian-családoknál a sor
+  // egyáltalán csak akkor jelenik meg (lásd a
+  // family_children/child_profiles RLS guardian-ágát,
+  // 20261001_family_schedule_authorization_completion.sql), ha a
+  // hívónak van aktív can_view_schedule VAGY can_manage_schedule
+  // jogosultsága ehhez a childhoz — tehát a MEGJELENÉS maga már
+  // "legalább view" jogot garantál; ez a mező KIZÁRÓLAG azt dönti el,
+  // hogy a Napirend UI megjelenítse-e a létrehozás/szerkesztés/törlés
+  // vezérlőket (lásd scheduleItemsByChild/canManageScheduleByChild
+  // felépítését getMyFamilies()-ben).
+  canManageSchedule: boolean;
+  scheduleItems: ChildScheduleItemView[];
 };
 
 export type PendingGuardianInvitationView = {
@@ -144,6 +173,135 @@ export async function getMyFamilies(
     return { families: [], error: firstError.message };
   }
 
+  // Napirendi elemek — EGYETLEN, batch-elt lekérdezés az ÖSSZES, a
+  // fenti family_children/child_profiles RLS által már amúgy is
+  // visszaadott (tehát jogosultság szerint eleve kiszűrt) gyermek
+  // azonosítóra, NEM gyermekenkénti külön lekérdezéssel (N+1 elkerülése).
+  // A child_schedule_items SELECT RLS (lásd
+  // supabase/migrations/20260927_guardian_child_permission_hardening_v1.sql)
+  // owner/guardian_child_permissions/child-self alapján amúgy is
+  // kiszűrné a nem-jogosult sorokat — itt a childId-halmaz maga is már
+  // csak a jogosult gyermekeket tartalmazza (lásd a children
+  // felépítésénél lentebb), tehát ez a lekérdezés nem is KÉR olyan
+  // napirendet, amihez a user egyébként sem férne hozzá.
+  const allChildIds = Array.from(
+    new Set(
+      (childrenRes.data ?? [])
+        .map(
+          (fc: {
+            child_profiles:
+              | { id: string }[]
+              | { id: string }
+              | null;
+          }) => normalizeToOneRelation(fc.child_profiles)
+        )
+        .filter((child): child is { id: string } => Boolean(child?.id))
+        .map((child) => child.id)
+    )
+  );
+
+  const scheduleItemsRes =
+    allChildIds.length > 0
+      ? await supabase
+          .from("child_schedule_items")
+          .select(
+            "id, child_id, title, description, schedule_type, start_date, end_date, time_local, arrival_time_local, days_of_week, origin_label, destination_label, is_active"
+          )
+          .in("child_id", allChildIds)
+      : {
+          data: [] as {
+            id: string;
+            child_id: string;
+            title: string;
+            description: string | null;
+            schedule_type: string;
+            start_date: string | null;
+            end_date: string | null;
+            time_local: string;
+            arrival_time_local: string | null;
+            days_of_week: number[] | null;
+            origin_label: string | null;
+            destination_label: string | null;
+            is_active: boolean;
+          }[],
+          error: null as { message: string } | null,
+        };
+
+  if (scheduleItemsRes.error) {
+    return { families: [], error: scheduleItemsRes.error.message };
+  }
+
+  // KIZÁRÓLAG a hívó SAJÁT, aktív guardian_child_permissions sorai —
+  // ez dönti el (guardian-családoknál), hogy a Napirend UI megjelenítse
+  // a létrehozás/szerkesztés/törlés vezérlőket. Owner-családoknál ez a
+  // map nem is kell (lásd lent: owner esetén canManageSchedule mindig
+  // true, a family_db_beta pilot-gate owner-oldali eltávolítása után —
+  // lásd 20261001_family_schedule_authorization_completion.sql). Nem
+  // más guardianok permission-sorait kérjük le (guardian_user_id =
+  // userId szűrés), tehát nem szivárogtatunk más gondviselők privát
+  // jogosultsági adatát.
+  const canManageScheduleByChild = new Map<string, boolean>();
+  if (allChildIds.length > 0) {
+    const { data: permissionRows, error: permissionsError } = await supabase
+      .from("guardian_child_permissions")
+      .select("child_id, can_manage_schedule")
+      .eq("guardian_user_id", userId)
+      .eq("status", "active")
+      .in("child_id", allChildIds);
+
+    if (permissionsError) {
+      return { families: [], error: permissionsError.message };
+    }
+
+    for (const row of permissionRows ?? []) {
+      if (row.can_manage_schedule) {
+        canManageScheduleByChild.set(row.child_id, true);
+      }
+    }
+  }
+
+  // Óra-string normalizálás: a Postgres `time` oszlop PostgREST-en
+  // keresztül "HH:MM:SS"-t ad vissza, a UI viszont "HH:MM"-et vár
+  // (HTML <input type="time"> defaultValue-hoz) — a másodperc-rész
+  // levágása tiszta string-szeletelés, nincs időzóna-konverzió.
+  function toHourMinute(value: string): string {
+    return value.length >= 5 ? value.slice(0, 5) : value;
+  }
+
+  const scheduleItemsByChild = new Map<string, ChildScheduleItemView[]>();
+  for (const row of scheduleItemsRes.data ?? []) {
+    const list = scheduleItemsByChild.get(row.child_id) ?? [];
+    list.push({
+      id: row.id,
+      title: row.title,
+      description: row.description,
+      scheduleType: row.schedule_type as ScheduleType,
+      startDate: row.start_date,
+      endDate: row.end_date,
+      timeLocal: toHourMinute(row.time_local),
+      arrivalTimeLocal: row.arrival_time_local
+        ? toHourMinute(row.arrival_time_local)
+        : null,
+      daysOfWeek: row.days_of_week,
+      originLabel: row.origin_label,
+      destinationLabel: row.destination_label,
+      isActive: row.is_active,
+    });
+    scheduleItemsByChild.set(row.child_id, list);
+  }
+  // Determinisztikus sorrend minden gyermeken belül: kezdési idő
+  // szerint növekvő (napi ütemezés-logika), `id` szerinti
+  // másodlagos rendezéssel azonos időpont esetén.
+  for (const [childId, items] of scheduleItemsByChild) {
+    items.sort((a, b) => {
+      if (a.timeLocal !== b.timeLocal) {
+        return a.timeLocal < b.timeLocal ? -1 : 1;
+      }
+      return a.id.localeCompare(b.id);
+    });
+    scheduleItemsByChild.set(childId, items);
+  }
+
   const pendingInvitationsByFamily = new Map<
     string,
     PendingGuardianInvitationView[]
@@ -187,6 +345,8 @@ export async function getMyFamilies(
           }
         );
 
+      const myRole = myRoleByFamily.get(f.id) ?? "guardian";
+
       const children: FamilyChildView[] = (childrenRes.data ?? [])
         .filter((fc: { family_id: string }) => fc.family_id === f.id)
         .map(
@@ -219,6 +379,13 @@ export async function getMyFamilies(
           id: child.id,
           firstName: child.first_name,
           birthYear: child.birth_year,
+          // Owner-családnál mindig true (a family_db_beta pilot-gate
+          // owner-oldali eltávolítása után, lásd 20261001_family_
+          // schedule_authorization_completion.sql); guardian-családnál
+          // a SAJÁT aktív can_manage_schedule flag dönt.
+          canManageSchedule:
+            myRole === "owner" || canManageScheduleByChild.get(child.id) === true,
+          scheduleItems: scheduleItemsByChild.get(child.id) ?? [],
         }))
         // Gyermekek mindig születési év szerint NÖVEKVŐ sorrendben
         // (legidősebb elöl) — ismeretlen (null) születési évvel
@@ -238,7 +405,6 @@ export async function getMyFamilies(
           return a.id.localeCompare(b.id);
         });
 
-      const myRole = myRoleByFamily.get(f.id) ?? "guardian";
       return {
         id: f.id,
         name: f.name,
