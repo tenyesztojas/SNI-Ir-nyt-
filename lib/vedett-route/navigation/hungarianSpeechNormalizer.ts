@@ -96,13 +96,25 @@ export function normalizeHungarianTransitSpeech(text: string): string {
   result = result.replace(/\bM\s*\+\s*H\b/gi, "metró- és HÉV-állomás");
   result = result.replace(/\bM\b(?=\s+felé(?![a-zA-Z0-9])|[.,]|$)/g, "metróállomás");
 
-  // Metró: M2 -> "em kettes metró".
-  result = result.replace(/\bM([1-4])\b/gi, (_, number: string) => {
+  // Metró: M2 -> "em kettes metró". REGRESSZIÓ-JAVÍTÁS (2026-10-01): az
+  // instructions.ts routeLabel() a canonical szövegben már maga is
+  // kiírja a jármű-szót (transitVehicleNoun(), pl. "M2 metró") — ha ezt a
+  // normalizáló is kimondaná, duplikáció lenne ("em kettes metró metró").
+  // A minta ezért a route-azonosító UTÁN opcionálisan elnyeli a MÁR ott
+  // álló "metró" szót, mielőtt a saját kiejtését hozzáfűzné.
+  // (A "metró" szó UTÁNI \b itt NEM használható — lásd a fejlebb lévő
+  // "regex-csapda" kommentet: az "ó" nem ASCII \w, ezért \bmetró\b sosem
+  // illeszkedne a MEGLÉVŐ szóhatár-ellenőrzéssel.)
+  result = result.replace(/\bM([1-4])\b(?:\s+metró)?/gi, (_, number: string) => {
     return `em ${routeNumberToHungarian(number)} metró`;
   });
 
-  // HÉV: H5 -> "há ötös HÉV".
-  result = result.replace(/\bH(\d+)\b/gi, (_, number: string) => {
+  // HÉV: H5 -> "há ötös HÉV". REGRESSZIÓ-JAVÍTÁS (2026-10-01): a HÉV-vonalak
+  // transitMode-ja REGIONAL_RAIL/RAIL, tehát a canonical szöveg "vonat"
+  // jármű-szót kap (pl. "H5 vonat") — ugyanazon okból, mint fent, ezt (vagy
+  // egy esetleges "HÉV" szót) a minta elnyeli, hogy ne duplikálódjon
+  // ("há ötös HÉV vonat" / "há ötös HÉV HÉV").
+  result = result.replace(/\bH(\d+)\b(?:\s+(?:vonat|HÉV))?/gi, (_, number: string) => {
     return `há ${routeNumberToHungarian(number)} HÉV`;
   });
 
