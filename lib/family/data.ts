@@ -59,6 +59,25 @@ export type PendingGuardianInvitationView = {
   createdAt: string;
 };
 
+// Owner-only — egy adott (guardian, child) párra vonatkozó, Napirend
+// szempontjából releváns jogosultság-állapot a guardian_child_permissions
+// táblából (lásd supabase/migrations/20260927_child_account_foundation.sql).
+// KIZÁRÓLAG a Napirend megtekintés/kezelés UI-hoz kell — a journey/GPS
+// flageket (can_start_supervised_journey, can_view_active_journey,
+// can_view_live_location) NEM ez a típus modellezi, azokat a
+// guardianChildFuturePermissionsByKey map tartja nyilván getMyFamilies()-ben,
+// KIZÁRÓLAG azért, hogy az owner UI action a meglévő
+// upsert_guardian_child_permission(...) RPC hívásakor pontosan ezeket az
+// ÉRINTETLEN flag-eket tudja visszaküldeni (lásd
+// lib/actions/family.ts updateGuardianChildScheduleAccessAction()) — SOHA
+// nem jelenik meg ez a UI-n, és SOHA nem módosítja ezt ez a funkció.
+export type GuardianChildSchedulePermissionView = {
+  guardianUserId: string;
+  childId: string;
+  canViewSchedule: boolean;
+  canManageSchedule: boolean;
+};
+
 export type FamilyView = {
   id: string;
   name: string | null;
@@ -70,6 +89,15 @@ export type FamilyView = {
   // UI rejti guardian elől (lásd family_guardian_invitations RLS:
   // supabase/migrations/20260927_family_guardian_invitation_foundation.sql).
   pendingGuardianInvitations: PendingGuardianInvitationView[];
+  // KIZÁRÓLAG owner szerepkör esetén töltött (lásd getMyFamilies()) — a
+  // guardian_child_permissions SELECT RLS (is_child_family_owner(child_id)
+  // or guardian_user_id = auth.uid(), lásd
+  // supabase/migrations/20260927_child_account_foundation.sql) a guardian
+  // saját lekérdezését is engedné a SAJÁT sorára, de ezt a mezőt a data
+  // loader guardian-családoknál explicit üres tömbbel tölti — ez egy
+  // owner-only PERMISSION-KEZELŐ UI adatforrása, nem egy általános
+  // olvasási nézet, ezért nem adjuk oda guardiannak.
+  guardianChildSchedulePermissions: GuardianChildSchedulePermissionView[];
 };
 
 // ────────────────────────────────────────────────────────────────
@@ -260,6 +288,75 @@ export async function getMyFamilies(
     }
   }
 
+  // Owner-only: az összes SAJÁT (owner által birtokolt) gyermekhez
+  // tartozó, Napirend-releváns guardian_child_permissions sor — ez adja
+  // a "Gondviselők" szekció permission-kezelő UI-jának adatát (lásd
+  // GuardianManagement.tsx). A guardian_child_permissions SELECT RLS
+  // (is_child_family_owner(child_id) or guardian_user_id = auth.uid(),
+  // lásd supabase/migrations/20260927_child_account_foundation.sql) az
+  // ownernek MINDEN sort visszaad a saját gyermekeihez, bármelyik
+  // guardianhoz tartozzon — tehát ez EGYETLEN batch-elt lekérdezés,
+  // NEM guardianonkénti/childenkénti N+1. Csak owner-családok gyermek
+  // azonosítóira kérdezünk (ownerChildIds), guardian-családokra nem — ott
+  // a mezőt a data loader lent explicit üres tömbbel tölti.
+  const ownerChildIds = Array.from(
+    new Set(
+      (childrenRes.data ?? [])
+        .filter(
+          (fc: { family_id: string }) =>
+            myRoleByFamily.get(fc.family_id) === "owner"
+        )
+        .map((fc: { child_profiles: { id: string }[] | { id: string } | null }) =>
+          normalizeToOneRelation(fc.child_profiles)
+        )
+        .filter((child): child is { id: string } => Boolean(child?.id))
+        .map((child) => child.id)
+    )
+  );
+
+  const guardianChildSchedulePermissionsByFamily = new Map<
+    string,
+    GuardianChildSchedulePermissionView[]
+  >();
+  if (ownerChildIds.length > 0) {
+    const { data: ownerPermissionRows, error: ownerPermissionsError } =
+      await supabase
+        .from("guardian_child_permissions")
+        .select("child_id, guardian_user_id, can_view_schedule, can_manage_schedule")
+        .eq("status", "active")
+        .in("child_id", ownerChildIds);
+
+    if (ownerPermissionsError) {
+      return { families: [], error: ownerPermissionsError.message };
+    }
+
+    // child_id -> family_id, hogy a sorokat a megfelelő családhoz tudjuk
+    // csoportosítani (egy gyermek pontosan egy családhoz tartozik).
+    const familyIdByChildId = new Map<string, string>();
+    for (const fc of childrenRes.data ?? []) {
+      const child = normalizeToOneRelation(
+        (fc as { child_profiles: { id: string }[] | { id: string } | null })
+          .child_profiles
+      );
+      if (child?.id) {
+        familyIdByChildId.set(child.id, (fc as { family_id: string }).family_id);
+      }
+    }
+
+    for (const row of ownerPermissionRows ?? []) {
+      const familyId = familyIdByChildId.get(row.child_id);
+      if (!familyId) continue;
+      const list = guardianChildSchedulePermissionsByFamily.get(familyId) ?? [];
+      list.push({
+        guardianUserId: row.guardian_user_id,
+        childId: row.child_id,
+        canViewSchedule: row.can_view_schedule,
+        canManageSchedule: row.can_manage_schedule,
+      });
+      guardianChildSchedulePermissionsByFamily.set(familyId, list);
+    }
+  }
+
   // Óra-string normalizálás: a Postgres `time` oszlop PostgREST-en
   // keresztül "HH:MM:SS"-t ad vissza, a UI viszont "HH:MM"-et vár
   // (HTML <input type="time"> defaultValue-hoz) — a másodperc-rész
@@ -414,6 +511,10 @@ export async function getMyFamilies(
         pendingGuardianInvitations:
           myRole === "owner"
             ? pendingInvitationsByFamily.get(f.id) ?? []
+            : [],
+        guardianChildSchedulePermissions:
+          myRole === "owner"
+            ? guardianChildSchedulePermissionsByFamily.get(f.id) ?? []
             : [],
       };
     }

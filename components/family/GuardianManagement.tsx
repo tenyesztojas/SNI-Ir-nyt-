@@ -1,6 +1,7 @@
 import type { FamilyView } from "@/lib/family/data";
 import GuardianInviteForm from "@/components/family/GuardianInviteForm";
 import RevokeGuardianInvitationButton from "@/components/family/RevokeGuardianInvitationButton";
+import GuardianChildScheduleAccessRow from "@/components/family/GuardianChildScheduleAccessRow";
 
 // OWNER-ONLY gondviselő-kezelő szekció a /csalad FamilyCard-on. Ezt a
 // komponenst a FamilyCard KIZÁRÓLAG family.myRole === "owner" esetén
@@ -11,6 +12,14 @@ import RevokeGuardianInvitationButton from "@/components/family/RevokeGuardianIn
 // supabase/migrations/20260927_family_guardian_invitation_foundation.sql).
 // A family.pendingGuardianInvitations mezőt a data loader is csak
 // owner-családokra tölti fel — guardianra ez mindig üres tömb.
+//
+// A Napirend-hozzáférés (can_view_schedule/can_manage_schedule)
+// szerkesztő sorai (lásd lent) ugyanígy KIZÁRÓLAG itt, owner nézetben
+// jelennek meg — a family.guardianChildSchedulePermissions mezőt a data
+// loader is csak owner-családokra tölti (lásd lib/family/data.ts), és a
+// tényleges védelmet a upsert_guardian_child_permission RPC saját
+// is_child_family_owner ellenőrzése adja (lásd lib/actions/family.ts
+// updateGuardianChildScheduleAccessAction), nem ez a UI-rejtés.
 export default function GuardianManagement({ family }: { family: FamilyView }) {
   const guardians = family.members.filter((member) => member.role === "guardian");
 
@@ -21,14 +30,37 @@ export default function GuardianManagement({ family }: { family: FamilyView }) {
       {guardians.length === 0 ? (
         <p className="mt-2 text-gray-500">Még nincs gondviselő a családban.</p>
       ) : (
-        <ul className="mt-2 flex flex-col gap-1">
+        <ul className="mt-2 flex flex-col gap-3">
           {guardians.map((guardian) => (
-            <li
-              key={guardian.userId}
-              className="flex items-center justify-between gap-3 text-sm text-gray-700"
-            >
-              <span>{guardian.displayName}</span>
-              <span className="text-gray-500">Aktív gondviselő</span>
+            <li key={guardian.userId} className="flex flex-col gap-2">
+              <div className="flex items-center justify-between gap-3 text-sm text-gray-700">
+                <span>{guardian.displayName}</span>
+                <span className="text-gray-500">Aktív gondviselő</span>
+              </div>
+
+              {family.children.length > 0 && (
+                <div className="flex flex-col gap-2 pl-2">
+                  {family.children.map((child) => {
+                    const existing = family.guardianChildSchedulePermissions.find(
+                      (permission) =>
+                        permission.guardianUserId === guardian.userId &&
+                        permission.childId === child.id
+                    );
+                    return (
+                      <GuardianChildScheduleAccessRow
+                        key={`${guardian.userId}:${child.id}`}
+                        guardianUserId={guardian.userId}
+                        childId={child.id}
+                        childFirstName={child.firstName}
+                        initialCanViewSchedule={existing?.canViewSchedule ?? false}
+                        initialCanManageSchedule={
+                          existing?.canManageSchedule ?? false
+                        }
+                      />
+                    );
+                  })}
+                </div>
+              )}
             </li>
           ))}
         </ul>

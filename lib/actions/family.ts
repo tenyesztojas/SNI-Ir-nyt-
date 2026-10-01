@@ -259,6 +259,102 @@ export async function revokeGuardianInvitationAction(
   return { success: true };
 }
 
+// Owner-only: egy adott (guardian, child) pár Napirend-releváns
+// jogosultságának (can_view_schedule / can_manage_schedule) módosítása.
+// KIZÁRÓLAG a meglévő upsert_guardian_child_permission(...) RPC-t hívja
+// (lásd supabase/migrations/20260927_child_account_foundation.sql) — a
+// tényleges owner-jogosultságot ott, az RPC belsejében ellenőrzi
+// (is_child_family_owner(p_child_id) + has_pilot_access('family_db_beta'),
+// ugyanaz a beta-flag, amit a hasFamilyBetaAccess() FE-gate is megkövetel
+// MINDEN family actionnél, tehát ez nem új/extra korlátozás). Soha NEM
+// hívja a revoke_guardian_child_permission(...) RPC-t — az a teljes sort
+// visszavonja és MINDEN flaget (a jövőbeli journey/GPS flageket is)
+// false-ra állítja, ami ennek a célnak (csak a két schedule-flag
+// módosítása) túl durva és nem biztonságos eszköz lenne.
+//
+// A journey/GPS flagek (can_start_supervised_journey,
+// can_view_active_journey, can_view_live_location) MEGŐRZÉSE: a kliens
+// ezeket SOHA nem küldi (nem is látja), ezért itt, a módosítás
+// pillanatában, egy friss SELECT-tel olvassuk vissza a meglévő sort, és
+// changetlenül visszaküldjük az upsert hívásban. A
+// guardian_child_permissions SELECT RLS
+// (is_child_family_owner(child_id) or guardian_user_id = auth.uid())
+// miatt ez a SELECT ownerként mindig látja a saját gyermeke sorát, ha
+// van; ha a hívó NEM owner, a SELECT egyszerűen 0 sort ad (nem hibát) —
+// a tényleges védelmet ettől függetlenül az upsert RPC saját
+// owner-ellenőrzése adja.
+export async function updateGuardianChildScheduleAccessAction(
+  _prevState: FamilyActionState,
+  formData: FormData
+): Promise<FamilyActionState> {
+  const { user, profile } = await getCurrentUserAndProfile();
+  if (!user) return { error: "Nem vagy bejelentkezve." };
+  if (!hasFamilyBetaAccess(profile)) {
+    return { error: "Ez a funkció még nem elérhető a fiókodhoz." };
+  }
+
+  const childId = String(formData.get("childId") ?? "").trim();
+  const guardianUserId = String(formData.get("guardianUserId") ?? "").trim();
+  const canViewSchedule = String(formData.get("canViewSchedule") ?? "") === "true";
+  let canManageSchedule =
+    String(formData.get("canManageSchedule") ?? "") === "true";
+
+  if (!childId) return { error: "Hiányzó gyermek azonosító." };
+  if (!guardianUserId) return { error: "Hiányzó gondviselő azonosító." };
+
+  // "Napirend kezelése" sosem lehet igaz "Napirend megtekintése" nélkül
+  // (lásd a feladat 3. szekcióját) — a UI ezt már eleve helyesen küldi,
+  // de a szerveroldali akció is kikényszeríti, ne csak a kliensre
+  // bízzuk.
+  if (!canViewSchedule) {
+    canManageSchedule = false;
+  }
+
+  const supabase = createClient();
+
+  // A jövőbeli (journey/GPS) flagek megőrzése — lásd a fenti megjegyzést.
+  const { data: existingRow, error: existingRowError } = await supabase
+    .from("guardian_child_permissions")
+    .select(
+      "can_start_supervised_journey, can_view_active_journey, can_view_live_location"
+    )
+    .eq("child_id", childId)
+    .eq("guardian_user_id", guardianUserId)
+    .maybeSingle();
+
+  if (existingRowError) {
+    return {
+      error: friendlyRpcError(
+        existingRowError,
+        "Nem sikerült betölteni a jelenlegi jogosultságokat. Próbáld újra."
+      ),
+    };
+  }
+
+  const { error } = await supabase.rpc("upsert_guardian_child_permission", {
+    p_child_id: childId,
+    p_guardian_user_id: guardianUserId,
+    p_can_view_schedule: canViewSchedule,
+    p_can_manage_schedule: canManageSchedule,
+    p_can_start_supervised_journey:
+      existingRow?.can_start_supervised_journey ?? false,
+    p_can_view_active_journey: existingRow?.can_view_active_journey ?? false,
+    p_can_view_live_location: existingRow?.can_view_live_location ?? false,
+  });
+
+  if (error) {
+    return {
+      error: friendlyRpcError(
+        error,
+        "Nem sikerült menteni a napirend-jogosultságot. Próbáld újra."
+      ),
+    };
+  }
+
+  revalidatePath("/csalad");
+  return { success: true, childId };
+}
+
 function parseDaysOfWeek(formData: FormData): number[] {
   return formData
     .getAll("daysOfWeek")
