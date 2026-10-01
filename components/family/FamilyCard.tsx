@@ -47,7 +47,7 @@ export default function FamilyCard({ family }: { family: FamilyView }) {
           </div>
         )}
 
-        <AddChildForm familyId={family.id} />
+        {family.myRole === "owner" && <AddChildForm familyId={family.id} />}
       </div>
     </div>
   );
