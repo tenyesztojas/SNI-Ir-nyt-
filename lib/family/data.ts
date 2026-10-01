@@ -219,7 +219,24 @@ export async function getMyFamilies(
           id: child.id,
           firstName: child.first_name,
           birthYear: child.birth_year,
-        }));
+        }))
+        // Gyermekek mindig születési év szerint NÖVEKVŐ sorrendben
+        // (legidősebb elöl) — ismeretlen (null) születési évvel
+        // rendelkező gyermek MINDIG a lista VÉGÉN, az ismert évűek
+        // után. Az Array.prototype.sort ES2019 óta garantáltan
+        // stabil, de a `child.id` szerinti másodlagos rendezéssel
+        // ettől FÜGGETLENÜL is determinisztikus a sorrend — nem a
+        // (nem garantált sorrendű) DB lekérdezés eredeti sorára
+        // támaszkodik, sem azonos évű, sem (mindkét) ismeretlen
+        // évű gyermekek esetén.
+        .sort((a, b) => {
+          if (a.birthYear !== b.birthYear) {
+            if (a.birthYear === null) return 1;
+            if (b.birthYear === null) return -1;
+            return a.birthYear - b.birthYear;
+          }
+          return a.id.localeCompare(b.id);
+        });
 
       const myRole = myRoleByFamily.get(f.id) ?? "guardian";
       return {
