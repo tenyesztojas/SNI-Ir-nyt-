@@ -355,6 +355,78 @@ export async function updateGuardianChildScheduleAccessAction(
   return { success: true, childId };
 }
 
+// MEGHÍVOTT (recipiens) oldali elfogadás/elutasítás — SZÁNDÉKOSAN NEM
+// gateli hasFamilyBetaAccess()-szel, ellentétben a modul fenti, owner-
+// oldali actionjeivel. Ez a kör-függőségi hibajegy LÉNYEGE: egy
+// meghívott, NEM béta-userhez szóló meghívást pontosan EZEKKEL az
+// actionökkel kell tudnia elfogadni/elutasítani, a béta-kaputól
+// FÜGGETLENÜL — a tényleges jogosultságot a MEGLÉVŐ
+// accept_family_guardian_invitation(uuid) / decline_family_guardian_
+// invitation(uuid) RPC-k saját, auth.email()-alapú ellenőrzése adja
+// (lásd supabase/migrations/20260927_family_guardian_invitation_foundation.sql
+// — NINCS has_pilot_access('family_db_beta') ellenőrzés ezekben az
+// RPC-kben), nem ez a szerveroldali action. Nincs kliensoldali/szerver
+// akcióbeli e-mail-cím paraméter — az RPC a SAJÁT session-jéből olvassa
+// (auth.email()), a kliens SOSE adhat át e-mail-cím-paramétert, amit a
+// szerver "elhinne".
+export async function acceptGuardianInvitationAction(
+  _prevState: FamilyActionState,
+  formData: FormData
+): Promise<FamilyActionState> {
+  const { user } = await getCurrentUserAndProfile();
+  if (!user) return { error: "Nem vagy bejelentkezve." };
+
+  const invitationId = String(formData.get("invitationId") ?? "").trim();
+  if (!invitationId) return { error: "Hiányzó meghívás azonosító." };
+
+  const supabase = createClient();
+  const { error } = await supabase.rpc("accept_family_guardian_invitation", {
+    p_invitation_id: invitationId,
+  });
+
+  if (error) {
+    return {
+      error: friendlyRpcError(
+        error,
+        "Nem sikerült elfogadni a meghívást. Próbáld újra."
+      ),
+    };
+  }
+
+  revalidatePath("/csalad");
+  revalidatePath("/profil");
+  return { success: true };
+}
+
+export async function declineGuardianInvitationAction(
+  _prevState: FamilyActionState,
+  formData: FormData
+): Promise<FamilyActionState> {
+  const { user } = await getCurrentUserAndProfile();
+  if (!user) return { error: "Nem vagy bejelentkezve." };
+
+  const invitationId = String(formData.get("invitationId") ?? "").trim();
+  if (!invitationId) return { error: "Hiányzó meghívás azonosító." };
+
+  const supabase = createClient();
+  const { error } = await supabase.rpc("decline_family_guardian_invitation", {
+    p_invitation_id: invitationId,
+  });
+
+  if (error) {
+    return {
+      error: friendlyRpcError(
+        error,
+        "Nem sikerült elutasítani a meghívást. Próbáld újra."
+      ),
+    };
+  }
+
+  revalidatePath("/csalad");
+  revalidatePath("/profil");
+  return { success: true };
+}
+
 function parseDaysOfWeek(formData: FormData): number[] {
   return formData
     .getAll("daysOfWeek")

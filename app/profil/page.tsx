@@ -3,6 +3,7 @@ import { UserCircle, Users, ArrowRight } from "lucide-react";
 import { getCurrentUserAndProfile, getOwnPlaces, getOwnReviews } from "@/lib/data";
 import { signOutAction } from "@/lib/actions/auth";
 import { hasFamilyBetaAccess } from "@/lib/family/config";
+import { hasAnyFamilyAccessSignal } from "@/lib/family/data";
 import ProfileNameForm from "@/components/ProfileNameForm";
 import PasswordChangeForm from "@/components/PasswordChangeForm";
 
@@ -38,7 +39,21 @@ export default async function ProfilePage() {
     );
   }
 
-  const [places, reviews] = await Promise.all([getOwnPlaces(user.id), getOwnReviews(user.id)]);
+  // KÖRKÖRÖS ONBOARDING-FÜGGŐSÉG JAVÍTÁSA (production hiba, 2026-10-01,
+  // lásd app/csalad/page.tsx részletes kommentjét) — a Család
+  // navigációs bejegyzés KIZÁRÓLAG a hasFamilyBetaAccess() szinkron
+  // flaget nézte, tehát egy meghívott (vagy már aktív, de nem béta-)
+  // guardian SOSE látta ezt a bejegyzést, hiába tudott volna belépni a
+  // /csalad oldalra. A hasAnyFamilyAccessSignal() egy könnyűsúlyú
+  // existence-check (lásd lib/family/data.ts) — ugyanaz a négy belépési
+  // pont (admin/beta/meghívás/aktív tagság), mint a /csalad oldalon.
+  const [places, reviews, hasFamilyAccess] = await Promise.all([
+    getOwnPlaces(user.id),
+    getOwnReviews(user.id),
+    hasFamilyBetaAccess(profile)
+      ? Promise.resolve(true)
+      : hasAnyFamilyAccessSignal(user.id, user.email),
+  ]);
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
@@ -72,7 +87,7 @@ export default async function ProfilePage() {
         />
       </div>
 
-      {hasFamilyBetaAccess(profile) && (
+      {hasFamilyAccess && (
         <Link
           href="/csalad"
           className="mt-8 flex items-center justify-between gap-3 rounded-2xl border border-gray-100 bg-white p-6 shadow-soft"

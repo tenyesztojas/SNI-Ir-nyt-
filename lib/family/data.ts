@@ -131,6 +131,123 @@ function normalizeToOneRelation<T>(value: T | T[] | null | undefined): T | null 
   return value ?? null;
 }
 
+// Owner-oldali nézet (lásd FamilyView.pendingGuardianInvitations) — ez
+// EGY a saját, meghívott e-mail-címre szóló, MÉG FÜGGŐ meghívást
+// modellez, amit a bejelentkezett userNEK KELL látnia, hogy
+// elfogadhassa/elutasíthassa (lásd GuardianInvitationInbox.tsx). A
+// familyName KIZÁRÓLAG megjelenítési célt szolgál ("Meghívták Önt a(z)
+// X család családhoz") — a tényleges elfogadás/elutasítás jogosultságát
+// NEM ez a lekérdezés, hanem az accept_family_guardian_invitation /
+// decline_family_guardian_invitation RPC-k saját, auth.email()-alapú
+// ellenőrzése adja (lásd lib/actions/family.ts).
+export type RecipientGuardianInvitationView = {
+  id: string;
+  familyId: string;
+  familyName: string | null;
+  createdAt: string;
+};
+
+// A /csalad oldal KÖRKÖRÖS onboarding-függőségének feloldásához (lásd a
+// hibajegyet: egy meghívott, NEM béta-userhez szóló meghívás korábban
+// SOSE volt látható, mert a teljes oldal a hasFamilyBetaAccess() kapun
+// bukott el, MIELŐTT egyáltalán lekérdezte volna a meghívásait) —
+// KIZÁRÓLAG a bejelentkezett user SAJÁT, szerveroldali (session-ből
+// jövő, SOHA nem böngészőből kapott) e-mail-címére szóló, MÉG FÜGGŐ
+// meghívásokat adja vissza. A family_guardian_invitations SELECT RLS
+// (is_family_owner(family_id) or lower(invited_email) =
+// lower(auth.email()), lásd
+// supabase/migrations/20260927_family_guardian_invitation_foundation.sql)
+// ÖNMAGÁBAN is garantálja, hogy egy user SOSE láthat más userhez szóló
+// meghívást — az alábbi explicit `.eq("invited_email", ...)` szűrés
+// ezen FELÜL, kifejezetten azért kell, hogy ez a lekérdezés
+// KIZÁRÓLAG a RECIPIENS-oldali sorokat adja vissza, NE az owner által
+// (a saját családjába) kiküldött, a RLS által ugyanúgy látható
+// meghívásokat is.
+export async function getPendingGuardianInvitationsForUser(
+  email: string | undefined | null
+): Promise<{ invitations: RecipientGuardianInvitationView[]; error?: string }> {
+  if (typeof email !== "string" || email.trim().length === 0) {
+    return { invitations: [] };
+  }
+  const emailNormalized = email.trim().toLowerCase();
+
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("family_guardian_invitations")
+    .select("id, family_id, created_at, families(name)")
+    .eq("invited_email", emailNormalized)
+    .eq("status", "pending")
+    .gt("expires_at", new Date().toISOString());
+
+  if (error) {
+    return { invitations: [], error: error.message };
+  }
+
+  const invitations: RecipientGuardianInvitationView[] = (data ?? []).map(
+    (row: {
+      id: string;
+      family_id: string;
+      created_at: string;
+      families: { name: string | null }[] | { name: string | null } | null;
+    }) => {
+      const family = normalizeToOneRelation(row.families);
+      return {
+        id: row.id,
+        familyId: row.family_id,
+        familyName: family?.name ?? null,
+        createdAt: row.created_at,
+      };
+    }
+  );
+
+  return { invitations };
+}
+
+// Könnyűsúlyú EXISTENCE-check a /profil navigációs Család-bejegyzés
+// gate-jéhez (lásd app/profil/page.tsx) — SZÁNDÉKOSAN NEM a teljes
+// getMyFamilies()/getPendingGuardianInvitationsForUser() lekérdezés-pár
+// (azok több JOIN-t és a teljes napirend-/engedély-adatot is betöltik,
+// ami egy puszta "van-e egyáltalán Family hozzáférésed" kérdéshez
+// felesleges terhelés lenne minden /profil betöltésnél). Mindkét al-
+// lekérdezés `.select("id").limit(1)`, és a MEGLÉVŐ RLS-ekre (lásd
+// family_members_select_* és
+// family_guardian_invitations_select_owner_or_recipient) támaszkodik —
+// ez a függvény csak a "van legalább egy sor" kérdést teszi fel, a
+// tényleges Family-adatbetöltést a /csalad oldal getMyFamilies()-e
+// végzi.
+export async function hasAnyFamilyAccessSignal(
+  userId: string,
+  email: string | undefined | null
+): Promise<boolean> {
+  const supabase = createClient();
+
+  const membershipCheck = supabase
+    .from("family_members")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("status", "active")
+    .limit(1);
+
+  const invitationCheck = typeof email === "string" && email.trim().length > 0
+    ? supabase
+        .from("family_guardian_invitations")
+        .select("id")
+        .eq("invited_email", email.trim().toLowerCase())
+        .eq("status", "pending")
+        .gt("expires_at", new Date().toISOString())
+        .limit(1)
+    : Promise.resolve({ data: [] as { id: string }[], error: null });
+
+  const [membershipRes, invitationRes] = await Promise.all([
+    membershipCheck,
+    invitationCheck,
+  ]);
+
+  return (
+    (membershipRes.data?.length ?? 0) > 0 || (invitationRes.data?.length ?? 0) > 0
+  );
+}
+
 export async function getMyFamilies(
   userId: string
 ): Promise<{ families: FamilyView[]; error?: string }> {
