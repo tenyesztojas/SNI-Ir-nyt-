@@ -96,6 +96,18 @@ export function normalizeHungarianTransitSpeech(text: string): string {
   result = result.replace(/\bM\s*\+\s*H\b/gi, "metró- és HÉV-állomás");
   result = result.replace(/\bM\b(?=\s+felé(?![a-zA-Z0-9])|[.,]|$)/g, "metróállomás");
 
+  // MEGÁLLÓNÉV-VÉGI BARE "H" JELZÉS (production hiba, 2026-10-01) — a "M"
+  // mintával TELJESEN azonos elv és azonos biztonsági korlát (lásd a fenti
+  // kommentet): KIZÁRÓLAG megállónév/destination kontextusban (a szó végén,
+  // "felé" előtt, mondatvégi írásjel előtt, vagy a szöveg végén) cseréljük,
+  // SOHA globális "H" betűcsere. A \bH\b-t követő lookahead (ugyanaz a
+  // mechanizmus, mint az "M" esetén) ÖNMAGÁBAN kizárja a "H5" (route-
+  // azonosító, lásd lejjebb a H(\d+) szabályt) és a "HÉV" szó eleji "H"-ját
+  // is: mindkét esetben a "H" UTÁN közvetlenül nem whitespace/felé/
+  // írásjel/szövegvég jön (hanem egy számjegy, ill. az "É" betű), tehát a
+  // lookahead ott nem illeszkedik — nincs szükség külön negatív feltételre.
+  result = result.replace(/\bH\b(?=\s+felé(?![a-zA-Z0-9])|[.,]|$)/g, "HÉV-állomás");
+
   // Metró: M2 -> "em kettes metró". REGRESSZIÓ-JAVÍTÁS (2026-10-01): az
   // instructions.ts routeLabel() a canonical szövegben már maga is
   // kiírja a jármű-szót (transitVehicleNoun(), pl. "M2 metró") — ha ezt a
@@ -144,6 +156,21 @@ export function normalizeHungarianTransitSpeech(text: string): string {
     (_, first: string, second: string) =>
       `${routeNumberToHungarian(first)}-${routeNumberToHungarian(second)} villamos`
   );
+
+  // "2 villamos" -> "kettes villamos" (production hiba, 2026-10-01) — a
+  // MEGLÉVŐ "{szám} busz" szabály (fent) villamos-megfelelője, SZÁNDÉKOSAN
+  // a fájl VÉGÉN: a fenti, specifikusabb villamos-mintáknak (betűjelzéses
+  // "56A villamos", tartomány "4-6-os villamos") előbb KELL lefutniuk, hogy
+  // ez az általánosabb minta ne "harapjon bele" egy tartomány MÁSODIK
+  // számjegyébe (pl. a "4-6-os villamos"-ban a "6-os villamos" rész önmagában
+  // is illeszkedne ERRE a mintára, és "4-hatos villamos" téves eredményt
+  // adna, ha ez előbb futna — ezért a sorrend itt NEM felcserélhető). Mire
+  // idáig jutunk, a "56A villamos"/"4-6-os villamos" alakok már
+  // transzformálva vannak, tehát bennük nincs már nyers "{szám} villamos"
+  // mintázat, amit ez a szabály újra elkaphatna.
+  result = result.replace(/\b(\d+)(?:-as|-es|-os|-ös)?\s+villamos\b/gi, (_, number: string) => {
+    return `${routeNumberToHungarian(number)} villamos`;
+  });
 
   return result;
 }

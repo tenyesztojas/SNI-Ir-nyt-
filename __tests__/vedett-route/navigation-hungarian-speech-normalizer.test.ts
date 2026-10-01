@@ -181,3 +181,57 @@ describe("REGRESSZIÓ — a canonical szöveg jármű-szava NEM duplikálódik",
     );
   });
 });
+
+// PRODUCTION HOTFIX (2026-10-01, "2 villamos" / megállónév-végi bare "H")
+// — a hibajegy élő production példája: a BOARD canonical szöveg
+// ("Szállj fel: 2 villamos – Közvágóhíd H felé") két, EDDIG kezeletlen
+// mintát tartalmazott: (1) sima "{szám} villamos" (a "{szám} busz"
+// szabálynak eddig nem volt villamos-megfelelője — a böngésző TTS ezért a
+// "2"-t kardinálisként ("kettő") mondta ki), (2) megállónév-végi bare "H"
+// (HÉV-állomás jelzés — eddig a betűt szó szerint "há"-ként ejtette ki,
+// összekeverve a H(\d+) JÁRAT-azonosító mintával, pl. "H5").
+describe("5) 'N villamos' sorszámnevesítése + megállónév-végi bare 'H' (HÉV-állomás)", () => {
+  test("'2 villamos' -> 'kettes villamos' (SOHA nem 'kettő villamos')", () => {
+    assert.equal(normalizeHungarianTransitSpeech("2 villamos"), "kettes villamos");
+  });
+
+  test("'Közvágóhíd H felé' -> 'Közvágóhíd HÉV-állomás felé' (SOHA nem 'Közvágóhíd há felé')", () => {
+    assert.equal(
+      normalizeHungarianTransitSpeech("Közvágóhíd H felé"),
+      "Közvágóhíd HÉV-állomás felé"
+    );
+  });
+
+  test("teljes production BOARD-szöveg: 'Szállj fel: 2 villamos – Közvágóhíd H felé'", () => {
+    assert.equal(
+      normalizeHungarianTransitSpeech("Szállj fel: 2 villamos – Közvágóhíd H felé"),
+      "Szállj fel: kettes villamos – Közvágóhíd HÉV-állomás felé"
+    );
+  });
+
+  test("a már javított megállónév-végi 'M' és 'M+H' NEM romlott el a bare 'H' szabály hozzáadásával", () => {
+    assert.equal(normalizeHungarianTransitSpeech("Móricz Zsigmond körtér M felé"), "Móricz Zsigmond körtér metróállomás felé");
+    assert.equal(normalizeHungarianTransitSpeech("Örs vezér tere M+H felé"), "Örs vezér tere metró- és HÉV-állomás felé");
+  });
+
+  test("a H(\\d+) JÁRAT-azonosító (pl. 'H5') NEM keveredik a megállónév-végi bare 'H'-val", () => {
+    assert.equal(normalizeHungarianTransitSpeech("H5"), "há ötös HÉV");
+    assert.equal(normalizeHungarianTransitSpeech("H5 vonat"), "há ötös HÉV");
+    assert.notEqual(normalizeHungarianTransitSpeech("H5"), "há ötös HÉV vonat");
+  });
+
+  test("'56A villamos' és '7 busz' NEM romlott el az új villamos-számnév-szabállyal", () => {
+    assert.equal(normalizeHungarianTransitSpeech("56A villamos"), "ötvenhatos A villamos");
+    assert.equal(normalizeHungarianTransitSpeech("7 busz"), "hetes busz");
+  });
+
+  test("'4-6-os villamos' tartomány NEM sérül az új, általánosabb '{szám} villamos' szabálytól (sorrend-regresszió)", () => {
+    assert.equal(normalizeHungarianTransitSpeech("4-6-os villamos"), "négyes-hatos villamos");
+    assert.notEqual(normalizeHungarianTransitSpeech("4-6-os villamos"), "4-hatos villamos");
+  });
+
+  test("'M2 metró' továbbra sem duplikálódik ('em kettes metró metró' SOHA)", () => {
+    assert.equal(normalizeHungarianTransitSpeech("M2 metró"), "em kettes metró");
+    assert.notEqual(normalizeHungarianTransitSpeech("M2 metró"), "em kettes metró metró");
+  });
+});
