@@ -1,6 +1,7 @@
 import type { FamilyView } from "@/lib/family/data";
 import AddChildForm from "@/components/family/AddChildForm";
 import ChildCard from "@/components/family/ChildCard";
+import GuardianManagement from "@/components/family/GuardianManagement";
 
 const ROLE_LABEL: Record<string, string> = {
   owner: "Tulajdonos",
@@ -49,6 +50,8 @@ export default function FamilyCard({ family }: { family: FamilyView }) {
 
         {family.myRole === "owner" && <AddChildForm familyId={family.id} />}
       </div>
+
+      {family.myRole === "owner" && <GuardianManagement family={family} />}
     </div>
   );
 }

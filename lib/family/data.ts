@@ -24,12 +24,23 @@ export type FamilyChildView = {
   birthYear: number | null;
 };
 
+export type PendingGuardianInvitationView = {
+  id: string;
+  invitedEmail: string;
+  createdAt: string;
+};
+
 export type FamilyView = {
   id: string;
   name: string | null;
   myRole: FamilyRole;
   members: FamilyMemberView[];
   children: FamilyChildView[];
+  // KIZÁRÓLAG owner szerepkör esetén töltött — lásd getMyFamilies():
+  // a lekérdezés is csak az owner-családokra szűkítve fut, nem csak a
+  // UI rejti guardian elől (lásd family_guardian_invitations RLS:
+  // supabase/migrations/20260927_family_guardian_invitation_foundation.sql).
+  pendingGuardianInvitations: PendingGuardianInvitationView[];
 };
 
 // ────────────────────────────────────────────────────────────────
@@ -90,7 +101,16 @@ export async function getMyFamilies(
     memberships.map((m) => [m.family_id as string, m.role as FamilyRole])
   );
 
-  const [familiesRes, membersRes, childrenRes] = await Promise.all([
+  // Függő gondviselő-meghívásokat KIZÁRÓLAG azokra a családokra
+  // kérdezzük le, amelyeknek a jelenlegi user aktív ownerje — a
+  // guardian-oldali RLS (lower(invited_email) = lower(auth.email()))
+  // egyébként is kiszűrné, de így eleve nem is futtatunk felesleges
+  // lekérdezést guardian-only családokra.
+  const ownerFamilyIds = familyIds.filter(
+    (id) => myRoleByFamily.get(id) === "owner"
+  );
+
+  const [familiesRes, membersRes, childrenRes, invitationsRes] = await Promise.all([
     supabase.from("families").select("id, name").in("id", familyIds),
     supabase
       .from("family_members")
@@ -101,12 +121,41 @@ export async function getMyFamilies(
       .from("family_children")
       .select("family_id, child_profiles(id, first_name, birth_year)")
       .in("family_id", familyIds),
+    ownerFamilyIds.length > 0
+      ? supabase
+          .from("family_guardian_invitations")
+          .select("id, family_id, invited_email, created_at")
+          .in("family_id", ownerFamilyIds)
+          .eq("status", "pending")
+      : Promise.resolve({
+          data: [] as {
+            id: string;
+            family_id: string;
+            invited_email: string;
+            created_at: string;
+          }[],
+          error: null,
+        }),
   ]);
 
   const firstError =
-    familiesRes.error || membersRes.error || childrenRes.error;
+    familiesRes.error || membersRes.error || childrenRes.error || invitationsRes.error;
   if (firstError) {
     return { families: [], error: firstError.message };
+  }
+
+  const pendingInvitationsByFamily = new Map<
+    string,
+    PendingGuardianInvitationView[]
+  >();
+  for (const invitation of invitationsRes.data ?? []) {
+    const list = pendingInvitationsByFamily.get(invitation.family_id) ?? [];
+    list.push({
+      id: invitation.id,
+      invitedEmail: invitation.invited_email,
+      createdAt: invitation.created_at,
+    });
+    pendingInvitationsByFamily.set(invitation.family_id, list);
   }
 
   const families: FamilyView[] = (familiesRes.data ?? []).map(
@@ -172,12 +221,17 @@ export async function getMyFamilies(
           birthYear: child.birth_year,
         }));
 
+      const myRole = myRoleByFamily.get(f.id) ?? "guardian";
       return {
         id: f.id,
         name: f.name,
-        myRole: myRoleByFamily.get(f.id) ?? "guardian",
+        myRole,
         members,
         children,
+        pendingGuardianInvitations:
+          myRole === "owner"
+            ? pendingInvitationsByFamily.get(f.id) ?? []
+            : [],
       };
     }
   );

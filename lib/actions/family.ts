@@ -184,3 +184,78 @@ export async function updateChildAction(
   revalidatePath("/csalad");
   return { success: true, childId };
 }
+
+export async function inviteGuardianAction(
+  _prevState: FamilyActionState,
+  formData: FormData
+): Promise<FamilyActionState> {
+  const { user, profile } = await getCurrentUserAndProfile();
+  if (!user) return { error: "Nem vagy bejelentkezve." };
+  if (!hasFamilyBetaAccess(profile)) {
+    return { error: "Ez a funkció még nem elérhető a fiókodhoz." };
+  }
+
+  const familyId = String(formData.get("familyId") ?? "").trim();
+  const emailRaw = String(formData.get("email") ?? "").trim();
+
+  if (!familyId) return { error: "Hiányzó család azonosító." };
+  if (!emailRaw) return { error: "Az e-mail-cím megadása kötelező." };
+
+  const supabase = createClient();
+  // KIZÁRÓLAG a meglévő invite_family_guardian(uuid,text) RPC — nincs
+  // kliensoldali/szerver akcióbeli direkt INSERT a
+  // family_guardian_invitations táblára. Az RPC saját maga ellenőrzi
+  // az owner jogosultságot, normalizálja és validálja az e-mail-t.
+  const { error } = await supabase.rpc("invite_family_guardian", {
+    p_family_id: familyId,
+    p_email: emailRaw,
+  });
+
+  if (error) {
+    return {
+      error: friendlyRpcError(
+        error,
+        "Nem sikerült elküldeni a meghívást. Próbáld újra."
+      ),
+    };
+  }
+
+  revalidatePath("/csalad");
+  return { success: true, familyId };
+}
+
+export async function revokeGuardianInvitationAction(
+  _prevState: FamilyActionState,
+  formData: FormData
+): Promise<FamilyActionState> {
+  const { user, profile } = await getCurrentUserAndProfile();
+  if (!user) return { error: "Nem vagy bejelentkezve." };
+  if (!hasFamilyBetaAccess(profile)) {
+    return { error: "Ez a funkció még nem elérhető a fiókodhoz." };
+  }
+
+  const invitationId = String(formData.get("invitationId") ?? "").trim();
+  if (!invitationId) return { error: "Hiányzó meghívás azonosító." };
+
+  const supabase = createClient();
+  // KIZÁRÓLAG a meglévő revoke_family_guardian_invitation(uuid) RPC —
+  // nincs kliensoldali/szerver akcióbeli direkt UPDATE a
+  // family_guardian_invitations táblára. Az RPC saját maga ellenőrzi,
+  // hogy a hívó a meghívás mögötti family aktív ownerje-e.
+  const { error } = await supabase.rpc("revoke_family_guardian_invitation", {
+    p_invitation_id: invitationId,
+  });
+
+  if (error) {
+    return {
+      error: friendlyRpcError(
+        error,
+        "Nem sikerült visszavonni a meghívást. Próbáld újra."
+      ),
+    };
+  }
+
+  revalidatePath("/csalad");
+  return { success: true };
+}
+
