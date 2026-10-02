@@ -8,7 +8,18 @@ import { hasFamilyBetaAccess } from "@/lib/family/config";
 export type FamilyActionState =
   | null
   | { error: string }
-  | { success: true; familyId?: string; childId?: string };
+  | {
+      success: true;
+      familyId?: string;
+      childId?: string;
+      // KIZÁRÓLAG a create_child_account_invitation RPC válaszában,
+      // EGYETLEN EGYSZER megjelenő plaintext token (lásd
+      // createChildAccountInvitationAction) — a DB SOSE tárolja
+      // plaintext formában (csak a SHA-256 hash-t, lásd
+      // supabase/migrations/20260927_child_account_foundation.sql).
+      // A kliens ebből állítja össze a gyermeknek továbbadandó linket.
+      childAccountInvitationToken?: string;
+    };
 
 const CURRENT_YEAR = new Date().getFullYear();
 
@@ -628,3 +639,180 @@ export async function deleteChildScheduleItemAction(
   return { success: true };
 }
 
+
+// ────────────────────────────────────────────────────────────────
+// Gyermekfiók — OWNER-oldali meghívás/visszavonás (lásd
+// supabase/migrations/20260927_child_account_foundation.sql). Ugyanaz
+// a beta-gate minta, mint a modul fenti összes owner-oldali actionjénél
+// — a create_child_account_invitation RPC saját maga is megköveteli a
+// has_pilot_access('family_db_beta')-t, a revoke_child_account_invitation
+// és a revoke_child_account RPC-k nem, de a konzisztencia kedvéért
+// (ugyanaz a UI-gate minden owner-oldali Family actionnél) ide is
+// kirakjuk.
+// ────────────────────────────────────────────────────────────────
+
+export async function createChildAccountInvitationAction(
+  _prevState: FamilyActionState,
+  formData: FormData
+): Promise<FamilyActionState> {
+  const { user, profile } = await getCurrentUserAndProfile();
+  if (!user) return { error: "Nem vagy bejelentkezve." };
+  if (!hasFamilyBetaAccess(profile)) {
+    return { error: "Ez a funkció még nem elérhető a fiókodhoz." };
+  }
+
+  const childId = String(formData.get("childId") ?? "").trim();
+  if (!childId) return { error: "Hiányzó gyermek azonosító." };
+
+  const supabase = createClient();
+  // KIZÁRÓLAG a meglévő create_child_account_invitation(uuid, integer)
+  // RPC — nincs kliensoldali/szerver akcióbeli direkt INSERT a
+  // child_account_invitations táblára. Az RPC saját maga ellenőrzi az
+  // owner jogosultságot, és a plaintext tokent KIZÁRÓLAG itt, a
+  // visszatérési értékben adja ki — a DB-ben csak a hash tárolódik.
+  const { data, error } = await supabase
+    .rpc("create_child_account_invitation", { p_child_id: childId })
+    .maybeSingle();
+
+  if (error) {
+    return {
+      error: friendlyRpcError(
+        error,
+        "Nem sikerült elkészíteni a gyermekfiók-meghívót. Próbáld újra."
+      ),
+    };
+  }
+  if (!data) {
+    return {
+      error: "Nem sikerült elkészíteni a gyermekfiók-meghívót. Próbáld újra.",
+    };
+  }
+
+  // A Supabase kliens (Database generic nélkül, lásd lib/family/data.ts
+  // fejléc-kommentjét) a table-visszatérésű RPC-k sorát `{}`-ként
+  // infereli fordítási időben — ugyanaz a type boundary-elv, mint a
+  // normalizeToOneRelation()-nél: EGYETLEN, explicit castban kezeljük,
+  // a függvény többi része nem `any`-vel dolgozik.
+  const invitationRow = data as { invitation_id: string; token: string; expires_at: string };
+
+  revalidatePath("/csalad");
+  return {
+    success: true,
+    childId,
+    childAccountInvitationToken: invitationRow.token,
+  };
+}
+
+export async function revokeChildAccountInvitationAction(
+  _prevState: FamilyActionState,
+  formData: FormData
+): Promise<FamilyActionState> {
+  const { user, profile } = await getCurrentUserAndProfile();
+  if (!user) return { error: "Nem vagy bejelentkezve." };
+  if (!hasFamilyBetaAccess(profile)) {
+    return { error: "Ez a funkció még nem elérhető a fiókodhoz." };
+  }
+
+  const invitationId = String(formData.get("invitationId") ?? "").trim();
+  if (!invitationId) return { error: "Hiányzó meghívás azonosító." };
+
+  const supabase = createClient();
+  // KIZÁRÓLAG a meglévő revoke_child_account_invitation(uuid) RPC — az
+  // RPC saját maga ellenőrzi, hogy a hívó a meghívás mögötti child
+  // family aktív ownerje-e, és hogy a meghívó még pending státuszú.
+  const { error } = await supabase.rpc("revoke_child_account_invitation", {
+    p_invitation_id: invitationId,
+  });
+
+  if (error) {
+    return {
+      error: friendlyRpcError(
+        error,
+        "Nem sikerült visszavonni a gyermekfiók-meghívót. Próbáld újra."
+      ),
+    };
+  }
+
+  revalidatePath("/csalad");
+  return { success: true };
+}
+
+// FONTOS: a revoke_child_account(uuid) RPC a visszavonást VÉGLEGESEN
+// rögzíti — a child_accounts_guard_status_transition trigger (lásd
+// supabase/migrations/20260927_child_account_foundation.sql) blokkol
+// minden revoked -> bármi átmenetet, tehát ez a leválasztás NEM
+// vonható vissza egy új meghívó elfogadásával sem (a child_accounts
+// sor child_id-ja unique, és a meglévő, revoked sor megmarad). Ez a UI
+// (ChildAccountSection.tsx) szövegében is jelzi.
+export async function revokeChildAccountAction(
+  _prevState: FamilyActionState,
+  formData: FormData
+): Promise<FamilyActionState> {
+  const { user, profile } = await getCurrentUserAndProfile();
+  if (!user) return { error: "Nem vagy bejelentkezve." };
+  if (!hasFamilyBetaAccess(profile)) {
+    return { error: "Ez a funkció még nem elérhető a fiókodhoz." };
+  }
+
+  const childId = String(formData.get("childId") ?? "").trim();
+  if (!childId) return { error: "Hiányzó gyermek azonosító." };
+
+  const supabase = createClient();
+  // KIZÁRÓLAG a meglévő revoke_child_account(uuid) RPC — az RPC saját
+  // maga ellenőrzi, hogy a hívó a child family aktív ownerje-e.
+  const { error } = await supabase.rpc("revoke_child_account", {
+    p_child_id: childId,
+  });
+
+  if (error) {
+    return {
+      error: friendlyRpcError(
+        error,
+        "Nem sikerült leválasztani a gyermekfiókot. Próbáld újra."
+      ),
+    };
+  }
+
+  revalidatePath("/csalad");
+  return { success: true, childId };
+}
+
+// ────────────────────────────────────────────────────────────────
+// Gyermekfiók — MEGHÍVOTT (a tokent birtokló) oldali elfogadás.
+// SZÁNDÉKOSAN NEM gateli hasFamilyBetaAccess()-szel — ugyanaz az elv,
+// mint acceptGuardianInvitationAction-nél fent: egy meghívott gyermek
+// NEM feltétlenül béta-user, és a tényleges jogosultságot a MEGLÉVŐ
+// accept_child_account_invitation(text) RPC saját ellenőrzése adja
+// (auth.uid() + "nincs már aktív family_members sora" check — lásd
+// supabase/migrations/20260927_child_account_foundation.sql), nem ez a
+// szerveroldali action. A kliens KIZÁRÓLAG a tokent küldi (amit a
+// szülőtől, out-of-band kapott linkből olvasott ki) — a szerver sosem
+// "hisz el" semmilyen felhasználó-/gyermek-azonosítót a formData-ból.
+export async function acceptChildAccountInvitationAction(
+  _prevState: FamilyActionState,
+  formData: FormData
+): Promise<FamilyActionState> {
+  const { user } = await getCurrentUserAndProfile();
+  if (!user) return { error: "Nem vagy bejelentkezve." };
+
+  const token = String(formData.get("token") ?? "").trim();
+  if (!token) return { error: "Hiányzó vagy érvénytelen meghívó link." };
+
+  const supabase = createClient();
+  const { error } = await supabase.rpc("accept_child_account_invitation", {
+    p_token: token,
+  });
+
+  if (error) {
+    return {
+      error: friendlyRpcError(
+        error,
+        "Nem sikerült elfogadni a gyermekfiók-meghívást. Próbáld újra."
+      ),
+    };
+  }
+
+  revalidatePath("/csalad");
+  revalidatePath("/profil");
+  return { success: true };
+}

@@ -2,6 +2,7 @@ import type { FamilyView } from "@/lib/family/data";
 import AddChildForm from "@/components/family/AddChildForm";
 import ChildCard from "@/components/family/ChildCard";
 import ChildScheduleSection from "@/components/family/ChildScheduleSection";
+import ChildAccountSection from "@/components/family/ChildAccountSection";
 import GuardianManagement from "@/components/family/GuardianManagement";
 
 const ROLE_LABEL: Record<string, string> = {
@@ -55,6 +56,13 @@ export default function FamilyCard({ family }: { family: FamilyView }) {
                   child={child}
                   canManage={child.canManageSchedule}
                 />
+                {family.myRole === "owner" && child.accountStatus && (
+                  <ChildAccountSection
+                    childId={child.id}
+                    childFirstName={child.firstName}
+                    accountStatus={child.accountStatus}
+                  />
+                )}
               </div>
             ))}
           </div>

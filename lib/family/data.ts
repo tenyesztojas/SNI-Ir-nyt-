@@ -51,6 +51,13 @@ export type FamilyChildView = {
   // felépítését getMyFamilies()-ben).
   canManageSchedule: boolean;
   scheduleItems: ChildScheduleItemView[];
+  // Owner-only (lásd a ChildAccountStatusView kommentjét) —
+  // guardian-családoknál mindig null, ugyanazon elv alapján, mint a
+  // guardianChildSchedulePermissions mezőnél: ez egy owner-only
+  // account-kezelő UI adatforrása, nem egy általános olvasási nézet.
+  // A getLinkedChildSelfView() által visszaadott gyermek-saját nézetnél
+  // is mindig null (ott nincs értelme).
+  accountStatus: ChildAccountStatusView | null;
 };
 
 export type PendingGuardianInvitationView = {
@@ -77,6 +84,20 @@ export type GuardianChildSchedulePermissionView = {
   canViewSchedule: boolean;
   canManageSchedule: boolean;
 };
+
+// Owner-only — egy (owner, child) pár gyermekfiók-állapota. "none":
+// nincs sem child_accounts sor, sem pending meghívó. "pending_invitation":
+// van egy MÉG FÜGGŐ (nem lejárt) child_account_invitations sor.
+// "active": van egy NEM visszavont (active/suspended) child_accounts
+// sor. Lásd supabase/migrations/20260927_child_account_foundation.sql —
+// a jelenlegi RPC-foundation semelyik meglévő RPC-vel sem hoz létre
+// 'pending' vagy 'suspended' állapotú child_accounts sort
+// (accept_child_account_invitation mindig 'active'-ot insertál), ezért
+// ez a típus csak a valóban előforduló három állapotot modellezi.
+export type ChildAccountStatusView =
+  | { kind: "none" }
+  | { kind: "pending_invitation"; invitationId: string; expiresAt: string }
+  | { kind: "active"; accountId: string };
 
 export type FamilyView = {
   id: string;
@@ -238,13 +259,30 @@ export async function hasAnyFamilyAccessSignal(
         .limit(1)
     : Promise.resolve({ data: [] as { id: string }[], error: null });
 
-  const [membershipRes, invitationRes] = await Promise.all([
+  // ÚJ: linkelt, AKTÍV child_accounts sor is önálló belépési pont — egy
+  // gyermek-saját userhez SOSE lesz family_members sora (lásd
+  // accept_child_account_invitation RPC: explicit blokkolja, ha a
+  // hívónak már van aktív family_members sora, és SOSE hoz létre
+  // ilyet), tehát a membershipCheck ág önmagában SOSE adna neki
+  // hozzáférést — ez a harmadik, egymástól független belépési pont
+  // (lásd app/csalad/page.tsx getLinkedChildSelfView()-ra épülő ágát).
+  const childAccountCheck = supabase
+    .from("child_accounts")
+    .select("id")
+    .eq("auth_user_id", userId)
+    .eq("status", "active")
+    .limit(1);
+
+  const [membershipRes, invitationRes, childAccountRes] = await Promise.all([
     membershipCheck,
     invitationCheck,
+    childAccountCheck,
   ]);
 
   return (
-    (membershipRes.data?.length ?? 0) > 0 || (invitationRes.data?.length ?? 0) > 0
+    (membershipRes.data?.length ?? 0) > 0 ||
+    (invitationRes.data?.length ?? 0) > 0 ||
+    (childAccountRes.data?.length ?? 0) > 0
   );
 }
 
@@ -474,6 +512,63 @@ export async function getMyFamilies(
     }
   }
 
+  // Owner-only: az összes SAJÁT (owner által birtokolt) gyermekhez
+  // tartozó gyermekfiók-állapot (child_accounts / child_account_
+  // invitations) — ez adja a "Gyermekfiók" szekció UI-jának adatát
+  // (lásd ChildAccountSection.tsx). KIZÁRÓLAG owner-családok gyermek
+  // azonosítóira kérdezünk (ownerChildIds) — ugyanaz a minta, mint a
+  // guardianChildSchedulePermissionsByFamily-nál fent. A child_accounts
+  // SELECT RLS (auth_user_id = auth.uid() or is_child_family_owner(child_id))
+  // és a child_account_invitations SELECT RLS
+  // (is_child_family_owner(child_id)) — mindkettő lásd
+  // supabase/migrations/20260927_child_account_foundation.sql — ownerként
+  // mindig visszaadja a saját gyermekeihez tartozó sorokat; guardian-
+  // családokra nem kérdezünk (ott a mezőt a data loader lent explicit
+  // null-lal tölti).
+  const childAccountStatusByChildId = new Map<string, ChildAccountStatusView>();
+  if (ownerChildIds.length > 0) {
+    const [childAccountsRes, childInvitationsRes] = await Promise.all([
+      supabase
+        .from("child_accounts")
+        .select("id, child_id, status")
+        .in("child_id", ownerChildIds)
+        .neq("status", "revoked"),
+      supabase
+        .from("child_account_invitations")
+        .select("id, child_id, status, expires_at")
+        .in("child_id", ownerChildIds)
+        .eq("status", "pending")
+        .gt("expires_at", new Date().toISOString()),
+    ]);
+
+    if (childAccountsRes.error) {
+      return { families: [], error: childAccountsRes.error.message };
+    }
+    if (childInvitationsRes.error) {
+      return { families: [], error: childInvitationsRes.error.message };
+    }
+
+    // Pending meghívó előbb, aktív account UTÓBB írja felül — egy
+    // childhoz legfeljebb egy nem-revoked account és legfeljebb egy
+    // pending meghívó létezhet egyszerre (lásd a child_accounts
+    // child_id unique constraint-ját és a child_account_invitations
+    // "egy pending per child" egyedi indexét), tehát ez a sorrend csak
+    // a gyakorlatban elő nem forduló átmeneti állapotok esetén dönt.
+    for (const row of childInvitationsRes.data ?? []) {
+      childAccountStatusByChildId.set(row.child_id, {
+        kind: "pending_invitation",
+        invitationId: row.id,
+        expiresAt: row.expires_at,
+      });
+    }
+    for (const row of childAccountsRes.data ?? []) {
+      childAccountStatusByChildId.set(row.child_id, {
+        kind: "active",
+        accountId: row.id,
+      });
+    }
+  }
+
   // Óra-string normalizálás: a Postgres `time` oszlop PostgREST-en
   // keresztül "HH:MM:SS"-t ad vissza, a UI viszont "HH:MM"-et vár
   // (HTML <input type="time"> defaultValue-hoz) — a másodperc-rész
@@ -600,6 +695,10 @@ export async function getMyFamilies(
           canManageSchedule:
             myRole === "owner" || canManageScheduleByChild.get(child.id) === true,
           scheduleItems: scheduleItemsByChild.get(child.id) ?? [],
+          accountStatus:
+            myRole === "owner"
+              ? childAccountStatusByChildId.get(child.id) ?? { kind: "none" }
+              : null,
         }))
         // Gyermekek mindig születési év szerint NÖVEKVŐ sorrendben
         // (legidősebb elöl) — ismeretlen (null) születési évvel
@@ -638,4 +737,161 @@ export async function getMyFamilies(
   );
 
   return { families };
+}
+
+// Gyermek-saját (child-self) nézet — KIZÁRÓLAG a bejelentkezett userhez
+// LINKELT, AKTÍV child_accounts sor alapján (lásd
+// supabase/migrations/20260927_child_account_foundation.sql). Ez a
+// lekérdezés SOSE megy a family_children/family_members táblákon
+// keresztül — nincs is rá szükség: a child_profiles és
+// child_schedule_items SELECT RLS mindkettő tartalmaz egy dedikált
+// child-self ágat (exists (... ca.auth_user_id = auth.uid() and
+// ca.status = 'active' ...)), lásd
+// 20261001_family_schedule_authorization_completion.sql és
+// 20260927_guardian_child_permission_hardening_v1.sql — tehát egy
+// linkelt gyermek-account KÖZVETLENÜL, a family_members tábla
+// megkerülésével (amibe egyébként SOSE kerül be, lásd
+// accept_child_account_invitation RPC) látja a SAJÁT gyermekprofilját
+// és napirendjét. canManageSchedule mindig false (a gyermek sosem
+// módosíthatja a saját napirendjét — a child_schedule_items
+// UPDATE/DELETE RLS-ben NINCS child-self ág), accountStatus mindig
+// null (az owner-only, itt nincs értelme).
+export async function getLinkedChildSelfView(
+  userId: string
+): Promise<{ child: FamilyChildView | null; error?: string }> {
+  const supabase = createClient();
+
+  const { data: accountRow, error: accountError } = await supabase
+    .from("child_accounts")
+    .select("child_id")
+    .eq("auth_user_id", userId)
+    .eq("status", "active")
+    .maybeSingle();
+
+  if (accountError) {
+    return { child: null, error: accountError.message };
+  }
+  if (!accountRow) {
+    return { child: null };
+  }
+
+  const childId = accountRow.child_id as string;
+
+  const [profileRes, scheduleRes] = await Promise.all([
+    supabase
+      .from("child_profiles")
+      .select("id, first_name, birth_year")
+      .eq("id", childId)
+      .maybeSingle(),
+    supabase
+      .from("child_schedule_items")
+      .select(
+        "id, child_id, title, description, schedule_type, start_date, end_date, time_local, arrival_time_local, days_of_week, origin_label, destination_label, is_active"
+      )
+      .eq("child_id", childId),
+  ]);
+
+  if (profileRes.error) {
+    return { child: null, error: profileRes.error.message };
+  }
+  if (scheduleRes.error) {
+    return { child: null, error: scheduleRes.error.message };
+  }
+  if (!profileRes.data) {
+    return { child: null };
+  }
+
+  function toHourMinute(value: string): string {
+    return value.length >= 5 ? value.slice(0, 5) : value;
+  }
+
+  const scheduleItems: ChildScheduleItemView[] = (scheduleRes.data ?? [])
+    .map(
+      (row: {
+        id: string;
+        title: string;
+        description: string | null;
+        schedule_type: string;
+        start_date: string | null;
+        end_date: string | null;
+        time_local: string;
+        arrival_time_local: string | null;
+        days_of_week: number[] | null;
+        origin_label: string | null;
+        destination_label: string | null;
+        is_active: boolean;
+      }) => ({
+        id: row.id,
+        title: row.title,
+        description: row.description,
+        scheduleType: row.schedule_type as ScheduleType,
+        startDate: row.start_date,
+        endDate: row.end_date,
+        timeLocal: toHourMinute(row.time_local),
+        arrivalTimeLocal: row.arrival_time_local
+          ? toHourMinute(row.arrival_time_local)
+          : null,
+        daysOfWeek: row.days_of_week,
+        originLabel: row.origin_label,
+        destinationLabel: row.destination_label,
+        isActive: row.is_active,
+      })
+    )
+    .sort((a, b) => {
+      if (a.timeLocal !== b.timeLocal) {
+        return a.timeLocal < b.timeLocal ? -1 : 1;
+      }
+      return a.id.localeCompare(b.id);
+    });
+
+  return {
+    child: {
+      id: profileRes.data.id,
+      firstName: profileRes.data.first_name,
+      birthYear: profileRes.data.birth_year,
+      canManageSchedule: false,
+      scheduleItems,
+      accountStatus: null,
+    },
+  };
+}
+
+// Biztonságos, token-kapuzott előnézet egy gyermekfiók-meghívóhoz —
+// KIZÁRÓLAG a meglévő preview_child_account_invitation(text) RPC-t
+// hívja (lásd supabase/migrations/20261002_child_account_invitation_
+// preview.sql). Ez a RPC anon-nak is futtatható (lásd a migráció
+// GRANT-kommentjét), ezért ez a függvény bejelentkezés ELŐTT és UTÁN
+// is biztonságosan hívható — a nagy entrópiájú token maga a
+// jogosultság, nem a bejelentkezett session. Érvénytelen/lejárt/
+// visszavont/már elfogadott token esetén a RPC nulla sort ad vissza —
+// ezt egyetlen, megkülönböztethetetlen `{ preview: null }` válaszként
+// adjuk tovább, hogy a hívó oldal (app/gyermek-meghivo/page.tsx) NE
+// tudjon információt szivárogtatni arról, hogy egy adott token valaha
+// is létezett-e.
+export type ChildAccountInvitationPreviewView = {
+  childFirstName: string;
+};
+
+export async function previewChildAccountInvitation(
+  token: string
+): Promise<{ preview: ChildAccountInvitationPreviewView | null; error?: string }> {
+  const trimmed = token.trim();
+  if (!trimmed) {
+    return { preview: null };
+  }
+
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .rpc("preview_child_account_invitation", { p_token: trimmed })
+    .maybeSingle();
+
+  if (error) {
+    return { preview: null, error: error.message };
+  }
+  if (!data) {
+    return { preview: null };
+  }
+
+  const row = data as { child_first_name: string };
+  return { preview: { childFirstName: row.child_first_name } };
 }
