@@ -37,7 +37,7 @@
 // diagnosztikában megkülönböztethetetlen volt.
 
 import { NextResponse } from "next/server";
-import { requireVedettRouteAccess } from "@/lib/vedett-route/access";
+import { requireVedettRoutePublicRead } from "@/lib/vedett-route/access";
 import { restStopRouteToRestPointSchema } from "@/lib/vedett-route/restStopFlow/schemas";
 import { listOwnRestPoints } from "@/lib/rest-points/queries";
 import { getApprovedPlaces } from "@/lib/data";
@@ -49,7 +49,7 @@ import { fetchMotisPlan } from "@/lib/vedett-route/motisClient";
 import { mapMotisItineraryToJourney } from "@/lib/vedett-route/orchestrator";
 
 export async function POST(request: Request) {
-  const auth = await requireVedettRouteAccess();
+  const auth = await requireVedettRoutePublicRead(request, { label: "rest-route-to-point", limit: 20, windowMs: 60_000 });
   if (!auth.ok) return auth.response;
 
   const body = await request.json().catch(() => null);
@@ -65,7 +65,9 @@ export async function POST(request: Request) {
   // Csak azt a forrást kérdezzük le, amelyikre TÉNYLEGESEN szükség van —
   // OSM esetén nincs DB-hívás egyáltalán (lásd resolveRestPoint.ts
   // "AUTHORITATIVE SOURCE" szakasza).
-  const ownPoints = ref.source === "USER" ? await listOwnRestPoints() : [];
+  // Anonim hívónak (auth.userId === null) nincs saját pihenőpontja — nem is
+  // hívjuk a DB-t; a resolveSelectedRestPoint() ilyenkor null-t ad -> 404.
+  const ownPoints = ref.source === "USER" && auth.userId !== null ? await listOwnRestPoints() : [];
   const places = ref.source === "VEDETT_SAROK" ? await getApprovedPlaces() : [];
   const restPoint = resolveSelectedRestPoint(ref, { ownPoints, places });
   if (!restPoint) {

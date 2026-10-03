@@ -63,7 +63,8 @@ test("RestStopFlowPanel.tsx sosem hívja közvetlenül a MOTIS-t vagy a route se
 test("a rest-stop API route-ok mindegyike a requireVedettRouteAccess() jogosultság-ellenőrzésen keresztül fut (nincs védetlen végpont)", () => {
   for (const file of REST_STOP_API_FILES) {
     const src = read(file);
-    assert.match(src, /requireVedettRouteAccess\(\)/, `${file}: hiányzik a requireVedettRouteAccess() hívás`);
+    assert.match(src, /const auth = await requireVedettRoutePublicRead\(request, /, `${file}: hiányzik a requireVedettRoutePublicRead() guard-hívás`);
+    assert.match(src, /if \(!auth\.ok\) return auth\.response;/, `${file}: a guard eredményét a route-nak kötelezően ellenőriznie kell`);
   }
 });
 

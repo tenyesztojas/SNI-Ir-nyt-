@@ -49,6 +49,13 @@
 // kereső, SOSEM crash). A `searchParams` prop szinkron objektum, ugyanúgy,
 // mint app/helyek/page.tsx-ben — nem hozunk létre eltérő konvenciót.
 
+// FRISSÍTÉS (2026-10-03, PUBLIC READ-ONLY ROUTING): VEDETT_ROUTE_ACCESS_LEVEL
+// = "public" -> az anonim látogató is a kereső alap, CSAK-OLVASÓ
+// workspace-ét kapja (isAuthenticated=false: nincs kedvenc/saját pihenőpont
+// UI). A fenti, "csak bejelentkezve" megfogalmazások a ZÁRTABB szintekre
+// (authenticated_users/beta_testers/admin_only) érvényesek. A tényleges
+// védelem az API-n van: írás/perzisztencia 401, admin végpont 401/403.
+
 import Link from "next/link";
 import { Bus, Footprints, Repeat2, HeartPulse, MapPinned, Sparkles, ArrowRight } from "lucide-react";
 import { getCurrentUserAndProfile } from "@/lib/data";
@@ -124,7 +131,10 @@ export default async function VedettUtvonalPage({
   // látogató csak statikus, marketing jellegű bemutatót kap, valamint egy
   // CTA-t, ami a meglévő /belepes?next=/vedett-utvonal mintát használja
   // (lásd pl. app/vedett-karrier/munkaprofil/page.tsx, app/akademia/layout.tsx).
-  if (!user) {
+  // PUBLIC READ-ONLY (2026-10-03): "public" szinten az anonim látogató is a
+  // kereső alap (csak-olvasó) workspace-ét kapja — a bemutató oldal csak
+  // zártabb szinteken (authenticated_users/beta_testers/admin_only) marad.
+  if (!user && VEDETT_ROUTE_ACCESS_LEVEL !== "public") {
     return (
       <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6 sm:py-14">
         <div className="flex flex-wrap items-center gap-3">
@@ -176,7 +186,7 @@ export default async function VedettUtvonalPage({
   //   beta_testers         -> hasVedettRouteBetaAccess() (admin VAGY grant)
   //   egyéb (admin_only)    -> csak admin
   const hasLevelAccess: boolean =
-    VEDETT_ROUTE_ACCESS_LEVEL === "authenticated_users"
+    VEDETT_ROUTE_ACCESS_LEVEL === "public" || VEDETT_ROUTE_ACCESS_LEVEL === "authenticated_users"
       ? true
       : VEDETT_ROUTE_ACCESS_LEVEL === "beta_testers"
         ? hasVedettRouteBetaAccess(
@@ -220,13 +230,22 @@ export default async function VedettUtvonalPage({
         A Védett Útvonal jelenleg tesztelés alatt áll. Az útvonal- és pihenőpont-adatok
         pontatlanok lehetnek.
       </p>
+      {!user && (
+        <p className="mt-1 text-sm text-gray-600">
+          Bejelentkezés nélkül az alap útvonaltervezés használható.{" "}
+          <Link href="/belepes?next=%2Fvedett-utvonal" className="font-semibold text-sni-brand-blue hover:underline">
+            Bejelentkezéssel
+          </Link>{" "}
+          kedvenc útvonalakat és saját pihenőpontokat is menthetsz.
+        </p>
+      )}
 
       <div className="mt-6 space-y-6">
         {/* Kedvenc útvonalak (2026-09-09) — a lista a kereső FÖLÖTT jelenik
             meg (spec 34. pont illusztratív UX flow-ja). A
             VedettUtvonalWorkspace felelős a "1 kattintásos újratervezés"
             React-key-remount mintájáért — lásd a komponens fejlécét. */}
-        <VedettUtvonalWorkspace disabled={!enabled} initialDestination={initialDestination} />
+        <VedettUtvonalWorkspace disabled={!enabled} initialDestination={initialDestination} isAuthenticated={Boolean(user)} />
       </div>
     </div>
   );

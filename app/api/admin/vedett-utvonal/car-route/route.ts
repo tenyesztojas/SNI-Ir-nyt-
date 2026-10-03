@@ -13,7 +13,7 @@
 
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireVedettRouteAccess } from "@/lib/vedett-route/access";
+import { requireVedettRoutePublicRead } from "@/lib/vedett-route/access";
 import { geocodeAddress, isAmbiguousGeocodeResult } from "@/lib/vedett-route/geocode";
 import {
   normalizeCarRoute as normalizeCarRouteData,
@@ -40,7 +40,7 @@ function normalizeCarRoute(route: RawMapboxRoute) {
 }
 
 export async function POST(request: Request) {
-  const auth = await requireVedettRouteAccess();
+  const auth = await requireVedettRoutePublicRead(request, { label: "car-route", limit: 10, windowMs: 60_000 });
   if (!auth.ok) return auth.response;
 
   const body = await request.json().catch(() => null);

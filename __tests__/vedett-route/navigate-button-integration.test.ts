@@ -345,7 +345,7 @@ describe("L) nincs saját auth/pilot_access logika a NavigateButtonban", () => {
 
   test("app/vedett-utvonal/page.tsx-en a bejelentkezés-ellenőrzés VÁLTOZATLANUL a KÖZÖS getCurrentUserAndProfile() hívást használja (nem a NavigateButton/deep-link integráció hoz létre egy második, párhuzamos auth-ágat) — a kijelentkezett ág mostantól publikus bemutatót renderel redirect helyett (2026-09-23, lásd riport 3. pont)", () => {
     assert.match(vedettUtvonalPageSrc, /const \{ user, profile \} = await getCurrentUserAndProfile\(\);/);
-    assert.match(vedettUtvonalPageSrc, /if \(!user\) \{/);
+    assert.match(vedettUtvonalPageSrc, /if \(!user && VEDETT_ROUTE_ACCESS_LEVEL !== "public"\) \{/);
   });
 });
 

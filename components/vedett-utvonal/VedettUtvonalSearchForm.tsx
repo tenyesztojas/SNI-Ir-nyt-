@@ -702,10 +702,13 @@ function RankedJourneyCard({
   isOpen,
   onToggleMap,
   serviceAlerts,
+  isAuthenticated,
 }: {
   ranked: RankedJourney;
   isOpen: boolean;
   onToggleMap: () => void;
+  // false = anonim (public read-only) mód: saját pihenőpont-hozzáadás UI rejtve.
+  isAuthenticated: boolean;
   // SPRINT 8.5 (ROUTE-SPECIFIC DISRUPTION -> LIVE ALTERNATIVE, 2026-09-19) —
   // a LEGKISEBB adatút: a szülő `result` state-je (a keresési válasz) MÁR
   // tartalmazza a BKK Alerts.pb-ből származó `serviceAlerts`-t (lásd
@@ -3105,8 +3108,14 @@ function RankedJourneyCard({
                   ismételten mode-váltáskor sem a saját belső logikáját nem
                   módosítottuk — csak a szülő dönt arról, hogy a JSX-fába
                   egyáltalán belekerüljön-e. */}
-              {restPanelMode === "ADD" && (
-                <RestPointQuickAdd onCreated={(rp) => setSessionRestPoints((points) => [...points, rp])} />
+              {/* Anonim (public read-only) módban a saját pihenőpont-hozzáadás UI nem
+                  jelenik meg — az API (POST /api/rest-points) ettől függetlenül 401. */}
+              {isAuthenticated && (
+                <>
+                  {restPanelMode === "ADD" && (
+                    <RestPointQuickAdd onCreated={(rp) => setSessionRestPoints((points) => [...points, rp])} />
+                  )}
+                </>
               )}
 
               {/* Sprint E — "Pihenőre van szükségem": az eredeti célt a
@@ -3330,8 +3339,12 @@ export default function VedettUtvonalSearchForm({
   disabled,
   initialDestination = null,
   initialFavoritePreset = null,
+  isAuthenticated = true,
 }: {
   disabled: boolean;
+  // false = anonim (public read-only) mód — kedvenc-mentés és saját
+  // pihenőpont-hozzáadás UI elrejtve (az API 401-gyel védi). Alapért.: true.
+  isAuthenticated?: boolean;
   // Védett Hely "Navigálj oda" -> Védett Útvonal integráció (2026-09-09).
   // Az /vedett-utvonal oldal (app/vedett-utvonal/page.tsx) adja át, MÁR
   // validáltan (lásd routeDestinationDeepLinkSchema) — ez a komponens
@@ -4571,6 +4584,7 @@ export default function VedettUtvonalSearchForm({
             alatt) — ez itt egy ERŐS MÁSODLAGOS CTA, vizuálisan
             visszafogottabb, de mobilon is jól érinthető (≥44px touch
             target, közel teljes szélesség), sosem apró link-jellegű. */}
+        {isAuthenticated && (
         <div className="rounded border border-dashed border-gray-300 p-3">
           {favoriteSaveState === "saved" ? (
             // Mentés után (spec 10. pont): a szív ÖNMAGÁBAN nem hordoz
@@ -4638,6 +4652,7 @@ export default function VedettUtvonalSearchForm({
             <p className="mt-1 text-xs text-amber-700">{favoriteSaveMessage}</p>
           )}
         </div>
+        )}
 
         {disabled && (
           <p className="text-sm text-amber-700">
@@ -4921,6 +4936,7 @@ export default function VedettUtvonalSearchForm({
               isOpen={openIndex === i}
               onToggleMap={() => setOpenIndex((prev) => (prev === i ? null : i))}
               serviceAlerts={result.serviceAlerts}
+              isAuthenticated={isAuthenticated}
             />
           ))}
         </div>

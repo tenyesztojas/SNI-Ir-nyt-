@@ -22,7 +22,7 @@ export interface FindNearbyParams {
   latitude: number;
   longitude: number;
   radiusMeters: number;
-  userId: string;
+  userId: string | null;
 }
 
 // A provider SOSEM dob tovább nyers hibát a hívónak — mindig egy

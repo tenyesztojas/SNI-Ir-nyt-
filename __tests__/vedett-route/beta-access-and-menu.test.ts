@@ -300,7 +300,7 @@ describe("H/I/J) menü gating — HeaderClient.tsx", () => {
 
 describe("K) szerver oldali oldal- és API-védelem — közös access guard", () => {
   test("app/vedett-utvonal/page.tsx: kijelentkezett felhasználó NEM kap redirect('/belepes')-t, hanem a publikus bemutatót látja, CTA-val a /belepes?next=... felé (2026-09-23 frissítés, lásd riport 3. pont)", () => {
-    assert.match(pageSrc, /if \(!user\) \{/);
+    assert.match(pageSrc, /if \(!user && VEDETT_ROUTE_ACCESS_LEVEL !== "public"\) \{/);
     assert.doesNotMatch(pageSrc, /if \(!user\) \{\s*redirect\("\/belepes"\);/);
     assert.match(pageSrc, /href="\/belepes\?next=%2Fvedett-utvonal"/);
   });
@@ -352,19 +352,23 @@ describe("K) szerver oldali oldal- és API-védelem — közös access guard", (
   });
 
   test("K) mind a Védett Útvonal API route-ok a KÖZÖS requireVedettRouteAccess()-en keresztül futnak — a szint-váltás egyetlen access.ts/config.ts módosítással minden route-ra érvényes, route-fájlokat nem kellett módosítani", () => {
-    const apiRoutePaths = [
+    // FRISSÍTVE (2026-10-03, public read-only routing): a felhasználó-specifikus
+    // (írás/perzisztencia) route-ok a requireVedettRouteAccess()-t, az alap
+    // csak-olvasó pihenőpont-keresés route-ok a requireVedettRoutePublicRead()-et
+    // hívják — mindkettő ugyanabból az access.ts-ből, ugyanazzal a policy-val.
+    const userTierPaths = [
       join(ROOT, "app", "api", "rest-points", "route.ts"),
       join(ROOT, "app", "api", "rest-points", "[id]", "route.ts"),
+    ];
+    const publicReadPaths = [
       join(ROOT, "app", "api", "vedett-route", "rest-stops", "nearby", "route.ts"),
       join(ROOT, "app", "api", "vedett-route", "rest-stops", "resume", "route.ts"),
     ];
-    for (const p of apiRoutePaths) {
-      const src = readFileSync(p, "utf-8");
-      assert.match(
-        src,
-        /requireVedettRouteAccess\(/,
-        `${p} -nak a közös requireVedettRouteAccess()-t kell hívnia`
-      );
+    for (const p of userTierPaths) {
+      assert.match(readFileSync(p, "utf-8"), /requireVedettRouteAccess\(/, `${p} -nak a közös requireVedettRouteAccess()-t kell hívnia`);
+    }
+    for (const p of publicReadPaths) {
+      assert.match(readFileSync(p, "utf-8"), /requireVedettRoutePublicRead\(request/, `${p} -nak a requireVedettRoutePublicRead()-et kell hívnia`);
     }
   });
 });
@@ -416,9 +420,9 @@ describe("L) GPS PRIVACY REGRESSION — a hozzáférési modell váltása nem é
 });
 
 describe("Konfiguráció — VEDETT_ROUTE_ACCESS_LEVEL ténylegesen 'authenticated_users'-re váltott, és a globális flag változatlan marad", () => {
-  test("config.ts a korábban előkészített, addig inaktív 'authenticated_users' szintet aktiválja", () => {
-    assert.equal(VEDETT_ROUTE_ACCESS_LEVEL, "authenticated_users");
-    assert.match(configSrc, /export const VEDETT_ROUTE_ACCESS_LEVEL: VedettRouteAccessLevel = "authenticated_users";/);
+  test("config.ts a 'public' szintet aktiválja (2026-10-03, public read-only routing) — az írás/perzisztencia és admin végpontok ettől függetlenül védettek (lásd access-matrix.test.ts)", () => {
+    assert.equal(VEDETT_ROUTE_ACCESS_LEVEL, "public");
+    assert.match(configSrc, /export const VEDETT_ROUTE_ACCESS_LEVEL: VedettRouteAccessLevel = "public";/);
   });
 
   test("isVedettRouteFeatureEnabled() továbbra is process.env.VEDETT_ROUTE_ENABLED === \"true\" — a globális kill switch mechanizmusa NEM változott", () => {

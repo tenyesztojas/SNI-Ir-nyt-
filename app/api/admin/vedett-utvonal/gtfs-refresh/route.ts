@@ -5,11 +5,11 @@
 // felkészítve — lásd lib/vedett-route/providers/bkk.ts refreshStaticData()).
 
 import { NextResponse } from "next/server";
-import { requireVedettRouteAccess } from "@/lib/vedett-route/access";
+import { requireVedettRouteAdminOperation } from "@/lib/vedett-route/access";
 import { getTransitProvider } from "@/lib/vedett-route/providers/registry";
 
 export async function POST() {
-  const auth = await requireVedettRouteAccess();
+  const auth = await requireVedettRouteAdminOperation();
   if (!auth.ok) return auth.response;
 
   const bkk = getTransitProvider("BKK");

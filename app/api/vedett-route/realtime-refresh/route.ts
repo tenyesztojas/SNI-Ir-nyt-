@@ -45,7 +45,7 @@
 // no-op — ez nem változott, csak az adatforrás.
 
 import { NextResponse } from "next/server";
-import { requireVedettRouteAccess } from "@/lib/vedett-route/access";
+import { requireVedettRoutePublicRead, getVedettRouteClientIp } from "@/lib/vedett-route/access";
 import { realtimeRefreshSchema } from "@/lib/vedett-route/realtimeRefresh/schemas";
 import { dedupeRealtimeRefreshTripIds } from "@/lib/vedett-route/realtimeRefresh/buildRequest";
 import { extractRealtimeUpdatesFromTrips } from "@/lib/vedett-route/realtimeRefresh/extractUpdates";
@@ -62,10 +62,15 @@ const RATE_LIMIT_MAX_REQUESTS = 10;
 const RATE_LIMIT_WINDOW_MS = 60_000;
 
 export async function POST(request: Request) {
-  const auth = await requireVedettRouteAccess();
+  const auth = await requireVedettRoutePublicRead(request);
   if (!auth.ok) return auth.response;
 
-  const rateLimit = await rateLimiter.check(`vedett-route:realtime-refresh:${auth.userId}`, RATE_LIMIT_MAX_REQUESTS, RATE_LIMIT_WINDOW_MS);
+  // Bejelentkezett: a MEGLÉVŐ per-user kulcs (VÁLTOZATLAN). Anonim (userId null):
+  // per-IP kulcs — SOSEM egy közös "anonymous" vödör, és SOSEM kitalált userId.
+  const rateLimitKey = auth.userId
+    ? `vedett-route:realtime-refresh:${auth.userId}`
+    : `vedett-route:realtime-refresh:anon-ip:${getVedettRouteClientIp(request)}`;
+  const rateLimit = await rateLimiter.check(rateLimitKey, RATE_LIMIT_MAX_REQUESTS, RATE_LIMIT_WINDOW_MS);
   if (!rateLimit.allowed) {
     return NextResponse.json(
       { ok: false, reason: "RATE_LIMITED", message: "Túl sok frissítési kérés érkezett rövid idő alatt." },

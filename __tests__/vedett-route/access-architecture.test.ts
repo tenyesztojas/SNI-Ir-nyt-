@@ -127,8 +127,8 @@ function extractFunctionSource(src: string, name: string): string | null {
 }
 
 // ── config szint ────────────────────────────────────────────────────────
-test("A) VEDETT_ROUTE_ACCESS_LEVEL jelenleg 'authenticated_users' (a PUBLIKUS, REGISZTRÁLT FELHASZNÁLÓI BÉTA szint aktív — SZÁNDÉKOS, nem beta_testers/admin_only)", () => {
-  assert.equal(VEDETT_ROUTE_ACCESS_LEVEL, "authenticated_users");
+test("A) VEDETT_ROUTE_ACCESS_LEVEL jelenleg 'public' (2026-10-03, public read-only routing — az alap csak-olvasó funkciók anonimnak is elérhetők; az írás/perzisztencia és admin végpontok védelmét az access-matrix.test.ts fedi)", () => {
+  assert.equal(VEDETT_ROUTE_ACCESS_LEVEL, "public");
 });
 
 test("access.ts exportálja a requireVedettRouteAdmin függvényt (admin_only fallback, megmarad)", () => {

@@ -48,7 +48,7 @@ const searchFormSrc = readFileSync(SEARCH_FORM_PATH, "utf-8");
 
 describe("cím autocomplete — /api/admin/vedett-utvonal/address-search Search Box first + Geocoding v6 fallback", () => {
   test("a végpont admin/feature-flag gate-et használ", () => {
-    assert.match(routeSrc, /const auth = await requireVedettRouteAccess\(\);/);
+    assert.match(routeSrc, /const auth = await requireVedettRoutePublicRead\(request, \{ label: "address-search"/);
     assert.match(routeSrc, /if \(!auth\.ok\) return auth\.response;/);
   });
 
@@ -113,7 +113,7 @@ describe("cím autocomplete — /api/admin/vedett-utvonal/address-search Search 
 
 describe("cím autocomplete — /api/admin/vedett-utvonal/address-retrieve fallback továbbra is megmarad", () => {
   test("a végpont admin/feature-flag gate-et használ", () => {
-    assert.match(retrieveRouteSrc, /const auth = await requireVedettRouteAccess\(\);/);
+    assert.match(retrieveRouteSrc, /const auth = await requireVedettRoutePublicRead\(request, \{ label: "address-retrieve"/);
     assert.match(retrieveRouteSrc, /if \(!auth\.ok\) return auth\.response;/);
   });
 

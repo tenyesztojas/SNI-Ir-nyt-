@@ -18,7 +18,7 @@
 // koordináta routingba kötését KÜLÖN kell megrendelni.
 
 import { NextResponse } from "next/server";
-import { requireVedettRouteAccess } from "@/lib/vedett-route/access";
+import { requireVedettRoutePublicRead } from "@/lib/vedett-route/access";
 
 function optionalStringField(body: unknown, field: string): string | undefined {
   const value = (body as Record<string, unknown> | null)?.[field];
@@ -31,7 +31,7 @@ type MapboxRetrieveFeature = {
 };
 
 export async function POST(request: Request) {
-  const auth = await requireVedettRouteAccess();
+  const auth = await requireVedettRoutePublicRead(request, { label: "address-retrieve", limit: 30, windowMs: 60_000 });
   if (!auth.ok) return auth.response;
 
   const body = await request.json().catch(() => null);

@@ -58,7 +58,7 @@ test("MOTIS_BASE_URL nélkül getMotisBaseUrl() null-t ad vissza", async () => {
   assert.equal(getMotisBaseUrl(), null);
 });
 
-test("A) VEDETT_ROUTE_ACCESS_LEVEL a PUBLIKUS, REGISZTRÁLT FELHASZNÁLÓI BÉTA sprint óta 'authenticated_users' (nem admin_only, nem beta_testers), függetlenül az env-től", async () => {
+test("A) VEDETT_ROUTE_ACCESS_LEVEL 'public' (2026-10-03 óta; nem admin_only, nem beta_testers), függetlenül az env-től", async () => {
   // FRISSÍTVE (2026-09-09): a korábbi "ZÁRT BÉTA HOZZÁFÉRÉS" szakaszban ez
   // a konstans "beta_testers" volt (admin VAGY explicit `vedett_route_beta`
   // pilot_access grant szükséges). A "Zárt béta → nyilvános, regisztrált
@@ -68,5 +68,5 @@ test("A) VEDETT_ROUTE_ACCESS_LEVEL a PUBLIKUS, REGISZTRÁLT FELHASZNÁLÓI BÉTA
   // útvonalválasztás tesztjéért). Ez a teszt nem regressziót jelez, hanem a
   // ténylegesen megvalósított, szándékos architektúrát igazolja.
   const { VEDETT_ROUTE_ACCESS_LEVEL } = await freshConfigModule();
-  assert.equal(VEDETT_ROUTE_ACCESS_LEVEL, "authenticated_users");
+  assert.equal(VEDETT_ROUTE_ACCESS_LEVEL, "public");
 });

@@ -11,7 +11,7 @@
 //   file: a GTFS zip
 
 import { NextResponse } from "next/server";
-import { requireVedettRouteAccess } from "@/lib/vedett-route/access";
+import { requireVedettRouteAdminOperation } from "@/lib/vedett-route/access";
 import { ingestUploadedGtfsZip } from "@/lib/vedett-route/providers/staticFileProvider";
 
 const PROVIDER_DIR_NAMES: Record<string, string> = {
@@ -22,7 +22,7 @@ const PROVIDER_DIR_NAMES: Record<string, string> = {
 const MAX_UPLOAD_BYTES = 200 * 1024 * 1024; // 200 MB — bőven elég egy országos GTFS-nek is
 
 export async function POST(request: Request) {
-  const auth = await requireVedettRouteAccess();
+  const auth = await requireVedettRouteAdminOperation();
   if (!auth.ok) return auth.response;
 
   const formData = await request.formData().catch(() => null);

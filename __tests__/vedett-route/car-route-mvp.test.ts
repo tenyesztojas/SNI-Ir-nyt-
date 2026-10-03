@@ -18,8 +18,8 @@ const src = readFileSync(ROUTE_PATH, "utf8");
 
 describe("car-route MVP — Mapbox driving-traffic + háttér turn-by-turn kompatibilitás", () => {
   test("admin/feature flag gate változatlan", () => {
-    assert.match(src, /requireVedettRouteAccess/);
-    assert.match(src, /const auth = await requireVedettRouteAccess\(\)/);
+    assert.match(src, /requireVedettRoutePublicRead/);
+    assert.match(src, /const auth = await requireVedettRoutePublicRead\(request, \{ label: "car-route"/);
     assert.match(src, /if \(!auth\.ok\) return auth\.response/);
   });
 

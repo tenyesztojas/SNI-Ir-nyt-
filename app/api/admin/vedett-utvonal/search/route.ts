@@ -11,7 +11,7 @@
 // generálunk kitalált/AI-becsült útvonalat.
 
 import { NextResponse } from "next/server";
-import { requireVedettRouteAccess } from "@/lib/vedett-route/access";
+import { requireVedettRoutePublicRead } from "@/lib/vedett-route/access";
 import { journeySearchSchema } from "@/lib/vedett-route/schemas";
 import { geocodeAddress, isAmbiguousGeocodeResult, type GeocodeResult } from "@/lib/vedett-route/geocode";
 import { searchVedettRoutes } from "@/lib/vedett-route/orchestrator";
@@ -23,7 +23,7 @@ import { resolveManualFieldOrStation } from "@/lib/vedett-route/stationNameSearc
 import { getAccessibilityIndex } from "@/lib/vedett-route/providers/staticFileProvider";
 
 export async function POST(request: Request) {
-  const auth = await requireVedettRouteAccess();
+  const auth = await requireVedettRoutePublicRead(request, { label: "search", limit: 20, windowMs: 60_000 });
   if (!auth.ok) return auth.response;
 
   const body = await request.json().catch(() => null);

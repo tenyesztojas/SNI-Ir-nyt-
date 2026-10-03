@@ -14,7 +14,7 @@
 // közvetlenül a MOTIS-t vagy a route service-t.
 
 import { NextResponse } from "next/server";
-import { requireVedettRouteAccess } from "@/lib/vedett-route/access";
+import { requireVedettRoutePublicRead } from "@/lib/vedett-route/access";
 import { restStopResumeSchema } from "@/lib/vedett-route/restStopFlow/schemas";
 import { buildRerouteToOriginalDestinationRequest } from "@/lib/vedett-route/restStopFlow/rerouteRequest";
 import { pickBestItinerary } from "@/lib/vedett-route/restStopFlow/pickBestItinerary";
@@ -23,7 +23,7 @@ import { fetchMotisPlan } from "@/lib/vedett-route/motisClient";
 import { mapMotisItineraryToJourney } from "@/lib/vedett-route/orchestrator";
 
 export async function POST(request: Request) {
-  const auth = await requireVedettRouteAccess();
+  const auth = await requireVedettRoutePublicRead(request, { label: "rest-resume", limit: 20, windowMs: 60_000 });
   if (!auth.ok) return auth.response;
 
   const body = await request.json().catch(() => null);

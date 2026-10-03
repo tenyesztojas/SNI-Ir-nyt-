@@ -28,7 +28,19 @@ export type VedettRouteAccessLevel = "admin_only" | "authenticated_users" | "bet
 // nélkül SENKI (admin sem) nem fér hozzá; a feature flaggel EGYÜTT ez a
 // konstans dönti el, hogy a bekapcsolt funkción belül KIK (jelenleg: minden
 // bejelentkezett felhasználó).
-export const VEDETT_ROUTE_ACCESS_LEVEL: VedettRouteAccessLevel = "authenticated_users";
+//
+// PUBLIC READ-ONLY ROUTING (2026-10-03): a szint "public"-ra váltott — de a
+// "public" SZÁNDÉKOSAN NEM "mindenki mindent": KIZÁRÓLAG az alap, csak-
+// olvasó funkciókat (útvonal/cím/pihenőpont-keresés, akadálymentességi
+// adat) nyitja meg ANONIM hívónak, per-IP rate limit mellett (lásd
+// accessPolicy.ts + access.ts requireVedettRoutePublicRead()).
+//   - felhasználó-specifikus perzisztencia/írás (kedvencek, saját
+//     pihenőpont CRUD): TOVÁBBRA IS bejelentkezés kell
+//     (requireVedettRouteAccess()),
+//   - operatív/admin végpontok (GTFS feltöltés/frissítés): TOVÁBBRA IS
+//     profiles.role === "admin" kell, a szinttől függetlenül
+//     (requireVedettRouteAdminOperation()).
+export const VEDETT_ROUTE_ACCESS_LEVEL: VedettRouteAccessLevel = "public";
 
 // A "profiles.pilot_access" tömbben tárolt kulcs, amivel egy admin egy
 // felhasználót Védett Útvonal béta-tesztelővé tehet (lásd

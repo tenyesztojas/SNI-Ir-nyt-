@@ -76,7 +76,8 @@ export const MAX_REST_POINTS = 15;
 export interface DiscoverRestPointsParams {
   latitude: number;
   longitude: number;
-  userId: string;
+  // null = anonim hívó (nincs saját/privát pihenőpont) — SOSEM kitalált id.
+  userId: string | null;
   // Csak teszteléshez/jövőbeli providerbővítéshez injektálható — éles
   // hívók (route.ts) nem adják át, a DEFAULT_PROVIDERS-t használjuk.
   providers?: RestPointProvider[];

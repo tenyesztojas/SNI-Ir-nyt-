@@ -47,14 +47,14 @@
 // (errorCode) okozott egy hiányzó/csökkent találatlistát.
 
 import { NextResponse } from "next/server";
-import { requireVedettRouteAccess } from "@/lib/vedett-route/access";
+import { requireVedettRoutePublicRead } from "@/lib/vedett-route/access";
 import { restStopNearbySchema } from "@/lib/vedett-route/restStopFlow/schemas";
 import { rankRestPoints } from "@/lib/vedett-route/restStopFlow/ranking";
 import { discoverRestPoints, MAX_REST_POINTS } from "@/lib/vedett-route/restStopFlow/aggregator";
 import { vedettRouteLog } from "@/lib/vedett-route/logger";
 
 export async function POST(request: Request) {
-  const auth = await requireVedettRouteAccess();
+  const auth = await requireVedettRoutePublicRead(request, { label: "rest-nearby", limit: 20, windowMs: 60_000 });
   if (!auth.ok) return auth.response;
 
   const body = await request.json().catch(() => null);

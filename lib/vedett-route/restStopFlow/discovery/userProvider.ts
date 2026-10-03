@@ -75,6 +75,9 @@ function classifyUserProviderError(err: unknown): { message: string; errorCode: 
 export const userRestPointProvider: RestPointProvider = {
   name: "user",
   async findNearby(params: FindNearbyParams): Promise<ProviderResult> {
+    // Anonim hívónak nincs saját pihenőpontja: üres, SIKERES eredmény (nem
+    // "unavailable", hogy a discovery ne jelölje hamisan részlegesnek).
+    if (params.userId === null) return { status: "ok", points: [] };
     try {
       const own = await listOwnRestPoints();
       const visible = filterVisibleRestPoints(own, params.userId);

@@ -74,9 +74,14 @@ type CarRouteResult = {
 export default function VedettUtvonalWorkspace({
   disabled,
   initialDestination,
+  isAuthenticated = true,
 }: {
   disabled: boolean;
   initialDestination: { name: string; latitude: number; longitude: number } | null;
+  // false = anonim látogató (public read-only mód): a perzisztens funkciók
+  // (kedvencek, saját pihenőpont mentés) UI-ja nem jelenik meg — az API
+  // ettől függetlenül 401-gyel védi őket. Alapértelmezés true (admin oldal).
+  isAuthenticated?: boolean;
 }) {
   const [travelMode, setTravelMode] = useState<TravelMode>("transit");
   const [selectedPreset, setSelectedPreset] = useState<{ key: number; preset: FavoriteRoutePreset } | null>(null);
@@ -261,13 +266,14 @@ export default function VedettUtvonalWorkspace({
         </div>
       ) : (
         <>
-          <FavoriteRoutesPanel onSelect={handleSelectFavorite} />
+          {isAuthenticated && <FavoriteRoutesPanel onSelect={handleSelectFavorite} />}
 
           <VedettUtvonalSearchForm
             key={selectedPreset?.key ?? "initial"}
             disabled={disabled}
             initialDestination={selectedPreset ? null : initialDestination}
             initialFavoritePreset={selectedPreset?.preset ?? null}
+            isAuthenticated={isAuthenticated}
           />
         </>
       )}

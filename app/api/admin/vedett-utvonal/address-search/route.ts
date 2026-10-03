@@ -3,7 +3,7 @@
 // Geocoding v6 remains as a fail-safe fallback.
 
 import { NextResponse } from "next/server";
-import { requireVedettRouteAccess } from "@/lib/vedett-route/access";
+import { requireVedettRoutePublicRead } from "@/lib/vedett-route/access";
 import {
   parseStreetAndHouseNumber,
   processMapboxGeocodingFeatures,
@@ -24,7 +24,7 @@ function optionalStringField(body: unknown, field: string): string | undefined {
 }
 
 export async function POST(request: Request) {
-  const auth = await requireVedettRouteAccess();
+  const auth = await requireVedettRoutePublicRead(request, { label: "address-search", limit: 40, windowMs: 60_000 });
   if (!auth.ok) return auth.response;
 
   const body = await request.json().catch(() => null);
