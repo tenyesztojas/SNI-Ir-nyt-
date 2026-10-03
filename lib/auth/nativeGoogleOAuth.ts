@@ -116,6 +116,8 @@ export interface NativeGoogleLoginOptions {
   win?: NativeOAuthWindow | null;
   /** Rövid, magyar, felhasználónak szánt hibaüzenet. */
   onError: (message: string) => void;
+  /** Közvetlenül a WebView /auth/callback navigációja előtt (loading állapothoz). */
+  onReturning?: () => void;
   /** A user megszakította (pl. bezárta a Custom Tabot). */
   onCancel?: () => void;
   /** A browserFinished után ennyit várunk a deep linkre (ms). */
@@ -177,6 +179,7 @@ export async function startNativeGoogleLogin(
         cleanup();
         closeBrowser();
         if (parsed.kind === "code") {
+          options.onReturning?.();
           win.location.assign(buildWebViewCallbackPath(parsed.code, next));
         } else if (parsed.error === "access_denied") {
           options.onError(NATIVE_GOOGLE_ERRORS.cancelled);

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Script from "next/script";
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import "@fontsource/nunito/400.css";
 import "@fontsource/nunito/500.css";
 import "@fontsource/nunito/600.css";
@@ -55,7 +55,20 @@ export default function RootLayout({
   // chrome (Header/Footer/PWA-banner/PWA-tracker) elrejtődik, hogy az app
   // ne vezessen el a teljes weboldal menüjébe. Normál böngészőben a
   // marker nincs jelen -> a viselkedés változatlan.
-  const isNativeApp = (headers().get("user-agent") ?? "").includes("VedettUtvonalNative");
+  // ROOT CAUSE (2026-10-03, Google belépés utáni regresszió): a public/sw.js
+  // service worker MINDEN same-origin GET-et (a navigációkat is) újra-fetch-eli
+  // (`fetch(e.request)`), és clients.claim()-mel átveszi az app WebView-t. A
+  // Capacitor `appendUserAgent` a WebView saját WebSettings-ében él; a service
+  // worker által újra kiadott kérések UA-ja NEM tartalmazza a markert, ezért a
+  // szerver-oldali UA-egyezés elveszett és a globális Header visszajött.
+  // Megoldás: (1) natívban nincs service worker (lásd a head scriptet), (2) a
+  // marker a kliensen sütiben is rögzül (vu_native), amit a szerver az UA
+  // mellett szintén olvas. KIZÁRÓLAG MEGJELENÍTÉSI jelző: semmilyen
+  // jogosultsági/auth döntés nem függ tőle (egy böngésző "hamisíthatja", de
+  // ezzel csak a saját nézetéből rejti el a Header/Footert).
+  const isNativeApp =
+    (headers().get("user-agent") ?? "").includes("VedettUtvonalNative") ||
+    cookies().get("vu_native")?.value === "1";
   const hideSiteChrome = isVedettUtvonalPwaShell || isNativeApp;
 
   return (
@@ -75,7 +88,7 @@ export default function RootLayout({
           nonce={nonce}
           suppressHydrationWarning
           dangerouslySetInnerHTML={{
-            __html: `if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js'))}`,
+            __html: `(function(){try{if(navigator.userAgent.indexOf('VedettUtvonalNative')>-1){document.cookie='vu_native=1; path=/; max-age=31536000; SameSite=Lax; Secure';if('serviceWorker' in navigator){navigator.serviceWorker.getRegistrations().then(function(rs){rs.forEach(function(r){r.unregister()})})}if(window.caches){caches.keys().then(function(ks){ks.forEach(function(k){if(k.indexOf('vedettsarok-')===0)caches.delete(k)})})}return}if('serviceWorker' in navigator){window.addEventListener('load',function(){navigator.serviceWorker.register('/sw.js')})}}catch(e){}})();`,
           }}
         />
         {/* Akadálymentességi beállítások anti-flash: hydration előtt alkalmazza a mentett prefs-t */}

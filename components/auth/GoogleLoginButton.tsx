@@ -13,6 +13,9 @@ import { isNativeCapacitor, startNativeGoogleLogin } from "@/lib/auth/nativeGoog
 //    (lib/auth/nativeGoogleOAuth.ts); a WebView SOHA nem navigál a Google-re.
 export default function GoogleLoginButton({ next }: { next?: string } = {}) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // Natív visszatérés: a /auth/callback átirányítás 1-2 mp-ig tart; addig egy
+  // egyszerű "Belépés folyamatban…" állapot jelenik meg (nincs villanó /belepes).
+  const [returning, setReturning] = useState(false);
 
   async function handleLogin() {
     setErrorMessage(null);
@@ -28,7 +31,11 @@ export default function GoogleLoginButton({ next }: { next?: string } = {}) {
 
     const safeNext = safeReturnPath(next, "/profil");
     if (isNativeCapacitor()) {
-      await startNativeGoogleLogin(supabase, { next: safeNext, onError: setErrorMessage });
+      await startNativeGoogleLogin(supabase, {
+        next: safeNext,
+        onError: setErrorMessage,
+        onReturning: () => setReturning(true),
+      });
       return;
     }
     await supabase.auth.signInWithOAuth({
@@ -53,6 +60,16 @@ export default function GoogleLoginButton({ next }: { next?: string } = {}) {
       </svg>
       Belépés Google-fiókkal
     </button>
+    {returning && (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-white"
+        role="status"
+        aria-live="polite"
+        data-testid="native-login-loading"
+      >
+        <p className="text-base font-semibold text-gray-700">Belépés folyamatban…</p>
+      </div>
+    )}
     {errorMessage && (
       <p className="text-sm text-red-600" role="alert">{errorMessage}</p>
     )}
