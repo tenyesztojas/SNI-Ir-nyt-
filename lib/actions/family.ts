@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUserAndProfile } from "@/lib/data";
 import { hasFamilyBetaAccess } from "@/lib/family/config";
@@ -814,5 +815,21 @@ export async function acceptChildAccountInvitationAction(
 
   revalidatePath("/csalad");
   revalidatePath("/profil");
-  return { success: true };
+
+  // UX JAVITAS (20261003): a sikeres elfogadas UTAN szandekosan EXPLICIT
+  // szerver-oldali redirect() a /csalad-ra, NEM { success: true }
+  // visszaadasa. Ha itt sima state-et adnank vissza, a Next.js a Server
+  // Action valaszakent a JELENLEGI (/gyermek-meghivo) route-ot is ujra-
+  // renderelne, mielott a kliens useEffect-je a router.push("/csalad")-ot
+  // lefuttatna -- az immar elfogadott (status=accepted) token ekkor a
+  // previewChildAccountInvitation()-ben helyesen ervenytelennek minosulne,
+  // es a "Ez a meghivas mar nem ervenyes." uzenet roviden felvillanna
+  // SIKERES elfogadas utan is. A redirect() a Server Action-bol KIHAGYJA
+  // a jelenlegi route ujra-renderelesét, egyenesen a /csalad RSC payload-
+  // jat kuldi -- igy az invalid-token ujraellenorzes itt sosem fut le. A
+  // normal (nem sikeres elfogadas utan megnyitott) ervenytelen/lejart/
+  // visszavont/mar felhasznalt meghivo-oldal viselkedese
+  // (app/gyermek-meghivo/page.tsx) ettol fuggetlenul, valtozatlanul
+  // "Ez a meghivas mar nem ervenyes."-t jeleniti meg.
+  redirect("/csalad");
 }
