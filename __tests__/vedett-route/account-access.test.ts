@@ -126,3 +126,28 @@ describe("/auth/callback next", () => {
     assert.match(callback, /window\.location\.replace\("\/profil"\)/);
   });
 });
+
+describe("UI cleanup: tesztelési figyelmeztetés eltávolítva, lábléc", () => {
+  test("a bevezető tesztelési figyelmeztetés nincs az oldalon", () => {
+    assert.doesNotMatch(page, /tesztelés alatt áll/);
+    assert.doesNotMatch(page, /pihenőpont-adatok/);
+  });
+  test("saját lábléc a meglévő jogi route-okkal", () => {
+    assert.match(page, /<footer[\s\S]*?© 2026 VédettSarok — Minden jog fenntartva/);
+    assert.match(page, /href="\/aszf"[\s\S]*?Általános Szerződési Feltételek/);
+    assert.match(page, /href="\/adatkezelesi-tajekoztato"[\s\S]*?Adatkezelési tájékoztató/);
+  });
+  test("a lábléc user-feltételtől független (anonim + bejelentkezett)", () => {
+    const f = page.slice(page.indexOf("<footer"), page.indexOf("</footer>"));
+    assert.doesNotMatch(f, /user|isAuthenticated/);
+  });
+  test("a globális Footer nem kerül vissza a layoutban", () => {
+    const layout = readFileSync("app/layout.tsx", "utf8");
+    assert.match(layout, /\{!hideSiteChrome && <Footer \/>\}/);
+    assert.doesNotMatch(page, /components\/Footer/);
+  });
+  test("a jogi route-ok léteznek", () => {
+    readFileSync("app/aszf/page.tsx", "utf8");
+    readFileSync("app/adatkezelesi-tajekoztato/page.tsx", "utf8");
+  });
+});

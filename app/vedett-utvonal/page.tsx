@@ -252,10 +252,6 @@ export default async function VedettUtvonalPage({
           )}
         </div>
       </div>
-      <p className="mt-1 text-sm text-gray-600">
-        A Védett Útvonal jelenleg tesztelés alatt áll. Az útvonal- és pihenőpont-adatok
-        pontatlanok lehetnek.
-      </p>
       {!user && (
         <p className="mt-1 text-sm text-gray-600">
           Bejelentkezés nélkül az alap útvonaltervezés használható.{" "}
@@ -273,6 +269,25 @@ export default async function VedettUtvonalPage({
             React-key-remount mintájáért — lásd a komponens fejlécét. */}
         <VedettUtvonalWorkspace disabled={!enabled} initialDestination={initialDestination} isAuthenticated={Boolean(user)} />
       </div>
+
+      {/* Kompakt, saját lábléc (2026-10-03) — a globális VédettSarok Footer
+          natív/PWA módban rejtett, ezért a jogi hivatkozások itt, az oldalon
+          belül jelennek meg (anonim és bejelentkezett állapotban is). A
+          meglévő /aszf és /adatkezelesi-tajekoztato oldalakra mutat. */}
+      <footer
+        className="mt-10 border-t border-gray-200 pt-4 text-center text-xs text-gray-400"
+        data-testid="vedett-utvonal-footer"
+      >
+        <p>© 2026 VédettSarok — Minden jog fenntartva</p>
+        <p className="mt-1 flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
+          <Link href="/aszf" className="hover:text-sni-brand-blue hover:underline">
+            Általános Szerződési Feltételek
+          </Link>
+          <Link href="/adatkezelesi-tajekoztato" className="hover:text-sni-brand-blue hover:underline">
+            Adatkezelési tájékoztató
+          </Link>
+        </p>
+      </footer>
     </div>
   );
 }
