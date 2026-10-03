@@ -9,6 +9,11 @@ import {
   FamilyActionState,
 } from "@/lib/actions/family";
 import type { ChildAccountStatusView } from "@/lib/family/data";
+// Kliensoldali, LOKÁLIS QR-generálás (nincs harmadik fél QR-API hívás,
+// nincs hálózati kérés) — a QRCodeSVG a value propból tisztán a
+// böngészőben rendereli az SVG-t. Lásd a feladat "Do NOT use an
+// external QR-generation web service" követelményét.
+import { QRCodeSVG } from "qrcode.react";
 
 // Owner-only "Gyermekfiók" szekció — egy adott gyermekhez tartozó
 // child_accounts/child_account_invitations állapot megjelenítése és
@@ -97,6 +102,10 @@ export default function ChildAccountSection({
   // újratöltés/revalidálás után már csak a "pending_invitation" állapot
   // látszik, a token NEM kérhető le újra.
   const [inviteLink, setInviteLink] = useState<string | null>(null);
+  // Kizárólag UI-visszajelzés a "Meghívólink másolása" gombhoz — SOSE
+  // ismétli meg a vágólapra másolt tartalmat, SOSE naplózza a
+  // tokent/URL-t.
+  const [linkCopied, setLinkCopied] = useState(false);
   useEffect(() => {
     if (
       createState &&
@@ -111,6 +120,21 @@ export default function ChildAccountSection({
       );
     }
   }, [createState]);
+
+  // mailto: link — KIZÁRÓLAG a kliens oldalon, kézi URL-encoding-gal
+  // összeállítva, nincs szerveroldali e-mail-küldés, nincs tárolt
+  // gyermek-email (a child_account_invitations táblában sincs ilyen
+  // mező, lásd a komponens fejléc-kommentjét). A felhasználó saját
+  // levelezőklienst nyitja meg, és Ő választja ki a címzettet.
+  const mailtoSubject = encodeURIComponent("VédettSarok – Gyermekfiók meghívás");
+  const mailtoBody = inviteLink
+    ? encodeURIComponent(
+        `Meghívást kaptál ${childFirstName} VédettSarok Gyermekfiókjának használatához.\n\n` +
+          `A meghívó megnyitásához használd ezt a linket:\n\n${inviteLink}\n\n` +
+          `A meghívás egyszer használható és 72 óráig érvényes.`
+      )
+    : "";
+  const mailtoHref = `mailto:?subject=${mailtoSubject}&body=${mailtoBody}`;
 
   return (
     <div className="mt-3 rounded-xl border border-gray-200 p-3">
@@ -133,18 +157,69 @@ export default function ChildAccountSection({
 
       {inviteLink && (
         <div className="mt-2">
-          <p className="text-sm text-gray-700">
-            Meghívás elküldve. Másold ki és add tovább {childFirstName}
-            -nak ezt a linket (csak most jelenik meg, később nem lesz
-            újra elérhető):
+          <p className="text-sm font-medium text-gray-900">
+            Meghívás elkészült
           </p>
-          <input
-            type="text"
-            readOnly
-            value={inviteLink}
-            onFocus={(event) => event.target.select()}
-            className="input-field mt-2 text-xs"
-          />
+          <p className="mt-1 text-sm text-gray-700">
+            Add át {childFirstName} számára a meghívót az alábbi
+            lehetőségek egyikével.
+          </p>
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                // Clipboard API — KIZÁRÓLAG explicit kattintásra, és
+                // KIZÁRÓLAG a már létező meghívó-URL-t másolja, nem
+                // generál újat (lásd createChildAccountInvitationAction —
+                // ez a gomb nem hívja azt újra).
+                navigator.clipboard
+                  .writeText(inviteLink)
+                  .then(() => {
+                    setLinkCopied(true);
+                    window.setTimeout(() => setLinkCopied(false), 2000);
+                  })
+                  .catch(() => {
+                    // Clipboard API nem elérhető (pl. engedély hiánya) —
+                    // a lenti "Link megjelenítése szövegként" mezőből a
+                    // felhasználó kézzel is kimásolhatja.
+                  });
+              }}
+              className="btn-secondary min-h-[40px] text-sm"
+            >
+              {linkCopied ? "Link másolva" : "Meghívólink másolása"}
+            </button>
+            <a href={mailtoHref} className="btn-secondary inline-flex min-h-[40px] items-center text-sm">
+              Meghívó küldése e-mailben
+            </a>
+          </div>
+
+          <div className="mt-4">
+            <p className="text-xs text-gray-500">vagy</p>
+            <div className="mt-2 inline-block rounded-lg border border-gray-200 bg-white p-2">
+              <QRCodeSVG value={inviteLink} size={160} marginSize={2} />
+            </div>
+            <p className="mt-1 text-xs text-gray-500">
+              Olvasd be a QR-kódot a meghívott telefonjával.
+            </p>
+          </div>
+
+          <p className="mt-3 text-xs text-gray-500">
+            A meghívás egyszer használható és 72 óráig érvényes.
+          </p>
+
+          <details className="mt-2">
+            <summary className="cursor-pointer text-xs text-gray-500 underline">
+              Link megjelenítése szövegként
+            </summary>
+            <input
+              type="text"
+              readOnly
+              value={inviteLink}
+              onFocus={(event) => event.target.select()}
+              className="input-field mt-2 text-xs"
+            />
+          </details>
         </div>
       )}
 
