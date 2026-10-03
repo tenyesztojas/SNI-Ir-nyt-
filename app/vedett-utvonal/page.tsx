@@ -258,7 +258,7 @@ export default async function VedettUtvonalPage({
           <Link href="/belepes?next=%2Fvedett-utvonal" className="font-semibold text-sni-brand-blue hover:underline">
             Bejelentkezéssel
           </Link>{" "}
-          kedvenc útvonalakat és saját pihenőpontokat is menthetsz.
+          kedvenc útvonalakat, saját pihenőpontokat és mentett helyeket (pl. Otthon, Munkahely) is menthetsz.
         </p>
       )}
 

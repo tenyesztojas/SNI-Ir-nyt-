@@ -236,6 +236,8 @@ import {
   type LiveAlternativeTrigger,
 } from "@/lib/vedett-route/navigation/liveAlternative";
 import { computeJourneyFingerprint } from "@/lib/vedett-route/fingerprint";
+import SavedPlacesPanel from "@/components/vedett-utvonal/SavedPlacesPanel";
+import { savedPlaceToRouteLocation } from "@/lib/vedett-route/savedPlaces/adapt";
 // SPRINT 8.5 — a MEGLÉVŐ 8.3 engine (csak export/signature szinten
 // használva itt): a React komponens SOHA nem implementál saját alert-
 // relevancia logikát, kizárólag a leg-shape konverziót (toDisruptionRelevanceLegs)
@@ -4098,6 +4100,14 @@ export default function VedettUtvonalSearchForm({
   return (
     <div className="card">
       <h2 className="text-lg font-semibold text-sni-text">Útvonalkeresés</h2>
+
+      <SavedPlacesPanel
+        isAuthenticated={isAuthenticated}
+        currentOrigin={origin as never}
+        currentDestination={destination as never}
+        onUseAsOrigin={(p) => setOrigin(savedPlaceToRouteLocation(p))}
+        onUseAsDestination={(p) => setDestination(savedPlaceToRouteLocation(p))}
+      />
 
       <form ref={formRef} onSubmit={handleSubmit} className="mt-3 space-y-3">
         <div>

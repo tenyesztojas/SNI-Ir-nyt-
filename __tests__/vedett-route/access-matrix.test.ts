@@ -177,6 +177,8 @@ const EXPECTED: Record<string, Guard> = {
   // B) csak bejelentkezett felhasználó (perzisztencia / írás / saját adat)
   "app/api/vedett-route/favorites/route.ts": "user",
   "app/api/vedett-route/favorites/[id]/route.ts": "user",
+  "app/api/vedett-route/saved-places/route.ts": "user",
+  "app/api/vedett-route/saved-places/[id]/route.ts": "user",
   "app/api/rest-points/route.ts": "user",
   "app/api/rest-points/[id]/route.ts": "user",
   // C) csak admin
@@ -234,6 +236,8 @@ describe("végpont → guard leltár (nincs védetlen vagy rossz guardú végpon
     for (const f of [
       "app/api/vedett-route/favorites/route.ts",
       "app/api/vedett-route/favorites/[id]/route.ts",
+      "app/api/vedett-route/saved-places/route.ts",
+      "app/api/vedett-route/saved-places/[id]/route.ts",
       "app/api/rest-points/route.ts",
       "app/api/rest-points/[id]/route.ts",
     ]) {
