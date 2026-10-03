@@ -4,7 +4,8 @@ import { useState } from "react";
 import { useFormState, useFormStatus } from "react-dom";
 import { LogIn, Mail, ChevronDown, Users } from "lucide-react";
 import { signInAction, signUpAction, AuthActionState } from "@/lib/actions/auth";
-import { safeReturnPath } from "@/lib/pwa/safeReturnPath";
+import Link from "next/link";
+import { safeReturnPath, isVedettUtvonalReturnPath } from "@/lib/pwa/safeReturnPath";
 import GoogleLoginButton from "@/components/auth/GoogleLoginButton";
 
 function SubmitButton({ label }: { label: string }) {
@@ -27,6 +28,10 @@ export default function LoginPage({
   // vissza (lásd lib/actions/auth.ts). safeReturnPath() nyílt redirect
   // ellen véd.
   const safeNext = safeReturnPath(searchParams?.next, "/profil");
+  // VÉDETT ÚTVONAL AUTH MODE (2026-10-03): ugyanaz a VédettSarok fiók és
+  // ugyanazok az actionök; csak a megjelenés egyszerűsödik (nincs Google, nincs
+  // közösségi opt-in). Normál /belepes (next nélkül) VÁLTOZATLAN.
+  const vuMode = isVedettUtvonalReturnPath(searchParams?.next);
   const [mode, setMode] = useState<"belepes" | "regisztracio">("belepes");
   const [showEmail, setShowEmail] = useState(true);
   const [joinCommunity, setJoinCommunity] = useState(false);
@@ -39,21 +44,43 @@ export default function LoginPage({
 
   return (
     <div className="mx-auto max-w-md px-4 py-12 sm:px-6">
-      <h1 className="text-2xl font-extrabold text-gray-900">Üdv a VédettSaroknál</h1>
-      <p className="mt-1.5 text-sm text-gray-500">
-        Lépj be e-maillel vagy regisztrálj új fiókot.
-      </p>
+      {vuMode ? (
+        <div data-testid="vedett-utvonal-auth-mode">
+          <div className="flex items-center gap-2.5">
+            <img src="/vedett-utvonal-logo-icon.png" alt="" aria-hidden="true" className="h-[35px] w-auto" />
+            <img src="/vedett-utvonal-wordmark.png" alt="Védett Útvonal" className="h-[22px] w-auto" />
+          </div>
+          <h1 className="mt-5 text-2xl font-extrabold text-gray-900">Belépés a Védett Útvonalhoz</h1>
+          <p className="mt-1.5 text-sm text-gray-500">
+            VédettSarok-fiókkal lépsz be — ha még nincs fiókod, a regisztrációddal ugyanilyen
+            VédettSarok-fiókot hozol létre.
+          </p>
+          <Link
+            href="/vedett-utvonal"
+            className="mt-3 inline-block text-sm font-semibold text-sni-brand-blue hover:underline"
+          >
+            Vissza a Védett Útvonalhoz
+          </Link>
+        </div>
+      ) : (
+        <>
+          <h1 className="text-2xl font-extrabold text-gray-900">Üdv a VédettSaroknál</h1>
+          <p className="mt-1.5 text-sm text-gray-500">
+            Lépj be e-maillel vagy regisztrálj új fiókot.
+          </p>
 
-      {/* Közösségi belépés (Google) */}
-      <div className="mt-6 flex flex-col gap-3">
-        <GoogleLoginButton />
-      </div>
+          {/* Közösségi belépés (Google) */}
+          <div className="mt-6 flex flex-col gap-3">
+            <GoogleLoginButton />
+          </div>
 
-      <div className="mt-5 flex items-center gap-3">
-        <div className="h-px flex-1 bg-gray-200" />
-        <span className="text-xs font-medium uppercase tracking-wide text-gray-400">vagy</span>
-        <div className="h-px flex-1 bg-gray-200" />
-      </div>
+          <div className="mt-5 flex items-center gap-3">
+            <div className="h-px flex-1 bg-gray-200" />
+            <span className="text-xs font-medium uppercase tracking-wide text-gray-400">vagy</span>
+            <div className="h-px flex-1 bg-gray-200" />
+          </div>
+        </>
+      )}
 
       {/* E-mailes belépés */}
       <div className="mt-5">
@@ -128,7 +155,8 @@ export default function LoginPage({
                   <input type="password" name="password" className="input-field mt-1.5" required minLength={6} />
                 </div>
 
-                {/* Közösségi csatlakozás opt-in */}
+                {/* Közösségi csatlakozás opt-in (VU módban rejtve) */}
+                {!vuMode && (
                 <div className="rounded-xl border border-sni-brand-teal/30 bg-[#f0fbfa] px-4 py-4 space-y-3">
                   <label className="flex items-start gap-3 cursor-pointer">
                     <input
@@ -181,6 +209,7 @@ export default function LoginPage({
                     </div>
                   )}
                 </div>
+                )}
 
                 {/* Hírlevél opt-out */}
                 <div className="rounded-xl bg-blue-50 px-4 py-3">

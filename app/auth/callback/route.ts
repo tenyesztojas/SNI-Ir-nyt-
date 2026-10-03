@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { generateDisplayName } from "@/lib/utils/display-name";
+import { safeReturnPath } from "@/lib/pwa/safeReturnPath";
 
 const POPUP_MESSAGE = "supabase:auth_complete";
 const KNOWN_OAUTH_PROVIDERS = ["github", "google", "facebook"];
@@ -9,6 +10,9 @@ export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
   const isPopup = searchParams.get("popup") === "1";
+  // Opcionális, SANITIZÁLT visszatérési cél (pl. Védett Útvonal email-
+  // megerősítés). Alapértelmezés változatlan: /profil.
+  const nextPath = safeReturnPath(searchParams.get("next"), "/profil");
 
   if (code) {
     const supabase = createClient();
@@ -71,5 +75,5 @@ export async function GET(request: Request) {
     }
   }
 
-  return NextResponse.redirect(`${origin}/profil`);
+  return NextResponse.redirect(`${origin}${nextPath}`);
 }

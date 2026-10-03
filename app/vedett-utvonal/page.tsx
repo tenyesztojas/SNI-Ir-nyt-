@@ -59,6 +59,7 @@
 import Link from "next/link";
 import { Bus, Footprints, Repeat2, HeartPulse, MapPinned, Sparkles, ArrowRight } from "lucide-react";
 import { getCurrentUserAndProfile } from "@/lib/data";
+import { signOutAction } from "@/lib/actions/auth";
 import { isVedettRouteFeatureEnabled, VEDETT_ROUTE_ACCESS_LEVEL } from "@/lib/vedett-route/config";
 import { hasVedettRouteBetaAccess } from "@/lib/vedett-route/access";
 import { routeDestinationDeepLinkSchema } from "@/lib/vedett-route/schemas";
@@ -225,6 +226,31 @@ export default async function VedettUtvonalPage({
           <img src="/vedett-utvonal-logo-icon.png" alt="" aria-hidden="true" className="h-[35.2px] w-auto sm:h-[39.6px]" />
           <img src="/vedett-utvonal-wordmark.png" alt="Védett Útvonal" className="h-[22px] w-auto sm:h-[26.4px]" />
         </h1>
+        {/* ACCOUNT ACCESS (2026-10-03) — ugyanaz a VédettSarok fiók/session.
+            Anonim: Belépés link; bejelentkezve: név/email + Kilépés
+            (kilépés után /vedett-utvonal, nem a főoldal). */}
+        <div className="ml-auto flex items-center gap-3 text-sm" data-testid="vedett-utvonal-account">
+          {user ? (
+            <>
+              <span className="max-w-[10rem] truncate font-semibold text-gray-700" title={profile?.displayName || user.email}>
+                {profile?.displayName || user.email}
+              </span>
+              <form action={signOutAction}>
+                <input type="hidden" name="next" value="/vedett-utvonal" />
+                <button type="submit" className="font-semibold text-sni-brand-blue hover:underline">
+                  Kilépés
+                </button>
+              </form>
+            </>
+          ) : (
+            <Link
+              href="/belepes?next=%2Fvedett-utvonal"
+              className="rounded-full bg-sni-brand-teal px-4 py-1.5 font-bold text-white shadow-sm hover:bg-sni-brand-blue focus:outline-none focus-visible:ring-2 focus-visible:ring-sni-brand-teal focus-visible:ring-offset-2"
+            >
+              Belépés
+            </Link>
+          )}
+        </div>
       </div>
       <p className="mt-1 text-sm text-gray-600">
         A Védett Útvonal jelenleg tesztelés alatt áll. Az útvonal- és pihenőpont-adatok

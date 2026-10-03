@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { safeReturnPath } from "@/lib/pwa/safeReturnPath";
+import { safeReturnPath, isVedettUtvonalReturnPath } from "@/lib/pwa/safeReturnPath";
 import { upsertCommunityProfile } from "@/app/kozosseg/actions";
 import type { CommunityRole } from "@/lib/community/types";
 
@@ -51,10 +51,27 @@ export async function signUpAction(
   if (joinCommunity && !communityCity) return { error: "A közösségi profilhoz add meg a települést." };
 
   const supabase = createClient();
+  // VÉDETT ÚTVONAL ACCOUNT ACCESS (2026-10-03) — a regisztráció UGYANAZ a
+  // meglévő supabase.auth.signUp (auth.users + handle_new_user trigger ->
+  // public.profiles). Ha a Védett Útvonal-ból jön (next=/vedett-utvonal...),
+  // az email-megerősítő link a MEGLÉVŐ /auth/callback-re mutat, sanitizált
+  // next-tel. Normál webes regisztrációnál nincs emailRedirectTo (változatlan).
+  const rawNext = String(formData.get("next") ?? "");
+  const fromVedettUtvonal = isVedettUtvonalReturnPath(rawNext);
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://vedettsarok.hu";
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
-    options: { data: { display_name: displayName } },
+    options: {
+      data: { display_name: displayName },
+      ...(fromVedettUtvonal
+        ? {
+            emailRedirectTo: `${siteUrl}/auth/callback?next=${encodeURIComponent(
+              safeReturnPath(rawNext, "/vedett-utvonal")
+            )}`,
+          }
+        : {}),
+    },
   });
 
   if (error) {
@@ -74,6 +91,15 @@ export async function signUpAction(
     const communityNote = joinCommunity
       ? " A közösségi profilodat belépés után a Közösség menüpontban tudod kitölteni."
       : "";
+    if (fromVedettUtvonal) {
+      // Az email-megerősítő link gyakran külső böngészőben (pl. Chrome) nyílik
+      // meg, ahol a session NEM kerül át automatikusan az appba.
+      return {
+        info:
+          "Sikeres regisztráció! Erősítsd meg az emailcímedet a kapott levélben, " +
+          "majd térj vissza a Védett Útvonal alkalmazásba, és lépj be az e-mail-címeddel és a jelszavaddal.",
+      };
+    }
     return { info: `Sikeres regisztráció! Erősítsd meg az emailcímedet a belépéshez.${communityNote}` };
   }
 
@@ -139,11 +165,19 @@ export async function changePasswordAction(
   return { info: "Jelszó sikeresen megváltoztatva." };
 }
 
-export async function signOutAction(): Promise<void> {
+// VÉDETT ÚTVONAL ACCOUNT ACCESS (2026-10-03) — return-aware kilépés. A
+// meglévő <form action={signOutAction}> hívók nem küldenek "next" mezőt, így
+// az alapértelmezett cél VÁLTOZATLANUL "/". A Védett Útvonal rejtett
+// next=/vedett-utvonal mezőt küld; safeReturnPath() nyílt redirect ellen véd.
+export async function signOutAction(formData?: FormData): Promise<void> {
   const supabase = createClient();
   await supabase.auth.signOut();
+  const nextPath = safeReturnPath(
+    formData ? String(formData.get("next") ?? "") : "",
+    "/"
+  );
   revalidatePath("/", "layout");
-  redirect("/");
+  redirect(nextPath);
 }
 
 export type ProfileActionState = { error?: string; success?: boolean } | null;

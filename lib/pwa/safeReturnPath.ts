@@ -17,3 +17,18 @@ export function safeReturnPath(value: string | null | undefined, fallback: strin
   if (value.includes("://")) return fallback;
   return value;
 }
+
+// VÉDETT ÚTVONAL ACCOUNT ACCESS (2026-10-03) — a Védett Útvonal-ból érkező
+// belépés/regisztráció/kilépés felismerése. A `next` érték ELŐSZÖR a
+// safeReturnPath()-on megy át (nyílt redirect elleni védelem), és csak a
+// pontos "/vedett-utvonal" útvonal, vagy annak alútvonala/query-je számít
+// Védett Útvonal módnak ("/vedett-utvonalx" NEM).
+export function isVedettUtvonalReturnPath(value: string | null | undefined): boolean {
+  const safe = safeReturnPath(value, "");
+  if (!safe) return false;
+  return (
+    safe === "/vedett-utvonal" ||
+    safe.startsWith("/vedett-utvonal/") ||
+    safe.startsWith("/vedett-utvonal?")
+  );
+}
