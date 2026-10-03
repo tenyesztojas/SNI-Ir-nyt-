@@ -25,9 +25,14 @@
 // felhasználó ezután bármikor választhat egy kedvencet is.
 
 import { useState } from "react";
+import dynamic from "next/dynamic";
 import FavoriteRoutesPanel, { type FavoriteRoutePreset } from "./FavoriteRoutesPanel";
 import VedettUtvonalSearchForm from "./VedettUtvonalSearchForm";
-import VedettUtvonalMap from "./VedettUtvonalMap";
+// STARTUP PERF (2026-10-03): a térkép (maplibre-gl + CSS) KORÁBBAN statikusan
+// volt importálva, így minden hidegindításkor az induló route chunkba került —
+// pedig csak az (jelenleg kikapcsolt) autós ágon használja a workspace. A
+// VedettUtvonalSearchForm ugyanezzel a dynamic({ssr:false}) mintával tölti.
+const VedettUtvonalMap = dynamic(() => import("./VedettUtvonalMap"), { ssr: false });
 import { useAddressAutocomplete } from "@/lib/vedett-route/useAddressAutocomplete";
 
 // KÖZLEKEDÉSI MÓD VÁLASZTÓ (2026-09-14) — a Védett Útvonal ebben a

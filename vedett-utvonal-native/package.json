@@ -15,6 +15,7 @@
     "@capacitor/browser": "^8.0.5",
     "@capacitor/cli": "^8.5.2",
     "@capacitor/core": "^8.5.2",
-    "@capacitor/geolocation": "^8.2.3"
+    "@capacitor/geolocation": "^8.2.3",
+    "@capacitor/splash-screen": "^8.0.2"
   }
 }

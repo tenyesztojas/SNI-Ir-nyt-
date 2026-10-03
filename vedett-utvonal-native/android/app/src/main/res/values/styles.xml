@@ -16,7 +16,12 @@
     </style>
 
 
+    <!-- Védett Útvonal indítási splash: világos háttér + logó (Android 12+ rendszer-
+         splash: ikon a háttérszínen; régebbi Androidon a drawable/splash.png). -->
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
         <item name="android:background">@drawable/splash</item>
+        <item name="windowSplashScreenBackground">#F3F4F6</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash_logo</item>
+        <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
     </style>
 </resources>

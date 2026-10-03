@@ -19,6 +19,21 @@ const config: CapacitorConfig = {
     androidScheme: 'https',
     cleartext: false,
   },
+  // Natív indítási splash (@capacitor/splash-screen): a launch téma splash-e a
+  // BridgeActivity első frame-jénél véget érne, és a távoli oldal betöltéséig
+  // fehér WebView látszana. A splash marad, amíg a Védett Útvonal oldal az első
+  // rendert jelzi (az oldal a natív hídon át hívja a SplashScreen.hide-ot),
+  // de LEGFELJEBB launchShowDuration ideig — soha nem ragadhat be.
+  backgroundColor: '#F3F4F6',
+  plugins: {
+    SplashScreen: {
+      launchShowDuration: 4000,
+      launchAutoHide: true,
+      launchFadeOutDuration: 150,
+      backgroundColor: '#F3F4F6',
+      showSpinner: false,
+    },
+  },
   android: {
     // Explicit natív marker a WebView User-Agent-jében — a Next.js layout
     // (app/layout.tsx) ezt olvassa szerver-oldalon, hogy natív módban
