@@ -13,10 +13,13 @@ export async function GET(request: Request) {
   // Opcionális, SANITIZÁLT visszatérési cél (pl. Védett Útvonal email-
   // megerősítés). Alapértelmezés változatlan: /profil.
   const nextPath = safeReturnPath(searchParams.get("next"), "/profil");
+  const hasExplicitNext = searchParams.get("next") !== null;
+  let exchangeFailed = false;
 
   if (code) {
     const supabase = createClient();
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+    if (error || !data.user) exchangeFailed = true;
 
     if (!error && data.user) {
       const user = data.user;
@@ -73,6 +76,17 @@ export async function GET(request: Request) {
         { headers: { "Content-Type": "text/html; charset=utf-8" } }
       );
     }
+  }
+
+  // Védett Útvonal (explicit next): sikertelen kódcsere / provider hiba esetén
+  // a /belepes ismert hibakóddal jelzi (nyers hibaszöveg nélkül). Next nélkül a
+  // viselkedés VÁLTOZATLAN.
+  const providerError = searchParams.get("error");
+  if (hasExplicitNext && !isPopup && (exchangeFailed || providerError)) {
+    const code = providerError === "access_denied" ? "oauth_cancelled" : "oauth_failed";
+    return NextResponse.redirect(
+      `${origin}/belepes?next=${encodeURIComponent(nextPath)}&error=${code}`
+    );
   }
 
   return NextResponse.redirect(`${origin}${nextPath}`);

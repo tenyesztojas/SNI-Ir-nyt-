@@ -20,7 +20,7 @@ function SubmitButton({ label }: { label: string }) {
 export default function LoginPage({
   searchParams,
 }: {
-  searchParams?: { next?: string };
+  searchParams?: { next?: string; error?: string };
 }) {
   // VÉDETT ÚTVONAL NAVIGATION-ONLY PWA sprint (2026-09-21) — ha a Védett
   // Útvonal PWA shell (vagy bármely más hívó) egy "next" visszatérési
@@ -32,6 +32,13 @@ export default function LoginPage({
   // ugyanazok az actionök; csak a megjelenés egyszerűsödik (nincs Google, nincs
   // közösségi opt-in). Normál /belepes (next nélkül) VÁLTOZATLAN.
   const vuMode = isVedettUtvonalReturnPath(searchParams?.next);
+  // A /auth/callback csak ISMERT kódokat küld; a nyers hibaszöveg nem jelenik meg.
+  const oauthError =
+    searchParams?.error === "oauth_failed"
+      ? "A Google-belépés nem sikerült. Próbáld újra, vagy lépj be e-mailben."
+      : searchParams?.error === "oauth_cancelled"
+        ? "A Google-belépés megszakadt."
+        : null;
   const [mode, setMode] = useState<"belepes" | "regisztracio">("belepes");
   const [showEmail, setShowEmail] = useState(true);
   const [joinCommunity, setJoinCommunity] = useState(false);
@@ -61,6 +68,20 @@ export default function LoginPage({
           >
             Vissza a Védett Útvonalhoz
           </Link>
+
+          {/* Google belépés: ugyanaz a VédettSarok fiók; natív Capacitorban a
+              Browser + deep link flow, böngészőben a webes OAuth. */}
+          {oauthError && (
+            <p className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">{oauthError}</p>
+          )}
+          <div className="mt-5 flex flex-col gap-3">
+            <GoogleLoginButton next={safeNext} />
+          </div>
+          <div className="mt-5 flex items-center gap-3">
+            <div className="h-px flex-1 bg-gray-200" />
+            <span className="text-xs font-medium uppercase tracking-wide text-gray-400">vagy</span>
+            <div className="h-px flex-1 bg-gray-200" />
+          </div>
         </div>
       ) : (
         <>

@@ -1,17 +1,46 @@
 "use client";
 
+import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { safeReturnPath } from "@/lib/pwa/safeReturnPath";
+import { isNativeCapacitor, startNativeGoogleLogin } from "@/lib/auth/nativeGoogleOAuth";
 
-export default function GoogleLoginButton() {
+// `next` NÉLKÜL a viselkedés a normál VédettSarok webes Google belépés
+// (VÁLTOZATLAN). `next`-tel (Védett Útvonal /belepes mód):
+//  - normál böngésző: ugyanaz a webes OAuth, de a callback a sanitizált
+//    next-re tér vissza;
+//  - Capacitor natív shell: Browser (Custom Tab) + deep link flow
+//    (lib/auth/nativeGoogleOAuth.ts); a WebView SOHA nem navigál a Google-re.
+export default function GoogleLoginButton({ next }: { next?: string } = {}) {
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
   async function handleLogin() {
+    setErrorMessage(null);
     const supabase = createClient();
+
+    if (next === undefined) {
+      await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo: `${window.location.origin}/auth/callback` },
+      });
+      return;
+    }
+
+    const safeNext = safeReturnPath(next, "/profil");
+    if (isNativeCapacitor()) {
+      await startNativeGoogleLogin(supabase, { next: safeNext, onError: setErrorMessage });
+      return;
+    }
     await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(safeNext)}`,
+      },
     });
   }
 
   return (
+    <>
     <button
       onClick={handleLogin}
       className="flex w-full items-center justify-center gap-3 rounded-full border border-gray-200 bg-white px-6 py-3.5 text-base font-semibold text-gray-700 shadow-sm transition-all duration-200 hover:bg-gray-50 hover:shadow-md active:scale-95"
@@ -24,5 +53,9 @@ export default function GoogleLoginButton() {
       </svg>
       Belépés Google-fiókkal
     </button>
+    {errorMessage && (
+      <p className="text-sm text-red-600" role="alert">{errorMessage}</p>
+    )}
+    </>
   );
 }

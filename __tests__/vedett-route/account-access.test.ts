@@ -62,12 +62,9 @@ describe("/belepes: Védett Útvonal auth mode", () => {
   test("a mode a sanitizált next-ből jön", () => {
     assert.match(belepes, /const vuMode = isVedettUtvonalReturnPath\(searchParams\?\.next\)/);
   });
-  test("Google belépés csak a normál ágban renderelődik", () => {
-    const vuIdx = belepes.indexOf("vuMode ? (");
-    const googleIdx = belepes.indexOf("<GoogleLoginButton />");
-    const elseIdx = belepes.indexOf(") : (", vuIdx);
-    assert.ok(vuIdx > 0 && googleIdx > elseIdx, "Google a normál (else) ágban");
+  test("Google belépés: normál ágban next nélkül, VU módban next-tel (natív Google fázis)", () => {
     assert.equal((belepes.match(/<GoogleLoginButton \/>/g) ?? []).length, 1);
+    assert.equal((belepes.match(/<GoogleLoginButton next=\{safeNext\} \/>/g) ?? []).length, 1);
   });
   test("közösségi opt-in rejtve VU módban", () => {
     assert.match(belepes, /\{!vuMode && \(\s*<div className="rounded-xl border border-sni-brand-teal\/30[\s\S]*?joinCommunity/);

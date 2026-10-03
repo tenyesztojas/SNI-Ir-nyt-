@@ -22,6 +22,18 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- Google belépés deep link (Supabase OAuth redirect):
+                 hu.vedettsarok.utvonal://auth/callback — pontos séma/host/útvonal. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="hu.vedettsarok.utvonal"
+                    android:host="auth"
+                    android:path="/callback" />
+            </intent-filter>
+
         </activity>
 
         <provider
