@@ -11,6 +11,7 @@ import type { SavedPlace } from "@/lib/vedett-route/savedPlaces/types";
 import { routeLocationToSavable } from "@/lib/vedett-route/savedPlaces/adapt";
 import { SAVED_PLACES_LIMIT, SAVED_PLACE_NAME_MAX } from "@/lib/vedett-route/savedPlaces/schemas";
 
+const SMALL = "min-h-[36px] rounded-md border border-gray-300 px-2 text-xs font-semibold text-sni-text hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-sni-brand-teal";
 const NAME_SUGGESTIONS = ["Otthon", "Munkahely", "Iskola"];
 const BTN = "min-h-[44px] rounded-lg border border-gray-300 px-3 text-sm font-semibold text-sni-text hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-sni-brand-teal";
 
@@ -39,6 +40,8 @@ export default function SavedPlacesPanel({
   const [saveSource, setSaveSource] = useState<"origin" | "destination">("destination");
   const [newName, setNewName] = useState("");
   const [busy, setBusy] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [menuId, setMenuId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoadError(null);
@@ -84,6 +87,7 @@ export default function SavedPlacesPanel({
       if (!res.ok || !json?.ok) throw new Error(json?.message ?? "A mentés sikertelen.");
       setPlaces((prev) => [...(prev ?? []), json.place as SavedPlace]);
       setNewName("");
+      setShowForm(false);
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "A mentés sikertelen.");
     } finally {
@@ -145,9 +149,9 @@ export default function SavedPlacesPanel({
       {places !== null && places.length === 0 && <p className="text-sm text-gray-600">Még nincs mentett helyed.</p>}
 
       {places && places.length > 0 && (
-        <ul className="space-y-2">
+        <ul className="space-y-1.5">
           {places.map((p) => (
-            <li key={p.id} className="rounded-lg bg-gray-50 p-2">
+            <li key={p.id} className="rounded-lg bg-gray-50 px-2 py-1.5">
               {renamingId === p.id ? (
                 <div className="flex flex-wrap gap-2">
                   <input
@@ -166,39 +170,56 @@ export default function SavedPlacesPanel({
                 </div>
               ) : (
                 <>
-                  <p className="text-sm font-semibold text-sni-text">{p.displayName}</p>
-                  <p className="text-xs text-gray-600">{p.address}</p>
-                  {deletingId === p.id ? (
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <span className="text-sm">Biztosan törlöd?</span>
-                      <button type="button" className={BTN} disabled={busy} onClick={() => void handleDelete(p.id)}>
-                        Igen, törlés
-                      </button>
-                      <button type="button" className={BTN} onClick={() => setDeletingId(null)}>
-                        Mégse
-                      </button>
+                  <div className="flex items-center gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-sni-text">{p.displayName}</p>
+                      <p className="truncate text-xs text-gray-600">{p.address}</p>
                     </div>
-                  ) : (
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      <button type="button" className={BTN} onClick={() => onUseAsOrigin(p)}>
-                        Indulás
-                      </button>
-                      <button type="button" className={BTN} onClick={() => onUseAsDestination(p)}>
-                        Úti cél
-                      </button>
+                    <button type="button" className={BTN} onClick={() => onUseAsOrigin(p)}>
+                      Indulás
+                    </button>
+                    <button type="button" className={BTN} onClick={() => onUseAsDestination(p)}>
+                      Úti cél
+                    </button>
+                    <button
+                      type="button"
+                      className={`${BTN} px-2`}
+                      aria-label="További műveletek"
+                      aria-expanded={menuId === p.id}
+                      onClick={() => {
+                        setMenuId(menuId === p.id ? null : p.id);
+                        setDeletingId(null);
+                      }}
+                    >
+                      ⋯
+                    </button>
+                  </div>
+                  {menuId === p.id && deletingId !== p.id && (
+                    <div className="mt-1.5 flex gap-2">
                       <button
                         type="button"
-                        className={BTN}
+                        className={SMALL}
                         onClick={() => {
                           setRenamingId(p.id);
                           setRenameValue(p.displayName);
-                          setDeletingId(null);
+                          setMenuId(null);
                         }}
                       >
                         Átnevezés
                       </button>
-                      <button type="button" className={BTN} onClick={() => { setDeletingId(p.id); setRenamingId(null); }}>
+                      <button type="button" className={SMALL} onClick={() => setDeletingId(p.id)}>
                         Törlés
+                      </button>
+                    </div>
+                  )}
+                  {deletingId === p.id && (
+                    <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                      <span className="text-sm">Biztosan törlöd?</span>
+                      <button type="button" className={SMALL} disabled={busy} onClick={() => void handleDelete(p.id)}>
+                        Igen, törlés
+                      </button>
+                      <button type="button" className={SMALL} onClick={() => { setDeletingId(null); setMenuId(null); }}>
+                        Mégse
                       </button>
                     </div>
                   )}
@@ -209,40 +230,53 @@ export default function SavedPlacesPanel({
         </ul>
       )}
 
-      <div className="mt-3 space-y-2 border-t border-gray-200 pt-3">
-        <p className="text-sm font-semibold text-sni-text">Hely mentése</p>
-        <div className="flex gap-2" role="group" aria-label="Melyik helyet mented?">
-          <button type="button" aria-pressed={saveSource === "origin"} className={BTN} onClick={() => setSaveSource("origin")}>
-            Indulási hely
+      <div className="mt-2 border-t border-gray-200 pt-2">
+        {!showForm ? (
+          <button type="button" className={BTN} onClick={() => setShowForm(true)}>
+            + Új hely mentése
           </button>
-          <button type="button" aria-pressed={saveSource === "destination"} className={BTN} onClick={() => setSaveSource("destination")}>
-            Úti cél
-          </button>
-        </div>
-        {savable ? (
-          <p className="text-xs text-gray-600">{savable.address}</p>
         ) : (
-          <p className="text-xs text-gray-600">Előbb válassz ki egy címet a javaslatok közül (vagy a térképen), hogy menthesd.</p>
+          <div className="space-y-2">
+            <p className="text-sm font-semibold text-sni-text">Hely mentése</p>
+            <div className="flex gap-2" role="group" aria-label="Melyik helyet mented?">
+              <button type="button" aria-pressed={saveSource === "origin"} className={BTN} onClick={() => setSaveSource("origin")}>
+                Indulási hely
+              </button>
+              <button type="button" aria-pressed={saveSource === "destination"} className={BTN} onClick={() => setSaveSource("destination")}>
+                Úti cél
+              </button>
+            </div>
+            {savable ? (
+              <p className="text-xs text-gray-600">{savable.address}</p>
+            ) : (
+              <p className="text-xs text-gray-600">Előbb válassz ki egy címet a javaslatok közül (vagy a térképen), hogy menthesd.</p>
+            )}
+            <input
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              maxLength={SAVED_PLACE_NAME_MAX}
+              placeholder="Név (pl. Nagyi, Edzés)"
+              aria-label="A mentett hely neve"
+              className="min-h-[44px] w-full rounded-lg border border-gray-300 px-3 text-sm"
+            />
+            <div className="flex flex-wrap gap-2">
+              {NAME_SUGGESTIONS.map((s) => (
+                <button key={s} type="button" className={SMALL} onClick={() => setNewName(s)}>
+                  {s}
+                </button>
+              ))}
+            </div>
+            {atLimit && <p className="text-xs text-amber-800">Elérted a {SAVED_PLACES_LIMIT} mentett helyes korlátot. Törölj egyet az újhoz.</p>}
+            <div className="flex gap-2">
+              <button type="button" className={BTN} disabled={!savable || !newName.trim() || busy || atLimit} onClick={() => void handleCreate()}>
+                Mentés
+              </button>
+              <button type="button" className={BTN} onClick={() => setShowForm(false)}>
+                Mégse
+              </button>
+            </div>
+          </div>
         )}
-        <input
-          value={newName}
-          onChange={(e) => setNewName(e.target.value)}
-          maxLength={SAVED_PLACE_NAME_MAX}
-          placeholder="Név (pl. Nagyi, Edzés)"
-          aria-label="A mentett hely neve"
-          className="min-h-[44px] w-full rounded-lg border border-gray-300 px-3 text-sm"
-        />
-        <div className="flex flex-wrap gap-2">
-          {NAME_SUGGESTIONS.map((s) => (
-            <button key={s} type="button" className={BTN} onClick={() => setNewName(s)}>
-              {s}
-            </button>
-          ))}
-        </div>
-        {atLimit && <p className="text-xs text-amber-800">Elérted a {SAVED_PLACES_LIMIT} mentett helyes korlátot. Törölj egyet az újhoz.</p>}
-        <button type="button" className={BTN} disabled={!savable || !newName.trim() || busy || atLimit} onClick={() => void handleCreate()}>
-          Mentés
-        </button>
       </div>
 
       {actionError && (
