@@ -41,6 +41,13 @@ const config: CapacitorConfig = {
     // banner). NEM találgatás: mi állítjuk be, minden kérésen jelen van.
     appendUserAgent: 'VedettUtvonalNative/0.1',
   },
+  ios: {
+    // Ugyanaz a natív marker, mint Androidon — a Next.js layout ebből tudja,
+    // hogy natív módban elrejtse a VédettSarok site-chrome-ot.
+    // contentInset (alapértelmezett 'automatic'): a WKWebView magától a biztonságos
+    // területen belül marad (notch / Dynamic Island / home indicator) — nincs web CSS módosítás.
+    appendUserAgent: 'VedettUtvonalNative/0.1',
+  },
 };
 
 export default config;
