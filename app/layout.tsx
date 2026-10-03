@@ -46,6 +46,18 @@ export default function RootLayout({
   const pathname = headers().get("x-pathname") ?? "";
   const isVedettUtvonalPwaShell = pathname.startsWith("/vedett-utvonal/app");
 
+  // NATÍV VÉDETT ÚTVONAL (Capacitor Android shell, 2026-10-03): a shell a
+  // capacitor.config.ts-ben (android.appendUserAgent) egy EXPLICIT, saját
+  // jelölőt (VedettUtvonalNative) fűz a WebView User-Agent-jéhez — ez nem
+  // UA-találgatás, hanem általunk beállított marker, és MINDEN kérésen
+  // (navigáción át is) jelen van, szerver-oldalon az első renderben is
+  // olvasható (nincs villanás). Natív módban a teljes VédettSarok site-
+  // chrome (Header/Footer/PWA-banner/PWA-tracker) elrejtődik, hogy az app
+  // ne vezessen el a teljes weboldal menüjébe. Normál böngészőben a
+  // marker nincs jelen -> a viselkedés változatlan.
+  const isNativeApp = (headers().get("user-agent") ?? "").includes("VedettUtvonalNative");
+  const hideSiteChrome = isVedettUtvonalPwaShell || isNativeApp;
+
   return (
     <html lang="hu">
       <head>
@@ -77,11 +89,11 @@ export default function RootLayout({
       </head>
       <body className="flex min-h-screen flex-col bg-gray-100 font-sans antialiased">
         <AccessibilityProvider>
-          {!isVedettUtvonalPwaShell && <Header />}
+          {!hideSiteChrome && <Header />}
           <main className="flex-1">{children}</main>
-          {!isVedettUtvonalPwaShell && <Footer />}
-          {!isVedettUtvonalPwaShell && <PWAInstallBanner />}
-          {!isVedettUtvonalPwaShell && <PWASessionTracker />}
+          {!hideSiteChrome && <Footer />}
+          {!hideSiteChrome && <PWAInstallBanner />}
+          {!hideSiteChrome && <PWASessionTracker />}
         </AccessibilityProvider>
 
         {/* Google Analytics – nonce szükséges a CSP script-src nonce-alapú engedélyhez */}

@@ -51,6 +51,13 @@ function detectPlatform(): Platform {
 
 function isStandalone(): boolean {
   if (typeof window === "undefined") return false;
+  // Capacitor natív app (Védett Útvonal Android shell): a WebView-ba a
+  // Capacitor bridge beinjektálja a window.Capacitor-t (hivatalos runtime
+  // jelző, nem UA-találgatás). Natív appon BELÜL SOSEM kínálunk PWA-
+  // telepítést — az app már telepítve van. A normál weboldal/böngésző
+  // viselkedése változatlan (ott nincs window.Capacitor).
+  const capacitor = (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
+  if (capacitor?.isNativePlatform?.() === true) return true;
   return (
     window.matchMedia("(display-mode: standalone)").matches ||
     // iOS Safari saját, nem-szabványos jelzője — típusosan kezelve (nincs
