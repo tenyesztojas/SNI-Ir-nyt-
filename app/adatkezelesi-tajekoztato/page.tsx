@@ -1,5 +1,6 @@
 /* eslint-disable react/no-unescaped-entities */
 import Link from "next/link";
+import AnalyticsSettingsButton from "@/components/analytics/AnalyticsSettingsButton";
 
 function Section({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {
   return (
@@ -618,8 +619,8 @@ export default function AdatkezelesiTajekoztato() {
           <P>A Védett Útvonal saját analitikai eseményeiben az Adatkezelő nem továbbít a Google Analytics részére pontos GPS-koordinátát, konkrét indulási vagy célcímet, gyermekadatot vagy szenzoros profilértéket.</P>
         </Sub>
         <Sub n="VU AT 9.2.">
-          <P>A Google (Google Analytics) a jelen tájékoztató szerinti szolgáltatóként és címzettként jár el; az adatait a Google saját tájékoztatói szerint is kezeli. Jogalap: a felhasználó hozzájárulása (GDPR 6. cikk (1) bekezdés a) pont), mivel a statisztikai célú tárolás és hozzáférés nem minősül szigorúan szükségesnek. A felhasználó hozzájárulását az alkalmazandó hozzájárulás-kezelési mechanizmuson keresztül adhatja meg és vonhatja vissza.</P>
-          {/* TODO PRIVACY RELEASE BLOCKER: GA4 consent gating / Consent Mode implementáció szükséges a jelen szöveg éles alkalmazásához. A GA4 jelenleg feltétel nélkül töltődik. */}
+          <P>A Google (Google Analytics) a jelen tájékoztató szerinti szolgáltatóként és címzettként jár el; az adatait a Google saját tájékoztatói szerint is kezeli. Jogalap: a felhasználó hozzájárulása (GDPR 6. cikk (1) bekezdés a) pont), mivel a statisztikai célú tárolás és hozzáférés nem minősül szigorúan szükségesnek. A Google Analytics (gtag.js) a hozzájárulás megadásáig nem töltődik be, és a hozzájárulás hiányában vagy elutasítása esetén a Google Analytics felé adat nem kerül továbbításra. A felhasználó a hozzájárulását az első megjelenéskor feltett kérdésnél adhatja meg vagy utasíthatja el, és később az „Analitikai beállítások” gombbal bármikor módosíthatja vagy visszavonhatja; a választást az eszköz helyi tárolója jegyzi meg (ez a választáson kívül más adatot nem tartalmaz). Visszavonás esetén a további adatküldés leáll, és a Google Analytics sütiket a rendszer törli. A hozzájárulás visszavonása nem érinti a visszavonás előtti adatkezelés jogszerűségét. Az analitika elutasítása nem korlátozza a szolgáltatások használatát.</P>
+          <AnalyticsSettingsButton className="mt-2 rounded-lg border border-gray-400 bg-white px-4 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50" />
         </Sub>
       </Section>
 

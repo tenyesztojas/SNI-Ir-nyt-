@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Script from "next/script";
 import { cookies, headers } from "next/headers";
 import "@fontsource/nunito/400.css";
 import "@fontsource/nunito/500.css";
@@ -12,6 +11,7 @@ import Footer from "@/components/Footer";
 import PWAInstallBanner from "@/components/PWAInstallBanner";
 import PWASessionTracker from "@/components/PWASessionTracker";
 import SignOutDataCleanup from "@/components/SignOutDataCleanup";
+import AnalyticsConsent from "@/components/analytics/AnalyticsConsent";
 import { AccessibilityProvider } from "@/components/accessibility/AccessibilityProvider";
 
 export const metadata: Metadata = {
@@ -111,15 +111,10 @@ export default function RootLayout({
         </AccessibilityProvider>
         <SignOutDataCleanup />
 
-        {/* Google Analytics – nonce szükséges a CSP script-src nonce-alapú engedélyhez */}
-        <Script
-          nonce={nonce}
-          src="https://www.googletagmanager.com/gtag/js?id=G-T748C867DW"
-          strategy="afterInteractive"
-        />
-        <Script nonce={nonce} id="ga-init" strategy="afterInteractive">
-          {`window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-T748C867DW',{page_location:location.origin+location.pathname,page_referrer:''});`}
-        </Script>
+        {/* Google Analytics – CSAK explicit hozzájárulás után töltődik be (Basic consent).
+            A gtag.js betöltése/config a kliensoldali AnalyticsConsent komponensben történik;
+            page_location: origin+pathname, page_referrer: üres (lásd lib/analytics/consent.ts). */}
+        <AnalyticsConsent measurementId="G-T748C867DW" nonce={nonce} />
       </body>
     </html>
   );

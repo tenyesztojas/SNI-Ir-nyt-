@@ -55,7 +55,8 @@ describe("GA4 helper", () => {
   test("GA4 id retained; page_location stripped of query/hash", () => {
     const layout = read("app/layout.tsx");
     assert.match(layout, /G-T748C867DW/);
-    assert.match(layout, /page_location:location\.origin\+location\.pathname/);
+    assert.match(strip(read("lib/analytics/consent.ts")), /page_location: win\.location\.origin \+ win\.location\.pathname/);
+    assert.match(strip(read("lib/analytics/consent.ts")), /page_referrer: ""/);
   });
   test("native UA markers keep the VedettUtvonalNative/0.1 prefix", () => {
     const cfg = read("vedett-utvonal-native/capacitor.config.ts");

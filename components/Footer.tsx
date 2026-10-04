@@ -1,4 +1,5 @@
 import Link from "next/link";
+import AnalyticsSettingsButton from "@/components/analytics/AnalyticsSettingsButton";
 
 export default function Footer() {
   return (
@@ -74,6 +75,7 @@ export default function Footer() {
                 <Link href="/adatkezelesi-tajekoztato" className="text-gray-500 hover:text-sni-brand-blue hover:underline">
                   Adatkezelési tájékoztató
                 </Link>
+                <AnalyticsSettingsButton className="text-left text-gray-500 hover:text-sni-brand-blue hover:underline" />
               </div>
             </div>
           </div>

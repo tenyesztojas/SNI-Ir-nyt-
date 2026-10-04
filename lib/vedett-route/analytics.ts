@@ -59,6 +59,9 @@ export function trackVedettRouteEvent(
   try {
     if (typeof window === "undefined") return;
     if (!VEDETT_ROUTE_EVENTS.includes(event)) return;
+    // Fail-closed: hozzájárulás (granted) nélkül NO-OP. A kulcs azonos a
+    // lib/analytics/consent.ts ANALYTICS_CONSENT_KEY értékével (teszt őrzi).
+    if (window.localStorage.getItem("vs-analytics-consent") !== "granted") return;
     const gtag = (window as unknown as { gtag?: GtagFn }).gtag;
     if (typeof gtag !== "function") return;
     const params = buildEventParams({
