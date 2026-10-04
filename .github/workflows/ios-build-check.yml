@@ -1,0 +1,54 @@
+name: iOS build check (unsigned)
+
+# Csak bizonyítja, hogy az iOS projekt Apple account / signing / provisioning
+# NÉLKÜL lefordul. Nincs secret, nincs TestFlight, nincs deploy.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "vedett-utvonal-native/ios/**"
+      - "vedett-utvonal-native/package.json"
+      - "vedett-utvonal-native/package-lock.json"
+      - "vedett-utvonal-native/capacitor.config.ts"
+      - ".github/workflows/ios-build-check.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  ios-build:
+    runs-on: macos-26
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: vedett-utvonal-native
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: vedett-utvonal-native/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Capacitor sync (iOS)
+        run: npx cap sync ios
+
+      - name: Xcode version
+        run: xcodebuild -version
+
+      - name: Build (unsigned, iOS Simulator SDK)
+        run: |
+          xcodebuild build \
+            -project ios/App/App.xcodeproj \
+            -scheme App \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY=""
