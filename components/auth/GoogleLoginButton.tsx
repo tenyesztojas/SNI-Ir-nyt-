@@ -1,5 +1,6 @@
 "use client";
 
+import { trackVedettRouteEvent } from "@/lib/vedett-route/analytics";
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { safeReturnPath } from "@/lib/pwa/safeReturnPath";
@@ -18,6 +19,7 @@ export default function GoogleLoginButton({ next }: { next?: string } = {}) {
   const [returning, setReturning] = useState(false);
 
   async function handleLogin() {
+    trackVedettRouteEvent("login_started", { authState: "anonymous" });
     setErrorMessage(null);
     const supabase = createClient();
 

@@ -6,6 +6,7 @@ import { hasFamilyBetaAccess } from "@/lib/family/config";
 import { hasAnyFamilyAccessSignal } from "@/lib/family/data";
 import ProfileNameForm from "@/components/ProfileNameForm";
 import PasswordChangeForm from "@/components/PasswordChangeForm";
+import DeleteAccountSection from "@/components/DeleteAccountSection";
 
 const placeStatusLabel: Record<string, string> = {
   pending: "Jóváhagyásra vár",
@@ -69,6 +70,9 @@ export default async function ProfilePage() {
             <p className="text-sm text-gray-500">{user.email}</p>
           </div>
         </div>
+        <Link href="/vedett-utvonal" className="text-sm font-semibold text-sni-brand-blue hover:underline">
+          ← Vissza a Védett Útvonalhoz
+        </Link>
         <form action={signOutAction}>
           <button type="submit" className="btn-secondary">Kijelentkezés</button>
         </form>
@@ -106,6 +110,8 @@ export default async function ProfilePage() {
       )}
 
       <PasswordChangeForm />
+
+      <DeleteAccountSection />
 
       <section className="mt-8">
         <h2 className="text-lg font-bold text-gray-900">Beküldött helyek ({places.length})</h2>

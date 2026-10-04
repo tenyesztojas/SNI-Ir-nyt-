@@ -236,6 +236,7 @@ import {
   type LiveAlternativeTrigger,
 } from "@/lib/vedett-route/navigation/liveAlternative";
 import { computeJourneyFingerprint } from "@/lib/vedett-route/fingerprint";
+import { trackVedettRouteEvent } from "@/lib/vedett-route/analytics";
 import SavedPlacesPanel from "@/components/vedett-utvonal/SavedPlacesPanel";
 import { savedPlaceToRouteLocation } from "@/lib/vedett-route/savedPlaces/adapt";
 // SPRINT 8.5 — a MEGLÉVŐ 8.3 engine (csak export/signature szinten
@@ -1028,6 +1029,7 @@ function RankedJourneyCard({
   };
 
   const startNavigation = () => {
+    trackVedettRouteEvent("navigation_started", { authState: isAuthenticated ? "authenticated" : "anonymous" });
     bumpNavigationSession();
     rerouteGuardRef.current = resetRerouteGuard();
     setAutomaticRerouteStatus("IDLE");
@@ -1041,6 +1043,7 @@ function RankedJourneyCard({
   };
 
   const stopNavigation = () => {
+    trackVedettRouteEvent("navigation_finished", { authState: isAuthenticated ? "authenticated" : "anonymous" });
     bumpNavigationSession();
     rerouteGuardRef.current = resetRerouteGuard();
     setAutomaticRerouteStatus("IDLE");
@@ -3436,6 +3439,10 @@ export default function VedettUtvonalSearchForm({
   // csak EGY mód aktív (nincs kétértelmű boolean, lásd handleSubmit lent).
   const [timeMode, setTimeMode] = useState<"DEPART_AT" | "ARRIVE_BY">("DEPART_AT");
   const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    trackVedettRouteEvent("vedett_route_open", { authState: isAuthenticated ? "authenticated" : "anonymous" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [result, setResult] = useState<SearchApiResponse | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   // Geocoding hardening (2026-09-10) — a térképes célpont-kijelölő NYITOTT/
@@ -4025,6 +4032,8 @@ export default function VedettUtvonalSearchForm({
         molBubiEnabled,
         bikePropulsion,
       };
+      const analyticsAuthState = isAuthenticated ? "authenticated" : "anonymous";
+      trackVedettRouteEvent("route_search", { authState: analyticsAuthState });
       const res = await fetch("/api/admin/vedett-utvonal/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -4032,6 +4041,10 @@ export default function VedettUtvonalSearchForm({
       });
       const data = (await res.json()) as SearchApiResponse;
       setResult(data);
+      trackVedettRouteEvent(data.ok ? "route_search_success" : "route_search_error", {
+        authState: analyticsAuthState,
+        result: data.ok ? "success" : "error",
+      });
       // Geocoding hardening (2026-09-10), 11-12. pont — az address_approximate
       // válasz esetén elmentjük a szerver által adott közelítő koordinátát,
       // hogy a térképes kijelölő ERRE fókuszálva induljon el (nem
@@ -4092,6 +4105,7 @@ export default function VedettUtvonalSearchForm({
       }
     } catch {
       setResult({ ok: false, reason: "routing_engine_unavailable", message: "Az útvonaltervezés átmenetileg nem érhető el." });
+      trackVedettRouteEvent("route_search_error", { authState: isAuthenticated ? "authenticated" : "anonymous", result: "error" });
     } finally {
       setLoading(false);
     }
@@ -4105,8 +4119,14 @@ export default function VedettUtvonalSearchForm({
         isAuthenticated={isAuthenticated}
         currentOrigin={origin as never}
         currentDestination={destination as never}
-        onUseAsOrigin={(p) => setOrigin(savedPlaceToRouteLocation(p))}
-        onUseAsDestination={(p) => setDestination(savedPlaceToRouteLocation(p))}
+        onUseAsOrigin={(p) => {
+          trackVedettRouteEvent("saved_place_used", { authState: "authenticated" });
+          setOrigin(savedPlaceToRouteLocation(p));
+        }}
+        onUseAsDestination={(p) => {
+          trackVedettRouteEvent("saved_place_used", { authState: "authenticated" });
+          setDestination(savedPlaceToRouteLocation(p));
+        }}
       />
 
       <form ref={formRef} onSubmit={handleSubmit} className="mt-3 space-y-3">

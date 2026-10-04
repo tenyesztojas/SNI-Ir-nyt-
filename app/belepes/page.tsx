@@ -7,6 +7,7 @@ import { signInAction, signUpAction, AuthActionState } from "@/lib/actions/auth"
 import Link from "next/link";
 import { safeReturnPath, isVedettUtvonalReturnPath } from "@/lib/pwa/safeReturnPath";
 import GoogleLoginButton from "@/components/auth/GoogleLoginButton";
+import { trackVedettRouteEvent } from "@/lib/vedett-route/analytics";
 
 function SubmitButton({ label }: { label: string }) {
   const { pending } = useFormStatus();
@@ -143,7 +144,7 @@ export default function LoginPage({
             {state?.info ? (
               <p className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{state.info}</p>
             ) : mode === "belepes" ? (
-              <form action={signInFormAction} className="flex flex-col gap-4">
+              <form action={signInFormAction} onSubmit={() => trackVedettRouteEvent("login_started", { authState: "anonymous" })} className="flex flex-col gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Email</label>
                   <input type="email" name="email" className="input-field mt-1.5" required />
@@ -162,7 +163,7 @@ export default function LoginPage({
                 </p>
               </form>
             ) : (
-              <form action={signUpFormAction} className="flex flex-col gap-4">
+              <form action={signUpFormAction} onSubmit={() => trackVedettRouteEvent("registration_started", { authState: "anonymous" })} className="flex flex-col gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Becenév</label>
                   <input name="displayName" className="input-field mt-1.5" placeholder="Pl. Anna" required />

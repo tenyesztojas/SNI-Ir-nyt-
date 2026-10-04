@@ -138,8 +138,8 @@ describe("saved places — UI wiring (static)", () => {
   const page = read("app/vedett-utvonal/page.tsx");
   test("panel is wired into the existing planner state for origin and destination", () => {
     assert.match(form, /<SavedPlacesPanel/);
-    assert.match(form, /onUseAsOrigin=\{\(p\) => setOrigin\(savedPlaceToRouteLocation\(p\)\)\}/);
-    assert.match(form, /onUseAsDestination=\{\(p\) => setDestination\(savedPlaceToRouteLocation\(p\)\)\}/);
+    assert.match(form, /onUseAsOrigin=\{\(p\) => \{[\s\S]*?setOrigin\(savedPlaceToRouteLocation\(p\)\);/);
+    assert.match(form, /onUseAsDestination=\{\(p\) => \{[\s\S]*?setDestination\(savedPlaceToRouteLocation\(p\)\);/);
   });
   test("anonymous sees a CTA, not a management UI; no localStorage", () => {
     assert.match(panel, /if \(!isAuthenticated\)[\s\S]*?\/belepes\?next=/);

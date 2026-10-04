@@ -77,7 +77,8 @@
 // nélküli "Rákóczi út" találat `isBareRoadOnlyResult` szerint puszta út,
 // a POI-ág explicit kizárja — ez marad APPROXIMATE, ahogy korábban is.
 export const NOMINATIM_URL = "https://nominatim.openstreetmap.org/search";
-const USER_AGENT = "SNI-Iranytu-VedettUtvonal/1.0 (holvay.csaba@gmail.com)";
+// Nincs személyes email a User-Agentben (ASCII, szervezeti/product azonosító).
+const USER_AGENT = "VedettSarok-VedettUtvonal/1.0 (+https://www.vedettsarok.hu)";
 
 // Két egymást követő Nominatim-hívás közötti minimális várakozás — a
 // Nominatim használati feltételeinek megfelelően (max. 1 kérés/másodperc).

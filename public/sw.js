@@ -1,4 +1,4 @@
-const CACHE = "vedettsarok-v2";
+const CACHE = "vedettsarok-v3"; // v3: a korábbi (v2) cache — benne esetleg API-válaszokkal — törlődik az activate-nél
 const OFFLINE_URL = "/";
 
 const PRECACHE = [
@@ -26,6 +26,8 @@ self.addEventListener("fetch", (e) => {
   if (e.request.method !== "GET") return;
   const url = new URL(e.request.url);
   if (url.origin !== location.origin) return;
+  // PRIVACY: dinamikus / autentikált API- és auth-válasz SOSEM kerül cache-be (network-only).
+  if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/auth/")) return;
 
   e.respondWith(
     fetch(e.request)

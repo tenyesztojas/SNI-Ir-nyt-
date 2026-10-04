@@ -11,6 +11,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import PWAInstallBanner from "@/components/PWAInstallBanner";
 import PWASessionTracker from "@/components/PWASessionTracker";
+import SignOutDataCleanup from "@/components/SignOutDataCleanup";
 import { AccessibilityProvider } from "@/components/accessibility/AccessibilityProvider";
 
 export const metadata: Metadata = {
@@ -108,6 +109,7 @@ export default function RootLayout({
           {!hideSiteChrome && <PWAInstallBanner />}
           {!hideSiteChrome && <PWASessionTracker />}
         </AccessibilityProvider>
+        <SignOutDataCleanup />
 
         {/* Google Analytics – nonce szükséges a CSP script-src nonce-alapú engedélyhez */}
         <Script
@@ -116,7 +118,7 @@ export default function RootLayout({
           strategy="afterInteractive"
         />
         <Script nonce={nonce} id="ga-init" strategy="afterInteractive">
-          {`window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-T748C867DW');`}
+          {`window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','G-T748C867DW',{page_location:location.origin+location.pathname,page_referrer:''});`}
         </Script>
       </body>
     </html>

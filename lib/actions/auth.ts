@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { safeReturnPath, isVedettUtvonalReturnPath } from "@/lib/pwa/safeReturnPath";
@@ -172,6 +173,8 @@ export async function changePasswordAction(
 export async function signOutAction(formData?: FormData): Promise<void> {
   const supabase = createClient();
   await supabase.auth.signOut();
+  // Jelző a kliensnek: töröld a készüléken tárolt navigációs sessiont (SignOutDataCleanup).
+  cookies().set({ name: "vu_signed_out", value: "1", path: "/", maxAge: 60, sameSite: "lax" });
   const nextPath = safeReturnPath(
     formData ? String(formData.get("next") ?? "") : "",
     "/"
