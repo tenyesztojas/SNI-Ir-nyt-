@@ -142,7 +142,7 @@ export default async function MeghivoLandingPage({ params }: Props) {
             eredményét és az igazolás adatait. Ezeket az adatokat kizárólag a munkáltató
             ({partnerName}) és a VédettSarok kezeli. Az igazolás személyes azonosítót és teszt
             eredményt tartalmaz. Az adatkezelésről részletes tájékoztatást a
-            vedettsarok.hu/adatvedelmi-tajekoztato oldalon talál.
+            vedettsarok.hu/adatkezelesi-tajekoztato oldalon talál.
           </p>
           <p className="text-xs text-gray-400 mt-2">
             A képzés megkezdésével Ön elfogadja, hogy az említett adatok rögzítésre kerülnek.

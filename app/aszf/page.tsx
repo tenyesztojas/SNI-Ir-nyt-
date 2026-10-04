@@ -66,6 +66,9 @@ export default function AszfPage() {
         <Sub n="1.5.">
           <P>Az Üzemeltető felhívja a figyelmet arra, hogy a jelen pontban rögzített automatizált folyamat kizárólag az Üzemeltető belső kockázatkezelését és jogi pozícióját szolgálja, és nem eredményezi, és jogilag nem is eredményezheti a felelősség teljes és feltétel nélküli kizárását. A tárhelyszolgáltatói felelősség alóli mentesség az Ekertv. és a DSA kógens szabályain alapul, és attól függ, hogy az Üzemeltető a jogszabályi feltételeknek (különösen a 8. pont szerinti bejelentés-alapú eljárásnak) a gyakorlatban is megfelel.</P>
         </Sub>
+        <Sub n="1.6.">
+          <P>A VédettSarok szolgáltatásai elérhetők lehetnek a weboldalon, webalkalmazásként, valamint – különösen a Védett Útvonal esetében – Android és iOS mobilalkalmazásként is; a jelen ÁSZF ezekre is vonatkozik.</P>
+        </Sub>
       </Section>
 
       <Section id="fogalmak" title="2. Fogalommeghatározások">
@@ -177,7 +180,7 @@ export default function AszfPage() {
       </Section>
 
       <Section id="adatkezeles" title="12. Adatkezelés">
-        <Sub n="12.1."><P>A regisztráció, a Hely-javaslat, az Értékelés, a Nyilvános Válasz közzététele, valamint a 7.6. pont szerinti anonimizált üzenetküldő funkció használata során megadott személyes adatok kezelésére a Weboldal külön <Link href="/adatkezelesi-tajekoztato" className="text-sni-brand-blue hover:underline">Adatkezelési Tájékoztatója</Link> az irányadó, amely a GDPR és az információs önrendelkezési jogról szóló 2011. évi CXII. törvény rendelkezéseinek megfelelően készült.</P></Sub>
+        <Sub n="12.1."><P>A regisztráció, a Hely-javaslat, az Értékelés, a Nyilvános Válasz közzététele, valamint a 7.6. pont szerinti anonimizált üzenetküldő funkció használata során megadott személyes adatok kezelésére a Weboldal külön <Link href="/adatkezelesi-tajekoztato" className="text-sni-brand-blue hover:underline">Adatkezelési Tájékoztatója</Link> az irányadó, amely a GDPR és az információs önrendelkezési jogról szóló 2011. évi CXII. törvény rendelkezéseinek megfelelően készült. Az Adatkezelési Tájékoztató a VédettSarok webes szolgáltatásaira és – ahol alkalmazandó – a Védett Útvonal Android és iOS alkalmazására is kiterjed.</P></Sub>
         <Sub n="12.2."><P>Az Üzemeltető rögzíti, hogy a Felhasználó személyes adatait – a Nyilvános Válasz funkció útján megvalósuló, adatot nem felfedő interakción kívül – nem továbbítja az Érintett Hely részére, kivéve, ha a Felhasználó erre kifejezett, önkéntes és elkülönített hozzájárulást ad.</P></Sub>
         <Sub n="12.3."><P>Az Automatikus technikai ellenőrzés – amennyiben az a GDPR 22. cikke szerinti, kizárólag automatizált döntéshozatalnak minősül – tekintetében a Felhasználót megilleti az emberi beavatkozás kérésének, álláspontja kifejtésének és a döntés megtámadásának joga, amelyet az 5.2. pont szerinti panaszeljárás biztosít.</P></Sub>
       </Section>
@@ -428,6 +431,115 @@ export default function AszfPage() {
         </Sub>
         <Sub n="KS 5.2.">
           <P>A megőrzési idő lejárta és a fellebbezési határidő letelte után, amennyiben sem jogi igény, sem legalHold nem áll fenn, a bejelentés személyes adatai anonimizálásra kerülnek.</P>
+        </Sub>
+      </Section>
+
+      {/* ─── Védett Útvonal ÁSZF kiegészítés ─── */}
+      <div className="mt-12 mb-6 border-t-2 border-sni-brand-teal pt-8">
+        <h2 className="text-2xl font-bold text-sni-text">Védett Útvonal – Különös Feltételek</h2>
+        <p className="text-sm text-gray-500 mt-1">Hatályos: 2026. október 4.</p>
+        <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          A jelen kiegészítés a VédettSarok meglévő Általános Szerződési Feltételeinek a Védett Útvonal szolgáltatásra vonatkozó kiegészítése. A meglévő ÁSZF általános rendelkezései e szolgáltatásra is alkalmazandók, kivéve, ha a jelen kiegészítés eltérően rendelkezik.
+        </div>
+      </div>
+
+      <Section id="vu-1" title="VU 1. A szolgáltatás">
+        <Sub n="VU 1.1.">
+          <P>A Védett Útvonal informatikai útvonaltervező és navigációtámogató szolgáltatás, amely weben, Androidon és iOS-en érhető el. A szolgáltató a 4 Nature Kft.</P>
+        </Sub>
+        <Sub n="VU 1.2.">
+          <P>A Szolgáltató nem személyszállító, nem tömegközlekedési szolgáltató, nem útkezelő, nem a menetrendi adatok elsődleges előállítója, nem akadálymentesítési tanúsító szervezet, nem egészségügyi szolgáltató és nem segélyszolgálat.</P>
+        </Sub>
+      </Section>
+
+      <Section id="vu-2" title="VU 2. Útvonaltervezés">
+        <Sub n="VU 2.1.">
+          <P>Az útvonaltervezés BKK, MÁV, Volán, MOL Bubi, gyalogos-, térkép-, külső útvonaltervezési és valós idejű adatokat is felhasználhat. A tervezés tájékoztató és támogató jellegű.</P>
+        </Sub>
+        <Sub n="VU 2.2.">
+          <P>A Szolgáltató nem vállal garanciát az indulási és érkezési időre, a késésekre, a járattörlésekre, az átszállási kapcsolatok elérhetőségére, az útlezárásokra, a járművek elérhetőségére, a Bubi-kerékpárok és dokkolók tényleges elérhetőségére, illetve a külső adatok valós idejű pontosságára.</P>
+        </Sub>
+      </Section>
+
+      <Section id="vu-3" title="VU 3. GPS és navigáció pontossága">
+        <Sub n="VU 3.1.">
+          <P>A helymeghatározásban és a navigációban eltérések fordulhatnak elő (GPS, hálózat, eszköz, térkép vagy külső adatok miatt). A navigáció nem helyettesíti a felhasználó saját körültekintését.</P>
+        </Sub>
+      </Section>
+
+      <Section id="vu-4" title="VU 4. Közlekedésbiztonság">
+        <Sub n="VU 4.1.">
+          <P>A Védett Útvonal utasításai nem írják felül a KRESZ-t, a közlekedési táblákat, a jelzőlámpákat, a lezárásokat, a hatósági utasításokat, a közlekedési személyzet utasításait és a helyszín tényleges körülményeit. A felhasználónak a valós környezetet figyelnie kell.</P>
+        </Sub>
+        <Sub n="VU 4.2.">
+          <P>Járművezetés vagy kerékpározás közben az eszköz kizárólag a jogszabályoknak és a biztonsági követelményeknek megfelelően használható.</P>
+        </Sub>
+      </Section>
+
+      <Section id="vu-5" title="VU 5. Szenzoros ajánlások">
+        <Sub n="VU 5.1.">
+          <P>Az útvonaltervezés figyelembe veheti a gyaloglást, az átszállásokat, a zajt, a zsúfoltságot, a várakozást és egyéb szenzoros szempontokat. Ezek a rendelkezésre álló adatokon alapuló becslések és ajánlások, és nem garantálják a tényleges körülményeket.</P>
+        </Sub>
+      </Section>
+
+      <Section id="vu-6" title="VU 6. Akadálymentesség">
+        <Sub n="VU 6.1.">
+          <P>Az útvonaltervezés figyelembe veheti az akadálymentességi szempontokat. A Szolgáltató nem garantálja, hogy egy lift vagy mozgólépcső működik, hogy egy jármű akadálymentes, hogy egy útvonal ténylegesen akadálymentes, hogy fizikai akadály nincs, illetve hogy a hely az adott felhasználó számára használható. A felhasználó ellenőrizze a szolgáltatók aktuális tájékoztatását.</P>
+        </Sub>
+      </Section>
+
+      <Section id="vu-7" title="VU 7. Pihenőpontok">
+        <Sub n="VU 7.1.">
+          <P>A pihenőpontok kizárólag tájékoztató jellegűek. A Szolgáltató nem garantálja a nyitvatartást, az akadálymentességet, a csendes jelleget, a felszereltséget és az aktuális állapotot.</P>
+        </Sub>
+      </Section>
+
+      <Section id="vu-8" title="VU 8. Külső szolgáltatások és adatok">
+        <Sub n="VU 8.1.">
+          <P>A Védett Útvonal harmadik felek térkép-, geokódolási, útvonaltervezési és közlekedési adatforrásait használhatja. A Szolgáltató nem vállal garanciát a Szolgáltatón kívüli adatforrások hibamentes és folyamatos működésére, ugyanakkor a saját rendszereinek működéséért a jogszabályok szerint felel.</P>
+        </Sub>
+      </Section>
+
+      <Section id="vu-9" title="VU 9. Rendelkezésre állás">
+        <Sub n="VU 9.1.">
+          <P>A Szolgáltató nem vállal 100%-os rendelkezésre állást. Karbantartás, technikai vagy hálózati hiba, külső szolgáltató hibája, illetve adatforrás kiesése miatt a szolgáltatás átmenetileg korlátozottan vagy egyáltalán nem érhető el.</P>
+        </Sub>
+      </Section>
+
+      <Section id="vu-10" title="VU 10. Felelősség">
+        <Sub n="VU 10.1.">
+          <P>A Szolgáltató felelősségére az irányadó magyar és uniós jog kógens rendelkezései az irányadók. Az ÁSZF nem korlátozza és nem zárja ki azt a felelősséget, amelyet jogszabály szerint korlátozni vagy kizárni nem lehet. A szolgáltatás jellegének és a szerződésszerű teljesítésnek a megítélésénél a VU 1–9. pontban foglalt kör és korlátok figyelembe veendők.</P>
+        </Sub>
+      </Section>
+
+      <Section id="vu-11" title="VU 11. A „Védett” elnevezés">
+        <Sub n="VU 11.1.">
+          <P>A „Védett" jelzőt tartalmazó elnevezések a szolgáltatás szemléletét és célját kifejező márkanevek. Nem jelentenek balesetmentességi, fizikai biztonsági vagy egészségügyi garanciát, akadálymentességi tanúsítványt, sem garantáltan megfelelő szenzoros környezetet.</P>
+        </Sub>
+      </Section>
+
+      <Section id="vu-12" title="VU 12. Regisztráció">
+        <Sub n="VU 12.1.">
+          <P>Az alapvető útvonaltervezés regisztráció nélkül is elérhető lehet. A kényelmi és személyre szabási funkciók (mentett helyek, kedvencek, fiókhoz kötött preferenciák) regisztrációhoz kötöttek lehetnek. A Szolgáltató a funkciók körét jogszerűen módosíthatja.</P>
+        </Sub>
+      </Section>
+
+      <Section id="vu-13" title="VU 13. Fióktörlés">
+        <Sub n="VU 13.1.">
+          <P>A felhasználó a fiók törlését a profil oldalon kezdeményezheti. A Family adatok más érintettek védelme érdekében külön kezelést igényelhetnek. Részletek: <Link href="/adatkezelesi-tajekoztato" className="text-sni-brand-blue hover:underline">Adatkezelési Tájékoztató</Link>.</P>
+        </Sub>
+      </Section>
+
+      <Section id="vu-14" title="VU 14. Mobilalkalmazás">
+        <Sub n="VU 14.1.">
+          <P>A mobilalkalmazás használatához kompatibilis eszköz, internetkapcsolat és bizonyos funkciókhoz helyadat-engedély szükséges lehet. Az eszköz és az operációs rendszer működéséért a felhasználó felel. Az alkalmazás frissítése szükségessé válhat.</P>
+        </Sub>
+      </Section>
+
+      <Section id="vu-15" title="VU 15. Apple / Google">
+        <Sub n="VU 15.1.">
+          <P>Ha az alkalmazást az Apple App Store-ból vagy a Google Play-ről szerzi be, az áruházak feltételei is alkalmazandók lehetnek.</P>
+          {/* TODO APP STORE LEGAL: Before App Store submission verify whether Apple Standard EULA or custom EULA is used and add the required Apple minimum terms if necessary. */}
         </Sub>
       </Section>
     </div>

@@ -65,7 +65,7 @@ export default function AdatkezelesiTajekoztato() {
         <span className="block">Adószám: 32038107-1-13</span>
       </div>
 
-      <P>Jelen tájékoztató a Weboldal (a továbbiakban: „Weboldal") működésével összefüggő adatkezelésekről nyújt tájékoztatást, az Európai Parlament és a Tanács (EU) 2016/679 rendelete (a továbbiakban: „GDPR"), valamint az információs önrendelkezési jogról és az információszabadságról szóló 2011. évi CXII. törvény (a továbbiakban: „Infotv.") rendelkezéseivel összhangban. A jelen tájékoztató a Weboldal <Link href="/aszf" className="text-sni-brand-blue hover:underline">Általános Szerződési Feltételeivel (ÁSZF)</Link> együtt értelmezendő; a fogalommeghatározások tekintetében az ÁSZF-ben foglaltak az irányadók.</P>
+      <P>Jelen tájékoztató a Weboldal (a továbbiakban: „Weboldal") működésével összefüggő adatkezelésekről nyújt tájékoztatást, az Európai Parlament és a Tanács (EU) 2016/679 rendelete (a továbbiakban: „GDPR"), valamint az információs önrendelkezési jogról és az információszabadságról szóló 2011. évi CXII. törvény (a továbbiakban: „Infotv.") rendelkezéseivel összhangban. A jelen tájékoztató a Weboldal <Link href="/aszf" className="text-sni-brand-blue hover:underline">Általános Szerződési Feltételeivel (ÁSZF)</Link> együtt értelmezendő; a fogalommeghatározások tekintetében az ÁSZF-ben foglaltak az irányadók. A VédettSarok szolgáltatásai elérhetők lehetnek a weboldalon, webalkalmazásként, valamint – különösen a Védett Útvonal esetében – Android és iOS mobilalkalmazásként is; a jelen tájékoztató ezekre is kiterjed.</P>
 
       <div className="my-8" />
 
@@ -504,6 +504,176 @@ export default function AdatkezelesiTajekoztato() {
         </Sub>
         <Sub n="KS AT 5.2.">
           <P>A legalHold jelölés manuálisan, adminisztrátori döntés alapján kerül alkalmazásra, kizárólag olyan esetekben, amikor folyamatban lévő vagy várható hatósági eljárás, bírósági ügy vagy jogvita indokolja az adatok fokozott megőrzését. A legalHold jelölés feloldása szintén adminisztrátori döntés alapján történik.</P>
+        </Sub>
+      </Section>
+
+      {/* ─── Védett Útvonal AT kiegészítés ─── */}
+      <div className="mt-12 mb-6 border-t-2 border-sni-brand-teal pt-8">
+        <h2 className="text-2xl font-bold text-sni-text">Védett Útvonal – Adatkezelési Kiegészítés</h2>
+        <p className="text-sm text-gray-500 mt-1">Hatályos: 2026. október 4.</p>
+        <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          A jelen kiegészítés a VédettSarok meglévő Adatkezelési Tájékoztatójának a Védett Útvonal szolgáltatásra vonatkozó kiegészítése. A Tájékoztató általános rendelkezései e szolgáltatásra is alkalmazandók, kivéve, ha a jelen kiegészítés eltérően rendelkezik.
+        </div>
+      </div>
+
+      <Section id="vu-at-1" title="VU AT 1. Hatály, adatkezelő">
+        <Sub n="VU AT 1.1.">
+          <P>A jelen kiegészítés a Védett Útvonal útvonaltervező és navigációtámogató szolgáltatás webes, Android és iOS változatára terjed ki. A Védett Útvonal a VédettSarok része.</P>
+        </Sub>
+        <Sub n="VU AT 1.2.">
+          <P>Adatkezelő: 4 Nature Kft. (székhely: 2038 Sóskút, Kőszikla utca 21.; cégjegyzékszám: 13-09-221686; adószám: 32038107-1-13). Elérhetőség: <a href="mailto:kapcsolat@vedettsarok.hu" className="underline">kapcsolat@vedettsarok.hu</a>.</P>
+        </Sub>
+      </Section>
+
+      <Section id="vu-at-2" title="VU AT 2. Aktuális hely és GPS">
+        <Sub n="VU AT 2.1.">
+          <P>A Védett Útvonal az eszköz helyadatához kizárólag a felhasználó engedélyével fér hozzá, és csak előtérben, használat közben kéri le azt. Háttérben történő helymeghatározást nem végez. Aktív navigáció során az alkalmazás folyamatosan, a helyzet változását figyelve (watchPosition) kérheti le az aktuális pozíciót.</P>
+          <P>Az aktuális GPS-pozíciót az alkalmazás elsődlegesen az eszköz memóriájában dolgozza fel. Az Adatkezelő szerveroldalon nem tárol folyamatos GPS-előzményt. Útvonaltervezéskor az aktuális hely koordinátája továbbításra kerülhet az útvonaltervezést végző infrastruktúrának (lásd VU AT 4.).</P>
+        </Sub>
+        <Sub n="VU AT 2.2." title="Kezelt adatok, cél, jogalap">
+          <DataTable rows={[
+            ["Adatok", "földrajzi szélesség és hosszúság; szükség esetén az eszköz által szolgáltatott technikai helyadatok"],
+            ["Cél", "az aktuális hely felhasználása az útvonal kiindulópontjaként, útvonaltervezés, aktív navigáció"],
+            ["Jogalap", "GDPR 6. cikk (1) bekezdés b) pont – a felhasználó által kért szolgáltatás nyújtása"],
+          ]} />
+          <P>Az operációs rendszer helyadat-engedélye technikai hozzáférési engedély, amely nem minősül a GDPR szerinti hozzájárulásnak.</P>
+        </Sub>
+        <Sub n="VU AT 2.3.">
+          <P>Ha a felhasználó megtagadja a helyadathoz való hozzáférést, az indulási pontot továbbra is megadhatja kézzel, de az aktuális helyhez kötött funkciók nem érhetők el.</P>
+        </Sub>
+      </Section>
+
+      <Section id="vu-at-3" title="VU AT 3. Címkeresés és geokódolás">
+        <Sub n="VU AT 3.1.">
+          <DataTable rows={[
+            ["Adatok", "a keresőkifejezés, a megadott cím, valamint a címhez rendelt koordináta"],
+            ["Cél", "helyek megtalálása, az útvonal indulási és célpontjának meghatározása"],
+            ["Jogalap", "GDPR 6. cikk (1) bekezdés b) pont"],
+          ]} />
+          <P>A címkeresés technikailag a Mapbox Search Box szolgáltatással, szükség esetén a Nominatim/OpenStreetMap szolgáltatással történik; ezeket a hívásokat az Adatkezelő szervere indítja. A megadott címet az Adatkezelő tartósan nem tárolja, kivéve, ha a felhasználó azt a Mentett helyek között kifejezetten elmenti (lásd VU AT 5.).</P>
+        </Sub>
+      </Section>
+
+      <Section id="vu-at-4" title="VU AT 4. Útvonaltervezés">
+        <Sub n="VU AT 4.1.">
+          <DataTable rows={[
+            ["Adatok", "indulási és célkoordináták, útvonaltervezési paraméterek, közlekedési mód, a kérés szerinti preferenciák"],
+            ["Cél", "az útvonal kiszámítása"],
+            ["Címzettek", "az Adatkezelő saját VédettSarok/Védett Útvonal szerverinfrastruktúrája, saját VPS/MOTIS útvonaltervező rendszere; autós útvonaltervezés esetén a Mapbox"],
+            ["Jogalap", "GDPR 6. cikk (1) bekezdés b) pont"],
+          ]} />
+        </Sub>
+        <Sub n="VU AT 4.2.">
+          <P>Az útvonaltervezés során a BKK, a MÁV, a Volán és a MOL Bubi forrásaiból származó közlekedési adatok is felhasználhatók. Ez nem jelenti azt, hogy a felhasználók személyes adatait az Adatkezelő e szervezeteknek továbbítaná.</P>
+        </Sub>
+      </Section>
+
+      <Section id="vu-at-5" title="VU AT 5. Mentett helyek">
+        <Sub n="VU AT 5.1.">
+          <DataTable rows={[
+            ["Érintettek", "kizárólag regisztrált felhasználók"],
+            ["Adatok", "felhasználói azonosító, a hely saját megnevezése, cím, földrajzi szélesség és hosszúság, létrehozási és módosítási technikai adatok"],
+            ["Cél", "a gyakori helyek gyors elérése"],
+            ["Jogalap", "GDPR 6. cikk (1) bekezdés b) pont"],
+            ["Megőrzés", "a felhasználó általi törlésig vagy a fiók törléséig, a jogszabály által előírt további megőrzés kivételével"],
+          ]} />
+          <P>A mentés a felhasználó kifejezett cselekedete; az Adatkezelő nem épít automatikus útvonaltörténetet.</P>
+        </Sub>
+      </Section>
+
+      <Section id="vu-at-6" title="VU AT 6. Kedvenc útvonalak és preferenciák">
+        <Sub n="VU AT 6.1.">
+          <P>A kedvenc útvonalak (vedett_route_favorites) tárolhatnak egy súlyozási beállítást (weights, JSONB). A preferenciák vonatkozhatnak például kevesebb gyaloglásra, kevesebb átszállásra, zajra, zsúfoltságra, várakozásra vagy akadálymentességre.</P>
+        </Sub>
+        <Sub n="VU AT 6.2.">
+          <P>A preferenciák nem minősülnek diagnózisnak, és az Adatkezelő a preferenciákból diagnózisra nem következtet. Ha azonban a felhasználó olyan információt ad meg vagy ment el, amelyből közvetlenül vagy közvetve egészségi állapotra vagy fogyatékosságra lehet következtetni, az a GDPR 9. cikke szerinti különleges személyes adatnak minősülhet.</P>
+          {/* TODO PRIVACY: A GDPR 9. cikk szerinti különleges adatok kezelésének végleges jogalapját és szükség esetén a kifejezett hozzájárulási mechanizmust a DPIA lezárásakor rendezni kell. */}
+        </Sub>
+        <Sub n="VU AT 6.3.">
+          <P>Jogalap: GDPR 6. cikk (1) bekezdés b) pont. Megőrzés: a felhasználó általi törlésig vagy a fiók törléséig.</P>
+        </Sub>
+      </Section>
+
+      <Section id="vu-at-7" title="VU AT 7. Saját pihenőpontok">
+        <Sub n="VU AT 7.1.">
+          <DataTable rows={[
+            ["Adatok", "koordináta, megnevezés vagy megjegyzés (ha van), a pihenőpont jellemzői (ülőhely, mosdó, csendes tér, beltéri jelleg), felhasználói azonosító"],
+            ["Cél", "a felhasználó által mentett pihenőpontok kezelése és az útvonaltervezés támogatása"],
+            ["Jogalap", "GDPR 6. cikk (1) bekezdés b) pont; ha az adat különleges személyes adatot tartalmaz, a VU AT 6. szerint"],
+          ]} />
+        </Sub>
+      </Section>
+
+      <Section id="vu-at-8" title="VU AT 8. Navigációs munkamenet az eszközön">
+        <Sub n="VU AT 8.1.">
+          <P>A folyamatban lévő navigáció visszaállítása érdekében az eszköz böngészője vagy WebView-ja a helyi tárolóban (local storage) átmenetileg elmentheti a navigációs munkamenetet. Ez tartalmazhatja a célt, az útvonalat és az útvonalszakaszok koordinátáit.</P>
+          <P>Az adat legfeljebb 6 óráig marad az eszközön, kijelentkezéskor és fióktörléskor törlésre kerül. Ez nem szerveroldali útvonaltörténet.</P>
+        </Sub>
+      </Section>
+
+      <Section id="vu-at-9" title="VU AT 9. Google Analytics 4">
+        <Sub n="VU AT 9.1.">
+          <P>A VédettSarok a Google Analytics 4 (GA4) szolgáltatást használja a webes és mobilalkalmazásos használat statisztikai elemzésére és a szolgáltatás fejlesztésére. A Védett Útvonal saját eseményei az alábbi kategóriákba tartoznak: az alkalmazás megnyitása; útvonaltervezés; navigáció indítása és befejezése; a mentett helyek funkció használata; bejelentkezési vagy regisztrációs folyamat megkezdése.</P>
+          <P>Az események paraméterei: a platform (web, android, ios), a hitelesítési állapot (anonymous vagy authenticated), valamint – ahol releváns – a sikeres vagy hibás eredmény.</P>
+          <P>A Védett Útvonal saját analitikai eseményeiben az Adatkezelő nem továbbít a Google Analytics részére pontos GPS-koordinátát, konkrét indulási vagy célcímet, gyermekadatot vagy szenzoros profilértéket.</P>
+        </Sub>
+        <Sub n="VU AT 9.2.">
+          <P>A Google (Google Analytics) a jelen tájékoztató szerinti szolgáltatóként és címzettként jár el; az adatait a Google saját tájékoztatói szerint is kezeli. Jogalap: a felhasználó hozzájárulása (GDPR 6. cikk (1) bekezdés a) pont), mivel a statisztikai célú tárolás és hozzáférés nem minősül szigorúan szükségesnek. A felhasználó hozzájárulását az alkalmazandó hozzájárulás-kezelési mechanizmuson keresztül adhatja meg és vonhatja vissza.</P>
+          {/* TODO PRIVACY RELEASE BLOCKER: GA4 consent gating / Consent Mode implementáció szükséges a jelen szöveg éles alkalmazásához. A GA4 jelenleg feltétel nélkül töltődik. */}
+        </Sub>
+      </Section>
+
+      <Section id="vu-at-10" title="VU AT 10. Technikai biztonság és rate limiting">
+        <Sub n="VU AT 10.1.">
+          <P>A névtelenül elérhető útvonaltervezési végpontokon az Adatkezelő technikai kérésszámlimitálást (rate limiting) alkalmaz. Ennek során az IP-cím egy Upstash Redis rate-limit kulcsban szerepelhet, rövid, jellemzően 60 másodperces élettartammal.</P>
+          <P>Cél: biztonság, visszaélések megelőzése és a szolgáltatás rendelkezésre állásának védelme. Jogalap: GDPR 6. cikk (1) bekezdés f) pont; az Adatkezelő jogos érdeke a szolgáltatás védelme a túlterheléssel és a visszaélésekkel szemben.</P>
+        </Sub>
+      </Section>
+
+      <Section id="vu-at-11" title="VU AT 11. Mobilalkalmazások">
+        <Sub n="VU AT 11.1.">
+          <P>Az Android és iOS alkalmazás internet-hozzáférést és előtérben használt helyadatot igényel. A jelenlegi verzióban az alkalmazás nem használ háttérben történő helymeghatározást, kamera- és mikrofonengedélyt, névjegyekhez való hozzáférést, egészségügyi rendszeradatokhoz való hozzáférést, továbbá nem igazolt hirdetési azonosító használata.</P>
+          <P>Az operációs rendszer engedélykezelése külön réteg; a helyadat-engedély az Android vagy iOS beállításaiban bármikor visszavonható.</P>
+        </Sub>
+      </Section>
+
+      <Section id="vu-at-12" title="VU AT 12. Adatfeldolgozók, szolgáltatók és egyéb címzettek">
+        <Sub n="VU AT 12.1.">
+          <P>A Védett Útvonal működéséhez az alábbi adatfeldolgozók, szolgáltatók és egyéb címzettek vehetők igénybe:</P>
+          <LetterList items={[
+            "Supabase – hitelesítés és adatbázis;",
+            "Vercel – webes tárhely, szerver- és API-futtatás;",
+            "Upstash – kérésszámlimitálás;",
+            "Mapbox – címkeresés, geokódolási és útvonaltervezési funkciók;",
+            "Google – Google OAuth bejelentkezés és Google Analytics;",
+            "Nominatim/OpenStreetMap – geokódolás;",
+            "OpenFreeMap – térképmegjelenítés; a térképcsempék lekérése az eszközről közvetlenül történik;",
+            "saját VPS/MOTIS – útvonaltervezési infrastruktúra.",
+          ]} />
+          {/* TODO LEGAL: Processor/controller roles, processing regions and international transfer safeguards must be verified against the current contracts/DPA/DPF/SCC documentation before final legal sign-off. */}
+        </Sub>
+      </Section>
+
+      <Section id="vu-at-13" title="VU AT 13. Fióktörlés">
+        <Sub n="VU AT 13.1.">
+          <P>A felhasználó a fiók törlését a profil oldalon (/profil) kezdeményezheti. A törlés általában a fiókot, a profilt, a mentett helyeket, a kedvenc útvonalakat, a saját pihenőpontokat és a push-feliratkozási adatokat érinti, a jogszabály által előírt megőrzésre kötelezett adatok kivételével.</P>
+          <P>Ha a fiók családi vagy gyermekprofil-adatokhoz kapcsolódik, az automatikus törlés adatbiztonsági okból korlátozott lehet. Ilyen esetben az Adatkezelő a törlési kérelmet egyedileg kezeli annak érdekében, hogy más érintettek adatai vagy jogosultságai ne sérüljenek.</P>
+          <P>Kapcsolat: <a href="mailto:kapcsolat@vedettsarok.hu" className="underline">kapcsolat@vedettsarok.hu</a>.</P>
+          {/* TODO PRIVACY RELEASE: Google Play requires an external web account-deletion path/request resource in addition to in-app deletion. Family deletion lifecycle must be finalized. */}
+        </Sub>
+      </Section>
+
+      <Section id="vu-at-14" title="VU AT 14. Family és gyermekadatok">
+        <Sub n="VU AT 14.1.">
+          <P>A Family funkció keretében kezelt adatok: a gyermek keresztneve és születési éve, a Family-tagság és a jogosultságok, a gyermek ütemezési elemei, valamint a hozzájuk tartozó cím, koordináta és időpont.</P>
+          <P>A jelenlegi implementációban Family-tagság önmagában NEM biztosít hozzáférést más személy aktuális GPS-helyzetéhez. A can_view_live_location jogosultsági mező létezése ellenére jelenleg nincs megvalósított élő helyadat-tárolási vagy -megosztási funkció.</P>
+          {/* TODO DPIA: Any future live child/family location sharing requires a separate DPIA and privacy/legal implementation before activation. */}
+        </Sub>
+      </Section>
+
+      <Section id="vu-at-15" title="VU AT 15. Érintetti jogok">
+        <Sub n="VU AT 15.1.">
+          <P>A jelen tájékoztató 6. pontja szerinti jogok a Védett Útvonal tekintetében is megilletik az érintettet: a hozzáféréshez, a helyesbítéshez, a törléshez, az adatkezelés korlátozásához való jog, adott esetben a tiltakozáshoz és az adathordozhatósághoz való jog, a hozzájárulás visszavonásának joga, a NAIH-hoz fordulás joga és a bírósági jogorvoslat. Kérelem: <a href="mailto:kapcsolat@vedettsarok.hu" className="underline">kapcsolat@vedettsarok.hu</a>.</P>
         </Sub>
       </Section>
     </div>
