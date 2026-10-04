@@ -40,12 +40,12 @@ jobs:
       - name: Xcode version
         run: xcodebuild -version
 
-      - name: Build (unsigned, iOS Simulator SDK)
+      - name: Build (unsigned Release, iOS Simulator SDK)
         run: |
           xcodebuild build \
             -project ios/App/App.xcodeproj \
             -scheme App \
-            -configuration Debug \
+            -configuration Release \
             -sdk iphonesimulator \
             -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath build/DerivedData \
