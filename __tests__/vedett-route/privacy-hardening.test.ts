@@ -75,7 +75,8 @@ describe("account deletion", () => {
   });
   test("requires confirmation and fails closed on Family data", () => {
     assert.match(route, /body\.confirm !== true/);
-    for (const t of ["family_members", "guardian_child_permissions", "child_accounts"]) assert.match(route, new RegExp(t));
+    // A Family-állapotot a DB RPC dönti el (fail closed), nem kliens-állítás.
+    assert.match(route, /prepare_account_deletion/);
     assert.match(route, /status: 409/);
   });
   test("service role never reaches client code", () => {

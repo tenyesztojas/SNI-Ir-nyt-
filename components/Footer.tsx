@@ -55,6 +55,9 @@ export default function Footer() {
                 <Link href="/profil" className="text-gray-500 hover:text-sni-brand-blue hover:underline">
                   Profilom
                 </Link>
+                <Link href="/fiok-torles" className="text-gray-500 hover:text-sni-brand-blue hover:underline">
+                  Fiók törlése
+                </Link>
               </div>
             </div>
             <div>

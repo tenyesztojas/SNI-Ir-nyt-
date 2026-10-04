@@ -657,10 +657,17 @@ export default function AdatkezelesiTajekoztato() {
 
       <Section id="vu-at-13" title="VU AT 13. Fióktörlés">
         <Sub n="VU AT 13.1.">
-          <P>A felhasználó a fiók törlését a profil oldalon (/profil) kezdeményezheti. A törlés általában a fiókot, a profilt, a mentett helyeket, a kedvenc útvonalakat, a saját pihenőpontokat és a push-feliratkozási adatokat érinti, a jogszabály által előírt megőrzésre kötelezett adatok kivételével.</P>
-          <P>Ha a fiók családi vagy gyermekprofil-adatokhoz kapcsolódik, az automatikus törlés adatbiztonsági okból korlátozott lehet. Ilyen esetben az Adatkezelő a törlési kérelmet egyedileg kezeli annak érdekében, hogy más érintettek adatai vagy jogosultságai ne sérüljenek.</P>
-          <P>Kapcsolat: <a href="mailto:kapcsolat@vedettsarok.hu" className="underline">kapcsolat@vedettsarok.hu</a>.</P>
-          {/* TODO PRIVACY RELEASE: Google Play requires an external web account-deletion path/request resource in addition to in-app deletion. Family deletion lifecycle must be finalized. */}
+          <P>A felhasználó a fiók törlését a profil oldalon (/profil, „Fiók törlése") kezdeményezheti bejelentkezve. Bejelentkezés nélkül is elérhető tájékoztató oldal: <Link href="/fiok-torles" className="text-sni-brand-blue hover:underline">/fiok-torles</Link>. A törlés általában a fiókot, a profilt, a mentett helyeket, a kedvenc útvonalakat, a saját pihenőpontokat és a push-feliratkozási adatokat érinti, a jogszabály által előírt megőrzésre kötelezett adatok kivételével. Fiókot hitelesítés nélkül, pusztán e-mail-cím megadásával nem törlünk.</P>
+        </Sub>
+        <Sub n="VU AT 13.2." title="Családi (Family) adatokkal kapcsolatos esetek">
+          <LetterList items={[
+            "a) Ha a fiókhoz nem kapcsolódik családi adat, a fiók a fentiek szerint törlődik.",
+            "b) Ha a felhasználó a család nem tulajdonos (guardian) tagja, vagy a családnak van másik aktív tulajdonosa, a felhasználó saját családtagsága és gondviselői jogosultságai törlődnek; a család és a gyermekadatok a többi felhasználó számára megmaradnak.",
+            "c) Ha a felhasználó a család egyetlen aktív tulajdonosa, és van másik aktív családtag, a törlés előtt a tulajdonjogot át kell adnia egy általa kiválasztott aktív családtagnak; az Adatkezelő új tulajdonost nem jelöl ki automatikusan.",
+            "d) Ha a felhasználó a család egyetlen aktív tulajdonosa és nincs másik aktív családtag, külön, kifejezett megerősítés után a család, a kizárólag ehhez a családhoz tartozó gyermekprofilok, a kapcsolódó napirendi adatok, a gyermekprofilokhoz kötött jogosultságok és meghívók a fiókkal együtt véglegesen törlődnek.",
+            "e) Ha a fiók gyermekfiókhoz kapcsolódik, vagy a törlés más felhasználó adatait vagy hozzáférését is érintené, automatikus törlés nem történik.",
+          ]} />
+          <P>Ha a fiók családi vagy gyermekprofil-adatokhoz kapcsolódik, és az automatikus törlés adatbiztonsági okból nem végezhető el, az Adatkezelő a törlési kérelmet egyedileg kezeli annak érdekében, hogy más érintettek adatai vagy jogosultságai ne sérüljenek. Gyermekfiók törlését a gyermek szülője vagy gondviselője kérheti. Kapcsolat: <a href="mailto:kapcsolat@vedettsarok.hu" className="underline">kapcsolat@vedettsarok.hu</a>.</P>
         </Sub>
       </Section>
 
