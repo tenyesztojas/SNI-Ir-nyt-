@@ -57,17 +57,17 @@ export default function AnalyticsConsent({
   return (
     <div
       role="dialog"
-      aria-label="Analitikai beállítások"
+      aria-label="Süti beállítások"
       className="fixed inset-x-0 bottom-0 z-[60] border-t border-gray-200 bg-white px-4 pt-4 shadow-[0_-4px_16px_rgba(0,0,0,0.12)]"
       style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
     >
       <div className="mx-auto flex max-w-3xl flex-col gap-3">
         <div>
-          <p className="font-semibold text-gray-900">Segítesz jobbá tenni a VédettSarkot?</p>
+          <p className="font-semibold text-gray-900">Süti beállítások</p>
           <p className="mt-1 text-sm leading-relaxed text-gray-700">
-            Használati statisztikát szeretnénk gyűjteni a Google Analytics segítségével, hogy lássuk,
-            mely funkciókat használják, és hol tudjuk javítani a szolgáltatást. Az analitika nem
-            szükséges a VédettSarok vagy a Védett Útvonal használatához.{" "}
+            A működéshez szükséges sütik mellett – a hozzájárulásoddal – analitikai sütiket is használunk,
+            hogy a Google Analytics segítségével megértsük, hogyan használják a VédettSarkot, és
+            javíthassuk a szolgáltatást. Az analitikai sütik elfogadása nem kötelező.{" "}
             <Link href="/adatkezelesi-tajekoztato" className="underline">
               Adatkezelési Tájékoztató
             </Link>
@@ -79,14 +79,14 @@ export default function AnalyticsConsent({
             onClick={() => choose("granted")}
             className="flex-1 rounded-lg border border-gray-400 bg-white px-4 py-2.5 text-sm font-semibold text-gray-900 hover:bg-gray-50"
           >
-            Analitika engedélyezése
+            Analitikai sütik elfogadása
           </button>
           <button
             type="button"
             onClick={() => choose("denied")}
             className="flex-1 rounded-lg border border-gray-400 bg-white px-4 py-2.5 text-sm font-semibold text-gray-900 hover:bg-gray-50"
           >
-            Elutasítom
+            Csak szükséges sütik
           </button>
         </div>
       </div>

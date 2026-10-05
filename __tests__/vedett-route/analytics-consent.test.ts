@@ -128,8 +128,8 @@ describe("storage + UI", () => {
   });
   test("10. UI offers both choices equally, no checkbox, privacy link, settings entry", () => {
     const ui = read("components/analytics/AnalyticsConsent.tsx");
-    assert.match(ui, /Analitika engedélyezése/);
-    assert.match(ui, /Elutasítom/);
+    assert.match(ui, /Analitikai sütik elfogadása/);
+    assert.match(ui, /Csak szükséges sütik/);
     assert.match(ui, /href="\/adatkezelesi-tajekoztato"/);
     assert.doesNotMatch(ui, /type="checkbox"|defaultChecked/);
     assert.doesNotMatch(ui, /névtelen/i);
