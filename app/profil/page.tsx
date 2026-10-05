@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { UserCircle, Users, ArrowRight } from "lucide-react";
+import { UserCircle } from "lucide-react";
 import { getCurrentUserAndProfile, getOwnPlaces, getOwnReviews } from "@/lib/data";
 import { signOutAction } from "@/lib/actions/auth";
 import { hasFamilyBetaAccess } from "@/lib/family/config";
@@ -7,6 +7,7 @@ import { hasAnyFamilyAccessSignal } from "@/lib/family/data";
 import ProfileNameForm from "@/components/ProfileNameForm";
 import PasswordChangeForm from "@/components/PasswordChangeForm";
 import DeleteAccountSection from "@/components/DeleteAccountSection";
+import ProfileDashboard from "@/components/profile/ProfileDashboard";
 
 const placeStatusLabel: Record<string, string> = {
   pending: "Jóváhagyásra vár",
@@ -78,78 +79,74 @@ export default async function ProfilePage() {
         </form>
       </div>
 
-      <div className="mt-8 rounded-2xl border border-gray-100 bg-white p-6 shadow-soft">
-        <h2 className="text-lg font-bold text-gray-900">Névbeállítások és hírlevél</h2>
-        <p className="mt-1 text-sm text-gray-500">
-          Válaszd meg, mi jelenjen meg az értékeléseiden, és kezelj hírlevél-feliratkozásodat.
-        </p>
-        <ProfileNameForm
-          displayName={profile?.displayName ?? ""}
-          firstName={profile?.firstName ?? ""}
-          showFirstName={profile?.showFirstName ?? false}
-          newsletterSubscribed={profile?.newsletterSubscribed ?? true}
-        />
-      </div>
-
-      {hasFamilyAccess && (
-        <Link
-          href="/csalad"
-          className="mt-8 flex items-center justify-between gap-3 rounded-2xl border border-gray-100 bg-white p-6 shadow-soft"
-        >
-          <div className="flex items-center gap-3">
-            <Users className="text-sni-brand-blue" size={28} />
+      <ProfileDashboard
+        profileLabel={
+          profile?.showFirstName && profile?.firstName
+            ? profile.firstName
+            : profile?.displayName ?? "Profil"
+        }
+        hasFamilyAccess={hasFamilyAccess}
+        placesCount={places.length}
+        reviewsCount={reviews.length}
+        panels={{
+          profile: (
             <div>
-              <h2 className="text-lg font-bold text-gray-900">Család</h2>
-              <p className="text-sm text-gray-500">
-                Családtagok és gyermekprofilok kezelése.
+              <h2 className="text-lg font-bold text-gray-900">Névbeállítások és hírlevél</h2>
+              <p className="mt-1 text-sm text-gray-500">
+                Válaszd meg, mi jelenjen meg az értékeléseiden, és kezelj hírlevél-feliratkozásodat.
               </p>
+              <ProfileNameForm
+                displayName={profile?.displayName ?? ""}
+                firstName={profile?.firstName ?? ""}
+                showFirstName={profile?.showFirstName ?? false}
+                newsletterSubscribed={profile?.newsletterSubscribed ?? true}
+              />
             </div>
-          </div>
-          <ArrowRight className="text-sni-brand-blue" size={20} />
-        </Link>
-      )}
-
-      <PasswordChangeForm />
-
-      <DeleteAccountSection />
-
-      <section className="mt-8">
-        <h2 className="text-lg font-bold text-gray-900">Beküldött helyek ({places.length})</h2>
-        {places.length === 0 ? (
-          <p className="mt-2 text-gray-500">Még nem küldtél be helyet.</p>
-        ) : (
-          <div className="mt-3 flex flex-col gap-3">
-            {places.map((p) => (
-              <div key={p.id} className="rounded-2xl border border-gray-100 bg-white p-4 shadow-soft flex items-center justify-between gap-3">
-                <div>
-                  <p className="font-semibold text-gray-900">{p.name}</p>
-                  <p className="text-sm text-gray-500">{p.city}</p>
+          ),
+          password: <PasswordChangeForm />,
+          delete: <DeleteAccountSection />,
+          places: (
+            <section>
+              <h2 className="text-lg font-bold text-gray-900">Beküldött helyek ({places.length})</h2>
+              {places.length === 0 ? (
+                <p className="mt-2 text-gray-500">Még nem küldtél be helyet.</p>
+              ) : (
+                <div className="mt-3 flex flex-col gap-3">
+                  {places.map((p) => (
+                    <div key={p.id} className="rounded-2xl border border-gray-100 bg-white p-4 shadow-soft flex items-center justify-between gap-3">
+                      <div>
+                        <p className="font-semibold text-gray-900">{p.name}</p>
+                        <p className="text-sm text-gray-500">{p.city}</p>
+                      </div>
+                      <span className="text-sm font-medium text-sni-brand-blue">{placeStatusLabel[p.status] ?? p.status}</span>
+                    </div>
+                  ))}
                 </div>
-                <span className="text-sm font-medium text-sni-brand-blue">{placeStatusLabel[p.status] ?? p.status}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
-
-      <section className="mt-8">
-        <h2 className="text-lg font-bold text-gray-900">Értékelések ({reviews.length})</h2>
-        {reviews.length === 0 ? (
-          <p className="mt-2 text-gray-500">Még nem írtál értékelést.</p>
-        ) : (
-          <div className="mt-3 flex flex-col gap-3">
-            {reviews.map((r) => (
-              <div key={r.id} className="rounded-2xl border border-gray-100 bg-white p-4 shadow-soft flex items-center justify-between gap-3">
-                <div>
-                  <p className="font-semibold text-gray-900">{r.title}</p>
-                  <p className="text-sm text-gray-500">Összbenyomás: {r.overallRating}/5</p>
+              )}
+            </section>
+          ),
+          reviews: (
+            <section>
+              <h2 className="text-lg font-bold text-gray-900">Értékelések ({reviews.length})</h2>
+              {reviews.length === 0 ? (
+                <p className="mt-2 text-gray-500">Még nem írtál értékelést.</p>
+              ) : (
+                <div className="mt-3 flex flex-col gap-3">
+                  {reviews.map((r) => (
+                    <div key={r.id} className="rounded-2xl border border-gray-100 bg-white p-4 shadow-soft flex items-center justify-between gap-3">
+                      <div>
+                        <p className="font-semibold text-gray-900">{r.title}</p>
+                        <p className="text-sm text-gray-500">Összbenyomás: {r.overallRating}/5</p>
+                      </div>
+                      <span className="text-sm font-medium text-sni-brand-blue">{reviewStatusLabel[r.status] ?? r.status}</span>
+                    </div>
+                  ))}
                 </div>
-                <span className="text-sm font-medium text-sni-brand-blue">{reviewStatusLabel[r.status] ?? r.status}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </section>
+              )}
+            </section>
+          ),
+        }}
+      />
     </div>
   );
 }
