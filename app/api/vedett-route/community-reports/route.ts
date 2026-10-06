@@ -23,6 +23,7 @@ import {
   communityReportActorKey,
 } from "@/lib/vedett-route/communityReports/submission";
 import { insertCommunityReport } from "@/lib/vedett-route/communityReports/repository";
+import { computeReporterScopeToken } from "@/lib/vedett-route/communityReports/reporterToken";
 
 export async function POST(request: Request) {
   const auth = await requireVedettRoutePublicRead(request);
@@ -55,7 +56,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, deduplicated: true });
   }
 
-  const stored = await insertCommunityReport(buildCommunityReportInsertRow(parsed.data, new Date()));
+  const row = buildCommunityReportInsertRow(parsed.data, new Date());
+  // Realtime dedup: rövid életű, célpontra scope-olt HMAC token — a nyers
+  // szereplő-kulcs (user/IP) NEM kerül a DB-be (lásd reporterToken.ts).
+  row.reporter_scope_token = computeReporterScopeToken(
+    actor,
+    { tripId: row.trip_id, routeId: row.route_id, segmentKey: row.segment_key, geoCell: row.geo_cell },
+    new Date(row.created_at)
+  );
+  const stored = await insertCommunityReport(row);
   if (!stored.ok) {
     return NextResponse.json({ ok: false, reason: "STORE_UNAVAILABLE" }, { status: 503 });
   }

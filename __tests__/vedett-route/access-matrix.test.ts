@@ -177,6 +177,8 @@ const EXPECTED: Record<string, Guard> = {
   // Community Reports v1: anonim is küldhet; user_id nélküli, insert-only,
   // szerver-oldali (service-role) írás saját, szigorúbb rate limittel.
   "app/api/vedett-route/community-reports/route.ts": "public_read",
+  // Realtime community state: csak aggregált állapot, saját rate limittel.
+  "app/api/vedett-route/community-state/route.ts": "public_read",
   // B) csak bejelentkezett felhasználó (perzisztencia / írás / saját adat)
   "app/api/vedett-route/favorites/route.ts": "user",
   "app/api/vedett-route/favorites/[id]/route.ts": "user",

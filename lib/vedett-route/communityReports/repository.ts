@@ -15,12 +15,22 @@ import {
   type TrafficObservationQuery,
 } from "./observation.ts";
 import type { CommunityReportInsertRow } from "./submission.ts";
+import type { RealtimeReportRecord, RealtimeStateQuery } from "./realtimeEngine.ts";
+import { REALTIME_QUERY_WINDOW_MINUTES } from "./realtimeConfig.ts";
 
 export const COMMUNITY_REPORTS_TABLE = "vedett_route_community_reports";
 
 export async function insertCommunityReport(row: CommunityReportInsertRow): Promise<{ ok: true } | { ok: false }> {
   try {
-    const { error } = await createAdminClient().from(COMMUNITY_REPORTS_TABLE).insert(row);
+    const client = createAdminClient();
+    let { error } = await client.from(COMMUNITY_REPORTS_TABLE).insert(row);
+    // Átmeneti kompatibilitás: ha a 20261008 migráció (reporter_scope_token)
+    // még nincs alkalmazva, a jelzés token nélkül (legacy módon) mentődik,
+    // a Jelzés funkció nem áll le.
+    if (error && "reporter_scope_token" in row) {
+      const { reporter_scope_token: _omitted, ...legacyRow } = row;
+      ({ error } = await client.from(COMMUNITY_REPORTS_TABLE).insert(legacyRow));
+    }
     if (error) {
       console.error("[vedett-route] community report insert failed", { code: error.code });
       return { ok: false };
@@ -84,3 +94,72 @@ export const communityTrafficObservationAdapter: TrafficObservationAdapter = {
       .filter((observation) => matchesObservationQuery(observation, query));
   },
 };
+
+// ── REALTIME COMMUNITY INTELLIGENCE (2026-10-06) ─────────────────────────────
+
+
+interface RealtimeRow {
+  id: string;
+  report_type: CommunityReportType;
+  created_at: string;
+  expires_at: string;
+  intensity: number | null;
+  base_confidence: number | null;
+  context_confidence: number | null;
+  trip_id: string | null;
+  route_id: string | null;
+  segment_key: string | null;
+  geo_cell: string | null;
+  reporter_scope_token?: string | null;
+}
+
+const REALTIME_COLUMNS =
+  "id, report_type, created_at, expires_at, intensity, base_confidence, context_confidence, trip_id, route_id, segment_key, geo_cell, reporter_scope_token";
+const REALTIME_COLUMNS_LEGACY =
+  "id, report_type, created_at, expires_at, intensity, base_confidence, context_confidence, trip_id, route_id, segment_key, geo_cell";
+
+/**
+ * Aktív (nem lejárt, ablakon belüli) jelöltek a lekérdezési kulcsra. Kulcsonként
+ * külön, paraméterezett lekérdezés (nincs string-összefűzött .or() szűrő), az
+ * eredmény id szerint egyesítve. A reporter tokent a motor csak a szerveren látja.
+ */
+export async function fetchRealtimeCandidateReports(query: RealtimeStateQuery): Promise<RealtimeReportRecord[] | null> {
+  try {
+    const client = createAdminClient();
+    const windowStart = new Date(query.now.getTime() - REALTIME_QUERY_WINDOW_MINUTES * 60_000).toISOString();
+    const nowIso = query.now.toISOString();
+    const base = (columns: string) =>
+      client.from(COMMUNITY_REPORTS_TABLE).select(columns).gte("created_at", windowStart).gt("expires_at", nowIso).limit(300);
+    const requests: ((columns: string) => ReturnType<typeof base>)[] = [];
+    const tripId = query.tripId;
+    const routeId = query.routeId;
+    const geoCell = query.geoCell;
+    if (tripId) requests.push((columns) => base(columns).eq("trip_id", tripId));
+    if (routeId) requests.push((columns) => base(columns).eq("route_id", routeId));
+    if (!tripId && !routeId && geoCell) requests.push((columns) => base(columns).eq("geo_cell", geoCell));
+    let results = await Promise.all(requests.map((build) => build(REALTIME_COLUMNS)));
+    // Átmeneti kompatibilitás a 20261008 migráció előtt: token oszlop nélkül.
+    if (results.some((r) => r.error)) results = await Promise.all(requests.map((build) => build(REALTIME_COLUMNS_LEGACY)));
+    const byId = new Map<string, RealtimeRow>();
+    for (const { data, error } of results) {
+      if (error) return null;
+      for (const row of (data ?? []) as unknown as RealtimeRow[]) byId.set(row.id, row);
+    }
+    return [...byId.values()].map((row) => ({
+      reportType: row.report_type,
+      createdAt: row.created_at,
+      expiresAt: row.expires_at,
+      intensity: row.intensity,
+      baseConfidence: row.base_confidence,
+      contextConfidence: row.context_confidence,
+      tripId: row.trip_id,
+      routeId: row.route_id,
+      segmentKey: row.segment_key,
+      geoCell: row.geo_cell,
+      reporterToken: row.reporter_scope_token ?? null,
+    }));
+  } catch {
+    console.error("[vedett-route] community realtime fetch threw");
+    return null;
+  }
+}

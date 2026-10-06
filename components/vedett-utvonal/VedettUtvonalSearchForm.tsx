@@ -240,6 +240,7 @@ import { trackVedettRouteEvent } from "@/lib/vedett-route/analytics";
 import CommunityReportButton from "@/components/vedett-utvonal/CommunityReportButton";
 import { buildCommunityReportContext } from "@/lib/vedett-route/communityReports/context";
 import { buildCommunityReportEventContext } from "@/lib/vedett-route/communityReports/eventContext";
+import { useCommunityRealtimeWarning } from "@/components/vedett-utvonal/useCommunityRealtimeWarning";
 import SavedPlacesPanel from "@/components/vedett-utvonal/SavedPlacesPanel";
 import { savedPlaceToRouteLocation } from "@/lib/vedett-route/savedPlaces/adapt";
 // SPRINT 8.5 — a MEGLÉVŐ 8.3 engine (csak export/signature szinten
@@ -1541,6 +1542,13 @@ function RankedJourneyCard({
   // byte-ra a geometriai értékkel egyezik; KIZÁRÓLAG BOARDED állapotban vált
   // a következő TRANSIT legre.
   const activeLegIndex = walkToTransitBoundary.resolvedLegIndex ?? geometryActiveLegIndex;
+  // REALTIME COMMUNITY INTELLIGENCE (2026-10-06) — aggregált közösségi állapot
+  // az aktuális trip/szakaszra; csak megerősített, magas confidence-ű
+  // állapotból lesz diszkrét figyelmeztetés (lásd navigationWarning.ts).
+  const communityRealtimeWarning = useCommunityRealtimeWarning(
+    navigationMode,
+    buildCommunityReportContext(displayedJourney.legs, activeLegIndex)
+  );
   const activeLegRange = navigationRouteGeometry.legRanges.find((range) => range.legIndex === activeLegIndex) ?? null;
   // TRANSIT STATE CONTINUITY + ARRIVAL SPRINT (2026-09-18) — ROOT CAUSE
   // FIX a "Szállj fel felszállás után is kiírva marad" hibára (Probléma A).
@@ -3002,6 +3010,11 @@ function RankedJourneyCard({
                 )}
                 {/* COMMUNITY REPORTS v1 — egyérintéses jelzés; csak a már ismert közlekedési kontextust küldi. */}
                 {navigationMode && <CommunityReportButton context={buildCommunityReportContext(displayedJourney.legs, activeLegIndex)} eventContext={buildCommunityReportEventContext(displayedJourney.legs, activeLegIndex, walkToTransitBoundary.phase)} open={communityReportOpen} onOpenChange={setCommunityReportOpen} />}
+                {navigationMode && communityRealtimeWarning && (
+                  <span role="status" aria-live="polite" className="rounded bg-white/95 px-2 py-1 text-xs text-amber-800 shadow">
+                    <span aria-hidden="true">{communityRealtimeWarning.icon}</span> {communityRealtimeWarning.text}
+                  </span>
+                )}
                 {navigationMode && geo.status === "requesting" && (
                   <span className="rounded bg-white/90 px-2 py-1 text-xs text-gray-700 shadow">Helyzet meghatározása…</span>
                 )}

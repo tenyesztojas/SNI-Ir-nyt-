@@ -52,6 +52,8 @@ export interface CommunityReportInsertRow {
   segment_to_lat: number | null;
   segment_to_lon: number | null;
   geo_cell: string | null;
+  /** Rövid életű, scope-olt dedup token (lásd reporterToken.ts) — a route tölti ki. */
+  reporter_scope_token?: string | null;
 }
 
 export function buildCommunityReportInsertRow(input: CommunityReportSubmitInput, now: Date): CommunityReportInsertRow {
