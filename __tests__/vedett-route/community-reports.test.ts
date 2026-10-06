@@ -272,6 +272,6 @@ describe("API route + migráció: anonim/authenticated beküldés biztonsága (f
     assert.match(ui, /Köszönjük a jelzést!/);
     assert.doesNotMatch(ui, /latitude|longitude|geolocation|trackVedettRouteEvent|gtag/);
     const form = read("components/vedett-utvonal/VedettUtvonalSearchForm.tsx");
-    assert.match(form, /\{navigationMode && <CommunityReportButton context=\{buildCommunityReportContext\(displayedJourney\.legs, activeLegIndex\)\} \/>\}/);
+    assert.match(form, /\{navigationMode && <CommunityReportButton context=\{buildCommunityReportContext\(displayedJourney\.legs, activeLegIndex\)\} open=\{communityReportOpen\} onOpenChange=\{setCommunityReportOpen\} \/>\}/);
   });
 });

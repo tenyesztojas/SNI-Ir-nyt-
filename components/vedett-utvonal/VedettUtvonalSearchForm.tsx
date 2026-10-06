@@ -1039,6 +1039,9 @@ function RankedJourneyCard({
   // MINDIG a szülőben, a két külső CTA valamelyikének megnyomásával
   // történik).
   const [restPanelMode, setRestPanelMode] = useState<RestPanelMode>("ADD");
+  // A "Jelzés" panel nyitott állapota (a CommunityReportButton ezt használja);
+  // amíg nyitva van, a lebegő pihenő-gombok nem jelennek meg (overlap fix).
+  const [communityReportOpen, setCommunityReportOpen] = useState(false);
 
   const handleRequestRestCta = () => {
     setRestPanelMode("SEARCH");
@@ -2997,7 +3000,7 @@ function RankedJourneyCard({
                   </>
                 )}
                 {/* COMMUNITY REPORTS v1 — egyérintéses jelzés; csak a már ismert közlekedési kontextust küldi. */}
-                {navigationMode && <CommunityReportButton context={buildCommunityReportContext(displayedJourney.legs, activeLegIndex)} />}
+                {navigationMode && <CommunityReportButton context={buildCommunityReportContext(displayedJourney.legs, activeLegIndex)} open={communityReportOpen} onOpenChange={setCommunityReportOpen} />}
                 {navigationMode && geo.status === "requesting" && (
                   <span className="rounded bg-white/90 px-2 py-1 text-xs text-gray-700 shadow">Helyzet meghatározása…</span>
                 )}
@@ -3261,7 +3264,7 @@ function RankedJourneyCard({
               jobbra-igazítás (`items-end` mobilon) a leghosszabb feliratú
               gomb szélességéhez igazodik, sosem feszíti túl a viewport
               szélességét. */}
-          {mapFullscreen && !restPanelVisible && (
+          {mapFullscreen && !restPanelVisible && !communityReportOpen && (
             <div
               className="fixed right-3 z-[60] flex flex-col items-end gap-2 md:flex-row md:items-center"
               style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 12px)" }}

@@ -354,7 +354,7 @@ describe("25. pont — Navigation Mode / GPS regresszióvédelem (a fullscreen p
 // mapFullscreen/VedettUtvonalMap remount-viselkedés NEM módosult — ez
 // KIZÁRÓLAG UI-wiring a MEGLÉVŐ REQUEST_REST eseményhez (lásd
 // RestStopFlowPanel.tsx triggerRequestRest()/externalRequestRestToken).
-const desktopCtaWrapperMatch = cardSrc.match(/\{mapFullscreen && !restPanelVisible && \([\s\S]{0,1200}?<\/div>\s*\)\}/);
+const desktopCtaWrapperMatch = cardSrc.match(/\{mapFullscreen && !restPanelVisible && !communityReportOpen && \([\s\S]{0,1200}?<\/div>\s*\)\}/);
 const desktopCtaBlock = desktopCtaWrapperMatch ? desktopCtaWrapperMatch[0] : "";
 
 describe("M-P) Desktop UX korrekció (2026-09-13) — 'Pihenőre van szükségem' ÉS 'Pihenőpont hozzáadása' desktopon KÜLÖN, közvetlenül elérhető CTA-ként", () => {

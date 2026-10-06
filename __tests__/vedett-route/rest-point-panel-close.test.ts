@@ -83,8 +83,8 @@ describe("1) Alap felfedezhetőség — restPanelVisible state + Bezárás gomb 
     // </div>-jéig tart, nem az első </button>-ig (lásd
     // fullscreen-rest-point-integration.test.ts az "M-P" desktop CTA
     // teszteket a teljes lefedettséghez).
-    assert.match(cardSrc, /\{mapFullscreen && !restPanelVisible && \(/);
-    const reopenButtonMatch = cardSrc.match(/\{mapFullscreen && !restPanelVisible && \([\s\S]{0,1200}?<\/div>\s*\)\}/);
+    assert.match(cardSrc, /\{mapFullscreen && !restPanelVisible && !communityReportOpen && \(/);
+    const reopenButtonMatch = cardSrc.match(/\{mapFullscreen && !restPanelVisible && !communityReportOpen && \([\s\S]{0,1200}?<\/div>\s*\)\}/);
     assert.ok(reopenButtonMatch, "meg kell találni a kompakt gombokat tartalmazó wrapper <div>-et");
     assert.match(reopenButtonMatch![0], />\s*Pihenőpont hozzáadása\s*</);
   });
@@ -158,7 +158,7 @@ describe("5) Visszanyitás — a MEGLÉVŐ 'Pihenőpont hozzáadása' funkcióva
     // gombra szűkít (a `handleAddRestPointCta` horgonyra), a másik
     // ("Pihenőre van szükségem") gombot a
     // fullscreen-rest-point-integration.test.ts fedi le.
-    const reopenWrapperMatch = cardSrc.match(/\{mapFullscreen && !restPanelVisible && \([\s\S]{0,1200}?<\/div>\s*\)\}/);
+    const reopenWrapperMatch = cardSrc.match(/\{mapFullscreen && !restPanelVisible && !communityReportOpen && \([\s\S]{0,1200}?<\/div>\s*\)\}/);
     assert.ok(reopenWrapperMatch, "meg kell találni a visszanyitó gombokat tartalmazó wrapper <div>-et");
     const reopenButtonMatch = reopenWrapperMatch![0].match(/<button[\s\S]{0,300}?onClick=\{handleAddRestPointCta\}[\s\S]{0,300}?<\/button>/);
     assert.ok(reopenButtonMatch, "meg kell találni a 'Pihenőpont hozzáadása' gombot a wrapperen belül");

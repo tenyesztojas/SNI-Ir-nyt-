@@ -16,14 +16,26 @@ import type { CommunityReportTransitContext } from "@/lib/vedett-route/community
 
 type SubmitState = "idle" | "sending" | "thanks" | "error";
 
-export default function CommunityReportButton({ context }: { context: CommunityReportTransitContext }) {
-  const [open, setOpen] = useState(false);
+// A panel nyitott állapota a szülőé (open/onOpenChange), hogy a szülő a
+// lebegő pihenő-gombokat elrejthesse, amíg a panel nyitva van.
+export default function CommunityReportButton({
+  context,
+  open,
+  onOpenChange: setOpen,
+}: {
+  context: CommunityReportTransitContext;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
   const [state, setState] = useState<SubmitState>("idle");
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => () => {
     if (timerRef.current) clearTimeout(timerRef.current);
   }, []);
+
+  // Unmountkor (pl. navigáció vége) a panel zárt állapotba kerül.
+  useEffect(() => () => setOpen(false), [setOpen]);
 
   const flash = (next: SubmitState) => {
     setState(next);
@@ -56,7 +68,7 @@ export default function CommunityReportButton({ context }: { context: CommunityR
     <>
       <button
         type="button"
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => setOpen(!open)}
         aria-expanded={open}
         aria-controls="vedett-community-report-sheet"
         className="btn-secondary bg-white text-xs shadow"
