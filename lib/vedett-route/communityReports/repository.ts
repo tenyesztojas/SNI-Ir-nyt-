@@ -163,3 +163,46 @@ export async function fetchRealtimeCandidateReports(query: RealtimeStateQuery): 
     return null;
   }
 }
+
+/**
+ * Batch realtime jelöltek több kontextushoz: legfeljebb KÉT lekérdezés
+ * (trip_id IN, route_id IN), id szerint egyesítve — nincs N+1.
+ */
+export async function fetchRealtimeCandidateReportsBatch(tripIds: readonly string[], routeIds: readonly string[], now: Date): Promise<RealtimeReportRecord[] | null> {
+  if (tripIds.length === 0 && routeIds.length === 0) return [];
+  try {
+    const client = createAdminClient();
+    const windowStart = new Date(now.getTime() - REALTIME_QUERY_WINDOW_MINUTES * 60_000).toISOString();
+    const nowIso = now.toISOString();
+    const run = (columns: string) => {
+      const base = () => client.from(COMMUNITY_REPORTS_TABLE).select(columns).gte("created_at", windowStart).gt("expires_at", nowIso).limit(1000);
+      const requests = [];
+      if (tripIds.length > 0) requests.push(base().in("trip_id", [...tripIds]));
+      if (routeIds.length > 0) requests.push(base().in("route_id", [...routeIds]));
+      return Promise.all(requests);
+    };
+    let results = await run(REALTIME_COLUMNS);
+    if (results.some((r) => r.error)) results = await run(REALTIME_COLUMNS_LEGACY);
+    const byId = new Map<string, RealtimeRow>();
+    for (const { data, error } of results) {
+      if (error) return null;
+      for (const row of (data ?? []) as unknown as RealtimeRow[]) byId.set(row.id, row);
+    }
+    return [...byId.values()].map((row) => ({
+      reportType: row.report_type,
+      createdAt: row.created_at,
+      expiresAt: row.expires_at,
+      intensity: row.intensity,
+      baseConfidence: row.base_confidence,
+      contextConfidence: row.context_confidence,
+      tripId: row.trip_id,
+      routeId: row.route_id,
+      segmentKey: row.segment_key,
+      geoCell: row.geo_cell,
+      reporterToken: row.reporter_scope_token ?? null,
+    }));
+  } catch {
+    console.error("[vedett-route] community realtime batch fetch threw");
+    return null;
+  }
+}

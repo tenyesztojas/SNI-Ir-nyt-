@@ -257,3 +257,38 @@ export function computeCommunityRealtimeState(
 export function aggregateRealtimeRoutingPenalty(states: readonly CommunityRealtimeState[]): number {
   return states.reduce((max, s) => Math.max(max, s.routingPenalty), 0);
 }
+
+/**
+ * HISTORICAL SENSORY LOAD (2026-10-06) — realtime ellen-jelzés ("Nyugodt")
+ * fajtánként, a pozitív állapotokkal AZONOS illesztéssel, súlyozással,
+ * deduplikációval és confidence-képlettel. Csak a COUNTER_EVIDENCE szerinti
+ * fajtákra (zsúfoltság, zaj) — közlekedési hibát nem érint.
+ */
+export function computeRealtimeCounterSignals(
+  records: readonly RealtimeReportRecord[],
+  query: RealtimeStateQuery
+): Partial<Record<RealtimeStateKind, { confidence: number; independentReportCount: number }>> {
+  const cfg = REALTIME_CONFIDENCE_CONFIG;
+  const out: Partial<Record<RealtimeStateKind, { confidence: number; independentReportCount: number }>> = {};
+  for (const kind of REALTIME_STATE_KINDS) {
+    const counterTypes = COUNTER_EVIDENCE[kind];
+    if (!counterTypes || counterTypes.length === 0) continue;
+    const allowed = ALLOWED_MATCH_LEVELS[kind];
+    const scored = records
+      .filter((r) => counterTypes.includes(r.reportType))
+      .map((record) => {
+        const level = resolveMatchLevel(record, query);
+        if (!level || !allowed.includes(level)) return null;
+        const evidence = reportEvidence(record, level, query.now);
+        return evidence > 0 ? { record, level, evidence, severity: 0 } : null;
+      })
+      .filter((s): s is ScoredRecord => s !== null);
+    const groups = groupIndependent(scored).map(bestOf).filter((g) => g.evidence >= cfg.minEvidenceForIndependence);
+    if (groups.length === 0) continue;
+    const total = groups.reduce((sum, g) => sum + g.evidence, 0);
+    const raw = (cfg.maxConfidence * total) / (total + cfg.evidenceSaturation);
+    const cap = groups.length === 1 ? cfg.singleReporterMaxConfidence : cfg.maxConfidence;
+    out[kind] = { confidence: round3(Math.min(cap, raw)), independentReportCount: groups.length };
+  }
+  return out;
+}

@@ -179,6 +179,8 @@ const EXPECTED: Record<string, Guard> = {
   "app/api/vedett-route/community-reports/route.ts": "public_read",
   // Realtime community state: csak aggregált állapot, saját rate limittel.
   "app/api/vedett-route/community-state/route.ts": "public_read",
+  // Expected community load: csak aggregált, batch, saját rate limittel.
+  "app/api/vedett-route/community-load/route.ts": "public_read",
   // B) csak bejelentkezett felhasználó (perzisztencia / írás / saját adat)
   "app/api/vedett-route/favorites/route.ts": "user",
   "app/api/vedett-route/favorites/[id]/route.ts": "user",
