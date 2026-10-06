@@ -43,6 +43,7 @@ interface CommunityReportRow {
   from_stop_id: string | null;
   to_stop_id: string | null;
   vehicle_type: CommunityVehicleType | null;
+  context_confidence: number | null;
 }
 
 /** Community forrás-adapter: friss (aktív) reportok egy route/irány/szakasz kulcsra. */
@@ -52,7 +53,7 @@ export const communityTrafficObservationAdapter: TrafficObservationAdapter = {
     const windowStart = new Date(query.now.getTime() - query.windowMinutes * 60_000).toISOString();
     let request = createAdminClient()
       .from(COMMUNITY_REPORTS_TABLE)
-      .select("report_type, created_at, expires_at, route_id, trip_id, vehicle_id, direction_id, from_stop_id, to_stop_id, vehicle_type")
+      .select("report_type, created_at, expires_at, route_id, trip_id, vehicle_id, direction_id, from_stop_id, to_stop_id, vehicle_type, context_confidence")
       .gte("created_at", windowStart)
       .gt("expires_at", query.now.toISOString())
       .limit(500);
@@ -62,8 +63,8 @@ export const communityTrafficObservationAdapter: TrafficObservationAdapter = {
     const { data, error } = await request;
     if (error || !data) return [];
     return (data as CommunityReportRow[])
-      .map((row) =>
-        communityReportToObservation({
+      .map((row) => ({
+        ...communityReportToObservation({
           reportType: row.report_type,
           createdAt: row.created_at,
           expiresAt: row.expires_at,
@@ -76,8 +77,10 @@ export const communityTrafficObservationAdapter: TrafficObservationAdapter = {
             toStopId: row.to_stop_id,
             vehicleType: row.vehicle_type,
           },
-        })
-      )
+        }),
+        // A jelzés kontextushoz köthetősége (fázisból) forrás-súlyként.
+        sourceWeight: typeof row.context_confidence === "number" ? row.context_confidence : 1,
+      }))
       .filter((observation) => matchesObservationQuery(observation, query));
   },
 };

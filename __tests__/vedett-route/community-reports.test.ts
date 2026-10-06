@@ -190,7 +190,10 @@ describe("payload validation + nullable transit context", () => {
     assert.deepEqual(Object.keys(row).sort(), [
       "created_at", "direction_id", "expires_at", "from_stop_id", "report_category", "report_type", "route_id",
       "segment_key", "service_date", "source", "time_bucket", "to_stop_id", "trip_id", "vehicle_id", "vehicle_type", "weekday",
-    ]);
+      // v2 (community intelligence) — esemény-kontextus, user-azonosító továbbra sincs
+      "base_confidence", "context_confidence", "context_phase", "context_source", "geo_cell", "headsign", "intensity",
+      "schema_version", "segment_from_lat", "segment_from_lon", "segment_to_lat", "segment_to_lon",
+    ].sort());
   });
   test("service day: 03:00 előtt az előző nap; 15 perces sáv helyes", () => {
     const keys = computeCommunityReportTimeKeys(new Date("2026-10-06T23:20:00Z")); // 01:20 Budapest, szerda
@@ -272,6 +275,6 @@ describe("API route + migráció: anonim/authenticated beküldés biztonsága (f
     assert.match(ui, /Köszönjük a jelzést!/);
     assert.doesNotMatch(ui, /latitude|longitude|geolocation|trackVedettRouteEvent|gtag/);
     const form = read("components/vedett-utvonal/VedettUtvonalSearchForm.tsx");
-    assert.match(form, /\{navigationMode && <CommunityReportButton context=\{buildCommunityReportContext\(displayedJourney\.legs, activeLegIndex\)\} open=\{communityReportOpen\} onOpenChange=\{setCommunityReportOpen\} \/>\}/);
+    assert.match(form, /\{navigationMode && <CommunityReportButton context=\{buildCommunityReportContext\(displayedJourney\.legs, activeLegIndex\)\} eventContext=\{buildCommunityReportEventContext\(displayedJourney\.legs, activeLegIndex, walkToTransitBoundary\.phase\)\} open=\{communityReportOpen\} onOpenChange=\{setCommunityReportOpen\} \/>\}/);
   });
 });

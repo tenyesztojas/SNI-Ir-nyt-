@@ -13,6 +13,7 @@ import {
   type CommunityReportType,
 } from "@/lib/vedett-route/communityReports/config";
 import type { CommunityReportTransitContext } from "@/lib/vedett-route/communityReports/context";
+import type { CommunityReportEventContext } from "@/lib/vedett-route/communityReports/eventContext";
 
 type SubmitState = "idle" | "sending" | "thanks" | "error";
 
@@ -20,10 +21,12 @@ type SubmitState = "idle" | "sending" | "thanks" | "error";
 // lebegő pihenő-gombokat elrejthesse, amíg a panel nyitva van.
 export default function CommunityReportButton({
   context,
+  eventContext,
   open,
   onOpenChange: setOpen,
 }: {
   context: CommunityReportTransitContext;
+  eventContext?: CommunityReportEventContext;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -50,7 +53,7 @@ export default function CommunityReportButton({
       const response = await fetch("/api/vedett-route/community-reports", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reportType, context }),
+        body: JSON.stringify({ reportType, context, event: eventContext ?? null }),
       });
       const data = (await response.json().catch(() => null)) as { ok?: boolean } | null;
       if (response.ok && data?.ok) {

@@ -101,3 +101,29 @@ export const COMMUNITY_REPORT_RATE_LIMITS = {
 
 export const COMMUNITY_REPORT_TIME_ZONE = "Europe/Budapest";
 export const TIME_BUCKET_MINUTES = 15;
+
+// ── COMMUNITY INTELLIGENCE DATA FOUNDATION (2026-10-06) ─────────────────────
+
+/** A report-sor sémaverziója (1 = v1 Community Reports, 2 = esemény-kontextussal bővítve). */
+export const COMMUNITY_REPORT_SCHEMA_VERSION = 2;
+
+/**
+ * Intenzitás (1..3) — KIZÁRÓLAG ott, ahol a jelenlegi UI ténylegesen
+ * megkülönbözteti (Zsúfolt vs. Nagyon zsúfolt). Minden más típusnál null:
+ * külön intenzitás-választó nincs, ezért nem találunk ki értéket.
+ */
+export const COMMUNITY_REPORT_INTENSITY: Partial<Record<CommunityReportType, 1 | 2 | 3>> = {
+  crowded: 2,
+  very_crowded: 3,
+};
+
+export function getCommunityReportIntensity(type: CommunityReportType): 1 | 2 | 3 | null {
+  return COMMUNITY_REPORT_INTENSITY[type] ?? null;
+}
+
+/**
+ * Egyetlen közösségi report alap-megbízhatósága, a friss-állapot aggregáció
+ * confidence-képletével konzisztensen: 1 / (1 + evidenceSaturation).
+ */
+export const COMMUNITY_REPORT_BASE_CONFIDENCE =
+  Math.round((1 / (1 + COMMUNITY_AGGREGATION_CONFIG.evidenceSaturation)) * 1000) / 1000;
