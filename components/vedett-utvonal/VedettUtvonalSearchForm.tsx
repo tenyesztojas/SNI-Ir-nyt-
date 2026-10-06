@@ -944,6 +944,32 @@ function RankedJourneyCard({
   // manualFullscreen önmagában is elég a nagy nézethez navigáció nélkül.
   const [manualFullscreen, setManualFullscreen] = useState(false);
   const mapFullscreen = navigationMode || manualFullscreen;
+  // NAVIGATION PANEL OVERLAP FIX (2026-10-06) — a felső gombsor (Navigáció
+  // befejezése / Jelzés / állapot-címkék) flex-wrap miatt keskeny kijelzőn
+  // több sorba törhet, így a fix `top-14` instrukciós kártya rálógott. A
+  // gombsor TÉNYLEGES alsó szélét mérjük (ResizeObserver), és a kártyát
+  // ez alá tesszük 10px térközzel — nincs eszköz-specifikus pixelérték, a
+  // gombsor bármilyen jövőbeli safe-area/pozíció-változását is követi.
+  // Mérés hiányában (SSR / régi WebView ResizeObserver nélkül) a korábbi
+  // osztály-alapú top érték marad érvényben.
+  const topActionBarRef = useRef<HTMLDivElement | null>(null);
+  const [topActionBarBottomPx, setTopActionBarBottomPx] = useState<number | null>(null);
+  useEffect(() => {
+    const bar = topActionBarRef.current;
+    if (!mapFullscreen || !bar || typeof ResizeObserver === "undefined") {
+      setTopActionBarBottomPx(null);
+      return;
+    }
+    const update = () => setTopActionBarBottomPx(bar.offsetTop + bar.offsetHeight);
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(bar);
+    window.addEventListener("resize", update);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", update);
+    };
+  }, [mapFullscreen]);
 
   // PIHENŐPONT PANEL BEZÁRÁSA (2026-09-11) — TISZTÁN UI-szintű
   // láthatóság-kapcsoló a fullscreen navigációban megjelenő pihenőpont
@@ -2854,6 +2880,14 @@ function RankedJourneyCard({
                 style={{
                   left: "calc(0.5rem + env(safe-area-inset-left, 0px))",
                   right: "calc(3.5rem + env(safe-area-inset-right, 0px))",
+                  ...(topActionBarBottomPx !== null
+                    ? {
+                        top:
+                          routeProgress.offRouteStatus === "OFF_ROUTE"
+                            ? `max(11rem, ${topActionBarBottomPx + 10}px)`
+                            : `${topActionBarBottomPx + 10}px`,
+                      }
+                    : {}),
                 }}
               >
                 <div className="flex items-center justify-center gap-2">
@@ -2947,7 +2981,7 @@ function RankedJourneyCard({
             )}
 
             {mapFullscreen && (
-              <div className="absolute left-2 right-2 top-2 z-10 flex flex-wrap items-center gap-2">
+              <div ref={topActionBarRef} className="absolute left-2 right-2 top-2 z-10 flex flex-wrap items-center gap-2">
                 {navigationMode ? (
                   <button type="button" onClick={stopNavigation} className="btn-secondary bg-white text-xs shadow">
                     ✕ Navigáció befejezése
