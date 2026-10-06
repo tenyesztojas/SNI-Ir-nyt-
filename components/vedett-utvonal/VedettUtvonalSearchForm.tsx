@@ -237,6 +237,8 @@ import {
 } from "@/lib/vedett-route/navigation/liveAlternative";
 import { computeJourneyFingerprint } from "@/lib/vedett-route/fingerprint";
 import { trackVedettRouteEvent } from "@/lib/vedett-route/analytics";
+import CommunityReportButton from "@/components/vedett-utvonal/CommunityReportButton";
+import { buildCommunityReportContext } from "@/lib/vedett-route/communityReports/context";
 import SavedPlacesPanel from "@/components/vedett-utvonal/SavedPlacesPanel";
 import { savedPlaceToRouteLocation } from "@/lib/vedett-route/savedPlaces/adapt";
 // SPRINT 8.5 — a MEGLÉVŐ 8.3 engine (csak export/signature szinten
@@ -2960,6 +2962,8 @@ function RankedJourneyCard({
                     </button>
                   </>
                 )}
+                {/* COMMUNITY REPORTS v1 — egyérintéses jelzés; csak a már ismert közlekedési kontextust küldi. */}
+                {navigationMode && <CommunityReportButton context={buildCommunityReportContext(displayedJourney.legs, activeLegIndex)} />}
                 {navigationMode && geo.status === "requesting" && (
                   <span className="rounded bg-white/90 px-2 py-1 text-xs text-gray-700 shadow">Helyzet meghatározása…</span>
                 )}

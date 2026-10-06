@@ -174,6 +174,9 @@ const EXPECTED: Record<string, Guard> = {
   "app/api/vedett-route/rest-stops/nearby/route.ts": "public_read",
   "app/api/vedett-route/rest-stops/resume/route.ts": "public_read",
   "app/api/vedett-route/rest-stops/route-to-rest-point/route.ts": "public_read",
+  // Community Reports v1: anonim is küldhet; user_id nélküli, insert-only,
+  // szerver-oldali (service-role) írás saját, szigorúbb rate limittel.
+  "app/api/vedett-route/community-reports/route.ts": "public_read",
   // B) csak bejelentkezett felhasználó (perzisztencia / írás / saját adat)
   "app/api/vedett-route/favorites/route.ts": "user",
   "app/api/vedett-route/favorites/[id]/route.ts": "user",
