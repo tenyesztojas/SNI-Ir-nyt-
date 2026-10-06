@@ -241,6 +241,7 @@ import CommunityReportButton from "@/components/vedett-utvonal/CommunityReportBu
 import { buildCommunityReportContext } from "@/lib/vedett-route/communityReports/context";
 import { buildCommunityReportEventContext } from "@/lib/vedett-route/communityReports/eventContext";
 import { useCommunityRealtimeWarning } from "@/components/vedett-utvonal/useCommunityRealtimeWarning";
+import { selectCommunityReasonChips } from "@/lib/vedett-route/communityReports/reasonText";
 import SavedPlacesPanel from "@/components/vedett-utvonal/SavedPlacesPanel";
 import { savedPlaceToRouteLocation } from "@/lib/vedett-route/savedPlaces/adapt";
 // SPRINT 8.5 — a MEGLÉVŐ 8.3 engine (csak export/signature szinten
@@ -2462,6 +2463,16 @@ function RankedJourneyCard({
         {ranked.labels.map((label) => (
           <span key={label} className={`rounded-full px-2 py-0.5 text-xs font-semibold ${LABEL_META[label].className}`}>
             {LABEL_META[label].text}
+          </span>
+        ))}
+        {/* PERSONALIZED SENSORY ROUTING — legfeljebb 2 rövid közösségi indok,
+            csak ha ténylegesen befolyásolta a rangsort (szám/százalék nélkül). */}
+        {selectCommunityReasonChips(ranked.reasonCodes).map((chip) => (
+          <span
+            key={chip.code}
+            className={`rounded-full px-2 py-0.5 text-xs font-medium ${chip.tone === "positive" ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-800"}`}
+          >
+            {chip.text}
           </span>
         ))}
         {/* AKADÁLYMENTES / LÉPCSŐMENTES MVP (2026-09-11) — journey.accessibilityStatus

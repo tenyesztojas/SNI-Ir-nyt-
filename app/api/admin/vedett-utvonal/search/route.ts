@@ -15,6 +15,7 @@ import { requireVedettRoutePublicRead } from "@/lib/vedett-route/access";
 import { journeySearchSchema } from "@/lib/vedett-route/schemas";
 import { geocodeAddress, isAmbiguousGeocodeResult, type GeocodeResult } from "@/lib/vedett-route/geocode";
 import { searchVedettRoutes } from "@/lib/vedett-route/orchestrator";
+import { createServerCommunityLoadProvider } from "@/lib/vedett-route/communityReports/communityLoadBatch";
 import { buildRouteCacheKey, getCached, setCached } from "@/lib/vedett-route/routeCache";
 import type { OrchestratedSearchResult } from "@/lib/vedett-route/types";
 import type { OrchestratorErrorResult } from "@/lib/vedett-route/orchestrator";
@@ -296,7 +297,10 @@ export async function POST(request: Request) {
       bikePropulsion: propulsion,
       timeMode,
     },
-    weights
+    weights,
+    // Közösségi terhelés a rangsoroláshoz (fail-open; kikapcsolható a
+    // VEDETT_ROUTE_COMMUNITY_RANKING_ENABLED=false env-vel).
+    process.env.VEDETT_ROUTE_COMMUNITY_RANKING_ENABLED === "false" ? {} : { communityLoadProvider: createServerCommunityLoadProvider() }
   );
 
   setCached(cacheKey, result);

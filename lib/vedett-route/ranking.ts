@@ -7,6 +7,12 @@
 // ha egyszerre a leggyorsabb ÉS a legkevesebb átszállásos is például.
 
 import type { Journey, RankedJourney, RankingLabel } from "./types.ts";
+import {
+  buildReasonCodes,
+  computeScoreBreakdown,
+  decideCommunityCalmest,
+  type JourneyCommunityAssessment,
+} from "./communityReports/communityRouting.ts";
 
 function pickFastest(journeys: Journey[]): Journey {
   return journeys.reduce((best, j) => (j.totalDurationMinutes < best.totalDurationMinutes ? j : best));
@@ -123,13 +129,23 @@ function labelSortPriority(labels: RankingLabel[]): number {
   return 4;
 }
 
-export function rankJourneys(journeys: Journey[]): RankedJourney[] {
+// PERSONALIZED SENSORY ROUTING (2026-10-06) — opcionális közösségi értékelés
+// (journeys-zel azonos sorrendű tömb). Hiányában (vagy ha minden elem null /
+// bizonyíték nélküli) a függvény BITRE a korábbi eredményt adja.
+export function rankJourneys(journeys: Journey[], community?: { assessments: readonly (JourneyCommunityAssessment | null)[] }): RankedJourney[] {
   if (journeys.length === 0) return [];
 
   const fastest = pickFastest(journeys);
   const fewestTransfers = pickFewestTransfers(journeys);
-  const calmest = pickCalmest(journeys);
+  const baselineCalmest = pickCalmest(journeys);
   const leastWalking = pickLeastWalking(journeys);
+
+  const assessments = community?.assessments;
+  const breakdowns = assessments ? journeys.map((j, i) => computeScoreBreakdown(j, assessments[i])) : null;
+  const decision = breakdowns
+    ? decideCommunityCalmest(journeys, journeys.indexOf(baselineCalmest), breakdowns)
+    : { index: journeys.indexOf(baselineCalmest), switched: false };
+  const calmest = journeys[decision.index];
 
   const ranked = journeys.map((journey) => {
     const labels: RankingLabel[] = [];
@@ -138,11 +154,25 @@ export function rankJourneys(journeys: Journey[]): RankedJourney[] {
     if (journey === calmest) labels.push("CALMEST");
     if (journey === leastWalking) labels.push("LEAST_WALKING");
 
-    return {
+    const entry: RankedJourney = {
       journey,
       labels,
       explanation: explain(journey, labels, fastest, calmest, fewestTransfers, leastWalking),
     };
+    if (breakdowns && assessments) {
+      const index = journeys.indexOf(journey);
+      entry.scoreBreakdown = breakdowns[index];
+      entry.reasonCodes = buildReasonCodes({
+        journey,
+        labels,
+        all: journeys,
+        assessment: assessments[index] ?? null,
+        isCommunityCalmest: decision.switched && journey === calmest,
+        isDemotedBaseline: decision.switched && journey === baselineCalmest,
+        baselineAssessment: assessments[journeys.indexOf(baselineCalmest)] ?? null,
+      });
+    }
+    return entry;
   });
 
   // A felhasználó kifejezett kérése alapján CSAK a 4 elnevezett kategória
@@ -151,7 +181,9 @@ export function rankJourneys(journeys: Journey[]): RankedJourney[] {
   // eldobjuk, így legfeljebb 4, ténylegesen megkülönböztethető kártya jut
   // el a felhasználóig (egy journey több címkét is viselhet, ilyenkor
   // kevesebb, mint 4 kártya jelenik meg).
-  const labeledOnly = ranked.filter((entry) => entry.labels.length > 0);
+  // A közösségi adat miatt "Legnyugodtabb" címkét vesztett korábbi útvonal
+  // a listában marad (nem tűnik el csendben), a címkézettek után.
+  const labeledOnly = ranked.filter((entry) => entry.labels.length > 0 || (decision.switched && entry.journey === baselineCalmest));
 
   // Array.prototype.sort a modern motorokon (V8 is) stabil, tehat az azonos
   // prioritasu elemek megtartjak eredeti (dedup utani) sorrendjuket.

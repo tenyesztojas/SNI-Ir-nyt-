@@ -362,7 +362,10 @@ describe("API, cron auth, privacy, migráció", () => {
     assert.match(api, /toPublicLoadEvaluation\(/);
     assert.match(api, /status: 429/);
     assert.doesNotMatch(api, /includeBreakdown|reporter/);
-    assert.equal((api.match(/fetchLoadProfilesForLookup\(/g) ?? []).length, 1, "egyetlen profil-lekérdezés (nincs N+1)");
+    assert.match(api, /evaluateCommunityLoadContexts\(contexts, now\)/);
+    const batch = stripComments(read("lib/vedett-route/communityReports/communityLoadBatch.ts"));
+    assert.equal((batch.match(/fetchLoadProfilesForLookup\(/g) ?? []).length, 1, "egyetlen profil-lekérdezés (nincs N+1)");
+    assert.equal((batch.match(/fetchRealtimeCandidateReportsBatch\(/g) ?? []).length, 1);
   });
   test("cron route: fail-closed auth, csak engedélyezett exportok; vercel.json ütemezés", () => {
     const cron = stripComments(read("app/api/cron/vedett-route-community-load/route.ts"));

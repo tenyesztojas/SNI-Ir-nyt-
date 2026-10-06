@@ -16,6 +16,7 @@ import { fetchMotisPlan } from "./motisClient.ts";
 import { computeSensoryScore } from "./sensoryEngine.ts";
 import { deduplicateJourneys, computeJourneyFingerprint } from "./fingerprint.ts";
 import { rankJourneys } from "./ranking.ts";
+import { enrichJourneysWithCommunity, type CommunityLoadProvider } from "./communityReports/communityRouting.ts";
 import { normalizePersonalizationWeights } from "./personalization.ts";
 import { vedettRouteLog, vedettRouteNearbyDebugLog } from "./logger.ts";
 import { getTransitProvider } from "./providers/registry.ts";
@@ -537,7 +538,10 @@ export function shouldAttemptLastMileFallback(
 
 export async function searchVedettRoutes(
   request: JourneySearchRequest,
-  weightsInput?: Partial<PersonalizationWeights>
+  weightsInput?: Partial<PersonalizationWeights>,
+  // PERSONALIZED SENSORY ROUTING (2026-10-06) — opcionális közösségi
+  // gazdagítás. Provider nélkül (tesztek, bootstrap) a ranking BITRE a régi.
+  options: { communityLoadProvider?: CommunityLoadProvider; now?: Date } = {}
 ): Promise<OrchestratedSearchResult | OrchestratorErrorResult> {
   const weights = normalizePersonalizationWeights(weightsInput);
   const fromPlace = `${request.from.lat},${request.from.lon}`;
@@ -851,7 +855,18 @@ export async function searchVedettRoutes(
   }
 
   const withSensory = deduped.map((journey) => ({ ...journey, sensory: computeSensoryScore(journey, weights) }));
-  const ranked = rankJourneys(withSensory);
+  // Közösségi (historikus + realtime) terhelés: batch, ≤12 kontextusos
+  // darabokban, időkerettel; BÁRMILYEN hiba / időtúllépés -> fail-open, a
+  // ranking a régi marad. Logba csak az állapot kerül (azonosító nem).
+  let communityAssessments: Awaited<ReturnType<typeof enrichJourneysWithCommunity>>["assessments"] = null;
+  if (options.communityLoadProvider) {
+    const enrichment = await enrichJourneysWithCommunity(withSensory, options.communityLoadProvider, { now: options.now ?? new Date() });
+    communityAssessments = enrichment.assessments;
+    if (enrichment.status !== "ok" && enrichment.status !== "no_transit") {
+      vedettRouteLog("routing_error", "warn", { reason: "community_enrichment_skipped", status: enrichment.status });
+    }
+  }
+  const ranked = rankJourneys(withSensory, communityAssessments ? { assessments: communityAssessments } : undefined);
 
   // IDEIGLENES DIAGNOSZTIKA (lásd logger.ts vedettRouteNearbyDebugLog) —
   // "ranking output yes/no" ÉS "API response-ban volt yes/no" (a `ranked`

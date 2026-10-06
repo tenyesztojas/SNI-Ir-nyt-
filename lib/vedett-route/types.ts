@@ -321,6 +321,11 @@ export interface RankedJourney {
   journey: Journey;
   labels: RankingLabel[];
   explanation: string;
+  // PERSONALIZED SENSORY ROUTING (2026-10-06) — CSAK akkor van jelen, ha a
+  // keresés közösségi gazdagítással futott (lásd communityReports/communityRouting.ts).
+  // Hiányában a ranking és a válasz BITRE a korábbi.
+  scoreBreakdown?: import("./communityReports/communityRouting.ts").CommunityScoreBreakdown;
+  reasonCodes?: import("./communityReports/communityRouting.ts").RankingReasonCode[];
 }
 
 export interface OrchestratedSearchResult {
