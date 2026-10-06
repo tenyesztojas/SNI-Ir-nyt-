@@ -54,7 +54,11 @@ import type { RealtimeLegUpdate } from "../realtimeRefresh/extractUpdates.ts";
 export type LiveAlternativeTriggerType =
   | "PROVEN_RELEVANT_DISRUPTION"
   | "SIGNIFICANT_REALTIME_DEGRADATION"
-  | "MANUAL_CHECK";
+  | "MANUAL_CHECK"
+  // DYNAMIC SENSORY REROUTING (2026-10-06) — a hátralévő út közösségi
+  // állapota érdemben romlott (lásd communityReports/communityReroute.ts).
+  // UGYANAZ a guard (cooldown, decline-suppression, GPS, recovery) vonatkozik rá.
+  | "COMMUNITY_DETERIORATION";
 
 export interface LiveAlternativeTrigger {
   type: LiveAlternativeTriggerType;
@@ -340,6 +344,8 @@ export type MeaningfulImprovementReason =
   | "SUFFICIENT_TIME_BENEFIT"
   | "DISRUPTION_DRIVEN_STRUCTURAL_IMPROVEMENT"
   | "PREFERENCE_BACKED_STRUCTURAL_ADVANTAGE"
+  // DYNAMIC SENSORY REROUTING — a közösségi kapu (evaluateRerouteOpportunity) döntött.
+  | "COMMUNITY_SENSORY_IMPROVEMENT"
   | "NONE";
 
 export interface StructuralImprovement {

@@ -137,7 +137,10 @@ describe("B2) Slider focus-release — fizikailag bizonyított Android PWA scrol
     // (a sensory range input onPointerDownCapture-jén) — nem fut minden
     // rendernél vagy más eseményen.
     const callSites = formSrc.match(/releasePreviousTextInputFocus\(/g) ?? [];
-    assert.equal(callSites.length, 2, "1 függvénydefiníció + 1 hívási hely várható (a definíció maga is tartalmazza a nevet)");
+    // DYNAMIC SENSORY REROUTING (2026-10-06): a két új közösségi csúszka
+    // (Zsúfolt jármű / Zajos környezet) KÜLÖN map-ben, de UGYANAZZAL a
+    // pointerdown-capture javítással jelenik meg -> 1 definíció + 2 hívási hely.
+    assert.equal(callSites.length, 3, "1 függvénydefiníció + 2 hívási hely várható (a definíció maga is tartalmazza a nevet)");
   });
 
   test("J) a grid grid-cols-3 layout hardening megmarad (a korábbi layout-shift javítás nem lett visszavonva — most a közös felső skálán él, lásd 'B) Kompakt slider UX' blokk)", () => {

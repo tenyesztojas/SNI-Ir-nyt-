@@ -12,6 +12,9 @@ export const personalizationWeightsSchema = z
     walking: z.number().min(0).max(2).optional(),
     duration: z.number().min(0).max(2).optional(),
     waiting: z.number().min(0).max(2).optional(),
+    // DYNAMIC SENSORY REROUTING (2026-10-06) — közösségi szenzoros preferenciák.
+    crowding: z.number().min(0).max(2).optional(),
+    noise: z.number().min(0).max(2).optional(),
   })
   .optional();
 

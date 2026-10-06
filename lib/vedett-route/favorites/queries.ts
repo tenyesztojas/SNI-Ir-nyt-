@@ -64,6 +64,9 @@ export function isSameFavoritePreset(a: FavoriteRoute, b: FavoriteRouteCreateInp
   for (const key of weightKeys) {
     if (a.weights[key] !== b.weights[key]) return false;
   }
+  // Közösségi preferenciák: hiányzó = semleges 1 (régi kedvencekkel kompatibilis).
+  if ((a.weights.crowding ?? 1) !== (b.weights.crowding ?? 1)) return false;
+  if ((a.weights.noise ?? 1) !== (b.weights.noise ?? 1)) return false;
 
   return true;
 }
@@ -114,6 +117,14 @@ export async function createFavoriteRoute(userId: string, input: FavoriteRouteCr
     .select("*")
     .single();
 
+  // Átmeneti kompatibilitás: amíg a 20261010 migráció (crowding/noise kulcsok
+  // engedélyezése a weights CHECK-ben) nincs alkalmazva, a DB elutasítja a
+  // 8 kulcsos weights-et (23514). Ilyenkor a mentés a 6 strukturális kulccsal
+  // ismétlődik — a kedvenc mentése nem áll le, csak a 2 új preferencia nem tárolódik.
+  if (error && error.code === "23514" && ("crowding" in input.weights || "noise" in input.weights)) {
+    const { crowding: _c, noise: _n, ...legacyWeights } = input.weights;
+    return createFavoriteRoute(userId, { ...input, name, weights: legacyWeights });
+  }
   if (error) throw new Error(`Kedvenc útvonal mentése sikertelen: ${error.message}`);
   return mapFavoriteRouteRow(data as FavoriteRouteRow);
 }

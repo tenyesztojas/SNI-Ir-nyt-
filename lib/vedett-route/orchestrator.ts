@@ -17,6 +17,7 @@ import { computeSensoryScore } from "./sensoryEngine.ts";
 import { deduplicateJourneys, computeJourneyFingerprint } from "./fingerprint.ts";
 import { rankJourneys } from "./ranking.ts";
 import { enrichJourneysWithCommunity, type CommunityLoadProvider } from "./communityReports/communityRouting.ts";
+import { resolveCommunitySensitivity } from "./communityReports/communityRoutingConfig.ts";
 import { normalizePersonalizationWeights } from "./personalization.ts";
 import { vedettRouteLog, vedettRouteNearbyDebugLog } from "./logger.ts";
 import { getTransitProvider } from "./providers/registry.ts";
@@ -860,7 +861,10 @@ export async function searchVedettRoutes(
   // ranking a régi marad. Logba csak az állapot kerül (azonosító nem).
   let communityAssessments: Awaited<ReturnType<typeof enrichJourneysWithCommunity>>["assessments"] = null;
   if (options.communityLoadProvider) {
-    const enrichment = await enrichJourneysWithCommunity(withSensory, options.communityLoadProvider, { now: options.now ?? new Date() });
+    const enrichment = await enrichJourneysWithCommunity(withSensory, options.communityLoadProvider, {
+      now: options.now ?? new Date(),
+      sensitivity: resolveCommunitySensitivity(weights),
+    });
     communityAssessments = enrichment.assessments;
     if (enrichment.status !== "ok" && enrichment.status !== "no_transit") {
       vedettRouteLog("routing_error", "warn", { reason: "community_enrichment_skipped", status: enrichment.status });

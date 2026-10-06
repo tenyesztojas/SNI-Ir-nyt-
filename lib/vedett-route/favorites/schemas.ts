@@ -26,6 +26,9 @@ export const favoriteWeightsSchema = z.object({
   walking: weightValueSchema,
   duration: weightValueSchema,
   waiting: weightValueSchema,
+  // Opcionális (a régi kedvencekben nincs) — hiányában semleges 1.
+  crowding: weightValueSchema.optional(),
+  noise: weightValueSchema.optional(),
 });
 
 // Strukturált cím — UGYANAZ a három mező, mint a

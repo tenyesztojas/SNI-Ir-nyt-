@@ -31,6 +31,21 @@ export const KIND_TO_ROUTING_DIMENSION: Record<RealtimeStateKind, { group: "sens
 export type CommunitySensitivity = Record<CommunitySensoryDimension, number>;
 export const NEUTRAL_COMMUNITY_SENSITIVITY: CommunitySensitivity = { crowding: 1, noise: 1, light: 1, vibration: 1, temperature: 1 };
 
+/**
+ * DYNAMIC SENSORY REROUTING (2026-10-06) — valódi mapping a felhasználói
+ * preferenciákból (0..2; 0 = nem zavar, 1 = fontos, 2 = különösen zavar):
+ *   crowding report  -> "Zsúfolt jármű zavar" (weights.crowding)
+ *   noise report     -> "Zajos környezet zavar" (weights.noise)
+ * A zavaró fény / rázkódás / meleg jelzéshez nincs szemantikailag megfelelő
+ * preferencia, ezért ezek semlegesek (1) maradnak. A közlekedési zavar
+ * (dugó, megállt jármű, közlekedési probléma) NEM szenzoros dimenzió — arra
+ * semmilyen érzékenység nem hat.
+ */
+export function resolveCommunitySensitivity(weights: { crowding?: number; noise?: number } | null | undefined): CommunitySensitivity {
+  const pick = (v: number | undefined) => (typeof v === "number" && Number.isFinite(v) ? Math.min(2, Math.max(0, v)) : 1);
+  return { ...NEUTRAL_COMMUNITY_SENSITIVITY, crowding: pick(weights?.crowding), noise: pick(weights?.noise) };
+}
+
 export const COMMUNITY_ROUTING_CONFIG = {
   /**
    * Confidence-sávok (a kombinált historikus+realtime confidence-re):

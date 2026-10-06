@@ -61,6 +61,8 @@ const WEIGHT_SUMMARY_LABELS: Record<keyof FavoriteRoute["weights"], string> = {
   walking: "gyaloglás",
   duration: "utazási idő",
   waiting: "várakozás",
+  crowding: "zsúfoltság",
+  noise: "zaj",
 };
 
 function veryImportantSummary(favorite: FavoriteRoute): string | null {

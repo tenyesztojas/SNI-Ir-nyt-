@@ -315,6 +315,13 @@ export interface PersonalizationWeights {
   walking: number;
   duration: number;
   waiting: number;
+  // DYNAMIC SENSORY REROUTING (2026-10-06) — közösségi szenzoros preferenciák,
+  // ugyanazon a 0..2 skálán (0 = nem zavar, 1 = fontos, 2 = különösen zavar).
+  // Opcionálisak: hiányukban semleges 1 (a korábbi viselkedés). A strukturális
+  // Sensory Engine pontszámát NEM befolyásolják — csak a közösségi zsúfoltság/
+  // zaj jelzések súlyát (lásd communityRoutingConfig.ts resolveCommunitySensitivity).
+  crowding?: number;
+  noise?: number;
 }
 
 export interface RankedJourney {

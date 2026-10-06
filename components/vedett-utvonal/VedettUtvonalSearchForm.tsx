@@ -241,7 +241,18 @@ import CommunityReportButton from "@/components/vedett-utvonal/CommunityReportBu
 import { buildCommunityReportContext } from "@/lib/vedett-route/communityReports/context";
 import { buildCommunityReportEventContext } from "@/lib/vedett-route/communityReports/eventContext";
 import { useCommunityRealtimeWarning } from "@/components/vedett-utvonal/useCommunityRealtimeWarning";
-import { selectCommunityReasonChips } from "@/lib/vedett-route/communityReports/reasonText";
+import { COMMUNITY_REASON_TEXT, selectCommunityReasonChips } from "@/lib/vedett-route/communityReports/reasonText";
+import {
+  buildRerouteOfferBullets,
+  collectRemainingCommunityContexts,
+  computeCurrentRemainingBreakdown,
+  evaluateCommunityDeterioration,
+  evaluateRerouteOpportunity,
+} from "@/lib/vedett-route/communityReports/communityReroute";
+import { assessRemainingJourneyCommunity, isDynamicReroutingEnabled } from "@/lib/vedett-route/communityReports/communityMonitor";
+import { resolveCommunitySensitivity } from "@/lib/vedett-route/communityReports/communityRoutingConfig";
+import { isMaterialCommunityChange, type JourneyCommunityAssessment, type JourneyCommunityState } from "@/lib/vedett-route/communityReports/communityRouting";
+import { communityRerouteDebugLog } from "@/lib/vedett-route/communityReports/communityRerouteDebug";
 import SavedPlacesPanel from "@/components/vedett-utvonal/SavedPlacesPanel";
 import { savedPlaceToRouteLocation } from "@/lib/vedett-route/savedPlaces/adapt";
 // SPRINT 8.5 — a MEGLÉVŐ 8.3 engine (csak export/signature szinten
@@ -711,6 +722,7 @@ function RankedJourneyCard({
   onToggleMap,
   serviceAlerts,
   isAuthenticated,
+  weights,
 }: {
   ranked: RankedJourney;
   isOpen: boolean;
@@ -725,6 +737,10 @@ function RankedJourneyCard({
   // RENDERELÉSE szűnt meg, lásd a hívó oldali komment). Nincs Context/
   // store/új hook architektúra — EGY új prop.
   serviceAlerts: ServiceAlert[];
+  // DYNAMIC SENSORY REROUTING (2026-10-06) — a felhasználó aktuális
+  // preferenciái (a 6 strukturális + zsúfoltság/zaj); az alternatíva-keresés
+  // és a jelenlegi hátralévő út pontozása UGYANEZEKKEL történik.
+  weights: PersonalizationWeights;
 }) {
   const journey = ranked.journey;
   const sensory = journey.sensory;
@@ -841,6 +857,19 @@ function RankedJourneyCard({
   // kártya). `liveAlternativePreviewOpen` KIZÁRÓLAG UI-szintű "Megnézem"
   // toggle — nem cseréli a displayedJourney-t, csak a preview-kártyát nyitja.
   const liveAlternativeGuardRef = useRef(createInitialLiveAlternativeGuardState());
+  // DYNAMIC SENSORY REROUTING — navigation-session szintű, csak memóriában élő állapot.
+  const communityBaselineRef = useRef<{ generation: number; state: JourneyCommunityState } | null>(null);
+  const latestCommunityStateRef = useRef<JourneyCommunityState | null>(null);
+  const latestCommunityAssessmentRef = useRef<JourneyCommunityAssessment | null>(null);
+  const communityDeclinedStateRef = useRef<JourneyCommunityState | null>(null);
+  useEffect(() => {
+    // Navigáció vége -> a session-szintű közösségi állapot eldobva (nincs megőrzés).
+    if (navigationMode) return;
+    communityBaselineRef.current = null;
+    communityDeclinedStateRef.current = null;
+    latestCommunityStateRef.current = null;
+    latestCommunityAssessmentRef.current = null;
+  }, [navigationMode]);
   const [liveAlternativeOffer, setLiveAlternativeOffer] = useState(createInitialLiveAlternativeOffer());
   const [liveAlternativePreviewOpen, setLiveAlternativePreviewOpen] = useState(false);
 
@@ -1546,9 +1575,49 @@ function RankedJourneyCard({
   // REALTIME COMMUNITY INTELLIGENCE (2026-10-06) — aggregált közösségi állapot
   // az aktuális trip/szakaszra; csak megerősített, magas confidence-ű
   // állapotból lesz diszkrét figyelmeztetés (lásd navigationWarning.ts).
+  // DYNAMIC SENSORY REROUTING (2026-10-06) — a hátralévő út közösségi
+  // monitora ugyanazon a percenkénti loopon fut, mint a figyelmeztetés.
+  // Baseline: az első eredmény a navigáció (vagy egy elfogadott váltás) után,
+  // KIZÁRÓLAG a kártya memóriájában (nincs szerveroldali előzmény).
+  // Romlás esetén a MEGLÉVŐ Live Alternative pipeline indul (guard: GPS,
+  // recovery, cooldown, decline-suppression; csak ajánlat, sosem automatikus váltás).
+  const dynamicReroutingEnabled = isDynamicReroutingEnabled(process.env.NEXT_PUBLIC_VEDETT_ROUTE_DYNAMIC_REROUTING_ENABLED);
+  const remainingCommunity = useMemo(
+    () => collectRemainingCommunityContexts(displayedJourney, activeLegIndex ?? null),
+    [displayedJourney, activeLegIndex]
+  );
   const communityRealtimeWarning = useCommunityRealtimeWarning(
     navigationMode,
-    buildCommunityReportContext(displayedJourney.legs, activeLegIndex)
+    buildCommunityReportContext(displayedJourney.legs, activeLegIndex),
+    {
+      enabled: dynamicReroutingEnabled,
+      contexts: remainingCommunity.contexts,
+      onEvaluations: (evaluations) => {
+        const { assessment, state } = assessRemainingJourneyCommunity(
+          remainingCommunity.contexts,
+          remainingCommunity.durations,
+          evaluations,
+          resolveCommunitySensitivity(weights)
+        );
+        latestCommunityAssessmentRef.current = assessment;
+        latestCommunityStateRef.current = state;
+        const generation = rerouteSessionRef.current;
+        if (!communityBaselineRef.current || communityBaselineRef.current.generation !== generation) {
+          communityBaselineRef.current = { generation, state };
+          communityRerouteDebugLog("baseline_set", { signature: state.signature });
+          return;
+        }
+        const declined = communityDeclinedStateRef.current;
+        if (declined && !isMaterialCommunityChange(declined, state)) {
+          communityRerouteDebugLog("suppressed_after_decline", { signature: state.signature });
+          return;
+        }
+        const deterioration = evaluateCommunityDeterioration(communityBaselineRef.current.state, state);
+        communityRerouteDebugLog("deterioration_check", { reason: deterioration.reason, trigger: deterioration.trigger, signature: state.signature });
+        if (!deterioration.material) return;
+        void maybeStartLiveAlternativeSearch({ type: "COMMUNITY_DETERIORATION", eventId: `community:${state.signature}` });
+      },
+    }
   );
   const activeLegRange = navigationRouteGeometry.legRanges.find((range) => range.legIndex === activeLegIndex) ?? null;
   // TRANSIT STATE CONTINUITY + ARRIVAL SPRINT (2026-09-18) — ROOT CAUSE
@@ -2153,6 +2222,8 @@ function RankedJourneyCard({
           toCoordinates: { latitude: originalDestination.lat, longitude: originalDestination.lon },
           toName: originalDestination.name,
           departAt: new Date().toISOString(),
+          // A felhasználó preferenciái — a jelöltek UGYANAZZAL a rangsorolással értékelődnek.
+          weights,
         }),
       });
       const data = (await response.json()) as OrchestratedSearchResult | { ok: false; reason?: string };
@@ -2165,6 +2236,43 @@ function RankedJourneyCard({
 
       const candidates = data.journeys.map((ranked) => ranked.journey);
       const currentFingerprint = displayedJourney.fingerprint ?? computeJourneyFingerprint(displayedJourney);
+
+      // DYNAMIC SENSORY REROUTING — közösségi trigger: a jelenlegi HÁTRALÉVŐ út
+      // vs. a legjobb új alternatíva, UGYANAZZAL a pontozással (computeScoreBreakdown),
+      // váltási költséggel és érdemi-javulás kapuval. Nincs ajánlat -> a keresés elvetve.
+      if (trigger.type === "COMMUNITY_DETERIORATION") {
+        const currentAssessment = latestCommunityAssessmentRef.current;
+        const current = computeCurrentRemainingBreakdown(displayedJourney, activeLegIndex ?? null, weights, currentAssessment);
+        const rerouteDecision = evaluateRerouteOpportunity({
+          current: { remaining: current.remaining, breakdown: current.breakdown, assessment: currentAssessment, fingerprint: currentFingerprint },
+          candidates: data.journeys.map((r) => ({ journey: r.journey, scoreBreakdown: r.scoreBreakdown, reasonCodes: r.reasonCodes })),
+        });
+        communityRerouteDebugLog("reroute_decision", {
+          shouldOffer: rerouteDecision.shouldOffer,
+          rejectedReason: rerouteDecision.rejectedReason,
+          improvementPoints: rerouteDecision.improvementPoints,
+          communityImprovementPoints: rerouteDecision.communityImprovementPoints,
+          switchingCostPoints: rerouteDecision.switchingCostPoints,
+        });
+        if (!rerouteDecision.shouldOffer || !rerouteDecision.best) {
+          setLiveAlternativeOffer((offer) => discardLiveAlternativeSearch(offer, sessionGeneration));
+          return;
+        }
+        const offeredJourney = rerouteDecision.best.journey;
+        setLiveAlternativeOffer((offer) =>
+          presentLiveAlternativeOffer(
+            offer,
+            offeredJourney,
+            {
+              netTimeBenefitMinutes: -rerouteDecision.durationDeltaMinutes,
+              reason: "COMMUNITY_SENSORY_IMPROVEMENT",
+              bullets: buildRerouteOfferBullets(rerouteDecision, (code) => COMMUNITY_REASON_TEXT[code]?.text ?? null),
+            },
+            sessionGeneration
+          )
+        );
+        return;
+      }
       const best = selectBestLiveAlternativeCandidate(candidates, currentFingerprint);
       if (!best) return;
 
@@ -2217,6 +2325,11 @@ function RankedJourneyCard({
   };
 
   const handleLiveAlternativeDecline = () => {
+    // DYNAMIC SENSORY REROUTING — "Maradok ezen": ugyanaz (vagy alig változott)
+    // közösségi állapot nem kerül újra felajánlásra; csak érdemi további romlás.
+    if (liveAlternativeOffer.trigger?.type === "COMMUNITY_DETERIORATION") {
+      communityDeclinedStateRef.current = latestCommunityStateRef.current;
+    }
     if (liveAlternativeOffer.trigger) {
       liveAlternativeGuardRef.current = markLiveAlternativeEventDeclined(
         liveAlternativeGuardRef.current,
@@ -2246,6 +2359,10 @@ function RankedJourneyCard({
     }
     setDisplayedJourney(accepted.acceptedJourney);
     bumpNavigationSession();
+    // Új útvonal -> új közösségi baseline (a következő monitor-eredményből),
+    // a korábbi elutasítás-suppression érvényét veszti. A cooldown a guardban fut tovább.
+    communityBaselineRef.current = null;
+    communityDeclinedStateRef.current = null;
     setLiveAlternativeOffer(createInitialLiveAlternativeOffer());
   };
 
@@ -2768,7 +2885,14 @@ function RankedJourneyCard({
                 aria-live="polite"
                 className="absolute left-1/2 top-[4.25rem] z-20 w-[calc(100%-1.5rem)] max-w-sm -translate-x-1/2 rounded-xl border border-sky-300 bg-sky-50/95 px-4 py-3 shadow-lg backdrop-blur"
               >
-                <div className="text-sm font-bold text-sky-950">Találtunk egy kedvezőbb lehetőséget.</div>
+                {liveAlternativeOffer.trigger?.type === "COMMUNITY_DETERIORATION" ? (
+                  <>
+                    <div className="text-sm font-bold text-sky-950">Megváltozott a helyzet az útvonaladon.</div>
+                    <div className="text-xs text-sky-900">Találtunk egy várhatóan nyugodtabb alternatívát.</div>
+                  </>
+                ) : (
+                  <div className="text-sm font-bold text-sky-950">Találtunk egy kedvezőbb lehetőséget.</div>
+                )}
                 {liveAlternativeOffer.comparisonSummary && liveAlternativeOffer.comparisonSummary.bullets.length > 0 && (
                   <ul className="mt-1 list-disc pl-4 text-xs leading-snug text-sky-900">
                     {liveAlternativeOffer.comparisonSummary.bullets.map((bullet) => (
@@ -2782,7 +2906,7 @@ function RankedJourneyCard({
                     className="flex-1 rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white"
                     onClick={() => setLiveAlternativePreviewOpen(true)}
                   >
-                    Megnézem
+                    {liveAlternativeOffer.trigger?.type === "COMMUNITY_DETERIORATION" ? "Alternatíva megtekintése" : "Megnézem"}
                   </button>
                   <button
                     type="button"
@@ -2807,13 +2931,20 @@ function RankedJourneyCard({
                   {liveAlternativeOffer.candidateJourney.transfers} átszállás ·{" "}
                   {Math.round(liveAlternativeOffer.candidateJourney.walkingMinutes)} perc gyaloglás
                 </div>
+                {liveAlternativeOffer.trigger?.type === "COMMUNITY_DETERIORATION" && (
+                  <div className="mt-0.5 text-xs leading-snug text-sky-900">
+                    Várható érkezés:{" "}
+                    {new Date(liveAlternativeOffer.candidateJourney.arrivalTime).toLocaleTimeString("hu-HU", { hour: "2-digit", minute: "2-digit" })}
+                    {liveAlternativeOffer.comparisonSummary?.bullets[0] ? ` · ${liveAlternativeOffer.comparisonSummary.bullets[0]}` : ""}
+                  </div>
+                )}
                 <div className="mt-2 flex gap-2">
                   <button
                     type="button"
                     className="flex-1 rounded-lg bg-sky-600 px-3 py-1.5 text-xs font-semibold text-white"
                     onClick={handleLiveAlternativeAccept}
                   >
-                    Ezt választom
+                    {liveAlternativeOffer.trigger?.type === "COMMUNITY_DETERIORATION" ? "Átváltok erre" : "Ezt választom"}
                   </button>
                   <button
                     type="button"
@@ -3331,13 +3462,22 @@ const ORIGIN_GEOLOCATION_ERROR_COPY: Record<string, string> = {
   error: "Az aktuális helyzeted most nem érhető el.",
 };
 
-const WEIGHT_FIELDS: { key: keyof PersonalizationWeights; label: string }[] = [
+const WEIGHT_FIELDS: { key: Exclude<keyof PersonalizationWeights, "crowding" | "noise">; label: string }[] = [
   { key: "transfers", label: "Átszállások zavarnak" },
   { key: "modeSwitches", label: "Közlekedési mód váltása zavar" },
   { key: "underground", label: "Földalatti (metró) szakasz zavar" },
   { key: "walking", label: "Sok gyaloglás zavar" },
   { key: "duration", label: "Hosszú utazási idő zavar" },
   { key: "waiting", label: "Várakozás zavar" },
+];
+
+// DYNAMIC SENSORY REROUTING (2026-10-06) — a közösségi jelzésekre ható két
+// szempont, UGYANAZON a 0/1/2 skálán és UGYANABBAN a blokkban, mint a fenti 6.
+// Hiányzó érték = semleges "Fontos" (1) — a régi kedvencek és kérések
+// változatlanul működnek; a strukturális Sensory Engine-t nem befolyásolják.
+const COMMUNITY_WEIGHT_FIELDS: { key: "crowding" | "noise"; label: string }[] = [
+  { key: "crowding", label: "Zsúfolt jármű zavar" },
+  { key: "noise", label: "Zajos környezet zavar" },
 ];
 
 // Szenzoros prioritás UX (8-11. pont) — a felhasználó SOSEM lát nyers 0/1/2
@@ -4566,6 +4706,23 @@ export default function VedettUtvonalSearchForm({
                 />
               </div>
             ))}
+            {COMMUNITY_WEIGHT_FIELDS.map(({ key, label }) => (
+              <div key={key}>
+                <label className="text-xs text-gray-700">{label}</label>
+                <input
+                  type="range"
+                  min={0}
+                  max={2}
+                  step={1}
+                  value={weights[key] ?? 1}
+                  disabled={disabled}
+                  onPointerDownCapture={(e) => releasePreviousTextInputFocus(e.currentTarget)}
+                  onChange={(e) => setWeights((w) => ({ ...w, [key]: Number(e.target.value) }))}
+                  aria-valuetext={sensoryPriorityLabel(weights[key] ?? 1)}
+                  className="mt-1 w-full"
+                />
+              </div>
+            ))}
           </div>
         </div>
 
@@ -5033,6 +5190,7 @@ export default function VedettUtvonalSearchForm({
               onToggleMap={() => setOpenIndex((prev) => (prev === i ? null : i))}
               serviceAlerts={result.serviceAlerts}
               isAuthenticated={isAuthenticated}
+              weights={weights}
             />
           ))}
         </div>

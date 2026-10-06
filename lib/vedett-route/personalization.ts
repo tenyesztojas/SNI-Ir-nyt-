@@ -17,6 +17,8 @@ export const DEFAULT_PERSONALIZATION_WEIGHTS: PersonalizationWeights = {
   waiting: 1,
 };
 
+export const COMMUNITY_WEIGHT_KEYS = ["crowding", "noise"] as const;
+
 const WEIGHT_KEYS: (keyof PersonalizationWeights)[] = [
   "transfers",
   "modeSwitches",
@@ -35,6 +37,12 @@ export function normalizePersonalizationWeights(input: Partial<PersonalizationWe
     if (typeof v === "number" && Number.isFinite(v)) {
       out[key] = Math.min(2, Math.max(0, v));
     }
+  }
+  // Opcionális közösségi preferenciák: csak ha a kérés tartalmazza (különben
+  // a kimenet BITRE a korábbi 6 kulcsos objektum).
+  for (const key of COMMUNITY_WEIGHT_KEYS) {
+    const v = input[key];
+    if (typeof v === "number" && Number.isFinite(v)) out[key] = Math.min(2, Math.max(0, v));
   }
   return out;
 }
