@@ -253,6 +253,12 @@ import { assessRemainingJourneyCommunity, isDynamicReroutingEnabled } from "@/li
 import { resolveCommunitySensitivity } from "@/lib/vedett-route/communityReports/communityRoutingConfig";
 import { isMaterialCommunityChange, type JourneyCommunityAssessment, type JourneyCommunityState } from "@/lib/vedett-route/communityReports/communityRouting";
 import { communityRerouteDebugLog } from "@/lib/vedett-route/communityReports/communityRerouteDebug";
+import {
+  boardingGuidanceText,
+  isBoardingGuidanceEnabled,
+  recommendBoardingPosition,
+  selectBoardingGuidanceLegIndex,
+} from "@/lib/vedett-route/navigation/boardingPosition";
 import SavedPlacesPanel from "@/components/vedett-utvonal/SavedPlacesPanel";
 import { savedPlaceToRouteLocation } from "@/lib/vedett-route/savedPlaces/adapt";
 // SPRINT 8.5 — a MEGLÉVŐ 8.3 engine (csak export/signature szinten
@@ -1582,6 +1588,19 @@ function RankedJourneyCard({
   // Romlás esetén a MEGLÉVŐ Live Alternative pipeline indul (guard: GPS,
   // recovery, cooldown, decline-suppression; csak ajánlat, sosem automatikus váltás).
   const dynamicReroutingEnabled = isDynamicReroutingEnabled(process.env.NEXT_PUBLIC_VEDETT_ROUTE_DYNAMIC_REROUTING_ENABLED);
+  // BOARDING POSITION GUIDANCE (2026-10-07) — "Melyik részébe szálljak?"
+  // LEVEL 2 geometriai heurisztika (lásd boardingPosition.ts). Csak a
+  // következő TRANSIT láb ELŐTT (APPROACHING_BOARDING / AT_BOARDING_AREA),
+  // csak MEDIUM+ confidence esetén. Tiszta számítás a már dekódolt
+  // útvonal-adatból: nincs hálózati hívás, nincs analitika, nincs tárolás.
+  const boardingGuidanceEnabled = isBoardingGuidanceEnabled(process.env.NEXT_PUBLIC_VEDETT_ROUTE_BOARDING_GUIDANCE_ENABLED);
+  const boardingGuidanceLegIndex = boardingGuidanceEnabled
+    ? selectBoardingGuidanceLegIndex(displayedJourney.legs, activeLegIndex ?? null, walkToTransitBoundary.phase)
+    : null;
+  const boardingGuidance = useMemo(
+    () => (boardingGuidanceLegIndex === null ? null : boardingGuidanceText(recommendBoardingPosition(displayedJourney.legs, boardingGuidanceLegIndex))),
+    [displayedJourney, boardingGuidanceLegIndex]
+  );
   const remainingCommunity = useMemo(
     () => collectRemainingCommunityContexts(displayedJourney, activeLegIndex ?? null),
     [displayedJourney, activeLegIndex]
@@ -3056,6 +3075,11 @@ function RankedJourneyCard({
                 )}
                 {navigationInstructionForDisplay.detail && (
                   <div className="mt-0.5 text-sm text-gray-600">{navigationInstructionForDisplay.detail}</div>
+                )}
+                {boardingGuidance && (
+                  <div className="mt-1.5 rounded-lg bg-sni-primary/5 px-2 py-1 text-xs text-gray-700" data-testid="boarding-guidance">
+                    <span className="font-medium">{boardingGuidance.title}.</span> {boardingGuidance.detail}
+                  </div>
                 )}
                 {/* SPRINT 7.1, Section G/H — CURRENT VEHICLE ARRIVAL. Csak
                     akkor jelenik meg, ha van megbízható érkezési idő az
