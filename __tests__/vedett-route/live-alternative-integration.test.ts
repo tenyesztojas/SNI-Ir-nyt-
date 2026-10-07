@@ -80,12 +80,18 @@ describe("Live Alternative runtime — SIGNIFICANT_REALTIME_DEGRADATION trigger 
     assert.match(onUpdatesBody, /evaluateRealtimeDegradation\(buildRealtimeDegradationSamples\(displayedJourney, updates\)\)/);
   });
 
-  test("7) a search KIZÁRÓLAG jelentős romlás esetén indul (degradation.degraded gate)", () => {
-    assert.match(onUpdatesBody, /if \(degradation\.degraded && degradation\.worstLegTripId\) \{/);
+  // JOURNEY MONITOR v1 (2026-10-07): a döntés a tiszta journeyMonitor.ts
+  // decideRealtimeMonitorTrigger()-be került (kimaradás azonnal, késés 2 poll
+  // megerősítéssel, csatlakozás-veszély); az eventId-k ott stabilak és tripId-hez kötöttek.
+  test("7) a search KIZÁRÓLAG a monitor-döntés triggere esetén indul", () => {
+    assert.match(onUpdatesBody, /const monitorDecision = decideRealtimeMonitorTrigger\(/);
+    assert.match(onUpdatesBody, /if \(monitorDecision\.trigger\) \{\s*void maybeStartLiveAlternativeSearch\(monitorDecision\.trigger\);/);
   });
 
   test("8) az esemény-identitás stabil (tripId-hez kötött) — ugyanaz a romlás nem generál minden ciklusban új eventId-t", () => {
-    assert.match(onUpdatesBody, /eventId: `degradation:\$\{degradation\.worstLegTripId\}`/);
+    const monitor = readFileSync(join(process.cwd(), "lib/vedett-route/navigation/journeyMonitor.ts"), "utf8");
+    assert.match(monitor, /eventId: `degradation:\$\{degradation\.worstLegTripId\}`/);
+    assert.match(monitor, /`cancelled:\$\{degradation\.cancelledTripId\}`/);
   });
 
   test("9) a merge (mergeRealtimeUpdates) VÁLTOZATLAN marad — a degradation-check NEM helyettesíti azt", () => {

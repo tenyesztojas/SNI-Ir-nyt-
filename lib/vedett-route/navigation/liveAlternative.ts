@@ -58,7 +58,13 @@ export type LiveAlternativeTriggerType =
   // DYNAMIC SENSORY REROUTING (2026-10-06) — a hátralévő út közösségi
   // állapota érdemben romlott (lásd communityReports/communityReroute.ts).
   // UGYANAZ a guard (cooldown, decline-suppression, GPS, recovery) vonatkozik rá.
-  | "COMMUNITY_DETERIORATION";
+  | "COMMUNITY_DETERIORATION"
+  // JOURNEY MONITOR v1 (2026-10-07) — bizonyított járatkimaradás (a realtime
+  // refresh cancelled=true-t adott egy hátralévő lábra), illetve realtime
+  // idők alapján veszélyeztetett/elveszett csatlakozás (lásd journeyMonitor.ts).
+  // UGYANAZ a guard vonatkozik rájuk (cooldown, decline-suppression, GPS, off-route, recovery).
+  | "CANCELLED"
+  | "MISSED_CONNECTION";
 
 export interface LiveAlternativeTrigger {
   type: LiveAlternativeTriggerType;
@@ -442,13 +448,24 @@ export interface RealtimeDegradationLegSample {
   /** null, ha a frissítés nem adott delay-t. */
   updatedDelayMinutes: number | null;
   updatedCancelled?: boolean;
+  /**
+   * JOURNEY MONITOR v1: ha a lábon eddig NEM volt megbízható realtime
+   * delay (previousDelayMinutes === null), az ELSŐ realtime frissítés
+   * késése a menetrendi időhöz mérve (realtime érkezés − menetrendi érkezés,
+   * hiányában indulás). null, ha nincs realtime=true frissítés vagy hiányzik
+   * a realtime/menetrendi időpár — sosem fabrikált érték.
+   */
+  firstRealtimeDelayMinutes?: number | null;
 }
 
 export interface RealtimeDegradationResult {
   degraded: boolean;
+  /** A legrosszabbul romló láb tripId-je; puszta kimaradásnál a kimaradt láb tripId-je. */
   worstLegTripId: string | null;
   worsenedByMinutes: number;
   newlyCancelled: boolean;
+  /** JOURNEY MONITOR v1: a (első) kimaradt hátralévő láb tripId-je, ha van. */
+  cancelledTripId: string | null;
 }
 
 export function evaluateRealtimeDegradation(
@@ -458,12 +475,21 @@ export function evaluateRealtimeDegradation(
   let worstDelta = 0;
   let worstTripId: string | null = null;
   let newlyCancelled = false;
+  let cancelledTripId: string | null = null;
 
   for (const sample of samples) {
-    if (sample.updatedCancelled === true) newlyCancelled = true;
-    if (sample.previousDelayMinutes === null || sample.updatedDelayMinutes === null) continue;
-    const delta = sample.updatedDelayMinutes - sample.previousDelayMinutes;
-    if (delta > worstDelta) {
+    if (sample.updatedCancelled === true) {
+      newlyCancelled = true;
+      cancelledTripId = cancelledTripId ?? sample.tripId;
+    }
+    let delta: number | null = null;
+    if (sample.previousDelayMinutes !== null && sample.updatedDelayMinutes !== null) {
+      delta = sample.updatedDelayMinutes - sample.previousDelayMinutes;
+    } else if (sample.previousDelayMinutes === null && typeof sample.firstRealtimeDelayMinutes === "number" && Number.isFinite(sample.firstRealtimeDelayMinutes)) {
+      // JOURNEY MONITOR v1 — első realtime késés a menetrendhez mérve.
+      delta = sample.firstRealtimeDelayMinutes;
+    }
+    if (delta !== null && delta > worstDelta) {
       worstDelta = delta;
       worstTripId = sample.tripId;
     }
@@ -471,9 +497,13 @@ export function evaluateRealtimeDegradation(
 
   return {
     degraded: newlyCancelled || worstDelta >= thresholdMinutes,
-    worstLegTripId: worstTripId,
+    // JOURNEY MONITOR v1 — puszta kimaradásnál is legyen esemény-identitás
+    // (korábban null maradt, és a hívó `degraded && worstLegTripId` feltétele
+    // miatt a kimaradás nem indított Live Alternative ellenőrzést).
+    worstLegTripId: worstTripId ?? cancelledTripId,
     worsenedByMinutes: worstDelta,
     newlyCancelled,
+    cancelledTripId,
   };
 }
 
@@ -484,6 +514,21 @@ export function evaluateRealtimeDegradation(
  * mergeRealtimeUpdates.ts saját findUpdate()-je nincs exportálva, és egy
  * ekkora, stabil párosítási logika duplikálása nem indokol új shared modult).
  */
+/** realtime=true frissítés realtime−menetrendi ideje percben (érkezés, hiányában indulás); különben null. */
+function firstRealtimeDelayMinutes(update: RealtimeLegUpdate): number | null {
+  if (update.realtime !== true) return null;
+  const pairs: [string | undefined, string | undefined][] = [
+    [update.arrivalTime, update.scheduledArrivalTime],
+    [update.departureTime, update.scheduledDepartureTime],
+  ];
+  for (const [actual, scheduled] of pairs) {
+    const a = actual ? Date.parse(actual) : NaN;
+    const s = scheduled ? Date.parse(scheduled) : NaN;
+    if (Number.isFinite(a) && Number.isFinite(s)) return (a - s) / 60_000;
+  }
+  return null;
+}
+
 export function buildRealtimeDegradationSamples(
   previousJourney: Journey,
   updates: RealtimeLegUpdate[]
@@ -497,12 +542,14 @@ export function buildRealtimeDegradationSamples(
       return true;
     });
     if (!update) continue;
+    const previousDelayMinutes = leg.realtime && leg.delayMinutes !== undefined ? leg.delayMinutes : null;
     samples.push({
       tripId: leg.tripId,
       routeId: leg.routeId,
-      previousDelayMinutes: leg.realtime && leg.delayMinutes !== undefined ? leg.delayMinutes : null,
+      previousDelayMinutes,
       updatedDelayMinutes: update.delayMinutes !== undefined ? update.delayMinutes : null,
       updatedCancelled: update.cancelled === true,
+      firstRealtimeDelayMinutes: previousDelayMinutes === null ? firstRealtimeDelayMinutes(update) : null,
     });
   }
   return samples;

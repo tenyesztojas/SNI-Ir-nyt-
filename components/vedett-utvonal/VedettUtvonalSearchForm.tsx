@@ -259,6 +259,12 @@ import {
   recommendBoardingPosition,
   selectBoardingGuidanceLegIndex,
 } from "@/lib/vedett-route/navigation/boardingPosition";
+import {
+  createInitialRealtimeMonitorDebounceState,
+  decideRealtimeMonitorTrigger,
+  evaluateMissedConnection,
+  type RealtimeMonitorDebounceState,
+} from "@/lib/vedett-route/navigation/journeyMonitor";
 import { recommendedExitText, selectStationGuidanceDisplay, stationExitGuidanceText, stationPreviewText } from "@/lib/vedett-route/stationInfrastructure/display";
 import SavedPlacesPanel from "@/components/vedett-utvonal/SavedPlacesPanel";
 import { savedPlaceToRouteLocation } from "@/lib/vedett-route/savedPlaces/adapt";
@@ -2255,6 +2261,8 @@ function RankedJourneyCard({
   // "innen MOST van-e jobb út" — explicit CURRENT time, NEM az eredeti,
   // frozen departAt (az továbbra is KIZÁRÓLAG a realtime-refresh identitás
   // számára marad érvényben, lásd realtimeRefreshContext fent).
+  // JOURNEY MONITOR v1 — a realtime-jelek debounce-állapota (csak memória, nem perzisztált).
+  const realtimeMonitorDebounceRef = useRef<RealtimeMonitorDebounceState>(createInitialRealtimeMonitorDebounceState());
   const maybeStartLiveAlternativeSearch = async (trigger: LiveAlternativeTrigger) => {
     const nowMs = Date.now();
     const decision = shouldStartLiveAlternativeSearch(liveAlternativeGuardRef.current, {
@@ -2355,7 +2363,11 @@ function RankedJourneyCard({
       const gate = evaluateMeaningfulImprovement({
         rawTimeDifferenceMinutes,
         netTimeBenefitMinutes,
-        disruptionDriven: trigger.type === "PROVEN_RELEVANT_DISRUPTION",
+        // JOURNEY MONITOR v1: kimaradás / elveszett csatlakozás esetén az
+        // eredeti út bizonyítottan sérült — UGYANAZ a strukturális kapu, mint
+        // egy bizonyított zavarnál (a 5 perces időnyereség-kapu változatlan).
+        disruptionDriven:
+          trigger.type === "PROVEN_RELEVANT_DISRUPTION" || trigger.type === "CANCELLED" || trigger.type === "MISSED_CONNECTION",
         structuralImprovement,
         hasRealPreferenceData: false,
         preferenceFavorsStructuralImprovement: false,
@@ -2466,15 +2478,22 @@ function RankedJourneyCard({
       // NEM egy második, párhuzamos GPS/realtime state machine.
       const degradation = evaluateRealtimeDegradation(buildRealtimeDegradationSamples(displayedJourney, updates));
       setDisplayedJourney((prev) => mergeRealtimeUpdates(prev, updates));
-      if (degradation.degraded && degradation.worstLegTripId) {
-        void maybeStartLiveAlternativeSearch({
-          type: "SIGNIFICANT_REALTIME_DEGRADATION",
-          // Stabil, tripId-hez kötött esemény-identitás — UGYANAZ a romlás
-          // (pl. +2 -> +6 -> +7 perc) NEM generál minden pollozási ciklusban
-          // új eventId-t, a cooldown/decline-suppression emiatt helyesen
-          // véd az ismételt search ellen (lásd liveAlternative.ts 5. pont).
-          eventId: `degradation:${degradation.worstLegTripId}`,
-        });
+      // JOURNEY MONITOR v1 (2026-10-07) — a kimaradás (azonnal), a
+      // veszélyeztetett csatlakozás (a frissített időkből) és a jelentős késés
+      // (2 egymást követő poll megerősítésével) UGYANAZON a meglévő Live
+      // Alternative guardon át indíthat ellenőrzést (lásd journeyMonitor.ts).
+      // Az eventId-k stabilak (tripId-hez kötöttek): `degradation:${tripId}`,
+      // `cancelled:${tripId}`, `missed:${from}>${to}`.
+      const monitorDecision = decideRealtimeMonitorTrigger(
+        {
+          degradation,
+          missedConnection: evaluateMissedConnection(mergeRealtimeUpdates(displayedJourney, updates), activeLegIndex ?? null),
+        },
+        realtimeMonitorDebounceRef.current
+      );
+      realtimeMonitorDebounceRef.current = monitorDecision.state;
+      if (monitorDecision.trigger) {
+        void maybeStartLiveAlternativeSearch(monitorDecision.trigger);
       }
     },
   });
