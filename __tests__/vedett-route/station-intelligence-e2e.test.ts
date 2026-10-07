@@ -21,7 +21,7 @@ import {
   type StationCompilerStopInput,
 } from "../../lib/vedett-route/stationInfrastructure/compiler.ts";
 import { createBkkStationInfrastructureProvider } from "../../lib/vedett-route/stationInfrastructure/provider.ts";
-import { stationExitGuidanceText, stationPreviewText } from "../../lib/vedett-route/stationInfrastructure/display.ts";
+import { recommendedExitText, stationExitGuidanceText, stationPreviewText } from "../../lib/vedett-route/stationInfrastructure/display.ts";
 import { recommendBoardingPosition } from "../../lib/vedett-route/navigation/boardingPosition.ts";
 import type { JourneyLeg, OrchestratedSearchResult } from "../../lib/vedett-route/types.ts";
 
@@ -165,25 +165,15 @@ function astoriaLeg(result: OrchestratedSearchResult): JourneyLeg | undefined {
 }
 
 function expectedExitLabel(): string {
-  // Független ellenőrzés: minden kijárat belső ideje azonos (60+30 s), így a
-  // 150 m-es gyalogos célponthoz légvonalban legközelebbi kijárat nyer.
+  // Független ellenőrzés: minden kijárat belső ideje azonos (60+30 s), így
+  // légvonalbeli rangsornál a célhoz legközelebbi kijárat nyer.
   const R = 6_371_000;
   const d = (a: { lat: number; lon: number }, b: { lat: number; lon: number }) => {
     const lat0 = (((a.lat + b.lat) / 2) * Math.PI) / 180;
     return Math.hypot((((b.lon - a.lon) * Math.PI) / 180) * R * Math.cos(lat0), (((b.lat - a.lat) * Math.PI) / 180) * R);
   };
-  const pts = [PLATFORM_W, { lat: 47.4927, lon: 19.0611 }, MUSEUM];
-  let acc = 0;
-  let target = pts[pts.length - 1];
-  for (let i = 1; i < pts.length; i++) {
-    const seg = d(pts[i - 1], pts[i]);
-    if (acc + seg >= 150) {
-      const t = (150 - acc) / seg;
-      target = { lat: pts[i - 1].lat + (pts[i].lat - pts[i - 1].lat) * t, lon: pts[i - 1].lon + (pts[i].lon - pts[i - 1].lon) * t };
-      break;
-    }
-    acc += seg;
-  }
+  // RECOMMENDED METRO EXITS v1: a cél a gyalogos folytatás / végső cél koordinátája.
+  const target = MUSEUM;
   return EXIT_RING.map(([label, lat, lon]) => ({ label, dist: d({ lat, lon }, target) })).sort((a, b) => a.dist - b.dist)[0].label;
 }
 
@@ -210,12 +200,13 @@ describe("Örs vezér tere -> M2 -> Astoria -> gyalog Magyar Nemzeti Múzeum", (
     assert.ok(g, "stationGuidance csatolva");
     assert.equal(g!.status, "EXIT_SELECTED");
     assert.equal(g!.capability, "GRAPH_USABLE");
-    assert.equal(g!.exit?.confidence, "HIGH");
-    assert.equal(g!.exit?.targetBasis, "WALK_PATH_GEOMETRY");
+    assert.equal(g!.exit?.confidence, "MEDIUM", "gyalogos routing nélkül (a mock /api/route nem ad útvonalat) légvonalbeli rangsor");
+    assert.equal(g!.exit?.rankingBasis, "STRAIGHT_LINE");
+    assert.equal(g!.exit?.targetBasis, "WALK_DESTINATION");
     assert.equal(g!.exit?.internalTraversalSeconds, 90);
     assert.equal(g!.exit?.label, expectedExitLabel());
     assert.equal(stationPreviewText(g), `Ajánlott kijárat: ${expectedExitLabel()}`);
-    assert.equal(stationExitGuidanceText(g)?.title, `Az „${expectedExitLabel()}” kijárat lehet a kedvezőbb.`);
+    assert.match(stationExitGuidanceText(g)?.title ?? "", new RegExp(`^Leszállás után keresd az? „${expectedExitLabel()}” kijárat jelzését\\.$`));
     assert.ok(g!.boardingTarget, "a közös csomópont (LM2AS1) a boarding cél");
     const legs = astoriaJourneyLegs(ok);
     const r = recommendBoardingPosition(legs, legs.findIndex((l) => l.toStopId === "bkkgtfs_F01018"));
@@ -243,6 +234,41 @@ describe("Örs vezér tere -> M2 -> Astoria -> gyalog Magyar Nemzeti Múzeum", (
 function astoriaJourneyLegs(result: OrchestratedSearchResult): JourneyLeg[] {
   return result.journeys.find((r) => r.journey.legs.some((l) => l.toStopId === "bkkgtfs_F01018"))!.journey.legs;
 }
+
+describe("valódi gyalogos rangsor a MEGLÉVŐ MOTIS /api/route-on keresztül", () => {
+  test("a légvonalban második kijárat nyer, ha gyalog rövidebb; HIGH + idő/táv az előnézetben", async () => {
+    const straight = expectedExitLabel();
+    const durations = new Map(EXIT_RING.map(([label, lat, lon]) => [`${lat.toFixed(4)},${lon.toFixed(4)}`, label === straight ? 700 : 300 + EXIT_RING.findIndex((e) => e[0] === label) * 10]));
+    const calls: SidecarCall[] = [];
+    const base = makeFetch([itinerary([startWalk, m2ToAstoria(), walkToMuseum()])], calls);
+    let walkingCalls = 0;
+    globalThis.fetch = (async (input: string | URL, init?: RequestInit) => {
+      if (String(input).endsWith("/api/route")) {
+        walkingCalls++;
+        const body = JSON.parse(String(init?.body)) as { start: { lat: number; lng: number }; profile: string };
+        assert.equal(body.profile, "foot");
+        const duration = durations.get(`${body.start.lat.toFixed(4)},${body.start.lng.toFixed(4)}`) ?? 999;
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            type: "FeatureCollection",
+            metadata: { duration, distance: duration * 1.2, uses_elevator: false },
+            features: [{ type: "Feature", geometry: { type: "LineString", coordinates: [[body.start.lng, body.start.lat], [MUSEUM.lon, MUSEUM.lat]] }, properties: { level: 0 } }],
+          }),
+        } as unknown as Response;
+      }
+      return base(input, init);
+    }) as typeof fetch;
+    const result = (await searchVedettRoutes(request, undefined, { stationInfrastructureProvider: createBkkStationInfrastructureProvider() })) as OrchestratedSearchResult;
+    const g = astoriaLeg(result)?.stationGuidance;
+    assert.ok(walkingCalls > 0 && walkingCalls <= 3, "csak a legígéretesebb néhány kijáratra");
+    assert.equal(g?.exit?.rankingBasis, "WALKING_ROUTE");
+    assert.notEqual(g?.exit?.label, straight);
+    assert.equal(g?.exit?.confidence, "HIGH");
+    assert.ok(recommendedExitText(g)?.meta?.startsWith("kb. "));
+  });
+});
 
 describe("átszállás explicit gráffal (szintetikus M3/M4 csomópont)", () => {
   test("M3 -> belső út (lift) -> M4: TRANSFER_PATH, idő, lift, előnézet", async () => {

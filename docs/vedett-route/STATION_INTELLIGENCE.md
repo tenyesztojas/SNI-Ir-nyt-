@@ -101,3 +101,17 @@ EXIT_SELECTED, TRANSFER_PATH, lift, boarding cél); productionben nem logol.
 - `StationInfrastructureProvider` (provider.ts): MÁV/Volán/egyéb GTFS új implementációként.
 - `StationEdgeCostModel` (graph.ts): későbbi érzékszervi / közösségi él-költség
   (lépcső, zaj, „lift nem működik”) — most nincs ilyen adat, nincs bekötve.
+
+## Ajánlott kijárat v1 (2026-10-07)
+
+- Csak metró lábakra (SUBWAY/METRO); a leszállási `toStopId` → `normalizeMotisStopId()` →
+  GTFS stop_id → komplexum (`parent_station`); klaszter-ID esetén a gyerek-peronokból indul.
+- Jelölt: a komplexum pathway-jel a peronról ELÉRHETŐ `location_type=2` kijáratai
+  (pathway nélküli kijárat nem ajánlható).
+- Cél: átszállásnál csak gyalogos láb + nem-metró következő járat + másik komplexum
+  esetén a következő megálló; különben a végső cél (az utolsó láb vége).
+- Rangsor: belső pathway-idő + légvonal → a legjobb 3 kijáratra valódi gyalogos útvonal
+  (meglévő `fetchMotisWalkingRoute`, MOTIS foot), legfeljebb 8 kérés / keresés, 1,5 s keret.
+  Valódi gyalogos rangsor → HIGH (idő/táv is látszik); csak légvonal → MEDIUM.
+- UI: „Ajánlott kijárat: G” + rövid indoklás a metró láb alatt; navigációban
+  „A következő megálló … Leszállás után keresd a „G” kijárat jelzését.”

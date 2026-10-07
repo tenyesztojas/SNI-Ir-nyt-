@@ -338,11 +338,13 @@ describe("akadálymentesség", () => {
 describe("exit selection", () => {
   const index = compileFixture();
   const resolve = resolverFor(index);
-  test("több kijárat közül a célhoz legjobb (A), indokkódokkal, HIGH bizonyossággal", () => {
+  test("több kijárat közül a célhoz legjobb (A), indokkódokkal; légvonalbeli rangsor -> MEDIUM", () => {
     const g = buildLegStationGuidance([startWalk, EAST(), walkTo(-160, 180)], 1, resolve, opts);
     assert.equal(g?.status, "EXIT_SELECTED");
     assert.equal(g?.exit?.label, "A");
-    assert.equal(g?.exit?.confidence, "HIGH");
+    assert.equal(g?.exit?.confidence, "MEDIUM");
+    assert.equal(g?.exit?.rankingBasis, "STRAIGHT_LINE");
+    assert.equal(g?.exit?.targetBasis, "WALK_DESTINATION");
     assert.equal(g?.exit?.internalTraversalSeconds, 90);
     assert.ok(g?.exit?.reasonCodes.includes("BEST_EXIT_FOR_DESTINATION"));
     assert.ok(g?.exit?.reasonCodes.includes("EXPLICIT_GTFS_PATHWAY"));
@@ -381,7 +383,7 @@ describe("exit selection", () => {
   test("gyalogos geometria nélküli cél -> MEDIUM (egyenes vonal)", () => {
     const w = walkTo(-160, 180);
     const g = buildLegStationGuidance([startWalk, EAST(), { ...w, geometryEncoded: undefined }], 1, resolve, opts);
-    assert.equal(g?.exit?.targetBasis, "STRAIGHT_LINE_TARGET");
+    assert.equal(g?.exit?.targetBasis, "WALK_DESTINATION", "a végső cél koordinátája geometria nélkül is ismert");
     assert.equal(g?.exit?.confidence, "MEDIUM");
   });
   test("nincs cél (az út az állomáson ér véget) -> NO_TARGET", () => {
@@ -527,8 +529,8 @@ describe("megjelenítés: fázis, szöveg, címke", () => {
   });
   test("kijárat-szöveg a bizonyossághoz igazodik; LOW/NONE -> nincs szöveg", () => {
     const t = stationExitGuidanceText(guided[1].stationGuidance);
-    assert.equal(t?.title, "Az „A” kijárat lehet a kedvezőbb.");
-    assert.equal(t?.detail, "Innen kevesebb gyaloglásra lehet szükség.");
+    assert.equal(t?.title, "Leszállás után keresd az „A” kijárat jelzését.");
+    assert.equal(t?.detail, "Ezen a kijáraton keresztül kedvezőbb a gyalogos folytatás a célodhoz.");
     const low = { ...guided[1].stationGuidance!, exit: { ...guided[1].stationGuidance!.exit!, confidence: "LOW" as const } };
     assert.equal(stationExitGuidanceText(low), null);
     assert.equal(stationExitGuidanceText(undefined), null);

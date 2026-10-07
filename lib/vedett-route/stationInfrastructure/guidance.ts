@@ -155,10 +155,38 @@ function accessibilityFor(stepFreePath: StationPath | null, graph: StationGraph)
   return { accessibility, liftAvailable };
 }
 
+/** Valódi gyalogos útvonal eredménye egy kijárat -> cél párra (MOTIS foot). */
+export interface ExitWalkingScore {
+  durationSeconds: number;
+  distanceMeters: number;
+}
+
+/** Egy kijárat -> cél gyalogos-routing kérés (az enrichment hajtja végre, időkerettel). */
+export interface ExitWalkingRequest {
+  key: string;
+  from: LatLon;
+  to: LatLon;
+}
+
+/** Stabil kulcs egy kijárat -> cél párhoz (kerekített koordináták, ID nélkül). */
+export function exitWalkingKey(from: LatLon, to: LatLon): string {
+  const r = (v: number) => v.toFixed(5);
+  return `${r(from.lat)},${r(from.lon)}>${r(to.lat)},${r(to.lon)}`;
+}
+
 export interface StationGuidanceOptions {
   /** A felhasználó MEGLÉVŐ lépcsőmentes preferenciája (stepFreeRequired). */
   stepFreePreferred: boolean;
+  /** Ha megadott: a légvonalban legígéretesebb kijáratok valódi gyalogos pontszáma (exitWalkingKey szerint). */
+  walkingScores?: ReadonlyMap<string, ExitWalkingScore>;
+  /** Gyűjtő: a valódi gyalogos routingra javasolt (legfeljebb N) kijárat -> cél pár. */
+  onWalkingRequests?: (requests: ExitWalkingRequest[]) => void;
 }
+
+/** RECOMMENDED METRO EXITS v1: csak metró lábakra adunk állomás-guidance-t. */
+export const METRO_TRANSIT_MODES: ReadonlySet<string> = new Set(["SUBWAY", "METRO"]);
+/** Légvonalbeli előszűrés után ennyi kijáratra kérünk valódi gyalogos útvonalat. */
+export const WALKING_RANKING_CANDIDATES = 3;
 
 interface ExitEvaluation {
   id: string;
@@ -200,6 +228,7 @@ export function buildLegStationGuidance(
 ): LegStationGuidance | null {
   const leg = legs[transitIndex];
   if (!leg || leg.mode !== "TRANSIT") return null;
+  if (!METRO_TRANSIT_MODES.has((leg.transitMode ?? "").toUpperCase())) return null;
   const resolved = resolve(leg.toStopId);
   if (!resolved) return null;
   const { complex, gtfsStopId } = resolved;
@@ -247,13 +276,26 @@ export function buildLegStationGuidance(
     }
   }
 
-  // 2) Kijárat-választás a következő utasmozgás céljához.
+  // 2) Kijárat-választás a következő TÉNYLEGES utasmozgás céljához.
   let target: MovementTarget | null = null;
   if (nextIdx !== null) {
+    // Átszállás: kijáratot CSAK akkor ajánlunk, ha felszíni gyaloglás valóban
+    // kell: van köztes gyalogos láb, a következő járat NEM metró (metró-metró
+    // kapcsolat lehet modellezetlen belső átjáró), és a következő megálló nem
+    // ugyanehhez az állomás-komplexumhoz tartozik.
     const next = legs[nextIdx];
+    const walkBetween = legs[transitIndex + 1]?.mode === "WALK";
+    const nextIsMetro = METRO_TRANSIT_MODES.has((next.transitMode ?? "").toUpperCase());
+    const nextResolved = resolve(next.fromStopId);
+    const sameComplex = nextResolved !== null && nextResolved.complex.id === complex.id;
+    if (!walkBetween || nextIsMetro || sameComplex) return { ...base, status: "NO_TARGET", stationPathConfidence: "NONE" };
     if (isFiniteCoord(next.fromLat, next.fromLon)) target = { point: { lat: next.fromLat as number, lon: next.fromLon as number }, basis: "NEXT_STOP_COORDINATE", targetType: "TRANSFER" };
   } else if (legs[transitIndex + 1]?.mode === "WALK") {
-    target = walkTarget(legs[transitIndex + 1], "DESTINATION");
+    // Nincs további tömegközlekedés: a felhasználó végső célja (az utolsó láb vége).
+    const last = legs[legs.length - 1];
+    target = isFiniteCoord(last?.toLat, last?.toLon)
+      ? { point: { lat: last.toLat as number, lon: last.toLon as number }, basis: "WALK_DESTINATION", targetType: "DESTINATION" }
+      : walkTarget(legs[transitIndex + 1], "DESTINATION");
   }
   if (!target) return { ...base, status: "NO_TARGET", stationPathConfidence: "NONE" };
   if (complex.capability === "GRAPH_PARTIAL") return { ...base, status: "GRAPH_PARTIAL", stationPathConfidence: "LOW" };
@@ -262,17 +304,50 @@ export function buildLegStationGuidance(
   if (candidates.length === 0 && options.stepFreePreferred) candidates = evaluateExits(graph, complex, sources, target.point, false);
   if (candidates.length === 0) return { ...base, status: "NO_CONNECTED_EXIT", stationPathConfidence: "NONE" };
 
-  const best = candidates[0];
-  const nearest = candidates.reduce((m, c) => (c.distance < m.distance || (c.distance === m.distance && compareExit(c, m) < 0) ? c : m), candidates[0]);
+  // Valódi gyalogos rangsor: a légvonalban legígéretesebb N kijáratra a
+  // hívó (enrichment) MOTIS foot útvonalat kér; ha van eredmény, az dönt.
+  const goalPoint: LatLon = target.point;
+  const shortlist = candidates.slice(0, WALKING_RANKING_CANDIDATES);
+  options.onWalkingRequests?.(
+    shortlist.map((c) => {
+      const from = nodePoint(c.node) as LatLon;
+      return { key: exitWalkingKey(from, goalPoint), from, to: goalPoint };
+    })
+  );
+  const walked = options.walkingScores
+    ? shortlist
+        .map((c) => ({ c, w: options.walkingScores!.get(exitWalkingKey(nodePoint(c.node) as LatLon, goalPoint)) }))
+        .filter((x): x is { c: ExitEvaluation; w: ExitWalkingScore } => Boolean(x.w) && Number.isFinite(x.w!.durationSeconds) && Number.isFinite(x.w!.distanceMeters))
+    : [];
+  const rankingBasis: "WALKING_ROUTE" | "STRAIGHT_LINE" = walked.length > 0 ? "WALKING_ROUTE" : "STRAIGHT_LINE";
+  let best = candidates[0];
+  let bestWalk: ExitWalkingScore | null = null;
+  let walkWinner = false;
+  let alternatives = candidates.length;
+  if (walked.length > 0) {
+    const scored = walked
+      .map((x) => ({ ...x, score: x.c.path.totalSeconds + x.w.durationSeconds }))
+      .sort((a, b) => a.score - b.score || a.w.distanceMeters - b.w.distanceMeters || compareExit(a.c, b.c));
+    best = scored[0].c;
+    bestWalk = scored[0].w;
+    const shortestWalk = scored.reduce((m, x) => (x.w.durationSeconds < m.w.durationSeconds ? x : m), scored[0]);
+    walkWinner = shortestWalk.c.id === best.id;
+    alternatives = scored.length;
+  } else {
+    const nearest = candidates.reduce((m, c) => (c.distance < m.distance || (c.distance === m.distance && compareExit(c, m) < 0) ? c : m), candidates[0]);
+    walkWinner = nearest.id === best.id;
+  }
   const stepFreePath = shortestPathsFrom(graph, sources, { stepFreePreferred: true }).get(best.id) ?? null;
   const { accessibility, liftAvailable } = accessibilityFor(stepFreePath, graph);
 
+  // Bizonyosság: valódi gyalogos útvonal + teljes explicit állomási út -> HIGH;
+  // légvonalbeli rangsor (vagy becsült élköltség / feloldatlan peron) -> legfeljebb MEDIUM.
   let confidence = pathConfidence(best.path, platformResolved);
-  if (target.basis === "STRAIGHT_LINE_TARGET" && confidence === "HIGH") confidence = "MEDIUM";
+  if (rankingBasis === "STRAIGHT_LINE" && target.basis !== "WALK_PATH_GEOMETRY" && confidence === "HIGH") confidence = "MEDIUM";
 
   const reasonCodes: StationExitReasonCode[] = [target.targetType === "TRANSFER" ? "BEST_EXIT_FOR_TRANSFER" : "BEST_EXIT_FOR_DESTINATION", "EXPLICIT_GTFS_PATHWAY"];
-  if (candidates.length >= 2 && best.id === nearest.id) reasonCodes.push("SHORTER_WALK_AFTER_EXIT");
-  if (candidates.length >= 2 && best.id !== nearest.id) reasonCodes.push("SHORTER_STATION_PATH");
+  if (alternatives >= 2 && walkWinner) reasonCodes.push("SHORTER_WALK_AFTER_EXIT");
+  if (alternatives >= 2 && !walkWinner) reasonCodes.push("SHORTER_STATION_PATH");
   if (liftAvailable) reasonCodes.push("LIFT_PATH_AVAILABLE");
   if (accessibility === "STEP_FREE_CONFIRMED") reasonCodes.push("STEP_FREE_PATH_AVAILABLE");
 
@@ -284,6 +359,8 @@ export function buildLegStationGuidance(
     targetDistanceMeters: Math.round(best.distance),
     accessibility,
     targetBasis: target.basis,
+    rankingBasis,
+    walkingRoute: bestWalk ? { durationSeconds: Math.round(bestWalk.durationSeconds), distanceMeters: Math.round(bestWalk.distanceMeters) } : null,
   };
   const boardingTarget = boardingTargetFromPath(best.path, graph, platformPoint, target.targetType);
   return { ...base, status: "EXIT_SELECTED", stationPathConfidence: confidence, exit, ...(boardingTarget ? { boardingTarget } : {}) };

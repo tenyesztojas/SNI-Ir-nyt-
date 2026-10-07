@@ -31,7 +31,10 @@ export type StationGuidanceStatus =
   | "NO_TARGET"
   | "NO_CONNECTED_EXIT";
 
-export type StationTargetBasis = "WALK_PATH_GEOMETRY" | "STRAIGHT_LINE_TARGET" | "NEXT_STOP_COORDINATE";
+export type StationTargetBasis = "WALK_DESTINATION" | "WALK_PATH_GEOMETRY" | "STRAIGHT_LINE_TARGET" | "NEXT_STOP_COORDINATE";
+
+/** Mi alapján rangsoroltuk a kijáratokat: valódi gyalogos útvonal (MOTIS foot) vagy légvonal. */
+export type StationExitRankingBasis = "WALKING_ROUTE" | "STRAIGHT_LINE";
 
 export interface StationExitRecommendation {
   /** Ember számára értelmes, szanitizált kijárat-címke (pl. "A"); nincs -> null. */
@@ -43,6 +46,10 @@ export interface StationExitRecommendation {
   targetDistanceMeters: number | null;
   accessibility: StationAccessibilityCode;
   targetBasis: StationTargetBasis;
+  /** RECOMMENDED METRO EXITS v1 (2026-10-07). Hiányzó mező (régi válasz) = légvonal. */
+  rankingBasis?: StationExitRankingBasis;
+  /** Csak valódi gyalogos routing esetén: kijárat -> cél gyaloglás (MOTIS foot). */
+  walkingRoute?: { durationSeconds: number; distanceMeters: number } | null;
 }
 
 export interface StationTransferGuidance {

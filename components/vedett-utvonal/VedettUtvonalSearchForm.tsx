@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { Journey, OrchestratedSearchResult, PersonalizationWeights, RankedJourney, RankingLabel, ServiceAlert } from "@/lib/vedett-route/types";
+import type { Journey, JourneyLeg, OrchestratedSearchResult, PersonalizationWeights, RankedJourney, RankingLabel, ServiceAlert } from "@/lib/vedett-route/types";
 import type { AccessibilityResultStatus } from "@/lib/vedett-route/accessibility";
 import dynamic from "next/dynamic";
 import { useGeolocation } from "@/lib/hooks/useGeolocation";
@@ -259,7 +259,7 @@ import {
   recommendBoardingPosition,
   selectBoardingGuidanceLegIndex,
 } from "@/lib/vedett-route/navigation/boardingPosition";
-import { selectStationGuidanceDisplay, stationExitGuidanceText, stationPreviewText } from "@/lib/vedett-route/stationInfrastructure/display";
+import { recommendedExitText, selectStationGuidanceDisplay, stationExitGuidanceText, stationPreviewText } from "@/lib/vedett-route/stationInfrastructure/display";
 import SavedPlacesPanel from "@/components/vedett-utvonal/SavedPlacesPanel";
 import { savedPlaceToRouteLocation } from "@/lib/vedett-route/savedPlaces/adapt";
 // SPRINT 8.5 — a MEGLÉVŐ 8.3 engine (csak export/signature szinten
@@ -629,6 +629,22 @@ const FACTOR_LABELS: Record<string, string> = {
 //     "Menetrend szerint: HH:mm / Várható indulás: HH:mm / Késés: +-N perc".
 //   3) minden más eset (nincs realtime, vagy realtime van de nem volt
 //      számítható eltérés) -> csak "Menetrend szerinti indulás: HH:mm".
+// RECOMMENDED METRO EXITS v1 (2026-10-07) — kompakt "Ajánlott kijárat" sor
+// a metró láb alatt. Csak a szerver által számolt, megbízható ajánlásnál.
+function RecommendedExitNote({ leg }: { leg: JourneyLeg }) {
+  const text = recommendedExitText(leg.stationGuidance);
+  if (!text) return null;
+  return (
+    <span className="w-full text-xs text-gray-600" data-testid="recommended-exit">
+      <span className="font-medium text-sni-text">{text.title}</span>
+      <span className="block text-gray-500">
+        {text.detail}
+        {text.meta ? ` (${text.meta})` : ""}
+      </span>
+    </span>
+  );
+}
+
 function TransitLegRealtimeNote({
   leg,
 }: {
@@ -1835,8 +1851,15 @@ function RankedJourneyCard({
         activeWalkDistanceAlongMeters: activeLegIsWalk ? activeLegDistanceAlongMeters : null,
       })
     : null;
+  // RECOMMENDED METRO EXITS v1: a járművön (leszálláshoz közeledve) a
+  // megálló nevét is elmondjuk; leszállás után csak a kijárat-jelzést.
   const stationExitGuidance =
-    stationGuidanceDisplay?.kind === "EXIT" ? stationExitGuidanceText(displayedJourney.legs[stationGuidanceDisplay.legIndex]?.stationGuidance) : null;
+    stationGuidanceDisplay?.kind === "EXIT"
+      ? stationExitGuidanceText(displayedJourney.legs[stationGuidanceDisplay.legIndex]?.stationGuidance, {
+          approachingStopName:
+            stationGuidanceDisplay.legIndex === activeLegIndex ? displayedJourney.legs[stationGuidanceDisplay.legIndex]?.toName ?? null : null,
+        })
+      : null;
   // Ha nincs megbízható manoeuvre/progress adat (rövid/hiányzó geometria,
   // nincs GPS-match még), a Sprint 2/3 WALK fallback ("Gyalogolj: X")
   // marad — SOSEM jelenítünk meg technikai bizonytalanságot.
@@ -2738,7 +2761,11 @@ function RankedJourneyCard({
                 {")"}
               </span>
               {leg.mode === "TRANSIT" ? <TransitLegRealtimeNote leg={leg} /> : null}
-              {leg.mode === "TRANSIT" && stationGuidancePreviewEnabled && stationPreviewText(leg.stationGuidance) ? (
+              {/* RECOMMENDED METRO EXITS v1 — csak megbízható, címkézett ajánlásnál;
+                  különben semmi (nincs hiba / "nincs adat" üzenet). */}
+              {leg.mode === "TRANSIT" && stationGuidancePreviewEnabled && recommendedExitText(leg.stationGuidance) ? (
+                <RecommendedExitNote leg={leg} />
+              ) : leg.mode === "TRANSIT" && stationGuidancePreviewEnabled && stationPreviewText(leg.stationGuidance) ? (
                 <span className="w-full text-xs text-gray-500" data-testid="station-preview">
                   {stationPreviewText(leg.stationGuidance)}
                 </span>

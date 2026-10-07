@@ -14,12 +14,57 @@
 import { vedettRouteLog } from "../logger.ts";
 import type { RankedJourney } from "../types.ts";
 import { stationGuidanceDebugLog } from "./debug.ts";
-import { attachStationGuidanceToLegs } from "./guidance.ts";
+import { attachStationGuidanceToLegs, type ExitWalkingRequest, type ExitWalkingScore } from "./guidance.ts";
+import { fetchMotisWalkingRoute } from "../motisClient.ts";
+import type { LatLon } from "../geometry.ts";
 import type { StationInfrastructureProvider } from "./provider.ts";
+
+/** Kijárat -> cél valódi gyalogos útvonal (alapból a MEGLÉVŐ MOTIS foot routing). */
+export type ExitWalkingRouter = (from: LatLon, to: LatLon) => Promise<ExitWalkingScore | null>;
 
 export interface StationGuidanceEnrichmentOptions {
   stepFreePreferred: boolean;
   timeBudgetMs?: number;
+  /** null = nincs valódi gyalogos rangsor (légvonal); undefined = MOTIS foot routing. */
+  walkingRouter?: ExitWalkingRouter | null;
+  walkingBudgetMs?: number;
+  maxWalkingRequests?: number;
+}
+
+const DEFAULT_WALKING_BUDGET_MS = 1_500;
+const DEFAULT_MAX_WALKING_REQUESTS = 8;
+
+/** A meglévő motisClient.fetchMotisWalkingRoute() adaptere; hiba -> null (fail-open). */
+export const motisExitWalkingRouter: ExitWalkingRouter = async (from, to) => {
+  try {
+    const r = await fetchMotisWalkingRoute({ lat: from.lat, lng: from.lon, level: 0 }, { lat: to.lat, lng: to.lon, level: 0 });
+    if (!r.ok) return null;
+    const { duration, distance } = r.data.metadata;
+    return Number.isFinite(duration) && Number.isFinite(distance) && duration >= 0 && distance >= 0 ? { durationSeconds: duration, distanceMeters: distance } : null;
+  } catch {
+    return null;
+  }
+};
+
+/** Egyedi kérések párhuzamosan, közös időkerettel; ami nem ér be, kimarad. */
+async function scoreWalkingRequests(requests: ExitWalkingRequest[], router: ExitWalkingRouter, budgetMs: number): Promise<Map<string, ExitWalkingScore>> {
+  const scores = new Map<string, ExitWalkingScore>();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, budgetMs);
+  });
+  const all = Promise.all(
+    requests.map(async (req) => {
+      try {
+        const score = await router(req.from, req.to);
+        if (score) scores.set(req.key, score);
+      } catch {
+        // fail-open
+      }
+    })
+  );
+  await Promise.race([all, deadline]).finally(() => clearTimeout(timer));
+  return new Map(scores);
 }
 
 export type StationGuidanceEnrichmentOutcome = "OK" | "NO_TRANSIT" | "LOOKUP_UNAVAILABLE" | "ENRICHMENT_TIMEOUT" | "ERROR";
@@ -68,10 +113,32 @@ export async function enrichRankedJourneysWithStationGuidance(
     // Lábankénti státusz-számláló: STOP_ID_UNMATCHED = a leszállási stop
     // nem tartozik ismert állomás-komplexumhoz (pl. felszíni megálló).
     const statusCounts: Record<string, number> = { STOP_ID_UNMATCHED: 0 };
+    // 1. menet: légvonalbeli rangsor + a gyalogos routingra javasolt kijárat -> cél párok.
+    const requests = new Map<string, ExitWalkingRequest>();
+    const firstPass = ranked.map((r) =>
+      attachStationGuidanceToLegs(r.journey.legs, lookup.resolve, {
+        stepFreePreferred: options.stepFreePreferred,
+        onWalkingRequests: (reqs) => {
+          for (const req of reqs) if (!requests.has(req.key)) requests.set(req.key, req);
+        },
+      })
+    );
+    // 2. menet (opcionális): valódi gyalogos útvonal a legígéretesebb kijáratokra.
+    const router = options.walkingRouter === undefined ? motisExitWalkingRouter : options.walkingRouter;
+    let walkingScores: Map<string, ExitWalkingScore> | null = null;
+    const walkingQueue = Array.from(requests.values()).slice(0, options.maxWalkingRequests ?? DEFAULT_MAX_WALKING_REQUESTS);
+    if (router && walkingQueue.length > 0) {
+      walkingScores = await scoreWalkingRequests(walkingQueue, router, options.walkingBudgetMs ?? DEFAULT_WALKING_BUDGET_MS);
+    }
+    const finalLegs =
+      walkingScores && walkingScores.size > 0
+        ? ranked.map((r) => attachStationGuidanceToLegs(r.journey.legs, lookup.resolve, { stepFreePreferred: options.stepFreePreferred, walkingScores: walkingScores! }))
+        : firstPass;
+
     let guided = 0;
     let displayable = 0;
-    const out = ranked.map((r) => {
-      const legs = attachStationGuidanceToLegs(r.journey.legs, lookup.resolve, { stepFreePreferred: options.stepFreePreferred });
+    const out = ranked.map((r, idx) => {
+      const legs = finalLegs[idx];
       for (const leg of legs) {
         if (leg.mode !== "TRANSIT") continue;
         const g = leg.stationGuidance;
@@ -98,6 +165,8 @@ export async function enrichRankedJourneysWithStationGuidance(
       transitLegs,
       guidedLegs: guided,
       displayableLegs: displayable,
+      walkingRequests: walkingQueue.length,
+      walkingRoutes: walkingScores?.size ?? 0,
       statuses: Object.entries(statusCounts)
         .filter(([, n]) => n > 0)
         .map(([k, n]) => `${k}:${n}`)
