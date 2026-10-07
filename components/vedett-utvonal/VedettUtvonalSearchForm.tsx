@@ -218,13 +218,10 @@ import {
   acceptLiveAlternativeOffer,
   buildDisruptionTriggers,
   buildRealtimeDegradationSamples,
-  computeRemainingJourneyMetrics,
-  computeSwitchingCost,
   createInitialLiveAlternativeGuardState,
   createInitialLiveAlternativeOffer,
   declineLiveAlternativeOffer,
   discardLiveAlternativeSearch,
-  evaluateMeaningfulImprovement,
   evaluateRealtimeDegradation,
   markLiveAlternativeEventDeclined,
   markLiveAlternativeSearchFinished,
@@ -262,6 +259,7 @@ import {
 import {
   createInitialRealtimeMonitorDebounceState,
   decideRealtimeMonitorTrigger,
+  evaluateEtaLiveAlternative,
   evaluateMissedConnection,
   type RealtimeMonitorDebounceState,
 } from "@/lib/vedett-route/navigation/journeyMonitor";
@@ -2278,7 +2276,6 @@ function RankedJourneyCard({
     if (!decision.shouldSearch || !currentPosition || !originalDestination) return;
 
     const sessionGeneration = rerouteSessionRef.current;
-    const currentRemaining = computeRemainingJourneyMetrics(displayedJourney, activeLegIndex ?? null);
     liveAlternativeGuardRef.current = markLiveAlternativeSearchStarted(liveAlternativeGuardRef.current, trigger, nowMs);
     setLiveAlternativePreviewOpen(false);
     setLiveAlternativeOffer(startLiveAlternativeOfferSearch(trigger, sessionGeneration));
@@ -2346,33 +2343,25 @@ function RankedJourneyCard({
       const best = selectBestLiveAlternativeCandidate(candidates, currentFingerprint);
       if (!best) return;
 
-      const candidateRemaining = computeRemainingJourneyMetrics(best, 0);
-      const switchingCost = computeSwitchingCost({ current: currentRemaining, candidate: candidateRemaining });
-      const rawTimeDifferenceMinutes = currentRemaining.remainingDurationMinutes - candidateRemaining.remainingDurationMinutes;
-      const netTimeBenefitMinutes = rawTimeDifferenceMinutes - switchingCost.totalPenaltyMinutes;
-      const structuralImprovement = {
-        fewerTransfers: candidateRemaining.remainingTransfers < currentRemaining.remainingTransfers,
-        lessWalking: candidateRemaining.remainingWalkingMinutes < currentRemaining.remainingWalkingMinutes,
-      };
-      // Sensory/preferencia-alapú kapu KIZÁRÓLAG akkor aktiválódhat, ha
-      // valós preferencia-adat áll rendelkezésre — ez a kártya jelenleg nem
-      // kapja meg a `weights` state-et (a szülő formban él, lásd fent), így
-      // itt SOHA nem fabrikálunk preferencia-előnyt (hasRealPreferenceData
-      // mindig false) — ez SZÁNDÉKOSAN dokumentált, kis, biztonságos
-      // egyszerűsítés, NEM hiba.
-      const gate = evaluateMeaningfulImprovement({
-        rawTimeDifferenceMinutes,
-        netTimeBenefitMinutes,
-        // JOURNEY MONITOR v1: kimaradás / elveszett csatlakozás esetén az
-        // eredeti út bizonyítottan sérült — UGYANAZ a strukturális kapu, mint
-        // egy bizonyított zavarnál (a 5 perces időnyereség-kapu változatlan).
-        disruptionDriven:
-          trigger.type === "PROVEN_RELEVANT_DISRUPTION" || trigger.type === "CANCELLED" || trigger.type === "MISSED_CONNECTION",
-        structuralImprovement,
-        hasRealPreferenceData: false,
-        preferenceFavorsStructuralImprovement: false,
+      // JOURNEY MONITOR v1 / 2. lépés (2026-10-07) — ETA-alapú összevetés:
+      // A = a jelenlegi út hátralévő realtime ETA-ja (aktív lábtól), B = a
+      // jelölt ETA-ja; nettó = A − B − a MEGLÉVŐ switching cost; a MEGLÉVŐ
+      // 5 perces meaningful-improvement kapu dönt. Kimaradás / elveszett
+      // csatlakozás esetén a sérült jelenlegi úthoz nem hasonlítunk: egy
+      // érvényes jelölt felajánlható (csak ajánlat, sosem automatikus váltás).
+      // Lásd journeyMonitor.ts evaluateEtaLiveAlternative().
+      const etaDecision = evaluateEtaLiveAlternative({
+        current: displayedJourney,
+        activeLegIndex: activeLegIndex ?? null,
+        candidate: best,
+        nowMs: Date.now(),
+        triggerType: trigger.type,
       });
-      if (!gate.meaningful) return;
+      if (!etaDecision.offer) return;
+      const rawTimeDifferenceMinutes = etaDecision.rawTimeDifferenceMinutes ?? 0;
+      const netTimeBenefitMinutes = etaDecision.netTimeBenefitMinutes ?? 0;
+      const structuralImprovement = etaDecision.structuralImprovement;
+      const gate = { reason: etaDecision.reason };
 
       const bullets: string[] = [];
       // SPRINT 8.5 (12. pont) — KIZÁRÓLAG PROVEN_RELEVANT disruption esetén,

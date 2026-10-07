@@ -12,7 +12,17 @@
 // Nincs hálózat, nincs React, nincs GPS. Bizonytalan adat -> null (fail-open).
 
 import type { Journey, JourneyLeg } from "../types.ts";
-import type { LiveAlternativeTrigger, RealtimeDegradationResult } from "./liveAlternative.ts";
+import {
+  computeRemainingJourneyMetrics,
+  computeSwitchingCost,
+  evaluateMeaningfulImprovement,
+  type LiveAlternativeTrigger,
+  type LiveAlternativeTriggerType,
+  type MeaningfulImprovementReason,
+  type RealtimeDegradationResult,
+  type StructuralImprovement,
+  type SwitchingCostBreakdown,
+} from "./liveAlternative.ts";
 
 const parseMs = (iso: string | undefined): number | null => {
   if (!iso) return null;
@@ -202,4 +212,124 @@ export function decideRealtimeMonitorTrigger(
   if (!candidate) return { trigger: null, state: { pendingEventId: null } };
   if (state.pendingEventId === candidate.eventId) return { trigger: candidate, state: { pendingEventId: candidate.eventId } };
   return { trigger: null, state: { pendingEventId: candidate.eventId } };
+}
+
+// ---------------------------------------------------------------------------
+// 4) ETA-ALAPÚ LIVE ALTERNATIVE ÖSSZEHASONLÍTÁS (Journey Monitor v1 / 2. lépés)
+// ---------------------------------------------------------------------------
+
+/**
+ * Szabály (dokumentált):
+ *   - NORMÁL eset (nincs bizonyított strukturális hiba): A = a jelenlegi út
+ *     hátralévő ETA-ja (estimateRemainingEta, aktív lábtól), B = a jelölt
+ *     teljes ETA-ja (estimateRemainingEta, 0. lábtól — a jelölt az aktuális
+ *     helyzetből indul). raw = A − B, nettó = raw − a MEGLÉVŐ switching cost,
+ *     majd a MEGLÉVŐ evaluateMeaningfulImprovement (5 perces kapu,
+ *     strukturális kapu változatlan). Bármelyik ETA null -> nincs ajánlat.
+ *   - STRUKTURÁLISAN SÉRÜLT jelenlegi út: a trigger CANCELLED, a hátralévő
+ *     részben van kimaradt TRANSIT láb, vagy a csatlakozás realtime szerint
+ *     már elveszett (MISSED). Ilyenkor a jelenlegi ETA értelmetlen (vagy
+ *     null), ezért nem vetjük össze vele: egy ÉRVÉNYES jelölt (van ETA-ja,
+ *     nincs kimaradt lába, nincs elveszett csatlakozása) felajánlható
+ *     "DISRUPTION_DRIVEN_STRUCTURAL_IMPROVEMENT" okkal. Ez is CSAK ajánlat
+ *     (OFFERED) — a váltás továbbra is kizárólag explicit elfogadással.
+ * A szerkezeti mérőszámok (átszállás, gyaloglás) továbbra is a meglévő
+ * computeRemainingJourneyMetrics-ből jönnek — ezek csak a switching costhoz
+ * és a strukturális kapuhoz kellenek, az IDŐ-összevetéshez nem.
+ */
+export type EtaComparisonRejectReason =
+  | "CANDIDATE_ETA_UNAVAILABLE"
+  | "CANDIDATE_NOT_VIABLE"
+  | "CURRENT_ETA_UNAVAILABLE"
+  | "NOT_MEANINGFUL";
+
+export interface EtaLiveAlternativeInput {
+  current: Journey;
+  activeLegIndex: number | null | undefined;
+  candidate: Journey;
+  nowMs: number;
+  triggerType: LiveAlternativeTriggerType;
+}
+
+export interface EtaLiveAlternativeDecision {
+  offer: boolean;
+  reason: MeaningfulImprovementReason;
+  rejectedReason: EtaComparisonRejectReason | null;
+  currentStructurallyBroken: boolean;
+  currentRemainingMinutes: number | null;
+  candidateRemainingMinutes: number | null;
+  /** current − candidate ETA percben (null, ha a jelenlegi ETA nem értelmezhető). */
+  rawTimeDifferenceMinutes: number | null;
+  /** raw − switching cost; strukturálisan sérült útnál null. */
+  netTimeBenefitMinutes: number | null;
+  switchingCost: SwitchingCostBreakdown;
+  structuralImprovement: StructuralImprovement;
+}
+
+function hasCancelledRemainingTransit(journey: Journey, fromIndex: number): boolean {
+  return journey.legs.slice(Math.max(0, fromIndex)).some((leg) => leg.mode === "TRANSIT" && leg.cancelled === true);
+}
+
+export function evaluateEtaLiveAlternative(input: EtaLiveAlternativeInput): EtaLiveAlternativeDecision {
+  const from = Math.max(0, input.activeLegIndex ?? 0);
+  const currentMetrics = computeRemainingJourneyMetrics(input.current, from);
+  const candidateMetrics = computeRemainingJourneyMetrics(input.candidate, 0);
+  const switchingCost = computeSwitchingCost({ current: currentMetrics, candidate: candidateMetrics });
+  const structuralImprovement: StructuralImprovement = {
+    fewerTransfers: candidateMetrics.remainingTransfers < currentMetrics.remainingTransfers,
+    lessWalking: candidateMetrics.remainingWalkingMinutes < currentMetrics.remainingWalkingMinutes,
+  };
+  const currentStructurallyBroken =
+    input.triggerType === "CANCELLED" ||
+    hasCancelledRemainingTransit(input.current, from) ||
+    evaluateMissedConnection(input.current, from).status === "MISSED";
+
+  const candidateEta = estimateRemainingEta(input.candidate, 0, input.nowMs);
+  const currentEta = currentStructurallyBroken ? null : estimateRemainingEta(input.current, from, input.nowMs);
+  const base = {
+    currentStructurallyBroken,
+    currentRemainingMinutes: currentEta?.remainingMinutes ?? null,
+    candidateRemainingMinutes: candidateEta?.remainingMinutes ?? null,
+    switchingCost,
+    structuralImprovement,
+  };
+  const reject = (rejectedReason: EtaComparisonRejectReason, raw: number | null = null, net: number | null = null): EtaLiveAlternativeDecision => ({
+    ...base,
+    offer: false,
+    reason: "NONE",
+    rejectedReason,
+    rawTimeDifferenceMinutes: raw,
+    netTimeBenefitMinutes: net,
+  });
+
+  if (!candidateEta) return reject("CANDIDATE_ETA_UNAVAILABLE");
+
+  if (currentStructurallyBroken) {
+    const candidateViable = !hasCancelledRemainingTransit(input.candidate, 0) && evaluateMissedConnection(input.candidate, 0).status !== "MISSED";
+    if (!candidateViable) return reject("CANDIDATE_NOT_VIABLE");
+    return {
+      ...base,
+      offer: true,
+      reason: "DISRUPTION_DRIVEN_STRUCTURAL_IMPROVEMENT",
+      rejectedReason: null,
+      rawTimeDifferenceMinutes: null,
+      netTimeBenefitMinutes: null,
+    };
+  }
+
+  if (!currentEta) return reject("CURRENT_ETA_UNAVAILABLE");
+
+  const rawTimeDifferenceMinutes = currentEta.remainingMinutes - candidateEta.remainingMinutes;
+  const netTimeBenefitMinutes = rawTimeDifferenceMinutes - switchingCost.totalPenaltyMinutes;
+  const gate = evaluateMeaningfulImprovement({
+    rawTimeDifferenceMinutes,
+    netTimeBenefitMinutes,
+    disruptionDriven:
+      input.triggerType === "PROVEN_RELEVANT_DISRUPTION" || input.triggerType === "CANCELLED" || input.triggerType === "MISSED_CONNECTION",
+    structuralImprovement,
+    hasRealPreferenceData: false,
+    preferenceFavorsStructuralImprovement: false,
+  });
+  if (!gate.meaningful) return reject("NOT_MEANINGFUL", rawTimeDifferenceMinutes, netTimeBenefitMinutes);
+  return { ...base, offer: true, reason: gate.reason, rejectedReason: null, rawTimeDifferenceMinutes, netTimeBenefitMinutes };
 }

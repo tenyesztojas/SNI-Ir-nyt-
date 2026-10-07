@@ -4,7 +4,10 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import type { Journey, JourneyLeg } from "../../lib/vedett-route/types.ts";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import {
+  evaluateEtaLiveAlternative,
   createInitialRealtimeMonitorDebounceState,
   decideRealtimeMonitorTrigger,
   estimateRemainingEta,
@@ -164,5 +167,115 @@ describe("I–K: debounce", () => {
     const p2 = decideRealtimeMonitorTrigger({ degradation: null, missedConnection: edge }, p1.state);
     assert.equal(p1.trigger, null);
     assert.equal(p2.trigger?.type, "MISSED_CONNECTION");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 2. lépés — ETA-alapú Live Alternative összehasonlítás
+// ---------------------------------------------------------------------------
+describe("ETA-alapú összehasonlítás (evaluateEtaLiveAlternative)", () => {
+  const NOW = T0 + 10 * 60_000;
+  // Jelenlegi: a C1 járaton ül (aktív láb 0), realtime érkezés 25', utána 5' séta -> ETA 20 perc.
+  const current = (arr = 25, extra: Partial<JourneyLeg> = {}) => journey([transit("C1", 5, arr, { realtime: true, ...extra }), walk(5)]);
+  // Jelölt az aktuális helyzetből: 2' séta, N1 (dep..arr), 2' séta.
+  const candidate = (dep: number, arr: number, extra: Partial<JourneyLeg> = {}) => journey([walk(2), transit("N1", dep, arr, extra), walk(2)]);
+  const decide = (cur: Journey, cand: Journey, triggerType: Parameters<typeof evaluateEtaLiveAlternative>[0]["triggerType"] = "SIGNIFICANT_REALTIME_DEGRADATION", activeLegIndex = 0) =>
+    evaluateEtaLiveAlternative({ current: cur, activeLegIndex, candidate: cand, nowMs: NOW, triggerType });
+
+  test("A) jelenlegi ETA 20, jelölt ETA 12 -> switching cost után is >= 5 perc -> ajánlható", () => {
+    const d = decide(current(), candidate(13, 20));
+    assert.equal(d.currentRemainingMinutes, 20);
+    assert.equal(d.candidateRemainingMinutes, 12);
+    assert.equal(d.rawTimeDifferenceMinutes, 8);
+    assert.ok((d.netTimeBenefitMinutes ?? 0) >= 5, `nettó: ${d.netTimeBenefitMinutes}`);
+    assert.equal(d.offer, true);
+    assert.equal(d.reason, "SUFFICIENT_TIME_BENEFIT");
+  });
+  test("B) jelenlegi 20, jelölt 17 -> nem ajánlható", () => {
+    const d = decide(current(), candidate(18, 25));
+    assert.equal(d.candidateRemainingMinutes, 17);
+    assert.equal(d.offer, false);
+    assert.equal(d.rejectedReason, "NOT_MEANINGFUL");
+  });
+  test("C) durationMinutes szerint jónak látszó jelenlegi út, de realtime ETA szerint sokkal rosszabb -> az ETA dönt", () => {
+    // durationMinutes 10 (elavult), de a realtime érkezés 45' -> ETA 40 perc.
+    const cur = current(45, { durationMinutes: 10 });
+    const cand = candidate(13, 30); // ETA 22, durationMinutes-összeg 21 > 15 (jelenlegi összeg)
+    const durationSumCurrent = cur.legs.reduce((s, l) => s + l.durationMinutes, 0);
+    const durationSumCandidate = cand.legs.reduce((s, l) => s + l.durationMinutes, 0);
+    assert.ok(durationSumCandidate > durationSumCurrent, "a régi összeg-logika szerint NEM lenne ajánlat");
+    const d = decide(cur, cand);
+    assert.equal(d.offer, true);
+    assert.equal(d.currentRemainingMinutes, 40);
+  });
+  test("D) a jelölt durationMinutes-a rövidebb, de valós ETA szerint nem jobb -> nincs ajánlat", () => {
+    const cand = candidate(30, 33); // 3 perces járat, de csak 30'-kor indul -> ETA 25 perc
+    const durationSumCandidate = cand.legs.reduce((s, l) => s + l.durationMinutes, 0);
+    assert.ok(durationSumCandidate < 20);
+    const d = decide(current(), cand);
+    assert.equal(d.candidateRemainingMinutes, 25);
+    assert.equal(d.offer, false);
+  });
+  test("E) normál esetben a jelenlegi ETA null -> fail-open, nincs ajánlat", () => {
+    const cur = current();
+    cur.legs[0] = { ...cur.legs[0], arrivalTime: undefined };
+    const d = decide(cur, candidate(13, 20));
+    assert.equal(d.offer, false);
+    assert.equal(d.rejectedReason, "CURRENT_ETA_UNAVAILABLE");
+  });
+  test("F) a jelölt ETA-ja null -> nincs ajánlat", () => {
+    const d = decide(current(), candidate(13, 20, { arrivalTime: undefined }));
+    assert.equal(d.offer, false);
+    assert.equal(d.rejectedReason, "CANDIDATE_ETA_UNAVAILABLE");
+  });
+  test("G) kimaradt jelenlegi járat + érvényes jelölt -> felajánlható a strukturális szabály szerint (még ha lassabb is)", () => {
+    const cur = current(25, { cancelled: true });
+    const viaTrigger = decide(cur, candidate(25, 40), "CANCELLED");
+    assert.equal(viaTrigger.offer, true);
+    assert.equal(viaTrigger.reason, "DISRUPTION_DRIVEN_STRUCTURAL_IMPROVEMENT");
+    assert.equal(viaTrigger.currentStructurallyBroken, true);
+    assert.equal(viaTrigger.netTimeBenefitMinutes, null);
+    const viaLeg = decide(cur, candidate(25, 40), "SIGNIFICANT_REALTIME_DEGRADATION");
+    assert.equal(viaLeg.offer, true, "a kimaradt láb önmagában is strukturális hiba");
+  });
+  test("G2) a jelölt maga is kimaradt lábat tartalmaz -> nincs ajánlat", () => {
+    const d = decide(current(25, { cancelled: true }), candidate(13, 20, { cancelled: true }), "CANCELLED");
+    assert.equal(d.offer, false);
+    assert.ok(d.rejectedReason === "CANDIDATE_ETA_UNAVAILABLE" || d.rejectedReason === "CANDIDATE_NOT_VIABLE");
+  });
+  test("H) biztosan elveszett csatlakozás + érvényes jelölt -> felajánlható", () => {
+    // T1 realtime érkezés 27' + 3' séta = 30' > T2 indulás 26' -> MISSED
+    const cur = base();
+    cur.legs[1] = transit("T1", 5, 27, { realtime: true });
+    const d = evaluateEtaLiveAlternative({ current: cur, activeLegIndex: 1, candidate: candidate(20, 45), nowMs: NOW, triggerType: "MISSED_CONNECTION" });
+    assert.equal(d.currentStructurallyBroken, true);
+    assert.equal(d.offer, true);
+    assert.equal(d.reason, "DISRUPTION_DRIVEN_STRUCTURAL_IMPROVEMENT");
+  });
+  test("H2) csak veszélyeztetett (nem elveszett) csatlakozás -> a normál ETA-összevetés érvényes", () => {
+    const cur = base();
+    cur.legs[1] = transit("T1", 5, 22, { realtime: true }); // 1 perc tartalék
+    const d = evaluateEtaLiveAlternative({ current: cur, activeLegIndex: 1, candidate: candidate(30, 50), nowMs: NOW, triggerType: "MISSED_CONNECTION" });
+    assert.equal(d.currentStructurallyBroken, false);
+    assert.equal(d.offer, false);
+  });
+  test("I) se kimaradás, se elveszett csatlakozás, és nincs >= 5 perc nettó ETA-előny -> nincs ajánlat", () => {
+    // (PROVEN_RELEVANT_DISRUPTION-nél a MEGLÉVŐ strukturális kapu — nem rosszabb
+    // idő + kevesebb gyaloglás/átszállás — szándékosan változatlanul engedhet.)
+    for (const trigger of ["SIGNIFICANT_REALTIME_DEGRADATION", "MANUAL_CHECK", "COMMUNITY_DETERIORATION"] as const) {
+      const d = decide(current(), candidate(16, 24), trigger);
+      assert.equal(d.offer, false, trigger);
+    }
+  });
+  test("J) nincs automatikus útvonalcsere: a döntés csak ajánlást ad, a csere kizárólag az accept handlerben van", () => {
+    const d = decide(current(), candidate(13, 20));
+    assert.equal("journey" in d, false);
+    const form = readFileSync(join(process.cwd(), "components/vedett-utvonal/VedettUtvonalSearchForm.tsx"), "utf8");
+    const start = form.indexOf("const maybeStartLiveAlternativeSearch = async");
+    const body = form.slice(start, form.indexOf("const handleLiveAlternativeDecline = ()", start));
+    assert.match(body, /evaluateEtaLiveAlternative\(\{/);
+    assert.doesNotMatch(body, /setDisplayedJourney\(/);
+    assert.doesNotMatch(body, /remainingDurationMinutes/, "a régi durationMinutes-összeg alapú időkülönbség megszűnt");
+    assert.match(body, /presentLiveAlternativeOffer\(/);
   });
 });
