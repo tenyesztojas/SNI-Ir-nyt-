@@ -2579,6 +2579,10 @@ function RankedJourneyCard({
     const attemptPosition = { lat: currentPosition.latitude, lon: currentPosition.longitude };
     const attemptDestination = { ...originalDestination };
     const plannedDepartureIso = earlierDeparturePlannedDepartureIso;
+    // ROUTING CONTEXT INTEGRITY — ugyanaz az effektív routing-kontextus, mint az
+    // off-route reroute és a pihenő utáni folytatás esetén (stepFree/Bubi/
+    // propulsion/weights); a jelölt validálása is ehhez igazodik.
+    const attemptRoutingContext = buildRerouteRoutingContext(effectiveLiveRerouteContext);
     // Edge-triggered: AZONNAL "checking"-re állítjuk (és handledPlannedDepartureIso-t
     // erre a plannedDepartureIso-ra), MIELŐTT a kérés elindulna — ez zárja ki a
     // duplikált /plan hívást ugyanarra a tervezett indulásra (lásd a modul
@@ -2597,6 +2601,7 @@ function RankedJourneyCard({
             currentPosition: attemptPosition,
             originalDestination: attemptDestination,
             departAt: new Date().toISOString(),
+            routingContext: attemptRoutingContext,
           }),
         });
         const data = (await response.json()) as
@@ -2635,6 +2640,8 @@ function RankedJourneyCard({
             plannedDepartureIso,
             originalArrivalIso: displayedJourney.arrivalTime,
             nowMs: Date.now(),
+            stepFreeRequired: attemptRoutingContext.stepFreeRequired,
+            candidateAccessibilityStatus: candidateJourney.accessibilityStatus,
           });
           if (validation.valid) {
             earlierDepartureCandidateJourneyRef.current = {

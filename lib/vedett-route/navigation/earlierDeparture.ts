@@ -17,6 +17,8 @@
 // döntéseit hozza. SOSEM vált automatikusan journey-t — a hívó a felhasználó
 // explicit elfogadása UTÁN cseréli a displayedJourney-t.
 
+import { isEligibleForStepFreeResults, type AccessibilityResultStatus } from "../accessibility.ts";
+
 export type EarlierDepartureBoardingPhase =
   | "AT_BOARDING_AREA"
   | "APPROACHING_BOARDING"
@@ -133,13 +135,21 @@ export interface EarlierDepartureCandidateInput {
   originalArrivalIso: string | null;
   nowMs: number;
   minImprovementMinutes?: number;
+  // ROUTING CONTEXT INTEGRITY (2026-10-07) — lépcsőmentes navigációnál a
+  // jelöltnek a szerver akadálymentességi minősítését KELL hordoznia
+  // (Journey.accessibilityStatus csak stepFreeRequired=true keresésből jön);
+  // hiánya (pl. routingContext nélküli, régi /resume út) vagy
+  // KNOWN_NOT_ACCESSIBLE -> nem ajánlható. Hiányzó/false: régi viselkedés.
+  stepFreeRequired?: boolean;
+  candidateAccessibilityStatus?: AccessibilityResultStatus;
 }
 
 export type EarlierDepartureRejectReason =
   | "DEPARTURE_NOT_IN_FUTURE"
   | "DEPARTURE_NOT_EARLIER_THAN_PLANNED"
   | "NO_MEANINGFUL_IMPROVEMENT"
-  | "MISSING_DATA";
+  | "MISSING_DATA"
+  | "STEP_FREE_NOT_PROVEN";
 
 export type EarlierDepartureValidation =
   | { valid: true }
@@ -167,6 +177,13 @@ export function validateEarlierDepartureCandidate(input: EarlierDepartureCandida
     originalArrivalMs === null
   ) {
     return { valid: false, reason: "MISSING_DATA" };
+  }
+
+  if (
+    input.stepFreeRequired === true &&
+    (input.candidateAccessibilityStatus === undefined || !isEligibleForStepFreeResults(input.candidateAccessibilityStatus))
+  ) {
+    return { valid: false, reason: "STEP_FREE_NOT_PROVEN" };
   }
 
   if (candidateDepartureMs <= input.nowMs) {
