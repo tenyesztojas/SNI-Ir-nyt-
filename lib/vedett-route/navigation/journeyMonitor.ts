@@ -188,6 +188,8 @@ export interface RealtimeMonitorDecision {
   state: RealtimeMonitorDebounceState;
 }
 
+const DEGRADATION_EVENT_PREFIX = "degradation:";
+
 export function decideRealtimeMonitorTrigger(
   input: { degradation: RealtimeDegradationResult | null; missedConnection: MissedConnectionResult | null },
   state: RealtimeMonitorDebounceState
@@ -207,6 +209,17 @@ export function decideRealtimeMonitorTrigger(
     candidate = { type: "MISSED_CONNECTION", eventId };
   } else if (degradation?.degraded && degradation.worstLegTripId) {
     candidate = { type: "SIGNIFICANT_REALTIME_DEGRADATION", eventId: `degradation:${degradation.worstLegTripId}` };
+  } else if (
+    state.pendingEventId?.startsWith(DEGRADATION_EVENT_PREFIX) &&
+    degradation?.significantDelayTripIds?.includes(state.pendingEventId.slice(DEGRADATION_EVENT_PREFIX.length))
+  ) {
+    // PERSISTENT DELAY CONFIRMATION (2026-10-07) — a második poll UGYANAZT a
+    // jelentős (menetrendhez mért, >= küszöb) késést látja ugyanazon a tripen:
+    // ez megerősíti a függő eseményt. Korábban a merge után 0 perces "új
+    // romlás" miatt a függő esemény törlődött, és egy stabil késés soha nem
+    // triggerelt. Ha a késés a küszöb alá esik / eltűnik, nincs jelölt -> a
+    // függő esemény törlődik (lent).
+    candidate = { type: "SIGNIFICANT_REALTIME_DEGRADATION", eventId: state.pendingEventId };
   }
 
   if (!candidate) return { trigger: null, state: { pendingEventId: null } };

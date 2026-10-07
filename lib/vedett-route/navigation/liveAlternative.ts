@@ -456,6 +456,13 @@ export interface RealtimeDegradationLegSample {
    * a realtime/menetrendi időpár — sosem fabrikált érték.
    */
   firstRealtimeDelayMinutes?: number | null;
+  /**
+   * PERSISTENT DELAY CONFIRMATION (2026-10-07): a frissítés ABSZOLÚT késése a
+   * MENETRENDHEZ mérve (nem az előző, már beolvasztott poll-hoz). Forrás: a
+   * frissítés delayMinutes mezője, hiányában realtime − menetrendi időpár.
+   * null, ha a frissítés nem realtime=true, kimaradt, vagy nincs megbízható adat.
+   */
+  currentDelayMinutes?: number | null;
 }
 
 export interface RealtimeDegradationResult {
@@ -466,6 +473,12 @@ export interface RealtimeDegradationResult {
   newlyCancelled: boolean;
   /** JOURNEY MONITOR v1: a (első) kimaradt hátralévő láb tripId-je, ha van. */
   cancelledTripId: string | null;
+  /**
+   * PERSISTENT DELAY CONFIRMATION: azok a tripId-k, amelyeknek EBBEN a pollban
+   * a menetrendhez mért késése >= a küszöb. A kétpollos megerősítés ezt nézi
+   * (a függő esemény továbbra is fennáll-e), NEM a pollok közötti további romlást.
+   */
+  significantDelayTripIds?: readonly string[];
 }
 
 export function evaluateRealtimeDegradation(
@@ -476,8 +489,17 @@ export function evaluateRealtimeDegradation(
   let worstTripId: string | null = null;
   let newlyCancelled = false;
   let cancelledTripId: string | null = null;
+  const significantDelayTripIds: string[] = [];
 
   for (const sample of samples) {
+    if (
+      sample.updatedCancelled !== true &&
+      typeof sample.currentDelayMinutes === "number" &&
+      Number.isFinite(sample.currentDelayMinutes) &&
+      sample.currentDelayMinutes >= thresholdMinutes
+    ) {
+      significantDelayTripIds.push(sample.tripId);
+    }
     if (sample.updatedCancelled === true) {
       newlyCancelled = true;
       cancelledTripId = cancelledTripId ?? sample.tripId;
@@ -504,6 +526,7 @@ export function evaluateRealtimeDegradation(
     worsenedByMinutes: worstDelta,
     newlyCancelled,
     cancelledTripId,
+    significantDelayTripIds,
   };
 }
 
@@ -529,6 +552,13 @@ function firstRealtimeDelayMinutes(update: RealtimeLegUpdate): number | null {
   return null;
 }
 
+/** A frissítés menetrendhez mért késése (perc): delayMinutes, hiányában időpár. */
+function currentDelayVsSchedule(update: RealtimeLegUpdate): number | null {
+  if (update.realtime !== true || update.cancelled === true) return null;
+  if (typeof update.delayMinutes === "number" && Number.isFinite(update.delayMinutes)) return update.delayMinutes;
+  return firstRealtimeDelayMinutes(update);
+}
+
 export function buildRealtimeDegradationSamples(
   previousJourney: Journey,
   updates: RealtimeLegUpdate[]
@@ -550,6 +580,7 @@ export function buildRealtimeDegradationSamples(
       updatedDelayMinutes: update.delayMinutes !== undefined ? update.delayMinutes : null,
       updatedCancelled: update.cancelled === true,
       firstRealtimeDelayMinutes: previousDelayMinutes === null ? firstRealtimeDelayMinutes(update) : null,
+      currentDelayMinutes: currentDelayVsSchedule(update),
     });
   }
   return samples;
