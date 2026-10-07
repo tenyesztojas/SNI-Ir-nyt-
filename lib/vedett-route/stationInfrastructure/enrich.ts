@@ -119,14 +119,24 @@ export async function enrichRankedJourneysWithStationGuidance(
       attachStationGuidanceToLegs(r.journey.legs, lookup.resolve, {
         stepFreePreferred: options.stepFreePreferred,
         onWalkingRequests: (reqs) => {
-          for (const req of reqs) if (!requests.has(req.key)) requests.set(req.key, req);
+          for (const req of reqs) {
+            const prev = requests.get(req.key);
+            if (!prev || (req.rank ?? 0) < (prev.rank ?? 0)) requests.set(req.key, prev ? { ...prev, rank: req.rank } : req);
+          }
         },
       })
     );
     // 2. menet (opcionális): valódi gyalogos útvonal a legígéretesebb kijáratokra.
     const router = options.walkingRouter === undefined ? motisExitWalkingRouter : options.walkingRouter;
     let walkingScores: Map<string, ExitWalkingScore> | null = null;
-    const walkingQueue = Array.from(requests.values()).slice(0, options.maxWalkingRequests ?? DEFAULT_MAX_WALKING_REQUESTS);
+    // HARD cap (alapból 8 egyedi kérés / keresés). Rang szerint priorizál
+    // (stabil rendezés): minden láb top jelöltjei előbb, mint bármely láb
+    // toleranciából bekerült további jelöltjei.
+    const walkingQueue = Array.from(requests.values())
+      .map((req, order) => ({ req, order }))
+      .sort((a, b) => (a.req.rank ?? 0) - (b.req.rank ?? 0) || a.order - b.order)
+      .map((x) => x.req)
+      .slice(0, options.maxWalkingRequests ?? DEFAULT_MAX_WALKING_REQUESTS);
     if (router && walkingQueue.length > 0) {
       walkingScores = await scoreWalkingRequests(walkingQueue, router, options.walkingBudgetMs ?? DEFAULT_WALKING_BUDGET_MS);
     }

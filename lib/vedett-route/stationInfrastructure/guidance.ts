@@ -166,6 +166,8 @@ export interface ExitWalkingRequest {
   key: string;
   from: LatLon;
   to: LatLon;
+  /** Hely a láb prescore-sorrendjében (0 = legjobb); a HARD cap ennek alapján priorizál. */
+  rank?: number;
 }
 
 /** Stabil kulcs egy kijárat -> cél párhoz (kerekített koordináták, ID nélkül). */
@@ -185,8 +187,33 @@ export interface StationGuidanceOptions {
 
 /** RECOMMENDED METRO EXITS v1: csak metró lábakra adunk állomás-guidance-t. */
 export const METRO_TRANSIT_MODES: ReadonlySet<string> = new Set(["SUBWAY", "METRO"]);
-/** Légvonalbeli előszűrés után ennyi kijáratra kérünk valódi gyalogos útvonalat. */
+/** Légvonalbeli előszűrés után legalább ennyi kijáratra kérünk valódi gyalogos útvonalat. */
 export const WALKING_RANKING_CANDIDATES = 3;
+/**
+ * Tolerancia a merev top-3 határra (2026-10-07, production: Astoria — a 4.
+ * kijárat prescore-ja 0,4 s-mal rosszabb volt a 3.-nál, de gyalog a legjobb).
+ * A top 3-on túl az a kijárat is gyalogos-routing jelölt, amelynek prescore-ja
+ * legfeljebb ennyivel rosszabb a 3. helyezettnél. A prescore másodperc
+ * (belső pathway-idő + légvonal / 1,2 m/s), így 10 s ≈ 12 m légvonalbeli
+ * különbség — gyakorlatilag azonos geometriai eredmény.
+ */
+export const WALKING_RANKING_TOLERANCE_SECONDS = 10;
+/** Lábanként legfeljebb ennyi jelölt (a toleranciával együtt), hogy egy sűrű kijárat-gyűrű se route-olódjon végig. */
+export const WALKING_RANKING_MAX_CANDIDATES = 5;
+
+/**
+ * Gyalogos-routing jelöltek: a prescore szerint rendezett lista első
+ * WALKING_RANKING_CANDIDATES eleme, plusz minden további, amelynek prescore-ja
+ * <= 3. helyezett + WALKING_RANKING_TOLERANCE_SECONDS, összesen legfeljebb
+ * WALKING_RANKING_MAX_CANDIDATES. (A keresésenkénti HARD cap az enrichmentben.)
+ */
+export function selectWalkingShortlist<T extends { score: number }>(sorted: readonly T[]): T[] {
+  const base = sorted.slice(0, WALKING_RANKING_CANDIDATES);
+  if (sorted.length <= WALKING_RANKING_CANDIDATES) return base;
+  const threshold = base[base.length - 1].score + WALKING_RANKING_TOLERANCE_SECONDS;
+  const extra = sorted.slice(WALKING_RANKING_CANDIDATES).filter((c) => c.score <= threshold);
+  return [...base, ...extra].slice(0, WALKING_RANKING_MAX_CANDIDATES);
+}
 
 interface ExitEvaluation {
   id: string;
@@ -307,11 +334,11 @@ export function buildLegStationGuidance(
   // Valódi gyalogos rangsor: a légvonalban legígéretesebb N kijáratra a
   // hívó (enrichment) MOTIS foot útvonalat kér; ha van eredmény, az dönt.
   const goalPoint: LatLon = target.point;
-  const shortlist = candidates.slice(0, WALKING_RANKING_CANDIDATES);
+  const shortlist = selectWalkingShortlist(candidates);
   options.onWalkingRequests?.(
     shortlist.map((c) => {
       const from = nodePoint(c.node) as LatLon;
-      return { key: exitWalkingKey(from, goalPoint), from, to: goalPoint };
+      return { key: exitWalkingKey(from, goalPoint), from, to: goalPoint, rank: shortlist.indexOf(c) };
     })
   );
   const walked = options.walkingScores
