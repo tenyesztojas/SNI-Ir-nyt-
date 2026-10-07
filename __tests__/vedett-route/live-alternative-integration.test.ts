@@ -40,7 +40,11 @@ const acceptBody = extractBetween(
   "const handleLiveAlternativeAccept = ()",
   "useTransitRealtimeRefresh({"
 );
-const onUpdatesBody = extractBetween("onUpdates: (updates) => {", "  });");
+// JOURNEY MONITOR ADMIN SZIMULÁTOR (2026-10-07): az onUpdates törzse
+// viselkedésmegőrzően a handleRealtimeUpdates()-be került; a hook onUpdates-e
+// (és az admin szimulátor) ezt hívja.
+const onUpdatesBody = extractBetween("const handleRealtimeUpdates = (updates: RealtimeLegUpdate[]) => {", "    return monitorDecision;");
+const hookOnUpdatesBody = extractBetween("onUpdates: (updates) => {", "  });");
 
 describe("Live Alternative runtime — network invariánsok (17. pont)", () => {
   test("1) a keresés a MEGLÉVŐ multi-candidate planning endpointot hívja, NEM a /rest-stops/resume-ot", () => {
@@ -78,6 +82,7 @@ describe("Live Alternative runtime — network invariánsok (17. pont)", () => {
 describe("Live Alternative runtime — SIGNIFICANT_REALTIME_DEGRADATION trigger (5. pont)", () => {
   test("6) a degradation-kiértékelés a MEGLÉVŐ realtime-refresh onUpdates callbackben történik, ÚJ poller nélkül", () => {
     assert.match(onUpdatesBody, /evaluateRealtimeDegradation\(buildRealtimeDegradationSamples\(displayedJourney, updates\)\)/);
+    assert.match(hookOnUpdatesBody, /handleRealtimeUpdates\(/);
   });
 
   // JOURNEY MONITOR v1 (2026-10-07): a döntés a tiszta journeyMonitor.ts

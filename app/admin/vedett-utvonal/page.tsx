@@ -51,7 +51,10 @@ export default async function VedettUtvonalAdminPage() {
       <div className="mt-6 space-y-6">
         <VedettUtvonalStatusPanel status={status} />
         <VedettUtvonalGtfsUploadForm disabled={!enabled} />
-        <VedettUtvonalSearchForm disabled={!enabled} />
+        {/* JOURNEY MONITOR ADMIN SZIMULÁTOR — csak ezen az admin oldalon (az
+            app/admin/layout.tsx szerveroldalon ellenőrzi a profiles.role ===
+            "admin"-t); a publikus /vedett-utvonal SOHA nem kapcsolja be. */}
+        <VedettUtvonalSearchForm disabled={!enabled} journeyMonitorSimulationEnabled />
       </div>
 
       <p className="mt-6 text-xs text-gray-400">

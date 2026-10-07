@@ -271,6 +271,16 @@ import {
   resolveLiveRerouteOrigin,
   type LiveRerouteSearchContext,
 } from "@/lib/vedett-route/navigation/liveRerouteContext";
+import {
+  applySimulationOverlay,
+  buildJourneyMonitorSimulation,
+  findSimulatableConnection,
+  isSimulationActive,
+  type JourneyMonitorSimulation,
+  type JourneyMonitorSimulationKind,
+} from "@/lib/vedett-route/navigation/journeyMonitorSimulation";
+import JourneyMonitorSimulationPanel from "./JourneyMonitorSimulationPanel";
+import type { RealtimeLegUpdate } from "@/lib/vedett-route/realtimeRefresh/extractUpdates";
 import { recommendedExitText, selectStationGuidanceDisplay, stationExitGuidanceText, stationPreviewText } from "@/lib/vedett-route/stationInfrastructure/display";
 import SavedPlacesPanel from "@/components/vedett-utvonal/SavedPlacesPanel";
 import { savedPlaceToRouteLocation } from "@/lib/vedett-route/savedPlaces/adapt";
@@ -759,6 +769,7 @@ function RankedJourneyCard({
   isAuthenticated,
   weights,
   liveRerouteContext = null,
+  journeyMonitorSimulationEnabled = false,
 }: {
   ranked: RankedJourney;
   isOpen: boolean;
@@ -781,6 +792,11 @@ function RankedJourneyCard({
   // routing-feltételeinek snapshotja (lásd liveRerouteContext.ts). Hiánya
   // (régi hívó) fail-open: a journey saját bizonyítéka + a weights prop.
   liveRerouteContext?: LiveRerouteSearchContext | null;
+  // JOURNEY MONITOR ADMIN SZIMULÁTOR — KIZÁRÓLAG az /admin/vedett-utvonal
+  // szerverkomponense adja át true-val (az app/admin/layout.tsx szerveroldalon
+  // ellenőrzi a profiles.role === "admin"-t). Alapból false: a szimulációs
+  // panel nem renderelődik és az overlay nem fut.
+  journeyMonitorSimulationEnabled?: boolean;
 }) {
   const journey = ranked.journey;
   const sensory = journey.sensory;
@@ -2502,6 +2518,50 @@ function RankedJourneyCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigationMode, serviceAlerts, displayedJourney, activeLegIndex]);
 
+  // JOURNEY MONITOR ADMIN SZIMULÁTOR (2026-10-07) — a realtime-feldolgozás
+  // törzse VÁLTOZATLANUL kiemelve, hogy a valódi poll ÉS az admin szimulátor
+  // UGYANAZT a láncot hívja. Visszatérési érték csak diagnosztika (panel).
+  // JOURNEY MONITOR ADMIN SZIMULÁTOR — kizárólag memóriában (ref), sosem
+  // perzisztált. A szimuláció a létrehozó navigációs session-generációhoz
+  // kötött: session-váltás (elfogadott alternatíva, reroute, stop/start) után
+  // automatikusan inaktív.
+  const journeyMonitorSimulationRef = useRef<JourneyMonitorSimulation | null>(null);
+  const journeyMonitorSimulationSnapshotRef = useRef<{ journey: Journey; sessionGeneration: number } | null>(null);
+  const [journeyMonitorSimulationPanel, setJourneyMonitorSimulationPanel] = useState<{
+    lastTrigger: { type: string; eventId: string } | null;
+    notice: string | null;
+  }>({ lastTrigger: null, notice: null });
+
+  const handleRealtimeUpdates = (updates: RealtimeLegUpdate[]) => {
+    // SIGNIFICANT_REALTIME_DEGRADATION TRIGGER — a MEGLÉVŐ ~30s realtime-
+    // refresh kimenetéből, ÚJ POLLER NÉLKÜL (lásd liveAlternative.ts 7.
+    // pont). A degradation-kiértékelés a MEGLÉVŐ displayedJourney (a jelen
+    // render aktuális állapota) és az új updates összevetésével történik,
+    // MIELŐTT a merge-updater fut — ez PONTOSAN a MEGLÉVŐ Sprint 7.2
+    // hook-mintázat (onUpdatesRef mindig a legfrissebb closure-t hívja),
+    // NEM egy második, párhuzamos GPS/realtime state machine.
+    const degradation = evaluateRealtimeDegradation(buildRealtimeDegradationSamples(displayedJourney, updates));
+    setDisplayedJourney((prev) => mergeRealtimeUpdates(prev, updates));
+    // JOURNEY MONITOR v1 (2026-10-07) — a kimaradás (azonnal), a
+    // veszélyeztetett csatlakozás (a frissített időkből) és a jelentős késés
+    // (2 egymást követő poll megerősítésével) UGYANAZON a meglévő Live
+    // Alternative guardon át indíthat ellenőrzést (lásd journeyMonitor.ts).
+    // Az eventId-k stabilak (tripId-hez kötöttek): `degradation:${tripId}`,
+    // `cancelled:${tripId}`, `missed:${from}>${to}`.
+    const monitorDecision = decideRealtimeMonitorTrigger(
+      {
+        degradation,
+        missedConnection: evaluateMissedConnection(mergeRealtimeUpdates(displayedJourney, updates), activeLegIndex ?? null),
+      },
+      realtimeMonitorDebounceRef.current
+    );
+    realtimeMonitorDebounceRef.current = monitorDecision.state;
+    if (monitorDecision.trigger) {
+      void maybeStartLiveAlternativeSearch(monitorDecision.trigger);
+    }
+    return monitorDecision;
+  };
+
   useTransitRealtimeRefresh({
     navigationActive: navigationMode,
     hasRelevantTransitLeg,
@@ -2510,34 +2570,58 @@ function RankedJourneyCard({
     context: realtimeRefreshContext,
     sessionId: rerouteSessionRef.current,
     onUpdates: (updates) => {
-      // SIGNIFICANT_REALTIME_DEGRADATION TRIGGER — a MEGLÉVŐ ~30s realtime-
-      // refresh kimenetéből, ÚJ POLLER NÉLKÜL (lásd liveAlternative.ts 7.
-      // pont). A degradation-kiértékelés a MEGLÉVŐ displayedJourney (a jelen
-      // render aktuális állapota) és az új updates összevetésével történik,
-      // MIELŐTT a merge-updater fut — ez PONTOSAN a MEGLÉVŐ Sprint 7.2
-      // hook-mintázat (onUpdatesRef mindig a legfrissebb closure-t hívja),
-      // NEM egy második, párhuzamos GPS/realtime state machine.
-      const degradation = evaluateRealtimeDegradation(buildRealtimeDegradationSamples(displayedJourney, updates));
-      setDisplayedJourney((prev) => mergeRealtimeUpdates(prev, updates));
-      // JOURNEY MONITOR v1 (2026-10-07) — a kimaradás (azonnal), a
-      // veszélyeztetett csatlakozás (a frissített időkből) és a jelentős késés
-      // (2 egymást követő poll megerősítésével) UGYANAZON a meglévő Live
-      // Alternative guardon át indíthat ellenőrzést (lásd journeyMonitor.ts).
-      // Az eventId-k stabilak (tripId-hez kötöttek): `degradation:${tripId}`,
-      // `cancelled:${tripId}`, `missed:${from}>${to}`.
-      const monitorDecision = decideRealtimeMonitorTrigger(
-        {
-          degradation,
-          missedConnection: evaluateMissedConnection(mergeRealtimeUpdates(displayedJourney, updates), activeLegIndex ?? null),
-        },
-        realtimeMonitorDebounceRef.current
+      handleRealtimeUpdates(
+        journeyMonitorSimulationEnabled
+          ? applySimulationOverlay(updates, journeyMonitorSimulationRef.current, rerouteSessionRef.current)
+          : updates
       );
-      realtimeMonitorDebounceRef.current = monitorDecision.state;
-      if (monitorDecision.trigger) {
-        void maybeStartLiveAlternativeSearch(monitorDecision.trigger);
-      }
     },
   });
+
+  // Szimulált poll: a rögzített szimulált frissítések a VALÓDI láncon.
+  const runJourneyMonitorSimulatedPoll = (simulation: JourneyMonitorSimulation) => {
+    const decision = handleRealtimeUpdates(simulation.updates);
+    setJourneyMonitorSimulationPanel((prev) => ({
+      lastTrigger: decision.trigger ? { type: decision.trigger.type, eventId: decision.trigger.eventId } : prev.lastTrigger,
+      notice: null,
+    }));
+  };
+  const handleJourneyMonitorSimulate = (kind: JourneyMonitorSimulationKind) => {
+    if (!journeyMonitorSimulationEnabled || !navigationMode) return;
+    const sessionGeneration = rerouteSessionRef.current;
+    const simulation = buildJourneyMonitorSimulation({ journey: displayedJourney, activeLegIndex: activeLegIndex ?? null, kind, sessionGeneration });
+    if (!simulation) {
+      setJourneyMonitorSimulationPanel((prev) => ({ ...prev, notice: "Ez a szimuláció ezen az útvonalon nem építhető fel." }));
+      return;
+    }
+    if (!isSimulationActive(journeyMonitorSimulationRef.current, sessionGeneration)) {
+      journeyMonitorSimulationSnapshotRef.current = { journey: displayedJourney, sessionGeneration };
+    }
+    journeyMonitorSimulationRef.current = simulation;
+    runJourneyMonitorSimulatedPoll(simulation);
+  };
+  const handleJourneyMonitorSimulatedPoll = () => {
+    const simulation = journeyMonitorSimulationRef.current;
+    if (!journeyMonitorSimulationEnabled || !isSimulationActive(simulation, rerouteSessionRef.current)) return;
+    runJourneyMonitorSimulatedPoll(simulation);
+  };
+  const handleJourneyMonitorSimulationClear = () => {
+    journeyMonitorSimulationRef.current = null;
+    const snapshot = journeyMonitorSimulationSnapshotRef.current;
+    journeyMonitorSimulationSnapshotRef.current = null;
+    // Visszaállítás CSAK, ha közben nem volt session-váltás (elfogadott
+    // alternatíva / reroute / újraindítás) — különben nincs rollback.
+    if (snapshot && snapshot.sessionGeneration === rerouteSessionRef.current) {
+      setDisplayedJourney(snapshot.journey);
+      realtimeMonitorDebounceRef.current = createInitialRealtimeMonitorDebounceState();
+      setJourneyMonitorSimulationPanel({ lastTrigger: null, notice: "Szimuláció törölve, az eredeti útvonal visszaállítva." });
+    } else {
+      setJourneyMonitorSimulationPanel({ lastTrigger: null, notice: "Szimuláció törölve. A tiszta állapothoz indítsd újra a navigációt." });
+    }
+  };
+  const activeJourneyMonitorSimulation = isSimulationActive(journeyMonitorSimulationRef.current, rerouteSessionRef.current)
+    ? journeyMonitorSimulationRef.current
+    : null;
 
   // EARLIER TRANSIT DEPARTURE — SPRINT (2026-09-22). A releváns (még el nem
   // ért) TRANSIT leg és annak tervezett indulása a MÁR MEGLÉVŐ
@@ -3008,6 +3092,27 @@ function RankedJourneyCard({
                   </button>
                 </div>
               </div>
+            )}
+
+            {journeyMonitorSimulationEnabled && navigationMode && (
+              <JourneyMonitorSimulationPanel
+                active={
+                  activeJourneyMonitorSimulation
+                    ? {
+                        kind: activeJourneyMonitorSimulation.kind,
+                        tripId: activeJourneyMonitorSimulation.tripId,
+                        connectionToTripId: activeJourneyMonitorSimulation.connectionToTripId,
+                      }
+                    : null
+                }
+                missedConnectionAvailable={findSimulatableConnection(displayedJourney, activeLegIndex ?? null) !== null}
+                pendingEventId={realtimeMonitorDebounceRef.current.pendingEventId}
+                lastTrigger={journeyMonitorSimulationPanel.lastTrigger}
+                notice={journeyMonitorSimulationPanel.notice}
+                onSimulate={handleJourneyMonitorSimulate}
+                onSimulatedPoll={handleJourneyMonitorSimulatedPoll}
+                onClear={handleJourneyMonitorSimulationClear}
+              />
             )}
 
             {/* LIVE ALTERNATIVE — SPRINT 8.4B (2026-09-18). KIZÁRÓLAG OFFERED
@@ -3702,8 +3807,12 @@ export default function VedettUtvonalSearchForm({
   initialDestination = null,
   initialFavoritePreset = null,
   isAuthenticated = true,
+  journeyMonitorSimulationEnabled = false,
 }: {
   disabled: boolean;
+  // JOURNEY MONITOR ADMIN SZIMULÁTOR — kizárólag az /admin/vedett-utvonal
+  // (szerveroldali admin-gate mögötti) oldal adja át true-val.
+  journeyMonitorSimulationEnabled?: boolean;
   // false = anonim (public read-only) mód — kedvenc-mentés és saját
   // pihenőpont-hozzáadás UI elrejtve (az API 401-gyel védi). Alapért.: true.
   isAuthenticated?: boolean;
@@ -5348,6 +5457,7 @@ export default function VedettUtvonalSearchForm({
               isAuthenticated={isAuthenticated}
               weights={weights}
               liveRerouteContext={liveRerouteContext}
+              journeyMonitorSimulationEnabled={journeyMonitorSimulationEnabled}
             />
           ))}
         </div>
