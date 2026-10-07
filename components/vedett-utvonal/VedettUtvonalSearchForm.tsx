@@ -266,6 +266,7 @@ import {
 import {
   buildLiveAlternativeSearchPayload,
   buildLiveRerouteSearchContext,
+  buildRerouteRoutingContext,
   resolveEffectiveLiveRerouteContext,
   resolveLiveRerouteOrigin,
   type LiveRerouteSearchContext,
@@ -2125,6 +2126,9 @@ function RankedJourneyCard({
     const attemptStartedAt = Date.now();
     const attemptPosition = { lat: currentPosition.latitude, lon: currentPosition.longitude };
     const attemptDestination = { ...originalDestination };
+    // ROUTING CONTEXT INTEGRITY — az eredeti routing-feltételek (stepFree/Bubi/
+    // propulsion/weights) a reroute-ban sem lazulhatnak fel.
+    const attemptRoutingContext = buildRerouteRoutingContext(effectiveLiveRerouteContext);
     rerouteGuardRef.current = markRerouteStarted(rerouteGuardRef.current, attemptStartedAt);
     setAutomaticRerouteStatus("REROUTING");
     setAutomaticRerouteMessage(null);
@@ -2138,6 +2142,7 @@ function RankedJourneyCard({
             currentPosition: attemptPosition,
             originalDestination: attemptDestination,
             departAt: new Date().toISOString(),
+            routingContext: attemptRoutingContext,
           }),
         });
         const data = (await response.json()) as
@@ -3481,6 +3486,7 @@ function RankedJourneyCard({
                 originalDestination={originalDestination}
                 originalDepartAt={displayedJourney.departureTime}
                 geo={geo}
+                routingContext={buildRerouteRoutingContext(effectiveLiveRerouteContext)}
                 onRouteResumed={(nextJourney) => {
                   // Sprint 7.2, 8. pont — a rest-stop resume is ÚJ Journey-t
                   // hoz be, ezért ez is új realtime-refresh sessiont kell

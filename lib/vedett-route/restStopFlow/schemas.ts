@@ -4,6 +4,7 @@
 
 import { z } from "zod";
 import { latitudeSchema, longitudeSchema } from "../../rest-points/schemas.ts";
+import { personalizationWeightsSchema } from "../schemas.ts";
 
 const coordinateSchema = z.object({
   lat: latitudeSchema,
@@ -96,5 +97,19 @@ export const restStopResumeSchema = z.object({
     lon: longitudeSchema,
   }),
   departAt: z.string().datetime().optional(),
+  // ROUTING CONTEXT INTEGRITY (2026-10-07) — OPCIONÁLIS: az aktív navigáció
+  // eredeti routing-feltételei (lásd liveRerouteContext.ts
+  // buildRerouteRoutingContext). UGYANAZ a szemantika és validáció, mint a
+  // normál keresés payloadjában (lib/vedett-route/schemas.ts). Hiányában
+  // (régi kliens) a végpont a korábbi, változatlan úton tervez.
+  routingContext: z
+    .object({
+      stepFreeRequired: z.boolean(),
+      molBubiEnabled: z.boolean(),
+      bikePropulsion: z.enum(["ANY", "HUMAN", "ELECTRIC_ASSIST"]).optional(),
+      weights: personalizationWeightsSchema,
+    })
+    .strict()
+    .optional(),
 });
 export type RestStopResumeInput = z.infer<typeof restStopResumeSchema>;

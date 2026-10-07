@@ -24,6 +24,7 @@
 // ez marad a hálózat nélküli, tisztán unit-tesztelhető réteg.
 
 import type { MotisPlanParams } from "../motisTypes.ts";
+import type { JourneySearchRequest, PersonalizationWeights } from "../types.ts";
 import type { OriginalDestination } from "./types.ts";
 import type { RestPoint } from "../../rest-points/types.ts";
 
@@ -68,5 +69,46 @@ export function buildRouteToRestPointRequest(
     toPlace: `${restPoint.latitude},${restPoint.longitude}`,
     time: departAt ?? new Date().toISOString(),
     numItineraries,
+  };
+}
+
+// ROUTING CONTEXT INTEGRITY (2026-10-07) — egy MÁR elindított navigáció
+// újratervezése (automatikus off-route reroute, pihenő utáni folytatás) nem
+// lazíthatja fel az eredeti routing-feltételeket. Ha a kliens átadja a
+// routingContext-et, a /resume végpont a normál kereséssel AZONOS
+// orchestratoron (searchVedettRoutes) tervez — így a lépcsőmentes szűrés,
+// a Bubi/propulsion MOTIS-paraméterek és a személyre szabott rangsorolás
+// pontosan ugyanaz, mint az eredeti keresésnél; nincs duplikált logika.
+// timeMode: MINDIG DEPART_AT a továbbutazás időpontjától (egy régi
+// ARRIVE_BY határidő itt értelmetlen) — a Live Alternative döntésével egyezően.
+export interface RerouteRoutingContext {
+  stepFreeRequired: boolean;
+  molBubiEnabled: boolean;
+  bikePropulsion?: "ANY" | "HUMAN" | "ELECTRIC_ASSIST";
+  weights?: Partial<PersonalizationWeights>;
+}
+
+export function buildConstrainedRerouteSearchRequest(
+  from: RerouteFromPoint,
+  originalDestination: OriginalDestination,
+  routingContext: RerouteRoutingContext,
+  departAt: string | undefined,
+  nowMs: number
+): { request: JourneySearchRequest; weights: Partial<PersonalizationWeights> | undefined } {
+  const requestedMs = departAt ? Date.parse(departAt) : NaN;
+  // Múltbeli / hiányzó időpont -> most (dinamikus továbbutazási idő).
+  const departMs = Number.isFinite(requestedMs) && requestedMs > nowMs ? requestedMs : nowMs;
+  const molBubiEnabled = routingContext.molBubiEnabled === true;
+  return {
+    request: {
+      from: { name: "Jelenlegi hely", lat: from.lat, lon: from.lon },
+      to: { name: originalDestination.name, lat: originalDestination.lat, lon: originalDestination.lon },
+      departAt: new Date(departMs).toISOString(),
+      timeMode: "DEPART_AT",
+      stepFreeRequired: routingContext.stepFreeRequired === true,
+      molBubiEnabled,
+      bikePropulsion: molBubiEnabled ? routingContext.bikePropulsion ?? "ANY" : "ANY",
+    },
+    weights: routingContext.weights,
   };
 }

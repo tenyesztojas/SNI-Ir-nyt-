@@ -16,11 +16,14 @@
 import { NextResponse } from "next/server";
 import { requireVedettRoutePublicRead } from "@/lib/vedett-route/access";
 import { restStopResumeSchema } from "@/lib/vedett-route/restStopFlow/schemas";
-import { buildRerouteToOriginalDestinationRequest } from "@/lib/vedett-route/restStopFlow/rerouteRequest";
+import {
+  buildConstrainedRerouteSearchRequest,
+  buildRerouteToOriginalDestinationRequest,
+} from "@/lib/vedett-route/restStopFlow/rerouteRequest";
 import { pickBestItinerary } from "@/lib/vedett-route/restStopFlow/pickBestItinerary";
 import { mapMotisPlanFailureToRestStopError } from "@/lib/vedett-route/restStopFlow/errorMapping";
 import { fetchMotisPlan } from "@/lib/vedett-route/motisClient";
-import { mapMotisItineraryToJourney } from "@/lib/vedett-route/orchestrator";
+import { mapMotisItineraryToJourney, searchVedettRoutes } from "@/lib/vedett-route/orchestrator";
 
 export async function POST(request: Request) {
   const auth = await requireVedettRoutePublicRead(request, { label: "rest-resume", limit: 20, windowMs: 60_000 });
@@ -41,6 +44,39 @@ export async function POST(request: Request) {
       },
       { status: 400 }
     );
+  }
+
+  // ROUTING CONTEXT INTEGRITY (2026-10-07) — ha a kliens átadta az aktív
+  // navigáció routing-feltételeit, a normál kereséssel AZONOS orchestrator
+  // tervez (stepFree-szűrés, Bubi/propulsion, súlyozott rangsor) — a
+  // feltételek SOHA nem lazulnak fel. A legjobb rangsorolt journey megy vissza.
+  if (parsed.data.routingContext) {
+    const { request: searchRequest, weights } = buildConstrainedRerouteSearchRequest(
+      { lat: parsed.data.currentPosition.lat, lon: parsed.data.currentPosition.lon },
+      parsed.data.originalDestination,
+      parsed.data.routingContext,
+      parsed.data.departAt,
+      Date.now()
+    );
+    const result = await searchVedettRoutes(searchRequest, weights);
+    if (!result.ok) {
+      if (result.reason === "timeout" || result.reason === "routing_engine_unavailable") {
+        const mapped = mapMotisPlanFailureToRestStopError({ ok: false, reason: result.reason, message: result.message });
+        return NextResponse.json({ ok: false, reason: mapped.reason, message: mapped.message }, { status: 200 });
+      }
+      return NextResponse.json(
+        { ok: false, reason: "REROUTE_FAILED", message: result.message || "Nem található útvonal az eredeti célig." },
+        { status: 200 }
+      );
+    }
+    const top = result.journeys[0]?.journey;
+    if (!top) {
+      return NextResponse.json(
+        { ok: false, reason: "REROUTE_FAILED", message: "Nem található útvonal az eredeti célig." },
+        { status: 200 }
+      );
+    }
+    return NextResponse.json({ ok: true, journey: top });
   }
 
   const planParams = buildRerouteToOriginalDestinationRequest(

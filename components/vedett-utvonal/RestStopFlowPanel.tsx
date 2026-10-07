@@ -37,6 +37,7 @@ import type {
   RestStopFlowEvent,
 } from "@/lib/vedett-route/restStopFlow/types";
 import type { RestPoint } from "@/lib/rest-points/types";
+import type { RerouteRoutingContextPayload } from "@/lib/vedett-route/navigation/liveRerouteContext";
 import type { RestPointMarker } from "./VedettUtvonalMap";
 import {
   categoryLabelFor,
@@ -197,6 +198,10 @@ export type RestPanelMode = "SEARCH" | "ADD";
 export interface RestStopFlowPanelProps {
   originalDestination: OriginalDestination | null;
   originalDepartAt: string;
+  // ROUTING CONTEXT INTEGRITY (2026-10-07) — az aktív navigáció routing-
+  // feltételei; a /resume kérés változatlanul továbbadja (lásd
+  // liveRerouteContext.ts buildRerouteRoutingContext). Hiánya: régi viselkedés.
+  routingContext?: RerouteRoutingContextPayload;
   geo: UseGeolocationResult;
   onRouteResumed?: (journey: Journey) => void;
   // Egyetlen megosztott térkép (UX módosítás, 2026-09-09) — lásd a fenti
@@ -237,6 +242,7 @@ export interface RestStopFlowPanelProps {
 export default function RestStopFlowPanel({
   originalDestination,
   originalDepartAt,
+  routingContext,
   geo,
   onRouteResumed,
   onMapStateChange,
@@ -247,6 +253,10 @@ export default function RestStopFlowPanel({
   const [restPointJourney, setRestPointJourney] = useState<Journey | null>(null);
   const [resumeJourney, setResumeJourney] = useState<Journey | null>(null);
   const resumeGpsRequestedRef = useRef(false);
+  // A legfrissebb routing-kontextus ref-ben (minden renderben új objektum —
+  // ne indítsa újra a /resume effektet).
+  const routingContextRef = useRef<RerouteRoutingContextPayload | undefined>(routingContext);
+  routingContextRef.current = routingContext;
   // Sprint E.1 — csak UI-állapot: a gyorsszűrő és a marker<->kártya
   // szinkronhoz kijelölt (de még NEM "Ide megyek"-kel véglegesített)
   // pihenőpont. Egyik sem érinti az állapotgépet (stateMachine.ts) — ezek
@@ -460,6 +470,7 @@ export default function RestStopFlowPanel({
       const result = await postJson<{ journey: Journey }>("/api/vedett-route/rest-stops/resume", {
         currentPosition: { lat: geo.latitude, lon: geo.longitude },
         originalDestination: destination,
+        ...(routingContextRef.current ? { routingContext: routingContextRef.current } : {}),
       });
       if (cancelled) return;
       if (result.ok) {

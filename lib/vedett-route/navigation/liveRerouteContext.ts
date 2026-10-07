@@ -269,3 +269,28 @@ export function buildLiveAlternativeSearchPayload(input: {
     bikePropulsion: context.molBubiEnabled ? context.bikePropulsion : "ANY",
   };
 }
+
+// ---------------------------------------------------------------------------
+// ROUTING CONTEXT INTEGRITY (2026-10-07) — UGYANEZ a kontextus az automatikus
+// off-route reroute és a pihenő utáni folytatás (/rest-stops/resume) számára.
+// Nincs külön snapshot-rendszer: a resolveEffectiveLiveRerouteContext()
+// eredményéből a /resume végpont routingContext mezője (lásd
+// restStopFlow/schemas.ts restStopResumeSchema). timeMode NEM megy: a
+// folytatás mindig DEPART_AT a továbbutazás időpontjától.
+// ---------------------------------------------------------------------------
+
+export interface RerouteRoutingContextPayload {
+  stepFreeRequired: boolean;
+  molBubiEnabled: boolean;
+  bikePropulsion: LiveRerouteBikePropulsion;
+  weights: PersonalizationWeights;
+}
+
+export function buildRerouteRoutingContext(context: LiveRerouteSearchContext): RerouteRoutingContextPayload {
+  return {
+    stepFreeRequired: context.stepFreeRequired,
+    molBubiEnabled: context.molBubiEnabled,
+    bikePropulsion: context.molBubiEnabled ? context.bikePropulsion : "ANY",
+    weights: context.weights,
+  };
+}
