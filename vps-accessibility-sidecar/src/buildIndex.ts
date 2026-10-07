@@ -37,6 +37,7 @@ import { readFile, writeFile, mkdir, rename, rm } from "node:fs/promises";
 import { randomUUID, createHash } from "node:crypto";
 import path from "node:path";
 import { buildAccessibilityIndexFromGtfsZip, type AccessibilityIndex } from "./lib/accessibilityIndex.js";
+import { compileStationInfrastructure } from "./lib/stationInfrastructureCompiler.js";
 import type { TransitProviderId } from "./lib/types.js";
 import {
   generationDir,
@@ -133,6 +134,21 @@ export async function buildAndActivate(dataset: string, gtfsZipPath: string): Pr
       await atomicWriteJson(indexPath(dataset, generation), index);
       await atomicWriteJson(manifestPath(dataset, generation), manifest);
       await validateWrittenIndex(dataset, generation); // lépés 5: validáció AKTIVÁLÁS ELŐTT
+      // BKK STATION INTELLIGENCE (2026-10-07): diagnosztikai artifact
+      // ugyanabba a generációba. NEM feltétele az aktiválásnak (a sidecar
+      // futásidőben a betöltött indexből fordít), ezért a hibája nem fatális.
+      try {
+        const compiled = compileStationInfrastructure({
+          provider: index.provider,
+          dataset,
+          sourceGeneration: generation,
+          stopsById: index.stopsById,
+          pathways: index.pathways,
+        });
+        await atomicWriteJson(path.join(dir, "station-infrastructure.json"), compiled);
+      } catch {
+        // no-op: a station-infrastruktúra artifact opcionális
+      }
     } catch (err) {
       // Takarítás: egy félig írt, SOHA nem aktivált generation könyvtár
       // eltávolítása — de az active-generation.txt-hez itt sem nyúlunk.

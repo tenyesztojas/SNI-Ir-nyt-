@@ -259,6 +259,7 @@ import {
   recommendBoardingPosition,
   selectBoardingGuidanceLegIndex,
 } from "@/lib/vedett-route/navigation/boardingPosition";
+import { selectStationGuidanceDisplay, stationExitGuidanceText, stationPreviewText } from "@/lib/vedett-route/stationInfrastructure/display";
 import SavedPlacesPanel from "@/components/vedett-utvonal/SavedPlacesPanel";
 import { savedPlaceToRouteLocation } from "@/lib/vedett-route/savedPlaces/adapt";
 // SPRINT 8.5 — a MEGLÉVŐ 8.3 engine (csak export/signature szinten
@@ -1594,6 +1595,8 @@ function RankedJourneyCard({
   // csak MEDIUM+ confidence esetén. Tiszta számítás a már dekódolt
   // útvonal-adatból: nincs hálózati hívás, nincs analitika, nincs tárolás.
   const boardingGuidanceEnabled = isBoardingGuidanceEnabled(process.env.NEXT_PUBLIC_VEDETT_ROUTE_BOARDING_GUIDANCE_ENABLED);
+  // Útvonal-előnézet kijárat/lift sora: ugyanaz a flag (alapból KI).
+  const stationGuidancePreviewEnabled = boardingGuidanceEnabled;
   const boardingGuidanceLegIndex = boardingGuidanceEnabled
     ? selectBoardingGuidanceLegIndex(displayedJourney.legs, activeLegIndex ?? null, walkToTransitBoundary.phase)
     : null;
@@ -1817,6 +1820,23 @@ function RankedJourneyCard({
     activeLegIsWalk && activeLegManoeuvres.length > 0 && activeLegDistanceAlongMeters !== null
       ? resolveWalkProgress(activeLegManoeuvres, activeLegDistanceAlongMeters)
       : null;
+  // BKK STATION INTELLIGENCE (2026-10-07) — a szerver által csatolt
+  // leg.stationGuidance megjelenítése a MEGLÉVŐ navigációs állapotból
+  // (aktív láb, walk-to-transit fázis, leszállás-közelség). Egyszerre
+  // legfeljebb egy blokk: felszállás előtt a boarding sor, leszálláshoz
+  // közeledve / leszállás után a kijárat- vagy átszállási sor. Tiszta
+  // számítás, nincs hálózat, nincs analitika, nincs tárolás.
+  const stationGuidanceDisplay = boardingGuidanceEnabled
+    ? selectStationGuidanceDisplay({
+        legs: displayedJourney.legs,
+        activeLegIndex: activeLegIndex ?? null,
+        walkToTransitPhase: walkToTransitBoundary.phase,
+        alightingReady: walkToTransitBoundary.alightingReady,
+        activeWalkDistanceAlongMeters: activeLegIsWalk ? activeLegDistanceAlongMeters : null,
+      })
+    : null;
+  const stationExitGuidance =
+    stationGuidanceDisplay?.kind === "EXIT" ? stationExitGuidanceText(displayedJourney.legs[stationGuidanceDisplay.legIndex]?.stationGuidance) : null;
   // Ha nincs megbízható manoeuvre/progress adat (rövid/hiányzó geometria,
   // nincs GPS-match még), a Sprint 2/3 WALK fallback ("Gyalogolj: X")
   // marad — SOSEM jelenítünk meg technikai bizonytalanságot.
@@ -2718,6 +2738,11 @@ function RankedJourneyCard({
                 {")"}
               </span>
               {leg.mode === "TRANSIT" ? <TransitLegRealtimeNote leg={leg} /> : null}
+              {leg.mode === "TRANSIT" && stationGuidancePreviewEnabled && stationPreviewText(leg.stationGuidance) ? (
+                <span className="w-full text-xs text-gray-500" data-testid="station-preview">
+                  {stationPreviewText(leg.stationGuidance)}
+                </span>
+              ) : null}
             </div>
           )
         )}
@@ -3079,6 +3104,13 @@ function RankedJourneyCard({
                 {boardingGuidance && (
                   <div className="mt-1.5 rounded-lg bg-sni-primary/5 px-2 py-1 text-xs text-gray-700" data-testid="boarding-guidance">
                     <span className="font-medium">{boardingGuidance.title}.</span> {boardingGuidance.detail}
+                  </div>
+                )}
+                {!boardingGuidance && stationExitGuidance && (
+                  <div className="mt-1.5 rounded-lg bg-sni-primary/5 px-2 py-1 text-xs text-gray-700" data-testid="station-exit-guidance">
+                    {stationExitGuidance.title && <span className="font-medium">{stationExitGuidance.title}</span>}
+                    {stationExitGuidance.detail && <> {stationExitGuidance.detail}</>}
+                    {stationExitGuidance.liftNote && <div className="mt-0.5">{stationExitGuidance.liftNote}</div>}
                   </div>
                 )}
                 {/* SPRINT 7.1, Section G/H — CURRENT VEHICLE ARRIVAL. Csak

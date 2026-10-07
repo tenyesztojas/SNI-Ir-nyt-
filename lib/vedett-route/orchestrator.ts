@@ -22,6 +22,8 @@ import { normalizePersonalizationWeights } from "./personalization.ts";
 import { vedettRouteLog, vedettRouteNearbyDebugLog } from "./logger.ts";
 import { getTransitProvider } from "./providers/registry.ts";
 import { lookupAccessibilityIndexForItineraries } from "./accessibilityLookupClient.ts";
+import { enrichRankedJourneysWithStationGuidance } from "./stationInfrastructure/enrich.ts";
+import type { StationInfrastructureProvider } from "./stationInfrastructure/provider.ts";
 import {
   classifyItineraryStepFreeAccessibility,
   isEligibleForStepFreeResults,
@@ -542,7 +544,13 @@ export async function searchVedettRoutes(
   weightsInput?: Partial<PersonalizationWeights>,
   // PERSONALIZED SENSORY ROUTING (2026-10-06) — opcionális közösségi
   // gazdagítás. Provider nélkül (tesztek, bootstrap) a ranking BITRE a régi.
-  options: { communityLoadProvider?: CommunityLoadProvider; now?: Date } = {}
+  options: {
+    communityLoadProvider?: CommunityLoadProvider;
+    now?: Date;
+    // BKK STATION INTELLIGENCE (2026-10-07) — opcionális, tájékoztató
+    // állomás-guidance a TRANSIT lábakhoz. Provider nélkül a válasz BITRE a régi.
+    stationInfrastructureProvider?: StationInfrastructureProvider;
+  } = {}
 ): Promise<OrchestratedSearchResult | OrchestratorErrorResult> {
   const weights = normalizePersonalizationWeights(weightsInput);
   const fromPlace = `${request.from.lat},${request.from.lon}`;
@@ -870,7 +878,13 @@ export async function searchVedettRoutes(
       vedettRouteLog("routing_error", "warn", { reason: "community_enrichment_skipped", status: enrichment.status });
     }
   }
-  const ranked = rankJourneys(withSensory, communityAssessments ? { assessments: communityAssessments } : undefined);
+  const rankedBase = rankJourneys(withSensory, communityAssessments ? { assessments: communityAssessments } : undefined);
+  // Állomás-guidance: a rangsort NEM változtatja, csak a lábakat gazdagítja (fail-open).
+  const ranked = options.stationInfrastructureProvider
+    ? await enrichRankedJourneysWithStationGuidance(rankedBase, options.stationInfrastructureProvider, {
+        stepFreePreferred: request.stepFreeRequired === true,
+      })
+    : rankedBase;
 
   // IDEIGLENES DIAGNOSZTIKA (lásd logger.ts vedettRouteNearbyDebugLog) —
   // "ranking output yes/no" ÉS "API response-ban volt yes/no" (a `ranked`

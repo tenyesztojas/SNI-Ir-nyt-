@@ -186,6 +186,10 @@ export interface JourneyLeg {
   routeId?: string;
   fromStopId?: string;
   toStopId?: string;
+  // BKK STATION INTELLIGENCE (2026-10-07) — CSAK TRANSIT lábon, a láb
+  // LESZÁLLÁSI állomására; csak bekapcsolt flag + elérhető infrastruktúra-
+  // adat esetén. Hiánya = nincs állomás-guidance (LEVEL 2 fallback).
+  stationGuidance?: import("./stationInfrastructure/guidanceTypes.ts").LegStationGuidance;
 }
 
 export interface Journey {

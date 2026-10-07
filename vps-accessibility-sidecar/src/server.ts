@@ -50,6 +50,7 @@ import { getLoadedDataset, pollDatasetOnce, startPolling } from "./activeIndexSt
 import { selectPathwaySubgraph, type PathwayQuery } from "./stationSubgraph.js";
 import { findNearbyStops, parseNearbyStopsRequest } from "./nearbyStops.js";
 import { findStationsByName, parseStationSearchRequest } from "./stationSearch.js";
+import { buildStationInfrastructureResponse, getCompiledStationInfrastructure, parseStationInfrastructureRequest } from "./stationInfrastructure.js";
 import type { StopAccessibilityIndexEntry, TripAccessibilityIndexEntry } from "./lib/accessibilityIndex.js";
 
 // --- Konfiguráció (env-alapú, spec 9/19. pont) -------------------------
@@ -375,6 +376,51 @@ async function handleStationSearch(req: IncomingMessage, res: ServerResponse): P
   sendJson(res, 200, { ok: true, status: "ok", stops });
 }
 
+// BKK STATION INTELLIGENCE (2026-10-07) — station-scoped infrastruktúra
+// slice (csomópontok + pathway élek) a kért stop_id-k komplexumaira.
+// Ugyanaz az auth / body-limit / fail-safe minta, mint a többi endpointnál.
+async function handleStationInfrastructure(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  if (!isAuthorized(req)) {
+    sendJson(res, 401, { ok: false, error: "UNAUTHORIZED" });
+    return;
+  }
+  let rawBody: string;
+  try {
+    rawBody = await readBody(req);
+  } catch (err) {
+    if (err instanceof Error && err.message === "BODY_TOO_LARGE") {
+      sendJson(res, 413, { ok: false, error: "BODY_TOO_LARGE" });
+      return;
+    }
+    sendJson(res, 400, { ok: false, error: "BODY_READ_FAILED" });
+    return;
+  }
+  let parsedBody: unknown;
+  try {
+    parsedBody = JSON.parse(rawBody);
+  } catch {
+    sendJson(res, 400, { ok: false, error: "MALFORMED_JSON" });
+    return;
+  }
+  const parsedRequest = parseStationInfrastructureRequest(parsedBody);
+  if ("error" in parsedRequest) {
+    sendJson(res, 400, { ok: false, error: parsedRequest.error });
+    return;
+  }
+  const { dataset, stopIds } = parsedRequest;
+  if (!configuredDatasets().includes(dataset)) {
+    sendJson(res, 404, { ok: false, error: "UNKNOWN_DATASET" });
+    return;
+  }
+  const loaded = getLoadedDataset(dataset);
+  if (!loaded) {
+    sendJson(res, 200, { ok: true, status: "unavailable", generation: null, complexes: [], unmatchedStopIds: [] });
+    return;
+  }
+  const compiled = getCompiledStationInfrastructure(loaded.index, dataset, loaded.manifest.generation);
+  sendJson(res, 200, buildStationInfrastructureResponse(compiled, stopIds));
+}
+
 export function createAccessibilitySidecarServer() {
   return createServer((req, res) => {
     void (async () => {
@@ -395,6 +441,10 @@ export function createAccessibilitySidecarServer() {
         }
         if (req.method === "POST" && path === "/station-search") {
           await handleStationSearch(req, res);
+          return;
+        }
+        if (req.method === "POST" && path === "/station-infrastructure") {
+          await handleStationInfrastructure(req, res);
           return;
         }
         sendJson(res, 404, { ok: false, error: "NOT_FOUND" });

@@ -305,7 +305,9 @@ describe("reroute-előkészítés, UI, privacy, regresszió", () => {
   });
   test("bekötés: orchestrator provider opcionális, keresés kill-switch-csel, fail-open", () => {
     const orch = read("lib/vedett-route/orchestrator.ts");
-    assert.match(orch, /options: \{ communityLoadProvider\?: CommunityLoadProvider; now\?: Date \} = \{\}/);
+    // BKK STATION INTELLIGENCE (2026-10-07): az options típus többsoros lett
+    // (új, opcionális stationInfrastructureProvider) — a szerződés változatlan.
+    assert.match(orch, /options: \{\s*communityLoadProvider\?: CommunityLoadProvider;\s*now\?: Date;[\s\S]*?\} = \{\}/);
     assert.match(orch, /rankJourneys\(withSensory, communityAssessments \? \{ assessments: communityAssessments \} : undefined\)/);
     const search = read("app/api/admin/vedett-utvonal/search/route.ts");
     assert.match(search, /VEDETT_ROUTE_COMMUNITY_RANKING_ENABLED === "false" \? \{\} : \{ communityLoadProvider: createServerCommunityLoadProvider\(\) \}/);

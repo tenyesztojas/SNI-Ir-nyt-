@@ -171,3 +171,12 @@ sidecar nem duplikálja.
 npm run build
 node --test dist-test/**/*.test.js   # vagy: node --test test/*.test.ts (Node 22 natív TS-stripping)
 ```
+
+## 10. BKK Station Intelligence (2026-10-07)
+
+Új endpoint: `POST /station-infrastructure` (`{dataset, stopIds≤100}`, Bearer auth)
+— a kért stop_id-k állomás-komplexumai (csomópontok + pathway élek), a betöltött
+generációból memóriában fordítva. Részletek: `docs/vedett-route/STATION_INTELLIGENCE.md`.
+A Caddy-ban ugyanúgy kell továbbítani, mint a `/station-search`-öt.
+
+Validáció: `node dist/stationInfrastructureReport.js bkkgtfs [--write] [--station "<név>"]`.

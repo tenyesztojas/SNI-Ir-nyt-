@@ -21,9 +21,9 @@ import type { JourneyLeg } from "../types.ts";
 export const BOARDING_POSITIONS = ["FRONT", "MIDDLE", "REAR", "UNKNOWN"] as const;
 export type BoardingPosition = (typeof BOARDING_POSITIONS)[number];
 export type BoardingConfidence = "HIGH" | "MEDIUM" | "LOW" | "NONE";
-export type BoardingBasis = "WALK_PATH_GEOMETRY" | "STRAIGHT_LINE_TARGET" | "NONE";
+export type BoardingBasis = "STATION_PATHWAY_NODE" | "WALK_PATH_GEOMETRY" | "STRAIGHT_LINE_TARGET" | "NONE";
 export type BoardingTargetType = "TRANSFER" | "DESTINATION" | "NONE";
-export type BoardingReasonCode = "BETTER_FOR_TRANSFER" | "LESS_WALKING_AFTER_EXIT" | "GEOMETRY_BASED";
+export type BoardingReasonCode = "BETTER_FOR_TRANSFER" | "CLOSER_TO_EXIT" | "LESS_WALKING_AFTER_EXIT" | "GEOMETRY_BASED";
 export type BoardingUnknownReason =
   | "NOT_TRANSIT"
   | "UNSUPPORTED_MODE"
@@ -37,7 +37,7 @@ export interface BoardingPositionRecommendation {
   position: BoardingPosition;
   confidence: BoardingConfidence;
   /** Az adat-képességi szint (2 = geometriai heurisztika). 3/4/5 csak explicit infrastruktúra-adattal. */
-  level: 0 | 2;
+  level: 0 | 2 | 3;
   basis: BoardingBasis;
   targetType: BoardingTargetType;
   reasonCodes: BoardingReasonCode[];
@@ -163,8 +163,28 @@ export function travelDirectionAtAlighting(leg: JourneyLeg): { unit: { x: number
   return null;
 }
 
-/** A leszállás utáni következő utasmozgás célpontja (átszállás > gyalogos folytatás). */
+/**
+ * BKK STATION INTELLIGENCE (2026-10-07): a szerver által csatolt explicit
+ * pathway-csomópont (a kiválasztott kijárat / átszállási platform felé
+ * vezető belső útvonal peron utáni első csomópontja). Ez a legerősebb
+ * célpont — de továbbra sem árul el semmit kocsiról vagy ajtóról.
+ */
+function stationPathwayTarget(leg: JourneyLeg): { point: LatLon; basis: BoardingBasis; targetType: BoardingTargetType } | null {
+  const t = leg.stationGuidance?.boardingTarget;
+  if (!t || t.basis !== "STATION_PATHWAY_NODE" || !isFiniteCoord(t.lat, t.lon)) return null;
+  if (t.targetType !== "TRANSFER" && t.targetType !== "DESTINATION") return null;
+  return { point: { lat: t.lat, lon: t.lon }, basis: "STATION_PATHWAY_NODE", targetType: t.targetType };
+}
+
+/**
+ * A leszállás utáni következő utasmozgás célpontja. Prioritás: explicit
+ * állomás-infrastruktúra csomópont > gyalogos geometria > egyenes vonalú
+ * végpont / következő megálló.
+ */
 export function nextMovementTarget(legs: readonly JourneyLeg[], transitIndex: number): { point: LatLon; basis: BoardingBasis; targetType: BoardingTargetType } | null {
+  const current = legs[transitIndex];
+  const station = current ? stationPathwayTarget(current) : null;
+  if (station) return station;
   const next = legs[transitIndex + 1];
   if (!next) return null;
   const afterNext = legs[transitIndex + 2];
@@ -197,7 +217,11 @@ export function recommendBoardingPosition(legs: readonly JourneyLeg[], transitIn
   const mode = (leg.transitMode ?? "").toUpperCase();
   const lowOnly = LOW_ONLY_MODES.has(mode);
   if (!FULL_SUPPORT_MODES.has(mode) && !lowOnly) return unknown("UNSUPPORTED_MODE");
-  if (isComplexStation(leg.toName)) return unknown("COMPLEX_STATION");
+  // Komplex csomópont (kézi névlista VAGY a szerver szerint több szülőállomást
+  // összekötő komplexum): csak explicit állomás-infrastruktúra célponttal
+  // értékelünk; puszta geometria itt nem megbízható -> UNKNOWN.
+  const hasStationTarget = stationPathwayTarget(leg) !== null;
+  if ((isComplexStation(leg.toName) || leg.stationGuidance?.interchangeComplex === true) && !hasStationTarget) return unknown("COMPLEX_STATION");
 
   const stop: LatLon | null = isFiniteCoord(leg.toLat, leg.toLon) ? { lat: leg.toLat as number, lon: leg.toLon as number } : null;
   const direction = travelDirectionAtAlighting(leg);
@@ -218,7 +242,8 @@ export function recommendBoardingPosition(legs: readonly JourneyLeg[], transitIn
   else return unknown("AMBIGUOUS_GEOMETRY", target.basis, target.targetType);
 
   // Confidence: geometriai heurisztika -> legfeljebb MEDIUM (HIGH csak explicit infrastruktúra-adatból).
-  let confidence: BoardingConfidence = target.basis === "WALK_PATH_GEOMETRY" ? "MEDIUM" : "LOW";
+  // Állomás-infrastruktúra cél sem emeli HIGH-ra: a peronon belüli kocsi-pozíció továbbra sem ismert.
+  let confidence: BoardingConfidence = target.basis === "WALK_PATH_GEOMETRY" || target.basis === "STATION_PATHWAY_NODE" ? "MEDIUM" : "LOW";
   if (position === "MIDDLE") confidence = "LOW"; // középső kijárat nem bizonyított
   if (position !== "MIDDLE" && (Math.abs(along) < BOARDING_CONFIG.mediumMinAlongMeters || angleDeg > BOARDING_CONFIG.mediumMaxAngleDeg)) {
     confidence = confidence === "MEDIUM" ? "LOW" : confidence;
@@ -227,8 +252,11 @@ export function recommendBoardingPosition(legs: readonly JourneyLeg[], transitIn
   if (lowOnly && (confidence === "MEDIUM" || confidence === "HIGH")) confidence = "LOW";
   if (confidence === "NONE") return unknown("AMBIGUOUS_GEOMETRY", target.basis, target.targetType);
 
-  const reasonCodes: BoardingReasonCode[] = [target.targetType === "TRANSFER" ? "BETTER_FOR_TRANSFER" : "LESS_WALKING_AFTER_EXIT", "GEOMETRY_BASED"];
-  return { position, confidence, level: 2, basis: target.basis, targetType: target.targetType, reasonCodes, unknownReason: null };
+  const reasonCodes: BoardingReasonCode[] = [
+    target.targetType === "TRANSFER" ? "BETTER_FOR_TRANSFER" : target.basis === "STATION_PATHWAY_NODE" ? "CLOSER_TO_EXIT" : "LESS_WALKING_AFTER_EXIT",
+    "GEOMETRY_BASED",
+  ];
+  return { position, confidence, level: target.basis === "STATION_PATHWAY_NODE" ? 3 : 2, basis: target.basis, targetType: target.targetType, reasonCodes, unknownReason: null };
 }
 
 /** Csak MEDIUM/HIGH ajánlás jeleníthető meg; LOW/NONE/UNKNOWN esetén nincs UI. */
@@ -264,6 +292,8 @@ export function boardingGuidanceText(r: BoardingPositionRecommendation): { title
   const title = r.confidence === "HIGH" ? `Utazz a szerelvény ${where}` : `Érdemes lehet a szerelvény ${where} utazni`;
   const detail = r.reasonCodes.includes("BETTER_FOR_TRANSFER")
     ? "Így egyszerűbb lehet az átszállás."
-    : "Így kevesebb gyaloglásra lehet szükség leszállás után.";
+    : r.reasonCodes.includes("CLOSER_TO_EXIT")
+      ? "Így közelebb lehet a javasolt kijárat."
+      : "Így kevesebb gyaloglásra lehet szükség leszállás után.";
   return { title, detail };
 }

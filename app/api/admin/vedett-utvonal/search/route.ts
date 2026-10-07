@@ -20,6 +20,8 @@ import { buildRouteCacheKey, getCached, setCached } from "@/lib/vedett-route/rou
 import type { OrchestratedSearchResult } from "@/lib/vedett-route/types";
 import type { OrchestratorErrorResult } from "@/lib/vedett-route/orchestrator";
 import { vedettRouteLog } from "@/lib/vedett-route/logger";
+import { isBoardingGuidanceEnabled } from "@/lib/vedett-route/navigation/boardingPosition";
+import { getServerStationInfrastructureProvider } from "@/lib/vedett-route/stationInfrastructure/provider";
 import { resolveManualFieldOrStation } from "@/lib/vedett-route/stationNameSearch";
 import { getAccessibilityIndex } from "@/lib/vedett-route/providers/staticFileProvider";
 
@@ -300,7 +302,14 @@ export async function POST(request: Request) {
     weights,
     // Közösségi terhelés a rangsoroláshoz (fail-open; kikapcsolható a
     // VEDETT_ROUTE_COMMUNITY_RANKING_ENABLED=false env-vel).
-    process.env.VEDETT_ROUTE_COMMUNITY_RANKING_ENABLED === "false" ? {} : { communityLoadProvider: createServerCommunityLoadProvider() }
+    {
+      ...(process.env.VEDETT_ROUTE_COMMUNITY_RANKING_ENABLED === "false" ? {} : { communityLoadProvider: createServerCommunityLoadProvider() }),
+      // BKK STATION INTELLIGENCE (2026-10-07) — ugyanaz a flag kapcsolja,
+      // mint a kliens oldali boarding/station guidance-t (alapból KI).
+      ...(isBoardingGuidanceEnabled(process.env.NEXT_PUBLIC_VEDETT_ROUTE_BOARDING_GUIDANCE_ENABLED)
+        ? { stationInfrastructureProvider: getServerStationInfrastructureProvider() }
+        : {}),
+    }
   );
 
   setCached(cacheKey, result);
