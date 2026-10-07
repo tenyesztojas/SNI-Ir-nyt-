@@ -105,7 +105,10 @@ export function createBkkStationInfrastructureProvider(options: BkkStationInfras
 
   async function fetchSlice(gtfsStopIds: string[]): Promise<z.infer<typeof stationInfrastructureResponseSchema> | null> {
     const config = options.config === undefined ? getAccessibilitySidecarConfig() : options.config;
-    if (!config) return null;
+    if (!config) {
+      vedettRouteLog("station_guidance", "info", { reason: "station_infrastructure_not_configured" });
+      return null;
+    }
     const fetchImpl = options.fetchImpl ?? fetch;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), Math.min(config.timeoutMs, MAX_TIMEOUT_MS));
@@ -117,21 +120,23 @@ export function createBkkStationInfrastructureProvider(options: BkkStationInfras
         signal: controller.signal,
       });
       if (!response.ok) {
-        vedettRouteLog("routing_error", "info", { reason: "station_infrastructure_http_error", status: response.status });
+        vedettRouteLog("station_guidance", "info", { reason: "station_infrastructure_http_error", status: response.status });
         return null;
       }
       const parsed = stationInfrastructureResponseSchema.safeParse(await response.json());
       if (!parsed.success) {
-        vedettRouteLog("routing_error", "warn", { reason: "station_infrastructure_malformed_body" });
+        vedettRouteLog("station_guidance", "warn", { reason: "station_infrastructure_malformed_body" });
         return null;
       }
       if (parsed.data.schemaVersion !== undefined && parsed.data.schemaVersion !== SUPPORTED_SCHEMA_VERSION) {
-        vedettRouteLog("routing_error", "warn", { reason: "station_infrastructure_schema_mismatch" });
+        vedettRouteLog("station_guidance", "warn", { reason: "station_infrastructure_schema_mismatch" });
         return null;
       }
       return parsed.data;
-    } catch {
-      vedettRouteLog("routing_error", "info", { reason: "station_infrastructure_lookup_failed" });
+    } catch (err) {
+      vedettRouteLog("station_guidance", "info", {
+        reason: err instanceof Error && err.name === "AbortError" ? "station_infrastructure_timeout" : "station_infrastructure_lookup_failed",
+      });
       return null;
     } finally {
       clearTimeout(timeout);
@@ -148,7 +153,10 @@ export function createBkkStationInfrastructureProvider(options: BkkStationInfras
           const norm = normalizeMotisStopId(id);
           if (norm.provider === "BKK" && /^[A-Za-z0-9_.:-]{1,64}$/.test(norm.gtfsId)) gtfsByMotis.set(id, norm.gtfsId);
         }
-        if (gtfsByMotis.size === 0) return null;
+        if (gtfsByMotis.size === 0) {
+          vedettRouteLog("station_guidance", "info", { reason: "station_infrastructure_no_supported_stop_ids" });
+          return null;
+        }
         const t = now();
         const missing = Array.from(new Set(gtfsByMotis.values()))
           .filter((g) => {
@@ -160,7 +168,10 @@ export function createBkkStationInfrastructureProvider(options: BkkStationInfras
         if (missing.length > 0) {
           const body = await fetchSlice(missing);
           if (!body) return null;
-          if (body.status === "unavailable" || !body.generation) return null;
+          if (body.status === "unavailable" || !body.generation) {
+            vedettRouteLog("station_guidance", "info", { reason: "station_infrastructure_dataset_unavailable" });
+            return null;
+          }
           if (generation !== null && generation !== body.generation) clearCache();
           generation = body.generation;
           if (stopCache.size + missing.length > maxStopEntries) clearCache();

@@ -58,7 +58,10 @@ export type VedettRouteLogEvent =
   // fromStopId/toStopId/reason-kódot és menetrendi/realtime ISO
   // időbélyegeket adnak át — SOHA user identityt, auth tokent, GPS-
   // koordinátát vagy teljes request body-t.
-  | "realtime_refresh_debug";
+  | "realtime_refresh_debug"
+  // BKK STATION INTELLIGENCE (2026-10-07) — keresésenként egy összesítő sor
+  // (csak kimenet-kód és darabszámok; SOHA stop/trip ID, GPS, user vagy token).
+  | "station_guidance";
 
 export function vedettRouteLog(
   event: VedettRouteLogEvent,

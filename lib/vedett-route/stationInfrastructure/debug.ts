@@ -3,7 +3,7 @@
 
 export type StationGuidanceDebugEvent = "enrichment_skipped" | "enrichment_result" | "leg_guidance";
 
-export function stationGuidanceDebugLog(event: StationGuidanceDebugEvent, details: Record<string, string | number | boolean | null>): void {
+export function stationGuidanceDebugLog(event: StationGuidanceDebugEvent, details: Record<string, string | number | boolean | null | undefined>): void {
   if (process.env.NODE_ENV === "production") return;
   try {
     console.debug(`[vedett-route:station-guidance] ${event}`, details);
