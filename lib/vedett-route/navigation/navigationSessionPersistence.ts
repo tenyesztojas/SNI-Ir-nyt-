@@ -13,6 +13,7 @@
 // minta) újra is használja.
 
 import type { Journey, JourneyLeg } from "../types";
+import { parseLiveRerouteSearchContext, type LiveRerouteSearchContext } from "./liveRerouteContext.ts";
 
 export const NAVIGATION_SESSION_SCHEMA_VERSION = 1 as const;
 
@@ -40,6 +41,11 @@ export interface PersistedNavigationSession {
   navigationActive: true;
   destination: PersistedNavigationDestination;
   displayedJourney: Journey;
+  // JOURNEY MONITOR v1 / 3. lépés — OPCIONÁLIS (visszafelé kompatibilis):
+  // a Live Alternative keresés routing-feltételei (stepFree/Bubi/propulsion/
+  // weights). Régi sessionben hiányzik; érvénytelen tartalom esetén a load
+  // ELDOBJA a mezőt, de a sessiont NEM (fail-open). Nem tartalmaz GPS-t.
+  liveRerouteContext?: LiveRerouteSearchContext;
 }
 
 /** A displayedJourney UTOLSÓ lábának végpontjából vezeti le a stabil úti célt. */
@@ -57,6 +63,7 @@ export function serializeNavigationSession(input: {
   destination: PersistedNavigationDestination;
   displayedJourney: Journey;
   nowMs: number;
+  liveRerouteContext?: LiveRerouteSearchContext | null;
 }): PersistedNavigationSession {
   return {
     schemaVersion: NAVIGATION_SESSION_SCHEMA_VERSION,
@@ -64,6 +71,7 @@ export function serializeNavigationSession(input: {
     navigationActive: true,
     destination: input.destination,
     displayedJourney: input.displayedJourney,
+    ...(input.liveRerouteContext ? { liveRerouteContext: input.liveRerouteContext } : {}),
   };
 }
 
@@ -175,7 +183,10 @@ export function loadNavigationSession(nowMs: number): PersistedNavigationSession
     return null;
   }
 
-  return parsed;
+  // Opcionális mező: hiány/érvénytelen tartalom -> elhagyjuk, a session marad.
+  const { liveRerouteContext: rawContext, ...rest } = parsed;
+  const liveRerouteContext = parseLiveRerouteSearchContext(rawContext);
+  return liveRerouteContext ? { ...rest, liveRerouteContext } : rest;
 }
 
 export function clearNavigationSession(): void {

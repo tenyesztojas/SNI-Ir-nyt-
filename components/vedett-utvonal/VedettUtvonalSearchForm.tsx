@@ -263,6 +263,13 @@ import {
   evaluateMissedConnection,
   type RealtimeMonitorDebounceState,
 } from "@/lib/vedett-route/navigation/journeyMonitor";
+import {
+  buildLiveAlternativeSearchPayload,
+  buildLiveRerouteSearchContext,
+  resolveEffectiveLiveRerouteContext,
+  resolveLiveRerouteOrigin,
+  type LiveRerouteSearchContext,
+} from "@/lib/vedett-route/navigation/liveRerouteContext";
 import { recommendedExitText, selectStationGuidanceDisplay, stationExitGuidanceText, stationPreviewText } from "@/lib/vedett-route/stationInfrastructure/display";
 import SavedPlacesPanel from "@/components/vedett-utvonal/SavedPlacesPanel";
 import { savedPlaceToRouteLocation } from "@/lib/vedett-route/savedPlaces/adapt";
@@ -750,6 +757,7 @@ function RankedJourneyCard({
   serviceAlerts,
   isAuthenticated,
   weights,
+  liveRerouteContext = null,
 }: {
   ranked: RankedJourney;
   isOpen: boolean;
@@ -768,6 +776,10 @@ function RankedJourneyCard({
   // preferenciái (a 6 strukturális + zsúfoltság/zaj); az alternatíva-keresés
   // és a jelenlegi hátralévő út pontozása UGYANEZEKKEL történik.
   weights: PersonalizationWeights;
+  // JOURNEY MONITOR v1 / 3. lépés — a kártyát létrehozó SIKERES keresés
+  // routing-feltételeinek snapshotja (lásd liveRerouteContext.ts). Hiánya
+  // (régi hívó) fail-open: a journey saját bizonyítéka + a weights prop.
+  liveRerouteContext?: LiveRerouteSearchContext | null;
 }) {
   const journey = ranked.journey;
   const sensory = journey.sensory;
@@ -962,7 +974,21 @@ function RankedJourneyCard({
   // fingerprint-egyezés a kártya saját journey-jével). Ez NEM egy "új
   // navigáció indítása" — egy KORÁBBAN, explicit user-akcióval (startNavigation)
   // elindított, MÉG érvényes session helyreállítása.
+  // JOURNEY MONITOR v1 / 3. lépés — a restore-olt session routing-kontextusa
+  // (ha a session már tartalmazta). Elsőbbséget kap a keresési snapshottal
+  // szemben, de booleanokban SOHA nem gyengít (lásd
+  // resolveEffectiveLiveRerouteContext).
+  const restoredRerouteContextRef = useRef<LiveRerouteSearchContext | null>(null);
+  const effectiveLiveRerouteContext = resolveEffectiveLiveRerouteContext({
+    restored: restoredRerouteContextRef.current,
+    snapshot: liveRerouteContext,
+    journey: displayedJourney,
+    fallbackWeights: weights,
+  });
+
   const restorePersistedNavigation = (persisted: PersistedNavigationSession) => {
+    // Régi (kontextus nélküli) session -> null, fail-open.
+    restoredRerouteContextRef.current = persisted.liveRerouteContext ?? null;
     bumpNavigationSession();
     rerouteGuardRef.current = resetRerouteGuard();
     setAutomaticRerouteStatus("IDLE");
@@ -1143,6 +1169,7 @@ function RankedJourneyCard({
     followResumeTimerRef.current!.cancel(); // Navigation end — timer cleanup (spec 3. pont).
     geo.stopWatching();
     clearNavigationSession(); // SPRINT 8.2 — explicit navigáció leállítása törli a persisted sessiont.
+    restoredRerouteContextRef.current = null;
   };
 
   // SPRINT 8.2 (NAVIGATION SESSION PERSISTENCE, 2026-09-18) — a navigáció
@@ -1159,6 +1186,7 @@ function RankedJourneyCard({
         destination: deriveDestinationFromJourney(displayedJourney),
         displayedJourney,
         nowMs: Date.now(),
+        liveRerouteContext: effectiveLiveRerouteContext,
       }),
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2275,6 +2303,27 @@ function RankedJourneyCard({
     });
     if (!decision.shouldSearch || !currentPosition || !originalDestination) return;
 
+    // JOURNEY MONITOR v1 / 3. lépés — a kiinduló pontot a TÉNYLEGES fázis/
+    // aktív láb dönti el (nem a trigger típusa): gyaloglás/várakozás -> GPS,
+    // járművön -> az aktív TRANSIT láb leszállási pontja + érkezési ideje.
+    // Járművön megbízható leszállási adat nélkül NINCS keresés (GPS-originről
+    // sem) — a navigáció változatlanul megy tovább. A routing-feltételek
+    // (stepFree/Bubi/propulsion/weights) a sikeres keresés snapshotjából jönnek.
+    const liveOrigin = resolveLiveRerouteOrigin({
+      journey: displayedJourney,
+      activeLegIndex: activeLegIndex ?? null,
+      boundaryPhase: walkToTransitBoundary.phase,
+      currentPosition,
+      nowMs,
+    });
+    const liveSearchPayload = buildLiveAlternativeSearchPayload({
+      origin: liveOrigin,
+      destination: originalDestination,
+      context: effectiveLiveRerouteContext,
+    });
+    if (!liveSearchPayload || liveOrigin.kind === "SKIP") return;
+    const liveSearchWeights = effectiveLiveRerouteContext.weights;
+
     const sessionGeneration = rerouteSessionRef.current;
     liveAlternativeGuardRef.current = markLiveAlternativeSearchStarted(liveAlternativeGuardRef.current, trigger, nowMs);
     setLiveAlternativePreviewOpen(false);
@@ -2284,14 +2333,9 @@ function RankedJourneyCard({
       const response = await fetch("/api/admin/vedett-utvonal/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fromCoordinates: { latitude: currentPosition.latitude, longitude: currentPosition.longitude },
-          toCoordinates: { latitude: originalDestination.lat, longitude: originalDestination.lon },
-          toName: originalDestination.name,
-          departAt: new Date().toISOString(),
-          // A felhasználó preferenciái — a jelöltek UGYANAZZAL a rangsorolással értékelődnek.
-          weights,
-        }),
+        // A felhasználó preferenciái + routing-feltételei (a keresés snapshotjából) —
+        // a jelöltek UGYANAZZAL a rangsorolással és szűréssel értékelődnek.
+        body: JSON.stringify(liveSearchPayload),
       });
       const data = (await response.json()) as OrchestratedSearchResult | { ok: false; reason?: string };
 
@@ -2309,7 +2353,7 @@ function RankedJourneyCard({
       // váltási költséggel és érdemi-javulás kapuval. Nincs ajánlat -> a keresés elvetve.
       if (trigger.type === "COMMUNITY_DETERIORATION") {
         const currentAssessment = latestCommunityAssessmentRef.current;
-        const current = computeCurrentRemainingBreakdown(displayedJourney, activeLegIndex ?? null, weights, currentAssessment);
+        const current = computeCurrentRemainingBreakdown(displayedJourney, activeLegIndex ?? null, liveSearchWeights, currentAssessment);
         const rerouteDecision = evaluateRerouteOpportunity({
           current: { remaining: current.remaining, breakdown: current.breakdown, assessment: currentAssessment, fingerprint: currentFingerprint },
           candidates: data.journeys.map((r) => ({ journey: r.journey, scoreBreakdown: r.scoreBreakdown, reasonCodes: r.reasonCodes })),
@@ -2354,7 +2398,10 @@ function RankedJourneyCard({
         current: displayedJourney,
         activeLegIndex: activeLegIndex ?? null,
         candidate: best,
-        nowMs: Date.now(),
+        // Leszállási originnél a jelölt a leszállás IDEJÉTŐL indul — az ETA-k
+        // ugyanarra az időpontra vetítve hasonlíthatók (az ETA-logika változatlan;
+        // GPS-originnél ez pontosan Date.now(), mint eddig).
+        nowMs: liveOrigin.kind === "ALIGHTING" ? Math.max(Date.now(), liveOrigin.departAtMs) : Date.now(),
         triggerType: trigger.type,
       });
       if (!etaDecision.offer) return;
@@ -3805,6 +3852,10 @@ export default function VedettUtvonalSearchForm({
   // hatást, ha molBubiEnabled === true (lásd handleSubmit body-ja lent).
   const [molBubiEnabled, setMolBubiEnabled] = useState(false);
   const [bikePropulsion, setBikePropulsion] = useState<"ANY" | "HUMAN" | "ELECTRIC_ASSIST">("ANY");
+  // JOURNEY MONITOR v1 / 3. lépés — a legutóbbi SIKERES keresés routing-
+  // feltételeinek snapshotja (a form azóta átállított state-je NEM szivárog
+  // a Live Alternative keresésbe). Lásd liveRerouteContext.ts.
+  const [liveRerouteContext, setLiveRerouteContext] = useState<LiveRerouteSearchContext | null>(null);
   // Part B (2026-09-08) — melyik kártya térképe van éppen nyitva (index a
   // result.journeys tömben, vagy null, ha egyik sincs nyitva). Ez az
   // EGYETLEN helye annak, hogy "melyik kártya aktív" — nincs másik,
@@ -4338,6 +4389,7 @@ export default function VedettUtvonalSearchForm({
       });
       const data = (await res.json()) as SearchApiResponse;
       setResult(data);
+      setLiveRerouteContext(data.ok ? buildLiveRerouteSearchContext(body) : null);
       trackVedettRouteEvent(data.ok ? "route_search_success" : "route_search_error", {
         authState: analyticsAuthState,
         result: data.ok ? "success" : "error",
@@ -5282,6 +5334,7 @@ export default function VedettUtvonalSearchForm({
               serviceAlerts={result.serviceAlerts}
               isAuthenticated={isAuthenticated}
               weights={weights}
+              liveRerouteContext={liveRerouteContext}
             />
           ))}
         </div>

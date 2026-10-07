@@ -262,9 +262,12 @@ describe("UX / navigation state (forrás-szint)", () => {
     assert.match(form, /void maybeStartLiveAlternativeSearch\(\{ type: "COMMUNITY_DETERIORATION", eventId: `community:\$\{state\.signature\}` \}\)/);
     const maybe = body("const maybeStartLiveAlternativeSearch = async");
     assert.match(maybe, /fetch\("\/api\/admin\/vedett-utvonal\/search"/, "ugyanaz a routing infrastruktúra");
-    assert.match(maybe, /toCoordinates: \{ latitude: originalDestination\.lat, longitude: originalDestination\.lon \}/, "az eredeti cél");
-    assert.match(maybe, /fromCoordinates: \{ latitude: currentPosition\.latitude, longitude: currentPosition\.longitude \}/, "a jelenlegi helyzetből");
-    assert.match(maybe, /weights,\n/, "a felhasználó preferenciáival");
+    // JOURNEY MONITOR v1 / 3. lépés — a body a liveRerouteContext.ts helperéből jön
+    // (viselkedési tesztek: live-reroute-context.test.ts).
+    assert.match(maybe, /destination: originalDestination,/, "az eredeti cél");
+    assert.match(maybe, /currentPosition,\n/, "a jelenlegi helyzetből (gyaloglás/várakozás közben)");
+    assert.match(maybe, /context: effectiveLiveRerouteContext,/, "a felhasználó preferenciáival és routing-feltételeivel");
+    assert.match(maybe, /body: JSON\.stringify\(liveSearchPayload\)/);
     assert.match(maybe, /evaluateRerouteOpportunity\(\{/);
     assert.doesNotMatch(maybe, /setDisplayedJourney\(/, "keresés/ajánlat nem cserél journey-t");
     assert.match(maybe, /discardLiveAlternativeSearch\(offer, sessionGeneration\)/, "hiba / nincs ajánlat -> a navigáció változatlan");
