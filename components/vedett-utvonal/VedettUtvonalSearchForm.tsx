@@ -282,6 +282,12 @@ import {
 import JourneyMonitorSimulationPanel from "./JourneyMonitorSimulationPanel";
 import { computeStackedOverlayLayout } from "./overlayStacking";
 import {
+  INITIAL_JOURNEY_REVISION,
+  isJourneyRevisionCurrent,
+  nextJourneyRevision,
+  resetAlternativeStateAfterJourneyReplacement,
+} from "@/lib/vedett-route/navigation/journeyRevision";
+import {
   createInitialLiveAlternativeDiagnosticsState,
   reportLiveAlternativeDiagnostic,
   startLiveAlternativeDiagnosticRun,
@@ -921,6 +927,11 @@ function RankedJourneyCard({
   // kártya). `liveAlternativePreviewOpen` KIZÁRÓLAG UI-szintű "Megnézem"
   // toggle — nem cseréli a displayedJourney-t, csak a preview-kártyát nyitja.
   const liveAlternativeGuardRef = useRef(createInitialLiveAlternativeGuardState());
+  // STALE ALTERNATIVE INVALIDATION — célzott útvonal-revízió (lásd
+  // journeyRevision.ts): a sikeres automatikus OFF_ROUTE útvonalcsere lépteti;
+  // a Live Alternative keresés/ajánlat a saját indulási revízióját hordozza.
+  const journeyRevisionRef = useRef(INITIAL_JOURNEY_REVISION);
+  const liveAlternativeOfferRevisionRef = useRef<number | null>(null);
   // DYNAMIC SENSORY REROUTING — navigation-session szintű, csak memóriában élő állapot.
   const communityBaselineRef = useRef<{ generation: number; state: JourneyCommunityState } | null>(null);
   const latestCommunityStateRef = useRef<JourneyCommunityState | null>(null);
@@ -2204,6 +2215,19 @@ function RankedJourneyCard({
         if (rerouteSessionRef.current !== sessionId) return;
         if (data.ok) {
           setDisplayedJourney(data.journey);
+          // STALE ALTERNATIVE INVALIDATION — CSAK sikeres útvonalcserénél: a régi
+          // útvonalhoz tartozó ajánlat, a folyamatban lévő keresések eredménye
+          // (revízió-ellenőrzés), a szimuláció és a pending debounce érvénytelen.
+          // A navigációs session generációja SZÁNDÉKOSAN nem lép (foreground/
+          // restore/GPS-vesztés helyreállítás érintetlen).
+          journeyRevisionRef.current = nextJourneyRevision(journeyRevisionRef.current);
+          const reset = resetAlternativeStateAfterJourneyReplacement();
+          liveAlternativeOfferRevisionRef.current = null;
+          setLiveAlternativeOffer(reset.offer);
+          setLiveAlternativePreviewOpen(reset.previewOpen);
+          realtimeMonitorDebounceRef.current = reset.debounce;
+          journeyMonitorSimulationRef.current = reset.simulation;
+          journeyMonitorSimulationSnapshotRef.current = null;
           setAutomaticRerouteStatus("IDLE");
           setAutomaticRerouteMessage(null);
           return;
@@ -2405,6 +2429,8 @@ function RankedJourneyCard({
     const liveSearchWeights = effectiveLiveRerouteContext.weights;
 
     const sessionGeneration = rerouteSessionRef.current;
+    const journeyRevision = journeyRevisionRef.current;
+    liveAlternativeOfferRevisionRef.current = journeyRevision;
     liveAlternativeGuardRef.current = markLiveAlternativeSearchStarted(liveAlternativeGuardRef.current, trigger, nowMs);
     setLiveAlternativePreviewOpen(false);
     setLiveAlternativeOffer(startLiveAlternativeOfferSearch(trigger, sessionGeneration));
@@ -2425,6 +2451,12 @@ function RankedJourneyCard({
       if (rerouteSessionRef.current !== sessionGeneration) {
         reportDiagnostic({ stage: "SEARCH_FAILED", reason: "SESSION_CHANGED", httpStatus: diagnosticHttpStatus });
         setLiveAlternativeOffer((offer) => discardLiveAlternativeSearch(offer, sessionGeneration));
+        return;
+      }
+      // STALE ALTERNATIVE INVALIDATION — a keresés közben automatikusan lecserélt
+      // útvonalhoz ez az eredmény már nem tartozik: SOHA nem lehet belőle ajánlat.
+      if (!isJourneyRevisionCurrent(journeyRevision, journeyRevisionRef.current)) {
+        reportDiagnostic({ stage: "SEARCH_FAILED", reason: "JOURNEY_REPLACED", httpStatus: diagnosticHttpStatus });
         return;
       }
       if (!data.ok || !Array.isArray(data.journeys)) {
@@ -2561,6 +2593,13 @@ function RankedJourneyCard({
     const accepted = acceptLiveAlternativeOffer(liveAlternativeOffer);
     if (!accepted) return;
     setLiveAlternativePreviewOpen(false);
+    // STALE ALTERNATIVE INVALIDATION — egy korábbi útvonalhoz számolt ajánlat
+    // (azóta automatikus útvonalcsere történt) nem fogadható el.
+    if (!isJourneyRevisionCurrent(liveAlternativeOfferRevisionRef.current, journeyRevisionRef.current)) {
+      liveAlternativeOfferRevisionRef.current = null;
+      setLiveAlternativeOffer(createInitialLiveAlternativeOffer());
+      return;
+    }
     if (liveAlternativeOffer.sessionGeneration !== rerouteSessionRef.current) {
       setLiveAlternativeOffer(createInitialLiveAlternativeOffer());
       return;
