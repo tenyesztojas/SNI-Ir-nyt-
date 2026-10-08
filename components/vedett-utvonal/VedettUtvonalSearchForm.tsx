@@ -280,6 +280,7 @@ import {
   type JourneyMonitorSimulationKind,
 } from "@/lib/vedett-route/navigation/journeyMonitorSimulation";
 import JourneyMonitorSimulationPanel from "./JourneyMonitorSimulationPanel";
+import { computeStackedOverlayLayout } from "./overlayStacking";
 import {
   createInitialLiveAlternativeDiagnosticsState,
   reportLiveAlternativeDiagnostic,
@@ -1970,6 +1971,34 @@ function RankedJourneyCard({
   const navigationInstructionForDisplay = (restStopMapState.active && restStopMapState.legsOverride) || automaticRerouteStatus === "REROUTING"
     ? null
     : activeNavigationInstructionWithWalkProgress;
+
+  // LIVE ALTERNATIVE KÁRTYA ÁTFEDÉS-JAVÍTÁS (2026-10-08) — az instrukciós
+  // kártya TÉNYLEGES alját mérjük (ResizeObserver + resize), hogy az ajánlat-
+  // kártya alá kerülhessen (lásd overlayStacking.ts). Csak elrendezés.
+  const navigationInstructionCardRef = useRef<HTMLDivElement | null>(null);
+  const [navigationInstructionCardBottomPx, setNavigationInstructionCardBottomPx] = useState<number | null>(null);
+  const navigationInstructionCardVisible = navigationMode && Boolean(navigationInstructionForDisplay);
+  useEffect(() => {
+    const card = navigationInstructionCardRef.current;
+    if (!navigationInstructionCardVisible || !card) {
+      setNavigationInstructionCardBottomPx(null);
+      return;
+    }
+    const update = () => setNavigationInstructionCardBottomPx(card.offsetTop + card.offsetHeight);
+    update();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(update);
+    observer.observe(card);
+    window.addEventListener("resize", update);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", update);
+    };
+  }, [navigationInstructionCardVisible, topActionBarBottomPx, routeProgress.offRouteStatus]);
+  const liveAlternativeCardLayout = computeStackedOverlayLayout({
+    anchorBottomPx: navigationInstructionCardVisible ? navigationInstructionCardBottomPx : null,
+    topActionBarBottomPx,
+  });
   // NAVIGATION — INSTRUCTION ICON MODEL (2026-09-25) — UGYANEBBŐL a
   // navigationInstructionForDisplay-ből (kind) + a MÁR MEGLÉVŐ aktív leg
   // transitMode-jából (RIDE esetén) + a MÁR MEGLÉVŐ aktív WALK-manőver
@@ -3175,7 +3204,9 @@ function RankedJourneyCard({
               <div
                 role="status"
                 aria-live="polite"
-                className="absolute left-1/2 top-[4.25rem] z-20 w-[calc(100%-1.5rem)] max-w-sm -translate-x-1/2 rounded-xl border border-sky-300 bg-sky-50/95 px-4 py-3 shadow-lg backdrop-blur"
+                data-testid="live-alternative-offer-card"
+                className="absolute left-1/2 z-30 w-[calc(100%-1.5rem)] max-w-sm -translate-x-1/2 overflow-y-auto overscroll-contain rounded-xl border border-sky-300 bg-sky-50/95 px-4 py-3 shadow-lg backdrop-blur"
+                style={liveAlternativeCardLayout}
               >
                 {liveAlternativeOffer.trigger?.type === "COMMUNITY_DETERIORATION" ? (
                   <>
@@ -3215,7 +3246,9 @@ function RankedJourneyCard({
               <div
                 role="status"
                 aria-live="polite"
-                className="absolute left-1/2 top-[4.25rem] z-20 w-[calc(100%-1.5rem)] max-w-sm -translate-x-1/2 rounded-xl border border-sky-300 bg-white/95 px-4 py-3 shadow-lg backdrop-blur"
+                data-testid="live-alternative-preview-card"
+                className="absolute left-1/2 z-30 w-[calc(100%-1.5rem)] max-w-sm -translate-x-1/2 overflow-y-auto overscroll-contain rounded-xl border border-sky-300 bg-white/95 px-4 py-3 shadow-lg backdrop-blur"
+                style={liveAlternativeCardLayout}
               >
                 <div className="text-sm font-bold text-sky-950">Alternatív útvonal előnézete</div>
                 <div className="mt-1 text-xs leading-snug text-sky-900">
@@ -3318,6 +3351,7 @@ function RankedJourneyCard({
                 változást nem okoz. */}
             {navigationMode && navigationInstructionForDisplay && (
               <div
+                ref={navigationInstructionCardRef}
                 role="status"
                 aria-live="polite"
                 className={`absolute right-14 z-20 mx-auto max-w-sm rounded-xl bg-white/95 px-4 py-3 text-center shadow-lg backdrop-blur ${
