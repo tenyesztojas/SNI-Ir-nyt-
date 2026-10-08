@@ -8,6 +8,20 @@
 // amelyek a VALÓDI realtime-feldolgozási láncot használják.
 
 import type { JourneyMonitorSimulationKind } from "@/lib/vedett-route/navigation/journeyMonitorSimulation";
+import type {
+  LiveAlternativeDiagnosticRun,
+  LiveAlternativeDiagnosticsState,
+} from "@/lib/vedett-route/navigation/liveAlternativeDiagnostics";
+
+/** Egy diagnosztikai futás egysoros, személyes adat nélküli összefoglalója (koordináta nincs). */
+export function formatLiveAlternativeDiagnosticRun(run: LiveAlternativeDiagnosticRun | null): string {
+  if (!run) return "—";
+  const parts = [`${run.stage}${run.reason ? ` (${run.reason})` : ""}`, `${run.triggerType} ${run.eventId}`];
+  if (run.originKind) parts.push(`origin: ${run.originKind}`);
+  if (run.httpStatus !== null) parts.push(`HTTP ${run.httpStatus}`);
+  if (run.candidateCount !== null) parts.push(`jelölt: ${run.candidateCount}`);
+  return parts.join(" · ");
+}
 
 const KIND_LABEL: Record<JourneyMonitorSimulationKind, string> = {
   DELAY: "+10 perc késés",
@@ -24,6 +38,7 @@ export interface JourneyMonitorSimulationPanelProps {
   onSimulate: (kind: JourneyMonitorSimulationKind) => void;
   onSimulatedPoll: () => void;
   onClear: () => void;
+  liveAlternativeDiagnostics?: LiveAlternativeDiagnosticsState;
 }
 
 export default function JourneyMonitorSimulationPanel({
@@ -35,6 +50,7 @@ export default function JourneyMonitorSimulationPanel({
   onSimulate,
   onSimulatedPoll,
   onClear,
+  liveAlternativeDiagnostics,
 }: JourneyMonitorSimulationPanelProps) {
   const button = "rounded border border-amber-400 bg-white px-2 py-1 text-xs disabled:opacity-40";
   return (
@@ -63,6 +79,8 @@ export default function JourneyMonitorSimulationPanel({
       </p>
       <p>Pending: {pendingEventId ?? "—"}</p>
       <p>Utolsó trigger: {lastTrigger ? `${lastTrigger.type} (${lastTrigger.eventId})` : "—"}</p>
+      <p className="mt-1">Live Alternative: {formatLiveAlternativeDiagnosticRun(liveAlternativeDiagnostics?.latest ?? null)}</p>
+      <p>Utolsó keresés: {formatLiveAlternativeDiagnosticRun(liveAlternativeDiagnostics?.lastSearch ?? null)}</p>
       {notice && <p className="mt-1 font-medium">{notice}</p>}
     </div>
   );

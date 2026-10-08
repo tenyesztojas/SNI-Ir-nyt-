@@ -280,6 +280,13 @@ import {
   type JourneyMonitorSimulationKind,
 } from "@/lib/vedett-route/navigation/journeyMonitorSimulation";
 import JourneyMonitorSimulationPanel from "./JourneyMonitorSimulationPanel";
+import {
+  createInitialLiveAlternativeDiagnosticsState,
+  reportLiveAlternativeDiagnostic,
+  startLiveAlternativeDiagnosticRun,
+  type LiveAlternativeDiagnosticEvent,
+  type LiveAlternativeDiagnosticsState,
+} from "@/lib/vedett-route/navigation/liveAlternativeDiagnostics";
 import type { RealtimeLegUpdate } from "@/lib/vedett-route/realtimeRefresh/extractUpdates";
 import { recommendedExitText, selectStationGuidanceDisplay, stationExitGuidanceText, stationPreviewText } from "@/lib/vedett-route/stationInfrastructure/display";
 import SavedPlacesPanel from "@/components/vedett-utvonal/SavedPlacesPanel";
@@ -2310,7 +2317,25 @@ function RankedJourneyCard({
   // számára marad érvényben, lásd realtimeRefreshContext fent).
   // JOURNEY MONITOR v1 — a realtime-jelek debounce-állapota (csak memória, nem perzisztált).
   const realtimeMonitorDebounceRef = useRef<RealtimeMonitorDebounceState>(createInitialRealtimeMonitorDebounceState());
+  // ADMIN LIVE ALTERNATIVE DIAGNOSZTIKA — KIZÁRÓLAG journeyMonitorSimulationEnabled
+  // (szerveroldali admin route) mellett jelent; csak memóriában, döntést nem befolyásol.
+  const liveAlternativeDiagnosticRunRef = useRef(0);
+  const [liveAlternativeDiagnostics, setLiveAlternativeDiagnostics] = useState<LiveAlternativeDiagnosticsState>(
+    createInitialLiveAlternativeDiagnosticsState
+  );
   const maybeStartLiveAlternativeSearch = async (trigger: LiveAlternativeTrigger) => {
+    // ADMIN DIAGNOSZTIKA — normál felhasználónál (journeyMonitorSimulationEnabled=false)
+    // a reportDiagnostic no-op; a döntési lánc változatlan.
+    const diagnosticRunId = journeyMonitorSimulationEnabled ? ++liveAlternativeDiagnosticRunRef.current : null;
+    const reportDiagnostic = (event: LiveAlternativeDiagnosticEvent) => {
+      if (diagnosticRunId === null) return;
+      setLiveAlternativeDiagnostics((prev) => reportLiveAlternativeDiagnostic(prev, diagnosticRunId, event));
+    };
+    if (diagnosticRunId !== null) {
+      setLiveAlternativeDiagnostics((prev) =>
+        startLiveAlternativeDiagnosticRun(prev, { runId: diagnosticRunId, triggerType: trigger.type, eventId: trigger.eventId })
+      );
+    }
     const nowMs = Date.now();
     const decision = shouldStartLiveAlternativeSearch(liveAlternativeGuardRef.current, {
       navigationActive: navigationMode,
@@ -2322,6 +2347,9 @@ function RankedJourneyCard({
       trigger,
       nowMs,
     });
+    if (!decision.shouldSearch) reportDiagnostic({ stage: "GUARD_BLOCKED", reason: decision.reason ?? "UNKNOWN" });
+    else if (!currentPosition) reportDiagnostic({ stage: "GUARD_BLOCKED", reason: "NO_GPS_POSITION" });
+    else if (!originalDestination) reportDiagnostic({ stage: "GUARD_BLOCKED", reason: "DESTINATION_MISSING" });
     if (!decision.shouldSearch || !currentPosition || !originalDestination) return;
 
     // JOURNEY MONITOR v1 / 3. lépés — a kiinduló pontot a TÉNYLEGES fázis/
@@ -2342,6 +2370,8 @@ function RankedJourneyCard({
       destination: originalDestination,
       context: effectiveLiveRerouteContext,
     });
+    if (liveOrigin.kind === "SKIP") reportDiagnostic({ stage: "ORIGIN_SKIPPED", reason: liveOrigin.reason });
+    else if (!liveSearchPayload) reportDiagnostic({ stage: "ORIGIN_SKIPPED", reason: "PAYLOAD_UNAVAILABLE" });
     if (!liveSearchPayload || liveOrigin.kind === "SKIP") return;
     const liveSearchWeights = effectiveLiveRerouteContext.weights;
 
@@ -2349,6 +2379,8 @@ function RankedJourneyCard({
     liveAlternativeGuardRef.current = markLiveAlternativeSearchStarted(liveAlternativeGuardRef.current, trigger, nowMs);
     setLiveAlternativePreviewOpen(false);
     setLiveAlternativeOffer(startLiveAlternativeOfferSearch(trigger, sessionGeneration));
+    reportDiagnostic({ stage: "SEARCH_STARTED", originKind: liveOrigin.kind });
+    let diagnosticHttpStatus: number | undefined;
 
     try {
       const response = await fetch("/api/admin/vedett-utvonal/search", {
@@ -2358,11 +2390,21 @@ function RankedJourneyCard({
         // a jelöltek UGYANAZZAL a rangsorolással és szűréssel értékelődnek.
         body: JSON.stringify(liveSearchPayload),
       });
+      diagnosticHttpStatus = response.status;
       const data = (await response.json()) as OrchestratedSearchResult | { ok: false; reason?: string };
 
       if (rerouteSessionRef.current !== sessionGeneration) {
+        reportDiagnostic({ stage: "SEARCH_FAILED", reason: "SESSION_CHANGED", httpStatus: diagnosticHttpStatus });
         setLiveAlternativeOffer((offer) => discardLiveAlternativeSearch(offer, sessionGeneration));
         return;
+      }
+      if (!data.ok || !Array.isArray(data.journeys)) {
+        const apiReason = "reason" in data && typeof data.reason === "string" ? data.reason : null;
+        reportDiagnostic({ stage: "SEARCH_FAILED", reason: apiReason ?? (data.ok ? "INVALID_RESPONSE" : "API_ERROR"), httpStatus: diagnosticHttpStatus });
+      } else if (data.journeys.length === 0) {
+        reportDiagnostic({ stage: "CANDIDATE_REJECTED", reason: "EMPTY_RESULTS", candidateCount: 0 });
+      } else {
+        reportDiagnostic({ stage: "SEARCH_RESULTS", candidateCount: data.journeys.length });
       }
       if (!data.ok || !Array.isArray(data.journeys) || data.journeys.length === 0) return;
 
@@ -2387,6 +2429,7 @@ function RankedJourneyCard({
           switchingCostPoints: rerouteDecision.switchingCostPoints,
         });
         if (!rerouteDecision.shouldOffer || !rerouteDecision.best) {
+          reportDiagnostic({ stage: "CANDIDATE_REJECTED", reason: rerouteDecision.rejectedReason ?? "NO_COMMUNITY_IMPROVEMENT" });
           setLiveAlternativeOffer((offer) => discardLiveAlternativeSearch(offer, sessionGeneration));
           return;
         }
@@ -2403,9 +2446,11 @@ function RankedJourneyCard({
             sessionGeneration
           )
         );
+        reportDiagnostic({ stage: "OFFERED" });
         return;
       }
       const best = selectBestLiveAlternativeCandidate(candidates, currentFingerprint);
+      if (!best) reportDiagnostic({ stage: "CANDIDATE_REJECTED", reason: "NO_DISTINCT_CANDIDATE" });
       if (!best) return;
 
       // JOURNEY MONITOR v1 / 2. lépés (2026-10-07) — ETA-alapú összevetés:
@@ -2425,6 +2470,7 @@ function RankedJourneyCard({
         nowMs: liveOrigin.kind === "ALIGHTING" ? Math.max(Date.now(), liveOrigin.departAtMs) : Date.now(),
         triggerType: trigger.type,
       });
+      if (!etaDecision.offer) reportDiagnostic({ stage: "CANDIDATE_REJECTED", reason: etaDecision.rejectedReason ?? "ETA_NOT_OFFERED" });
       if (!etaDecision.offer) return;
       const rawTimeDifferenceMinutes = etaDecision.rawTimeDifferenceMinutes ?? 0;
       const netTimeBenefitMinutes = etaDecision.netTimeBenefitMinutes ?? 0;
@@ -2448,7 +2494,9 @@ function RankedJourneyCard({
           sessionGeneration
         )
       );
+      reportDiagnostic({ stage: "OFFERED" });
     } catch {
+      reportDiagnostic({ stage: "SEARCH_FAILED", reason: "NETWORK_OR_PARSE_ERROR", httpStatus: diagnosticHttpStatus });
       setLiveAlternativeOffer((offer) => discardLiveAlternativeSearch(offer, sessionGeneration));
     } finally {
       liveAlternativeGuardRef.current = markLiveAlternativeSearchFinished(liveAlternativeGuardRef.current);
@@ -3112,6 +3160,7 @@ function RankedJourneyCard({
                 onSimulate={handleJourneyMonitorSimulate}
                 onSimulatedPoll={handleJourneyMonitorSimulatedPoll}
                 onClear={handleJourneyMonitorSimulationClear}
+                liveAlternativeDiagnostics={liveAlternativeDiagnostics}
               />
             )}
 
