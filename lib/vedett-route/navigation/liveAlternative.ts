@@ -649,6 +649,20 @@ export function discardLiveAlternativeSearch(
   return createInitialLiveAlternativeOffer();
 }
 
+/**
+ * SEARCHING LEZÁRÁS (2026-10-08) — egy KONKRÉT keresés lezárása ajánlat nélkül
+ * (üres eredmény, nincs eltérő jelölt, ETA-elutasítás, API-hiba). Csak akkor
+ * állít vissza NONE-ra, ha az állapot még PONTOSAN ennek a keresésnek a
+ * SEARCHING objektuma (`searchOffer`, referencia-azonosság) — egy újabb keresés
+ * állapotát vagy egy már megjelenített ajánlatot SOHA nem töröl.
+ */
+export function discardLiveAlternativeSearchIfCurrent(
+  offer: LiveAlternativeOffer,
+  searchOffer: LiveAlternativeOffer
+): LiveAlternativeOffer {
+  return offer === searchOffer && offer.status === "SEARCHING" ? createInitialLiveAlternativeOffer() : offer;
+}
+
 /** "Maradok ezen" — displayedJourney/navigáció VÁLTOZATLAN, a hívó felelőssége a guard.declinedEvents frissítése. */
 export function declineLiveAlternativeOffer(offer: LiveAlternativeOffer): LiveAlternativeOffer {
   if (offer.status !== "OFFERED") return offer;

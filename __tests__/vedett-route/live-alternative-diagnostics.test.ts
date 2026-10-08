@@ -147,9 +147,10 @@ describe("bekötés és határok", () => {
     assert.match(maybeStart, /if \(diagnosticRunId === null\) return;/);
     assert.match(maybeStart, /if \(!decision\.shouldSearch \|\| !currentPosition \|\| !originalDestination\) return;/);
     assert.match(maybeStart, /if \(!liveSearchPayload \|\| liveOrigin\.kind === "SKIP"\) return;/);
-    assert.match(maybeStart, /if \(!data\.ok \|\| !Array\.isArray\(data\.journeys\) \|\| data\.journeys\.length === 0\) return;/);
-    assert.match(maybeStart, /if \(!best\) return;/);
-    assert.match(maybeStart, /if \(!etaDecision\.offer\) return;/);
+    // SEARCHING LEZÁRÁS (2026-10-08): ezek az ágak visszatérés előtt a saját keresést is lezárják.
+    assert.match(maybeStart, /if \(!data\.ok \|\| !Array\.isArray\(data\.journeys\) \|\| data\.journeys\.length === 0\) \{/);
+    assert.match(maybeStart, /if \(!best\) \{/);
+    assert.match(maybeStart, /if \(!etaDecision\.offer\) \{/);
     assert.doesNotMatch(maybeStart, /setTimeout|setInterval|retry/i, "nincs újrapróbálkozás");
   });
   test("11) publikus útvonalon nincs diagnosztikai panel", () => {

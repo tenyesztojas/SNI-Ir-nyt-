@@ -222,6 +222,7 @@ import {
   createInitialLiveAlternativeOffer,
   declineLiveAlternativeOffer,
   discardLiveAlternativeSearch,
+  discardLiveAlternativeSearchIfCurrent,
   evaluateRealtimeDegradation,
   markLiveAlternativeEventDeclined,
   markLiveAlternativeSearchFinished,
@@ -2433,7 +2434,11 @@ function RankedJourneyCard({
     liveAlternativeOfferRevisionRef.current = journeyRevision;
     liveAlternativeGuardRef.current = markLiveAlternativeSearchStarted(liveAlternativeGuardRef.current, trigger, nowMs);
     setLiveAlternativePreviewOpen(false);
-    setLiveAlternativeOffer(startLiveAlternativeOfferSearch(trigger, sessionGeneration));
+    // SEARCHING LEZÁRÁS — ennek a keresésnek a SAJÁT SEARCHING objektuma: a
+    // lezárás és az ajánlat csak akkor írhat, ha az állapot még ez (késői válasz
+    // nem írhat felül újabb keresést vagy már megjelenített ajánlatot).
+    const searchOffer = startLiveAlternativeOfferSearch(trigger, sessionGeneration);
+    setLiveAlternativeOffer(searchOffer);
     reportDiagnostic({ stage: "SEARCH_STARTED", originKind: liveOrigin.kind });
     let diagnosticHttpStatus: number | undefined;
 
@@ -2457,6 +2462,7 @@ function RankedJourneyCard({
       // útvonalhoz ez az eredmény már nem tartozik: SOHA nem lehet belőle ajánlat.
       if (!isJourneyRevisionCurrent(journeyRevision, journeyRevisionRef.current)) {
         reportDiagnostic({ stage: "SEARCH_FAILED", reason: "JOURNEY_REPLACED", httpStatus: diagnosticHttpStatus });
+        setLiveAlternativeOffer((offer) => discardLiveAlternativeSearchIfCurrent(offer, searchOffer));
         return;
       }
       if (!data.ok || !Array.isArray(data.journeys)) {
@@ -2467,7 +2473,10 @@ function RankedJourneyCard({
       } else {
         reportDiagnostic({ stage: "SEARCH_RESULTS", candidateCount: data.journeys.length });
       }
-      if (!data.ok || !Array.isArray(data.journeys) || data.journeys.length === 0) return;
+      if (!data.ok || !Array.isArray(data.journeys) || data.journeys.length === 0) {
+        setLiveAlternativeOffer((offer) => discardLiveAlternativeSearchIfCurrent(offer, searchOffer));
+        return;
+      }
 
       const candidates = data.journeys.map((ranked) => ranked.journey);
       const currentFingerprint = displayedJourney.fingerprint ?? computeJourneyFingerprint(displayedJourney);
@@ -2491,12 +2500,12 @@ function RankedJourneyCard({
         });
         if (!rerouteDecision.shouldOffer || !rerouteDecision.best) {
           reportDiagnostic({ stage: "CANDIDATE_REJECTED", reason: rerouteDecision.rejectedReason ?? "NO_COMMUNITY_IMPROVEMENT" });
-          setLiveAlternativeOffer((offer) => discardLiveAlternativeSearch(offer, sessionGeneration));
+          setLiveAlternativeOffer((offer) => discardLiveAlternativeSearchIfCurrent(offer, searchOffer));
           return;
         }
         const offeredJourney = rerouteDecision.best.journey;
         setLiveAlternativeOffer((offer) =>
-          presentLiveAlternativeOffer(
+          offer !== searchOffer ? offer : presentLiveAlternativeOffer(
             offer,
             offeredJourney,
             {
@@ -2512,7 +2521,10 @@ function RankedJourneyCard({
       }
       const best = selectBestLiveAlternativeCandidate(candidates, currentFingerprint);
       if (!best) reportDiagnostic({ stage: "CANDIDATE_REJECTED", reason: "NO_DISTINCT_CANDIDATE" });
-      if (!best) return;
+      if (!best) {
+        setLiveAlternativeOffer((offer) => discardLiveAlternativeSearchIfCurrent(offer, searchOffer));
+        return;
+      }
 
       // JOURNEY MONITOR v1 / 2. lépés (2026-10-07) — ETA-alapú összevetés:
       // A = a jelenlegi út hátralévő realtime ETA-ja (aktív lábtól), B = a
@@ -2532,7 +2544,10 @@ function RankedJourneyCard({
         triggerType: trigger.type,
       });
       if (!etaDecision.offer) reportDiagnostic({ stage: "CANDIDATE_REJECTED", reason: etaDecision.rejectedReason ?? "ETA_NOT_OFFERED" });
-      if (!etaDecision.offer) return;
+      if (!etaDecision.offer) {
+        setLiveAlternativeOffer((offer) => discardLiveAlternativeSearchIfCurrent(offer, searchOffer));
+        return;
+      }
       const rawTimeDifferenceMinutes = etaDecision.rawTimeDifferenceMinutes ?? 0;
       const netTimeBenefitMinutes = etaDecision.netTimeBenefitMinutes ?? 0;
       const structuralImprovement = etaDecision.structuralImprovement;
@@ -2548,7 +2563,7 @@ function RankedJourneyCard({
       if (structuralImprovement.lessWalking) bullets.push("Kevesebb gyaloglás");
 
       setLiveAlternativeOffer((offer) =>
-        presentLiveAlternativeOffer(
+        offer !== searchOffer ? offer : presentLiveAlternativeOffer(
           offer,
           best,
           { netTimeBenefitMinutes, reason: gate.reason, bullets: bullets.slice(0, 3) },
@@ -2558,7 +2573,7 @@ function RankedJourneyCard({
       reportDiagnostic({ stage: "OFFERED" });
     } catch {
       reportDiagnostic({ stage: "SEARCH_FAILED", reason: "NETWORK_OR_PARSE_ERROR", httpStatus: diagnosticHttpStatus });
-      setLiveAlternativeOffer((offer) => discardLiveAlternativeSearch(offer, sessionGeneration));
+      setLiveAlternativeOffer((offer) => discardLiveAlternativeSearchIfCurrent(offer, searchOffer));
     } finally {
       liveAlternativeGuardRef.current = markLiveAlternativeSearchFinished(liveAlternativeGuardRef.current);
     }
