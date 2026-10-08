@@ -39,6 +39,8 @@ export interface JourneyMonitorSimulationPanelProps {
   onSimulatedPoll: () => void;
   onClear: () => void;
   liveAlternativeDiagnostics?: LiveAlternativeDiagnosticsState;
+  /** Az ajánlat AKTUÁLIS állapota (NONE/SEARCHING/OFFERED/…) — a diagnosztika csak előzmény. */
+  currentOfferStatus?: string;
 }
 
 export default function JourneyMonitorSimulationPanel({
@@ -51,6 +53,7 @@ export default function JourneyMonitorSimulationPanel({
   onSimulatedPoll,
   onClear,
   liveAlternativeDiagnostics,
+  currentOfferStatus,
 }: JourneyMonitorSimulationPanelProps) {
   const button = "rounded border border-amber-400 bg-white px-2 py-1 text-xs disabled:opacity-40";
   return (
@@ -79,7 +82,10 @@ export default function JourneyMonitorSimulationPanel({
       </p>
       <p>Pending: {pendingEventId ?? "—"}</p>
       <p>Utolsó trigger: {lastTrigger ? `${lastTrigger.type} (${lastTrigger.eventId})` : "—"}</p>
-      <p className="mt-1">Live Alternative: {formatLiveAlternativeDiagnosticRun(liveAlternativeDiagnostics?.latest ?? null)}</p>
+      {/* A diagnosztikai sorok az utolsó KERESÉSI folyamat előzményei (elfogadás/elutasítás
+          nem írja őket) — az aktuális ajánlat-állapot külön sorban. */}
+      <p className="mt-1">Ajánlat most: {currentOfferStatus ?? "—"}</p>
+      <p>Utolsó LA-folyamat (előzmény): {formatLiveAlternativeDiagnosticRun(liveAlternativeDiagnostics?.latest ?? null)}</p>
       <p>Utolsó keresés: {formatLiveAlternativeDiagnosticRun(liveAlternativeDiagnostics?.lastSearch ?? null)}</p>
       {notice && <p className="mt-1 font-medium">{notice}</p>}
     </div>

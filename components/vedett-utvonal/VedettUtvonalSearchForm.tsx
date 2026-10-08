@@ -3182,7 +3182,13 @@ function RankedJourneyCard({
                 )}
                 <div className="text-[11px] font-medium uppercase tracking-wide text-gray-500">Várható érkezés</div>
                 <div className="text-2xl font-bold tabular-nums text-sni-text">{navigationEta}</div>
-                <div className="text-[10px] text-gray-500">GPS-alapú útvonalhaladás becslése</div>
+                <div className="text-[10px] text-gray-500">
+                  {navigationEtaResult.basis === "TRANSIT_SCHEDULE"
+                    ? "Menetrend és valós idejű járatadatok alapján"
+                    : navigationEtaResult.basis === "JOURNEY_ARRIVAL"
+                      ? "Az útiterv tervezett érkezése"
+                      : "GPS-alapú útvonalhaladás becslése"}
+                </div>
               </div>
             )}
 
@@ -3228,7 +3234,9 @@ function RankedJourneyCard({
               <div
                 role="status"
                 aria-live="polite"
-                className="absolute left-1/2 top-[4.25rem] z-20 w-[calc(100%-1.5rem)] max-w-sm -translate-x-1/2 rounded-xl border border-amber-300 bg-amber-50/95 px-4 py-3 text-center shadow-lg backdrop-blur"
+                data-testid="transit-gps-loss-card"
+                className="absolute left-1/2 z-30 w-[calc(100%-1.5rem)] max-w-sm -translate-x-1/2 overflow-y-auto overscroll-contain rounded-xl border border-amber-300 bg-amber-50/95 px-4 py-3 text-center shadow-lg backdrop-blur"
+                style={liveAlternativeCardLayout}
               >
                 <div className="text-sm font-bold text-amber-950">
                   {transitOnboardQuestionText(transitGpsLossConfirmation.scope).primary}
@@ -3269,6 +3277,7 @@ function RankedJourneyCard({
                 onSimulatedPoll={handleJourneyMonitorSimulatedPoll}
                 onClear={handleJourneyMonitorSimulationClear}
                 liveAlternativeDiagnostics={liveAlternativeDiagnostics}
+                currentOfferStatus={liveAlternativeOffer.status}
               />
             )}
 
@@ -3397,7 +3406,9 @@ function RankedJourneyCard({
               <div
                 role="status"
                 aria-live="polite"
-                className="absolute left-1/2 top-[4.25rem] z-20 w-[calc(100%-1.5rem)] max-w-sm -translate-x-1/2 rounded-xl border border-emerald-300 bg-emerald-50/95 px-4 py-3 shadow-lg backdrop-blur"
+                data-testid="earlier-departure-card"
+                className="absolute left-1/2 z-30 w-[calc(100%-1.5rem)] max-w-sm -translate-x-1/2 overflow-y-auto overscroll-contain rounded-xl border border-emerald-300 bg-emerald-50/95 px-4 py-3 shadow-lg backdrop-blur"
+                style={liveAlternativeCardLayout}
               >
                 <div className="text-sm font-bold text-emerald-950">Korábbi járat elérhető</div>
                 <div className="mt-1 text-xs leading-snug text-emerald-900">{earlierDepartureOffer.candidate.routeLabel}</div>

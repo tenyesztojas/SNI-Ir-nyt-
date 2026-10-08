@@ -69,6 +69,8 @@ describe("bekötés (forrásszint)", () => {
   });
   test("a többi felső kártya és a navigációs gombsor pozíciója nem változott", () => {
     assert.match(form, /ref=\{topActionBarRef\} className="absolute left-2 right-2 top-2 z-10 flex flex-wrap items-center gap-2"/);
-    assert.equal((form.match(/top-\[4\.25rem\] z-20/g) ?? []).length, 3, "OFF_ROUTE, GPS-vesztés, korábbi járat — érintetlen");
+    // 2026-10-08: a GPS-vesztés és a korábbi járat kártya is a mért elrendezést kapta;
+    // csak a (pointer-events-none) OFF_ROUTE sáv maradt fix pozíción — alatta az instrukció 11rem-re csúszik.
+    assert.equal((form.match(/top-\[4\.25rem\] z-20/g) ?? []).length, 1, "OFF_ROUTE sáv");
   });
 });
