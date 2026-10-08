@@ -282,6 +282,7 @@ import {
 } from "@/lib/vedett-route/navigation/journeyMonitorSimulation";
 import JourneyMonitorSimulationPanel from "./JourneyMonitorSimulationPanel";
 import { computeStackedOverlayLayout } from "./overlayStacking";
+import { buildLiveAlternativeOfferDetails, LONGER_WALKING_NOTICE } from "./liveAlternativeOfferDetails";
 import {
   INITIAL_JOURNEY_REVISION,
   isJourneyRevisionCurrent,
@@ -2007,6 +2008,17 @@ function RankedJourneyCard({
       window.removeEventListener("resize", update);
     };
   }, [navigationInstructionCardVisible, topActionBarBottomPx, routeProgress.offRouteStatus]);
+  // LIVE ALTERNATIVE AJÁNLAT-RÉSZLETEK — csak megjelenítés, meglévő valós adatokból.
+  const liveAlternativeOfferDetails =
+    liveAlternativeOffer.status === "OFFERED" && liveAlternativeOffer.candidateJourney
+      ? buildLiveAlternativeOfferDetails({
+          triggerType: liveAlternativeOffer.trigger?.type,
+          candidate: liveAlternativeOffer.candidateJourney,
+          current: displayedJourney,
+          currentActiveLegIndex: activeLegIndex ?? null,
+          nowMs: Date.now(),
+        })
+      : null;
   const liveAlternativeCardLayout = computeStackedOverlayLayout({
     anchorBottomPx: navigationInstructionCardVisible ? navigationInstructionCardBottomPx : null,
     topActionBarBottomPx,
@@ -3268,7 +3280,12 @@ function RankedJourneyCard({
                     <div className="text-xs text-sky-900">Találtunk egy várhatóan nyugodtabb alternatívát.</div>
                   </>
                 ) : (
-                  <div className="text-sm font-bold text-sky-950">Találtunk egy kedvezőbb lehetőséget.</div>
+                  <>
+                    <div className="text-sm font-bold text-sky-950">Találtunk egy kedvezőbb lehetőséget.</div>
+                    {liveAlternativeOfferDetails?.reasonLabel && (
+                      <div className="text-xs text-sky-900">{liveAlternativeOfferDetails.reasonLabel}</div>
+                    )}
+                  </>
                 )}
                 {liveAlternativeOffer.comparisonSummary && liveAlternativeOffer.comparisonSummary.bullets.length > 0 && (
                   <ul className="mt-1 list-disc pl-4 text-xs leading-snug text-sky-900">
@@ -3305,17 +3322,36 @@ function RankedJourneyCard({
                 style={liveAlternativeCardLayout}
               >
                 <div className="text-sm font-bold text-sky-950">Alternatív útvonal előnézete</div>
+                {liveAlternativeOfferDetails?.reasonLabel && (
+                  <div className="mt-0.5 text-xs leading-snug text-sky-900">{liveAlternativeOfferDetails.reasonLabel}</div>
+                )}
+                {liveAlternativeOfferDetails?.arrivalLabel && (
+                  <div className="mt-1 text-sm font-semibold text-sky-950">Várható érkezés: {liveAlternativeOfferDetails.arrivalLabel}</div>
+                )}
                 <div className="mt-1 text-xs leading-snug text-sky-900">
-                  {Math.round(liveAlternativeOffer.candidateJourney.totalDurationMinutes)} perc ·{" "}
-                  {liveAlternativeOffer.candidateJourney.transfers} átszállás ·{" "}
-                  {Math.round(liveAlternativeOffer.candidateJourney.walkingMinutes)} perc gyaloglás
+                  {[
+                    liveAlternativeOfferDetails?.durationMinutes != null ? `Menetidő: ${liveAlternativeOfferDetails.durationMinutes} perc` : null,
+                    liveAlternativeOfferDetails?.transfers != null ? `${liveAlternativeOfferDetails.transfers} átszállás` : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
                 </div>
-                {liveAlternativeOffer.trigger?.type === "COMMUNITY_DETERIORATION" && (
-                  <div className="mt-0.5 text-xs leading-snug text-sky-900">
-                    Várható érkezés:{" "}
-                    {new Date(liveAlternativeOffer.candidateJourney.arrivalTime).toLocaleTimeString("hu-HU", { hour: "2-digit", minute: "2-digit" })}
-                    {liveAlternativeOffer.comparisonSummary?.bullets[0] ? ` · ${liveAlternativeOffer.comparisonSummary.bullets[0]}` : ""}
+                {liveAlternativeOfferDetails?.walkingMinutes != null && (
+                  <div className="mt-0.5 text-xs font-semibold leading-snug text-sky-950">
+                    Gyaloglás: kb. {liveAlternativeOfferDetails.walkingMinutes} perc
+                    {liveAlternativeOfferDetails.extraWalkingMinutes != null && liveAlternativeOfferDetails.extraWalkingMinutes !== 0
+                      ? ` (${liveAlternativeOfferDetails.extraWalkingMinutes > 0 ? "+" : "−"}${Math.abs(liveAlternativeOfferDetails.extraWalkingMinutes)} perc az eredetihez képest)`
+                      : ""}
                   </div>
+                )}
+                {liveAlternativeOfferDetails?.showLongerWalkingNotice && (
+                  <div className="mt-0.5 text-xs leading-snug text-sky-900">{LONGER_WALKING_NOTICE}</div>
+                )}
+                {liveAlternativeOfferDetails?.arrivalDifferenceLabel && (
+                  <div className="mt-0.5 text-xs leading-snug text-sky-900">{liveAlternativeOfferDetails.arrivalDifferenceLabel}</div>
+                )}
+                {liveAlternativeOffer.trigger?.type === "COMMUNITY_DETERIORATION" && liveAlternativeOffer.comparisonSummary?.bullets[0] && (
+                  <div className="mt-0.5 text-xs leading-snug text-sky-900">{liveAlternativeOffer.comparisonSummary.bullets[0]}</div>
                 )}
                 <div className="mt-2 flex gap-2">
                   <button
