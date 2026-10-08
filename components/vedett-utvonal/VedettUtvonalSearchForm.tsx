@@ -282,6 +282,7 @@ import {
 } from "@/lib/vedett-route/navigation/journeyMonitorSimulation";
 import JourneyMonitorSimulationPanel from "./JourneyMonitorSimulationPanel";
 import { computeStackedOverlayLayout } from "./overlayStacking";
+import { computeNavigationEta } from "@/lib/vedett-route/navigation/navigationEta";
 import { buildLiveAlternativeOfferDetails, LONGER_WALKING_NOTICE } from "./liveAlternativeOfferDetails";
 import {
   INITIAL_JOURNEY_REVISION,
@@ -1569,14 +1570,11 @@ function RankedJourneyCard({
   // Ez NEM forgalmi/realtime újratervezés: nincs GPS-tickenként hálózati kérés.
   // Amíg nincs használható GPS+route progress, visszaesünk a routing engine
   // eredeti arrivalTime értékére.
-  const navigationEta = routeProgress.estimatedArrivalTimeMs !== null
-    ? formatClockTime(new Date(routeProgress.estimatedArrivalTimeMs).toISOString())
-    : formatClockTime(displayedJourney.arrivalTime);
+  // NAVIGÁCIÓS ETA — MENETRENDI KORLÁT (2026-10-08): az ETA és a hátralévő perc
+  // lentebb (az activeLegIndex után) a computeNavigationEta()-ból jön; lásd
+  // lib/vedett-route/navigation/navigationEta.ts.
   const navigationRemainingDistance = routeProgress.routeDistanceMeters > 0
     ? routeProgress.remainingDistanceMeters
-    : null;
-  const navigationRemainingMinutes = routeProgress.remainingDurationSeconds !== null
-    ? Math.max(0, Math.ceil(routeProgress.remainingDurationSeconds / 60))
     : null;
 
   // NAVIGATION INSTRUCTIONS SPRINT 1 (2026-09-16) — a MEGLÉVŐ
@@ -1665,6 +1663,21 @@ function RankedJourneyCard({
   // byte-ra a geometriai értékkel egyezik; KIZÁRÓLAG BOARDED állapotban vált
   // a következő TRANSIT legre.
   const activeLegIndex = walkToTransitBoundary.resolvedLegIndex ?? geometryActiveLegIndex;
+  // NAVIGÁCIÓS ETA — MENETRENDI KORLÁT (2026-10-08): közösségi közlekedést
+  // tartalmazó hátralévő útnál az ETA nem lehet korábbi a hátralévő járatok
+  // (realtime-korrigált) érkezésénél; tisztán gyalogos útnál a GPS-becslés
+  // változatlan. A hátralévő perc ugyanebből az érkezésből számolódik.
+  const navigationEtaResult = computeNavigationEta({
+    journey: displayedJourney,
+    activeLegIndex: activeLegIndex ?? null,
+    gpsEstimatedArrivalMs: routeProgress.estimatedArrivalTimeMs,
+    gpsRemainingDurationSeconds: routeProgress.remainingDurationSeconds,
+    nowMs: Date.now(),
+  });
+  const navigationEta = navigationEtaResult.arrivalMs !== null
+    ? formatClockTime(new Date(navigationEtaResult.arrivalMs).toISOString())
+    : null;
+  const navigationRemainingMinutes = navigationEtaResult.remainingMinutes;
   // REALTIME COMMUNITY INTELLIGENCE (2026-10-06) — aggregált közösségi állapot
   // az aktuális trip/szakaszra; csak megerősített, magas confidence-ű
   // állapotból lesz diszkrét figyelmeztetés (lásd navigationWarning.ts).
