@@ -107,7 +107,7 @@ beforeEach(() => clearNavigationSession());
 
 describe("1) érvényes munkamenet felismerése új keresés nélkül", () => {
   test("a főkomponens mountkor betölti és értékeli a mentett sessiont (nincs fingerprint-egyezés feltétel, nincs keresés)", () => {
-    const m = formSrc.match(/useEffect\(\(\) => \{\s*\n\s*const nowMs = Date\.now\(\);\s*\n\s*const persisted = loadNavigationSession\(nowMs\);[\s\S]*?\}, \[\]\);/);
+    const m = formSrc.match(/useEffect\(\(\) => \{\s*\n\s*if \(!navigationResumeEnabled\) return;\s*\n\s*const nowMs = Date\.now\(\);\s*\n\s*const persisted = loadNavigationSession\(nowMs\);[\s\S]*?\}, \[\]\);/);
     assert.ok(m, "resume-offer mount effekt");
     assert.match(m[0], /setNavigationResumeOffer\(\{ session: persisted, assessment: assessNavigationResume\(persisted, nowMs\) \}\)/);
     assert.doesNotMatch(m[0], /fetch\(|fingerprint|setNavigationMode|handleSubmit/);

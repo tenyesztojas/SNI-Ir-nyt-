@@ -221,7 +221,7 @@ import {
   saveBackgroundNavigationNoticeAcknowledged,
   shouldShowBackgroundNavigationNotice,
 } from "@/lib/vedett-route/navigation/backgroundNavigationNotice";
-import { detectSpeechSynthesisSupport } from "@/lib/vedett-route/navigation/speechSupport";
+import { SPEECH_NO_HUNGARIAN_VOICE_MESSAGE, detectSpeechSynthesisSupport } from "@/lib/vedett-route/navigation/speechSupport";
 // LIVE ALTERNATIVE — SPRINT 8.4 (8.4A pure engine, 8.4B runtime wiring,
 // 2026-09-18). "STAY ON CURRENT ROUTE" az alap — ez a bekötés SOHA nem vált
 // automatikusan journey-t, kizárólag OFFERED állapotban ajánl fel egy
@@ -2172,7 +2172,7 @@ function RankedJourneyCard({
     const timer = setTimeout(() => setBackgroundNoticeVisible(false), BACKGROUND_NAVIGATION_NOTICE_AUTO_HIDE_MS);
     return () => clearTimeout(timer);
   }, [backgroundNoticeVisible, navigationInstructionCardVisible]);
-  useNavigationSpeech({
+  const navigationSpeechStatus = useNavigationSpeech({
     enabled: navigationSpeechPreference && navigationMode,
     announcement: navigationSpeechAnnouncement,
     // Elfogadott reroute -> ÚJ navigációs kontextus (lásd
@@ -3651,6 +3651,20 @@ function RankedJourneyCard({
                     Hangos navigáció ezen az eszközön nem érhető el.
                   </p>
                 )}
+                {/* 2026-10-09: magyar hang hiánya / beszédindítási hiba — a
+                    kapcsoló bekapcsolt állapotában, rövid, nem blokkoló sor. */}
+                {speechSynthesisSupported === true &&
+                  navigationSpeechPreference &&
+                  navigationSpeechStatus.voiceAvailability === "NO_HUNGARIAN" && (
+                    <p className="mt-1 text-[11px] text-gray-600" data-testid="navigation-speech-no-hungarian">
+                      {SPEECH_NO_HUNGARIAN_VOICE_MESSAGE}
+                    </p>
+                  )}
+                {speechSynthesisSupported === true && navigationSpeechPreference && navigationSpeechStatus.lastErrorMessage && (
+                  <p className="mt-1 text-[11px] font-medium text-red-700" data-testid="navigation-speech-error">
+                    {navigationSpeechStatus.lastErrorMessage}
+                  </p>
+                )}
                 {backgroundNoticeVisible && (
                   <div
                     className="mt-2 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-left text-xs leading-snug text-amber-900"
@@ -4088,8 +4102,15 @@ export default function VedettUtvonalSearchForm({
   initialFavoritePreset = null,
   isAuthenticated = true,
   journeyMonitorSimulationEnabled = false,
+  navigationResumeEnabled = false,
 }: {
   disabled: boolean;
+  // NAVIGATION RESUME (2026-10-09 utóellenőrzés) — a "Folytatod a korábbi
+  // navigációt?" kérdés KIZÁRÓLAG a felhasználói felületen (VedettUtvonal-
+  // Workspace) engedélyezett. Alapból false: az admin oldal (és bármely más
+  // hívó) mountja nem olvassa, nem törli és nem módosítja a mentett
+  // felhasználói navigációt.
+  navigationResumeEnabled?: boolean;
   // JOURNEY MONITOR ADMIN SZIMULÁTOR — kizárólag az /admin/vedett-utvonal
   // (szerveroldali admin-gate mögötti) oldal adja át true-val.
   journeyMonitorSimulationEnabled?: boolean;
@@ -4270,6 +4291,7 @@ export default function VedettUtvonalSearchForm({
   const [resumedNavigationSession, setResumedNavigationSession] = useState<PersistedNavigationSession | null>(null);
   const [resumedNavigationOpen, setResumedNavigationOpen] = useState(true);
   useEffect(() => {
+    if (!navigationResumeEnabled) return;
     const nowMs = Date.now();
     const persisted = loadNavigationSession(nowMs);
     if (!persisted) return;

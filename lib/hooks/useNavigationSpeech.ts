@@ -15,7 +15,14 @@
 
 import { useEffect, useRef, useState } from "react";
 import { normalizeHungarianTransitSpeech } from "@/lib/vedett-route/navigation/hungarianSpeechNormalizer";
-import { detectSpeechSynthesisSupport } from "@/lib/vedett-route/navigation/speechSupport";
+import {
+  SPEECH_VOICES_SETTLE_TIMEOUT_MS,
+  describeSpeechSynthesisError,
+  detectSpeechSynthesisSupport,
+  resolveSpeechVoiceAvailability,
+  selectHungarianVoice,
+  type SpeechVoiceAvailability,
+} from "@/lib/vedett-route/navigation/speechSupport";
 import {
   INITIAL_SPEECH_ANNOUNCER_STATE,
   invalidateSpeechAnnouncerState,
@@ -29,6 +36,9 @@ const SPEECH_PREFERENCE_STORAGE_KEY = "vedett-route:navigation-speech-enabled:v1
 type SpeechSynthesisLike = {
   cancel: () => void;
   speak: (utterance: SpeechSynthesisUtterance) => void;
+  getVoices?: () => SpeechSynthesisVoice[];
+  addEventListener?: (type: "voiceschanged", listener: () => void) => void;
+  removeEventListener?: (type: "voiceschanged", listener: () => void) => void;
 };
 
 function getSpeechSynthesis(): SpeechSynthesisLike | null {
@@ -103,12 +113,50 @@ export interface UseNavigationSpeechOptions {
 
 export interface UseNavigationSpeechResult {
   supported: boolean;
+  // 2026-10-09: magyar hang elérhetősége (UNKNOWN, amíg a hanglista tölt) és
+  // az utolsó beszédindítási hiba felhasználói üzenete (null = nincs hiba).
+  voiceAvailability: SpeechVoiceAvailability;
+  lastErrorMessage: string | null;
+}
+
+/** A hanglista aszinkron betöltésének követése (getVoices + voiceschanged + settle-timeout). */
+function useSpeechVoices(): { voices: SpeechSynthesisVoice[]; settled: boolean } {
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [settled, setSettled] = useState(false);
+  useEffect(() => {
+    const synth = getSpeechSynthesis();
+    if (!synth || typeof synth.getVoices !== "function") {
+      setSettled(true);
+      return;
+    }
+    const read = () => {
+      try {
+        const list = synth.getVoices?.() ?? [];
+        setVoices(list);
+        if (list.length > 0) setSettled(true);
+      } catch {
+        setSettled(true);
+      }
+    };
+    read();
+    synth.addEventListener?.("voiceschanged", read);
+    const timer = setTimeout(() => setSettled(true), SPEECH_VOICES_SETTLE_TIMEOUT_MS);
+    return () => {
+      clearTimeout(timer);
+      synth.removeEventListener?.("voiceschanged", read);
+    };
+  }, []);
+  return { voices, settled };
 }
 
 export function useNavigationSpeech({ enabled, announcement, resetKey }: UseNavigationSpeechOptions): UseNavigationSpeechResult {
   const stateRef = useRef<SpeechAnnouncerState>(INITIAL_SPEECH_ANNOUNCER_STATE);
   const lastResetKeyRef = useRef<string | number | undefined>(resetKey);
   const supported = isNavigationSpeechSupported();
+  const { voices, settled: voicesSettled } = useSpeechVoices();
+  const voicesRef = useRef<SpeechSynthesisVoice[]>(voices);
+  voicesRef.current = voices;
+  const [lastErrorMessage, setLastErrorMessage] = useState<string | null>(null);
 
   // REROUTE / ÚJ JOURNEY (spec "N" pont) — a régi, esetleg még beszélő
   // instrukciót azonnal megszakítjuk, és a dedupe-identitást eldobjuk, hogy
@@ -129,6 +177,7 @@ export function useNavigationSpeech({ enabled, announcement, resetKey }: UseNavi
   // speechAnnouncer.ts INITIAL_SPEECH_ANNOUNCER_STATE kommentje).
   useEffect(() => {
     if (enabled) return;
+    setLastErrorMessage(null);
     stateRef.current = INITIAL_SPEECH_ANNOUNCER_STATE;
     const synth = getSpeechSynthesis();
     synth?.cancel();
@@ -151,7 +200,21 @@ export function useNavigationSpeech({ enabled, announcement, resetKey }: UseNavi
     // Rögzített magyar nyelv — SOSE hardcode-olt voice név (a böngésző saját
     // alapértelmezett hu-HU hangját választja, ha van neki).
     utterance.lang = "hu-HU";
-    synth.speak(utterance);
+    // 2026-10-09: ha a (már betöltött) hanglistában van magyar hang, azt
+    // explicit kiválasztjuk; ha nincs, a lang="hu-HU" marad (változatlan
+    // viselkedés), a felület pedig jelzi, hogy a magyar hang nem garantált.
+    const hungarianVoice = selectHungarianVoice(voicesRef.current);
+    if (hungarianVoice) utterance.voice = hungarianVoice;
+    utterance.onstart = () => setLastErrorMessage(null);
+    utterance.onerror = (event: SpeechSynthesisErrorEvent) => {
+      const message = describeSpeechSynthesisError(event?.error);
+      if (message) setLastErrorMessage(message);
+    };
+    try {
+      synth.speak(utterance);
+    } catch {
+      setLastErrorMessage(describeSpeechSynthesisError("synthesis-failed"));
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, announcement?.key, announcement?.text]);
 
@@ -162,5 +225,9 @@ export function useNavigationSpeech({ enabled, announcement, resetKey }: UseNavi
     };
   }, []);
 
-  return { supported };
+  return {
+    supported,
+    voiceAvailability: resolveSpeechVoiceAvailability(voices, voicesSettled),
+    lastErrorMessage,
+  };
 }

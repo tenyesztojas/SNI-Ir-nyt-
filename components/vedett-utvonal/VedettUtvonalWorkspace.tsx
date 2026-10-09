@@ -279,6 +279,7 @@ export default function VedettUtvonalWorkspace({
             initialDestination={selectedPreset ? null : initialDestination}
             initialFavoritePreset={selectedPreset?.preset ?? null}
             isAuthenticated={isAuthenticated}
+            navigationResumeEnabled
           />
         </>
       )}
