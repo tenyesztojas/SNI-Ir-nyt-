@@ -15,6 +15,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { normalizeHungarianTransitSpeech } from "@/lib/vedett-route/navigation/hungarianSpeechNormalizer";
+import { detectSpeechSynthesisSupport } from "@/lib/vedett-route/navigation/speechSupport";
 import {
   INITIAL_SPEECH_ANNOUNCER_STATE,
   invalidateSpeechAnnouncerState,
@@ -32,7 +33,8 @@ type SpeechSynthesisLike = {
 
 function getSpeechSynthesis(): SpeechSynthesisLike | null {
   if (typeof window === "undefined") return null;
-  if (!("speechSynthesis" in window) || typeof window.SpeechSynthesisUtterance !== "function") return null;
+  // 2026-10-09: tényleges támogatás (objektum + speak/cancel + Utterance), lásd speechSupport.ts.
+  if (!detectSpeechSynthesisSupport(window as unknown as Record<string, unknown>)) return null;
   return window.speechSynthesis;
 }
 

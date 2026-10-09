@@ -184,9 +184,18 @@ export function loadNavigationSession(nowMs: number): PersistedNavigationSession
   }
 
   // Opcionális mező: hiány/érvénytelen tartalom -> elhagyjuk, a session marad.
-  const { liveRerouteContext: rawContext, ...rest } = parsed;
-  const liveRerouteContext = parseLiveRerouteSearchContext(rawContext);
-  return liveRerouteContext ? { ...rest, liveRerouteContext } : rest;
+  // NAVIGATION RESUME (2026-10-09): KIZÁRÓLAG az ismert mezőket adjuk vissza
+  // (whitelist) — egy storage-ban esetleg ott maradt idegen mező (pl. régi
+  // Live Alternative ajánlat, szimulációs állapot) SOHA nem jut vissza.
+  const liveRerouteContext = parseLiveRerouteSearchContext(parsed.liveRerouteContext);
+  const base: PersistedNavigationSession = {
+    schemaVersion: parsed.schemaVersion,
+    savedAt: parsed.savedAt,
+    navigationActive: true,
+    destination: parsed.destination,
+    displayedJourney: parsed.displayedJourney,
+  };
+  return liveRerouteContext ? { ...base, liveRerouteContext } : base;
 }
 
 export function clearNavigationSession(): void {

@@ -69,7 +69,9 @@ describe("I) Explicit Navigation Mode — SOHA nem automatikus", () => {
   });
 
   test("a mount-effekt (persisted session restore-kísérlet) ÖNMAGA nem hív setNavigationMode(true)-t — kizárólag validál, és csak érvényes egyezés esetén hívja a restorePersistedNavigation() helpert", () => {
-    const mountEffectMatch = formSrc.match(/useEffect\(\(\) => \{\s*\n\s*const persisted = loadNavigationSession\(Date\.now\(\)\);[\s\S]*?\n {2}\}, \[\]\);/);
+    // 2026-10-09 (NAVIGATION RESUME): a mount-effekt elején kifejezett
+    // jóváhagyás-guard áll (resumeApproved), utána a változatlan validálás.
+    const mountEffectMatch = formSrc.match(/useEffect\(\(\) => \{[^}]*?if \(!resumeApproved\) return;\s*\n\s*const persisted = loadNavigationSession\(Date\.now\(\)\);[\s\S]*?\n {2}\}, \[\]\);/);
     assert.ok(mountEffectMatch, "meg kell találni a persisted-session restore mount-effektet");
     assert.doesNotMatch(mountEffectMatch[0], /setNavigationMode\(true\)/);
     assert.match(mountEffectMatch[0], /restorePersistedNavigation\(persisted\);/);

@@ -207,6 +207,21 @@ import {
   serializeNavigationSession,
   type PersistedNavigationSession,
 } from "@/lib/vedett-route/navigation/navigationSessionPersistence";
+// NAVIGATION RESUME (2026-10-09) — alkalmazás-újraindítás utáni, KIFEJEZETT
+// jóváhagyáshoz kötött folytatás (pure értékelés, nem új állapotgép).
+import {
+  assessNavigationResume,
+  describeNavigationResume,
+  type NavigationResumeAssessment,
+} from "@/lib/vedett-route/navigation/navigationResume";
+import {
+  BACKGROUND_NAVIGATION_NOTICE_AUTO_HIDE_MS,
+  BACKGROUND_NAVIGATION_NOTICE_TEXT,
+  loadBackgroundNavigationNoticeAcknowledged,
+  saveBackgroundNavigationNoticeAcknowledged,
+  shouldShowBackgroundNavigationNotice,
+} from "@/lib/vedett-route/navigation/backgroundNavigationNotice";
+import { detectSpeechSynthesisSupport } from "@/lib/vedett-route/navigation/speechSupport";
 // LIVE ALTERNATIVE — SPRINT 8.4 (8.4A pure engine, 8.4B runtime wiring,
 // 2026-09-18). "STAY ON CURRENT ROUTE" az alap — ez a bekötés SOHA nem vált
 // automatikusan journey-t, kizárólag OFFERED állapotban ajánl fel egy
@@ -787,6 +802,7 @@ function RankedJourneyCard({
   weights,
   liveRerouteContext = null,
   journeyMonitorSimulationEnabled = false,
+  resumeApproved = false,
 }: {
   ranked: RankedJourney;
   isOpen: boolean;
@@ -814,6 +830,10 @@ function RankedJourneyCard({
   // ellenőrzi a profiles.role === "admin"-t). Alapból false: a szimulációs
   // panel nem renderelődik és az overlay nem fut.
   journeyMonitorSimulationEnabled?: boolean;
+  // NAVIGATION RESUME (2026-10-09) — true KIZÁRÓLAG a szülő "Folytatod a
+  // korábbi navigációt?" kérdésére adott kifejezett "Folytatom" válasz után
+  // renderelt kártyán. Enélkül a mentett session SOHA nem áll vissza.
+  resumeApproved?: boolean;
 }) {
   const journey = ranked.journey;
   const sensory = journey.sensory;
@@ -1052,6 +1072,11 @@ function RankedJourneyCard({
   // egyezés esetén adja át a döntést az explicit restorePersistedNavigation()
   // helpernek.
   useEffect(() => {
+    // NAVIGATION RESUME (2026-10-09): a visszaállítás KIZÁRÓLAG kifejezett
+    // felhasználói jóváhagyás után fut (a korábbi, keresés-találaton alapuló
+    // csendes visszaállítás megszűnt). A storage-ot itt ÚJRA olvassuk és
+    // validáljuk (TTL), nem a szülőtől kapott példányban bízunk.
+    if (!resumeApproved) return;
     const persisted = loadNavigationSession(Date.now());
     if (!persisted) return;
     if (!persisted.displayedJourney.fingerprint || !journey.fingerprint) return;
@@ -2111,6 +2136,42 @@ function RankedJourneyCard({
     [navigationInstructionForDisplay, speechSubState]
   );
   const [navigationSpeechPreference, setNavigationSpeechPreference] = useNavigationSpeechPreference();
+  // HANGOS NAVIGÁCIÓ — tényleges támogatás (2026-10-09). Mount után
+  // detektálunk (SSR/hydration-safe): null = még ismeretlen (semmi nem
+  // jelenik meg), false = nincs Web Speech API -> a kapcsoló NEM jelenik meg
+  // működőként, csak egy rövid tájékoztató sor.
+  const [speechSynthesisSupported, setSpeechSynthesisSupported] = useState<boolean | null>(null);
+  useEffect(() => {
+    setSpeechSynthesisSupported(
+      detectSpeechSynthesisSupport(typeof window === "undefined" ? null : (window as unknown as Record<string, unknown>)),
+    );
+  }, []);
+  // HÁTTÉRNAVIGÁCIÓS TÁJÉKOZTATÁS (2026-10-09) — navigációs munkamenetenként
+  // (startNavigation / restorePersistedNavigation -> navigationMode true)
+  // legfeljebb egyszer; az utasításkártyán BELÜL jelenik meg (nem takar),
+  // és csak látható kártya mellett számol vissza az automatikus elrejtésig.
+  const [backgroundNoticeVisible, setBackgroundNoticeVisible] = useState(false);
+  useEffect(() => {
+    if (!navigationMode) {
+      setBackgroundNoticeVisible(false);
+      return;
+    }
+    setBackgroundNoticeVisible(
+      shouldShowBackgroundNavigationNotice({
+        navigationActive: true,
+        acknowledged: loadBackgroundNavigationNoticeAcknowledged(),
+      }),
+    );
+  }, [navigationMode]);
+  const acknowledgeBackgroundNotice = () => {
+    saveBackgroundNavigationNoticeAcknowledged();
+    setBackgroundNoticeVisible(false);
+  };
+  useEffect(() => {
+    if (!backgroundNoticeVisible || !navigationInstructionCardVisible) return;
+    const timer = setTimeout(() => setBackgroundNoticeVisible(false), BACKGROUND_NAVIGATION_NOTICE_AUTO_HIDE_MS);
+    return () => clearTimeout(timer);
+  }, [backgroundNoticeVisible, navigationInstructionCardVisible]);
   useNavigationSpeech({
     enabled: navigationSpeechPreference && navigationMode,
     announcement: navigationSpeechAnnouncement,
@@ -3572,17 +3633,39 @@ function RankedJourneyCard({
                     kártya-layoutot nem módosítja (csak egy kis sor a
                     realtime-sor alatt). A választás böngésző-refresh után
                     is megmarad (lásd useNavigationSpeechPreference()). */}
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={navigationSpeechPreference}
-                  aria-label={navigationSpeechPreference ? "Hangos navigáció kikapcsolása" : "Hangos navigáció bekapcsolása"}
-                  onClick={() => setNavigationSpeechPreference(!navigationSpeechPreference)}
-                  className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-medium text-gray-600"
-                >
-                  <span aria-hidden="true">{navigationSpeechPreference ? "🔊" : "🔈"}</span>
-                  Hangos navigáció: {navigationSpeechPreference ? "be" : "ki"}
-                </button>
+                {speechSynthesisSupported === true && (
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={navigationSpeechPreference}
+                    aria-label={navigationSpeechPreference ? "Hangos navigáció kikapcsolása" : "Hangos navigáció bekapcsolása"}
+                    onClick={() => setNavigationSpeechPreference(!navigationSpeechPreference)}
+                    className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-medium text-gray-600"
+                  >
+                    <span aria-hidden="true">{navigationSpeechPreference ? "🔊" : "🔈"}</span>
+                    Hangos navigáció: {navigationSpeechPreference ? "be" : "ki"}
+                  </button>
+                )}
+                {speechSynthesisSupported === false && (
+                  <p className="mt-2 text-[11px] text-gray-500" data-testid="navigation-speech-unsupported">
+                    Hangos navigáció ezen az eszközön nem érhető el.
+                  </p>
+                )}
+                {backgroundNoticeVisible && (
+                  <div
+                    className="mt-2 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-left text-xs leading-snug text-amber-900"
+                    data-testid="background-navigation-notice"
+                  >
+                    <span className="flex-1">{BACKGROUND_NAVIGATION_NOTICE_TEXT}</span>
+                    <button
+                      type="button"
+                      onClick={acknowledgeBackgroundNotice}
+                      className="shrink-0 rounded-full border border-amber-300 bg-white px-2 py-0.5 font-semibold text-amber-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                    >
+                      Értem
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 
@@ -4175,6 +4258,68 @@ export default function VedettUtvonalSearchForm({
   // feltételeinek snapshotja (a form azóta átállított state-je NEM szivárog
   // a Live Alternative keresésbe). Lásd liveRerouteContext.ts.
   const [liveRerouteContext, setLiveRerouteContext] = useState<LiveRerouteSearchContext | null>(null);
+  // NAVIGATION RESUME (2026-10-09) — alkalmazás-újraindítás után a mentett
+  // (érvényes, TTL-en belüli) navigáció felismerése ÚJ KERESÉS NÉLKÜL. A
+  // navigáció csak a "Folytatom" gombbal indul újra (resumeApproved kártya),
+  // elutasításkor a mentés törlődik; ha az út már nem folytatható
+  // biztonságosan, újratervezést ajánlunk ugyanoda.
+  const [navigationResumeOffer, setNavigationResumeOffer] = useState<{
+    session: PersistedNavigationSession;
+    assessment: NavigationResumeAssessment;
+  } | null>(null);
+  const [resumedNavigationSession, setResumedNavigationSession] = useState<PersistedNavigationSession | null>(null);
+  const [resumedNavigationOpen, setResumedNavigationOpen] = useState(true);
+  useEffect(() => {
+    const nowMs = Date.now();
+    const persisted = loadNavigationSession(nowMs);
+    if (!persisted) return;
+    setNavigationResumeOffer({ session: persisted, assessment: assessNavigationResume(persisted, nowMs) });
+  }, []);
+  const handleAcceptNavigationResume = () => {
+    if (!navigationResumeOffer) return;
+    // Újraértékelés a kattintás pillanatában (a kérdés sokáig nyitva lehetett).
+    const nowMs = Date.now();
+    const fresh = loadNavigationSession(nowMs);
+    if (!fresh) {
+      setNavigationResumeOffer(null);
+      return;
+    }
+    const assessment = assessNavigationResume(fresh, nowMs);
+    if (assessment.status !== "RESUMABLE") {
+      setNavigationResumeOffer({ session: fresh, assessment });
+      return;
+    }
+    setNavigationResumeOffer(null);
+    setResumedNavigationOpen(true);
+    setResumedNavigationSession(fresh);
+  };
+  const handleDeclineNavigationResume = () => {
+    clearNavigationSession();
+    setNavigationResumeOffer(null);
+  };
+  const handleReplanFromNavigationResume = () => {
+    if (!navigationResumeOffer) return;
+    const { session } = navigationResumeOffer;
+    clearNavigationSession();
+    setNavigationResumeOffer(null);
+    // Úti cél + preferenciák + routing-korlátok visszatöltése a keresőbe; a
+    // keresést a felhasználó indítja (nincs automatikus routing-hívás).
+    if (session.destination.latitude !== undefined && session.destination.longitude !== undefined) {
+      setDestination({
+        type: "KNOWN_PLACE",
+        name: session.destination.name,
+        latitude: session.destination.latitude,
+        longitude: session.destination.longitude,
+      });
+    }
+    const ctx = session.liveRerouteContext;
+    if (ctx) {
+      setWeights(ctx.weights);
+      setStepFreeRequired(ctx.stepFreeRequired);
+      setMolBubiEnabled(ctx.molBubiEnabled);
+      setBikePropulsion(ctx.bikePropulsion);
+    }
+  };
   // Part B (2026-09-08) — melyik kártya térképe van éppen nyitva (index a
   // result.journeys tömben, vagy null, ha egyik sincs nyitva). Ez az
   // EGYETLEN helye annak, hogy "melyik kártya aktív" — nincs másik,
@@ -4630,6 +4775,11 @@ export default function VedettUtvonalSearchForm({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    // NAVIGATION RESUME: új keresés -> a függő kérdés eltűnik (a mentés
+    // nem törlődik, csak egy újonnan indított navigáció írja felül), egy
+    // folytatott navigáció kártyája pedig lezárul.
+    setNavigationResumeOffer(null);
+    setResumedNavigationSession(null);
     setFormError(null);
     setResult(null);
     setOpenIndex(null);
@@ -4782,6 +4932,58 @@ export default function VedettUtvonalSearchForm({
   return (
     <div className="card">
       <h2 className="text-lg font-semibold text-sni-text">Útvonalkeresés</h2>
+
+      {navigationResumeOffer && (
+        <section
+          aria-labelledby="navigation-resume-title"
+          className="mt-3 rounded-xl border border-sni-brand-teal/30 bg-sni-brand-teal/5 p-4"
+          data-testid="navigation-resume-prompt"
+        >
+          <h3 id="navigation-resume-title" className="text-base font-bold text-gray-900">
+            {navigationResumeOffer.assessment.status === "RESUMABLE"
+              ? "Folytatod a korábbi navigációt?"
+              : "A korábbi navigáció nem folytatható"}
+          </h3>
+          <p className="mt-1 text-sm text-gray-700">
+            Úti cél: <strong>{navigationResumeOffer.session.destination.name}</strong>
+          </p>
+          <p className="mt-1 text-sm text-gray-600">{describeNavigationResume(navigationResumeOffer.assessment)}</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {navigationResumeOffer.assessment.status === "RESUMABLE" && (
+              <button type="button" onClick={handleAcceptNavigationResume} className="btn-primary text-sm">
+                Folytatom
+              </button>
+            )}
+            <button type="button" onClick={handleReplanFromNavigationResume} className="btn-secondary text-sm">
+              Új útvonal ugyanoda
+            </button>
+            <button type="button" onClick={handleDeclineNavigationResume} className="btn-secondary text-sm">
+              Nem, elvetem
+            </button>
+          </div>
+        </section>
+      )}
+
+      {resumedNavigationSession && (
+        <div className="mt-3" data-testid="resumed-navigation">
+          <RankedJourneyCard
+            key={`resumed-${resumedNavigationSession.savedAt}`}
+            ranked={{
+              journey: resumedNavigationSession.displayedJourney,
+              labels: [],
+              explanation: "Korábbi navigáció folytatása",
+            }}
+            isOpen={resumedNavigationOpen}
+            onToggleMap={() => setResumedNavigationOpen((prev) => !prev)}
+            serviceAlerts={[]}
+            isAuthenticated={isAuthenticated}
+            weights={resumedNavigationSession.liveRerouteContext?.weights ?? weights}
+            liveRerouteContext={resumedNavigationSession.liveRerouteContext ?? null}
+            journeyMonitorSimulationEnabled={journeyMonitorSimulationEnabled}
+            resumeApproved
+          />
+        </div>
+      )}
 
       <SavedPlacesPanel
         isAuthenticated={isAuthenticated}
