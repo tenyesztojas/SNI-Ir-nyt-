@@ -92,7 +92,9 @@ describe("B) FŐOLDALI HERO-SZÖVEG — a specifikáció szerinti végleges tart
 
   test("a CTA gomb felirata pontosan 'Megtervezem az útvonalam', és belső Next.js <Link href=\"/vedett-utvonal\"> -ot használ (nem hardcode-olt teljes URL-t)", () => {
     const heroIdx = homeSrc.indexOf("VÉDETT ÚTVONAL HERO");
-    const heroBlock = homeSrc.slice(heroIdx, heroIdx + 3000);
+    // 2026-10-09: a CTA mellé letöltési jelvények kerültek (wrapper + komment),
+    // ezért a vizsgált ablak 3000 -> 3600 karakter; a tartalmi feltétel azonos.
+    const heroBlock = homeSrc.slice(heroIdx, heroIdx + 3600);
     assert.match(heroBlock, /<Link\s*\n\s*href="\/vedett-utvonal"/, "a CTA-nak Next.js <Link>-nek kell lennie, /vedett-utvonal href-fel");
     assert.match(heroBlock, /Megtervezem az útvonalam/);
     assert.doesNotMatch(homeSrc, /href="https:\/\/[^"]*\/vedett-utvonal"/, "nem szabad hardcode-olt teljes production URL-t használni a CTA-hoz");

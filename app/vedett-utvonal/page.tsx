@@ -64,6 +64,7 @@ import { isVedettRouteFeatureEnabled, VEDETT_ROUTE_ACCESS_LEVEL } from "@/lib/ve
 import { hasVedettRouteBetaAccess } from "@/lib/vedett-route/access";
 import { routeDestinationDeepLinkSchema } from "@/lib/vedett-route/schemas";
 import VedettUtvonalWorkspace from "@/components/vedett-utvonal/VedettUtvonalWorkspace";
+import AppDownloadBadges from "@/components/vedett-utvonal/AppDownloadBadges";
 import type { Metadata } from "next";
 
 // Lásd app/admin/vedett-utvonal/page.tsx fejlécét — ugyanaz a build-time
@@ -158,6 +159,8 @@ export default async function VedettUtvonalPage({
           Útvonaltervezés indítása
           <ArrowRight size={18} aria-hidden="true" />
         </Link>
+
+        <AppDownloadBadges className="mt-5" testId="vedett-utvonal-app-download-badges" />
 
         <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {PREVIEW_FEATURES.map(({ icon: Icon, title, desc }) => (
@@ -261,6 +264,11 @@ export default async function VedettUtvonalPage({
           kedvenc útvonalakat, saját pihenőpontokat és mentett helyeket (pl. Otthon, Munkahely) is menthetsz.
         </p>
       )}
+
+      {/* Alkalmazásletöltés (2026-10-09) — a kereső FÖLÖTT, jól látható
+          helyen (natív appon belül a komponens maga rejtett). Csak
+          megjelenítés: a kereső/navigáció változatlan. */}
+      <AppDownloadBadges className="mt-4" testId="vedett-utvonal-app-download-badges" />
 
       <div className="mt-6 space-y-6">
         {/* Kedvenc útvonalak (2026-09-09) — a lista a kereső FÖLÖTT jelenik

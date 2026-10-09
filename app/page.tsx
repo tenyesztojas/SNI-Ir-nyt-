@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/server";
 import { isVedettRouteFeatureEnabled } from "@/lib/vedett-route/config";
 import HeroSearchForm from "@/components/HeroSearchForm";
 import NearbyPlacesPanel from "@/components/NearbyPlacesPanel";
+import AppDownloadBadges from "@/components/vedett-utvonal/AppDownloadBadges";
 
 export default async function HomePage() {
   const supabase = createClient();
@@ -131,14 +132,19 @@ export default async function HomePage() {
               <span>lépcsőmentes útvonal</span>
             </div>
 
-            <Link
-              href="/vedett-utvonal"
-              className="mt-5 inline-flex items-center gap-2 rounded-full bg-sni-brand-teal px-5 py-2.5 text-sm font-bold text-white shadow-md transition-all hover:bg-sni-brand-blue hover:shadow-lg"
-            >
-              <Compass size={16} />
-              Megtervezem az útvonalam
-              <ArrowRight size={16} />
-            </Link>
+            {/* Alkalmazásletöltés (2026-10-09): a meglévő CTA változatlan,
+                a letöltési jelzések mobilon alatta, desktopon mellette. */}
+            <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+              <Link
+                href="/vedett-utvonal"
+                className="inline-flex w-fit items-center gap-2 rounded-full bg-sni-brand-teal px-5 py-2.5 text-sm font-bold text-white shadow-md transition-all hover:bg-sni-brand-blue hover:shadow-lg"
+              >
+                <Compass size={16} />
+                Megtervezem az útvonalam
+                <ArrowRight size={16} />
+              </Link>
+              <AppDownloadBadges testId="homepage-app-download-badges" />
+            </div>
 
             {/* Round 9, B) rész — a lábsor a specifikáció szerinti pontos
                 szöveg ("BKK, MÁV, Volánbusz és MOL Bubi – Próbáld ki, és
