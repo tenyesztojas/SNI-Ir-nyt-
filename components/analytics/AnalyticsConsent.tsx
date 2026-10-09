@@ -5,13 +5,15 @@
 // "granted" állapotban tölti be (lásd lib/analytics/consent.ts). Nem blokkoló
 // alsó panel; az elutasítás ugyanolyan súlyú, mint az engedélyezés.
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   ANALYTICS_CONSENT_CHANGE_EVENT,
   ANALYTICS_CONSENT_OPEN_EVENT,
   applyAnalyticsConsent,
   readAnalyticsConsent,
+  sendSanitizedPageView,
   writeAnalyticsConsent,
 } from "@/lib/analytics/consent";
 
@@ -40,6 +42,23 @@ export default function AnalyticsConsent({
     window.addEventListener(ANALYTICS_CONSENT_OPEN_EVENT, onOpen);
     return () => window.removeEventListener(ANALYTICS_CONSENT_OPEN_EVENT, onOpen);
   }, [apply]);
+
+  // KLIENSOLDALI OLDALVÁLTÁS (2026-10-09): a GA4 csak sanitizált (domain +
+  // útvonal, query/fragment nélküli) page_view-t kap. Az első renderhez a
+  // fenti apply() config-hívása küldi az oldalmegtekintést, ezért azt itt
+  // kihagyjuk; csak tényleges útvonal-váltáskor küldünk. Hozzájárulás
+  // nélkül a sendSanitizedPageView() NO-OP.
+  const pathname = usePathname();
+  const lastPathnameRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (lastPathnameRef.current === null) {
+      lastPathnameRef.current = pathname;
+      return;
+    }
+    if (lastPathnameRef.current === pathname) return;
+    lastPathnameRef.current = pathname;
+    sendSanitizedPageView(window);
+  }, [pathname]);
 
   function choose(value: "granted" | "denied") {
     writeAnalyticsConsent(value);

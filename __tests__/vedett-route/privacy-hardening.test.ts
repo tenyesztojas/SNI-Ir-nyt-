@@ -32,14 +32,19 @@ describe("GA4 helper", () => {
   });
   test("exactly the planned events exist", () => {
     assert.deepEqual([...analytics.VEDETT_ROUTE_EVENTS].sort(), [
-      "login_started", "navigation_finished", "navigation_started", "registration_started",
-      "route_search", "route_search_error", "route_search_success", "saved_place_used", "vedett_route_open",
+      "login_started", "navigation_completed", "navigation_error", "navigation_finished", "navigation_rerouted",
+      "navigation_resumed", "navigation_started", "registration_started", "route_search", "route_search_error",
+      "route_search_success", "route_selected", "saved_place_used", "vedett_route_open",
     ]);
   });
   test("helper source has no free-form payload parameter", () => {
     const src = strip(read("lib/vedett-route/analytics.ts"));
     assert.doesNotMatch(src, /Record<string,\s*unknown>|params\??:\s*(any|object)/);
-    assert.match(src, /options:\s*\{\s*authState: AnalyticsAuthState; result\?: AnalyticsResult\s*\}/);
+    // 2026-10-09: az opciók kizárólag zárt (enum) típusú mezők.
+    assert.match(
+      src,
+      /options:\s*\{\s*authState: AnalyticsAuthState;\s*result\?: AnalyticsResult;\s*rankBucket\?: AnalyticsRankBucket;\s*rerouteType\?: AnalyticsRerouteType;\s*errorType\?: AnalyticsNavigationErrorType;\s*\}/,
+    );
   });
   test("call sites pass only authState/result (no coordinates, addresses, ids)", () => {
     for (const f of [
@@ -55,7 +60,9 @@ describe("GA4 helper", () => {
   test("GA4 id retained; page_location stripped of query/hash", () => {
     const layout = read("app/layout.tsx");
     assert.match(layout, /G-T748C867DW/);
-    assert.match(strip(read("lib/analytics/consent.ts")), /page_location: win\.location\.origin \+ win\.location\.pathname/);
+    // 2026-10-09: a sanitizálás a buildSanitizedPageFields()-be költözött (origin + pathname, query/hash nélkül).
+    assert.match(strip(read("lib/analytics/consent.ts")), /page_location: origin \+ pathname/);
+    assert.match(strip(read("lib/analytics/consent.ts")), /buildSanitizedPageFields\(win\.location\)/);
     assert.match(strip(read("lib/analytics/consent.ts")), /page_referrer: ""/);
   });
   test("native UA markers keep the VedettUtvonalNative/0.1 prefix", () => {

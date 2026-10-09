@@ -249,7 +249,15 @@ import {
   type LiveAlternativeTrigger,
 } from "@/lib/vedett-route/navigation/liveAlternative";
 import { computeJourneyFingerprint } from "@/lib/vedett-route/fingerprint";
-import { trackVedettRouteEvent } from "@/lib/vedett-route/analytics";
+import {
+  createNavigationEventOnceGate,
+  hasRouteStructureChanged,
+  markNavigationEventOnce,
+  toRankBucket,
+  trackVedettRouteEvent,
+  type AnalyticsNavigationErrorType,
+  type AnalyticsRerouteType,
+} from "@/lib/vedett-route/analytics";
 import CommunityReportButton from "@/components/vedett-utvonal/CommunityReportButton";
 import { buildCommunityReportContext } from "@/lib/vedett-route/communityReports/context";
 import { buildCommunityReportEventContext } from "@/lib/vedett-route/communityReports/eventContext";
@@ -992,6 +1000,20 @@ function RankedJourneyCard({
   // kerül kiválasztásra, az ELŐZŐ async eredmény nem írhatja felül az új
   // állapotot") — UGYANAZT a MEGLÉVŐ session-mechanizmust bővíti, NEM egy
   // második, párhuzamos session-fogalmat hoz létre.
+  // ANALITIKA (2026-10-09) — navigációs munkamenetenkénti egyszeri kapu
+  // (érkezés, hibatípusok), és zárt értékű esemény-helperek. A tényleges
+  // küldés a trackVedettRouteEvent()-ben hozzájáruláshoz és nem-admin
+  // útvonalhoz kötött.
+  const navigationAnalyticsGateRef = useRef(createNavigationEventOnceGate());
+  const navigationAnalyticsAuthState = isAuthenticated ? "authenticated" : "anonymous";
+  const trackNavigationRerouted = (rerouteType: AnalyticsRerouteType) => {
+    trackVedettRouteEvent("navigation_rerouted", { authState: navigationAnalyticsAuthState, rerouteType });
+  };
+  const trackNavigationErrorOnce = (errorType: AnalyticsNavigationErrorType) => {
+    if (!markNavigationEventOnce(navigationAnalyticsGateRef.current, `error:${errorType}`)) return;
+    trackVedettRouteEvent("navigation_error", { authState: navigationAnalyticsAuthState, errorType });
+  };
+
   const bumpNavigationSession = () => {
     rerouteSessionRef.current += 1;
     if (isForegroundRecoveryActive(foregroundRecoveryRef.current.phase)) {
@@ -1046,6 +1068,10 @@ function RankedJourneyCard({
   });
 
   const restorePersistedNavigation = (persisted: PersistedNavigationSession) => {
+    // ANALITIKA: visszaállítás NEM navigation_started (azt a szülő
+    // navigation_resumed-ként méri a "Folytatom" gombnál) — csak az egyszeri
+    // kaput nyitjuk újra ehhez a navigációs munkamenethez.
+    navigationAnalyticsGateRef.current = createNavigationEventOnceGate();
     // Régi (kontextus nélküli) session -> null, fail-open.
     restoredRerouteContextRef.current = persisted.liveRerouteContext ?? null;
     bumpNavigationSession();
@@ -1210,6 +1236,7 @@ function RankedJourneyCard({
 
   const startNavigation = () => {
     trackVedettRouteEvent("navigation_started", { authState: isAuthenticated ? "authenticated" : "anonymous" });
+    navigationAnalyticsGateRef.current = createNavigationEventOnceGate();
     bumpNavigationSession();
     rerouteGuardRef.current = resetRerouteGuard();
     setAutomaticRerouteStatus("IDLE");
@@ -2172,6 +2199,23 @@ function RankedJourneyCard({
     const timer = setTimeout(() => setBackgroundNoticeVisible(false), BACKGROUND_NAVIGATION_NOTICE_AUTO_HIDE_MS);
     return () => clearTimeout(timer);
   }, [backgroundNoticeVisible, navigationInstructionCardVisible]);
+  // ANALITIKA — érkezés: az ARRIVE instrukció (geometria-alapú, isAtRouteEnd)
+  // ELSŐ megjelenése használható GPS mellett; munkamenetenként egyszer, így
+  // GPS-ingadozás (ki-be lépés a végszegmensen) nem ismétli.
+  useEffect(() => {
+    if (!navigationMode || !gpsFixUsable) return;
+    if (navigationInstructionForDisplay?.kind !== "ARRIVE") return;
+    if (!markNavigationEventOnce(navigationAnalyticsGateRef.current, "completed")) return;
+    trackVedettRouteEvent("navigation_completed", { authState: navigationAnalyticsAuthState });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [navigationMode, gpsFixUsable, navigationInstructionForDisplay?.kind]);
+  // ANALITIKA — GPS-hiba navigáció közben (zárt hibatípus, nyers üzenet nélkül).
+  useEffect(() => {
+    if (!navigationMode) return;
+    if (geo.status === "denied") trackNavigationErrorOnce("gps_permission_denied");
+    else if (geo.status === "unavailable" || geo.status === "timeout") trackNavigationErrorOnce("gps_unavailable");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [navigationMode, geo.status]);
   const navigationSpeechStatus = useNavigationSpeech({
     enabled: navigationSpeechPreference && navigationMode,
     announcement: navigationSpeechAnnouncement,
@@ -2182,6 +2226,12 @@ function RankedJourneyCard({
     // számláló bevezetve.
     resetKey: rerouteSessionRef.current,
   });
+  // ANALITIKA — beszédindítási hiba navigáció közben (munkamenetenként egyszer).
+  useEffect(() => {
+    if (!navigationMode || !navigationSpeechStatus.lastErrorMessage) return;
+    trackNavigationErrorOnce("speech_failed");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [navigationMode, navigationSpeechStatus.lastErrorMessage]);
 
   const lastLeg = displayedJourney.legs.length > 0 ? displayedJourney.legs[displayedJourney.legs.length - 1] : undefined;
   const originalDestination =
@@ -2302,6 +2352,7 @@ function RankedJourneyCard({
         if (rerouteSessionRef.current !== sessionId) return;
         if (data.ok) {
           setDisplayedJourney(data.journey);
+          trackNavigationRerouted("automatic");
           // STALE ALTERNATIVE INVALIDATION — CSAK sikeres útvonalcserénél: a régi
           // útvonalhoz tartozó ajánlat, a folyamatban lévő keresések eredménye
           // (revízió-ellenőrzés), a szimuláció és a pending debounce érvénytelen.
@@ -2322,10 +2373,12 @@ function RankedJourneyCard({
 
         setAutomaticRerouteStatus("FAILED");
         setAutomaticRerouteMessage(data.message ?? "Az automatikus újratervezés most nem sikerült.");
+        trackNavigationErrorOnce("reroute_failed");
       } catch {
         if (rerouteSessionRef.current !== sessionId) return;
         setAutomaticRerouteStatus("FAILED");
         setAutomaticRerouteMessage("Az automatikus újratervezés most nem sikerült.");
+        trackNavigationErrorOnce("reroute_failed");
       } finally {
         // Csak ugyanennek a sessionnek a guardját oldjuk fel. Egy régi kérés
         // befejezése nem írhatja felül egy új navigáció guard-állapotát.
@@ -2707,6 +2760,7 @@ function RankedJourneyCard({
     }
     setDisplayedJourney(accepted.acceptedJourney);
     bumpNavigationSession();
+    trackNavigationRerouted("live_alternative");
     // Új útvonal -> új közösségi baseline (a következő monitor-eredményből),
     // a korábbi elutasítás-suppression érvényét veszti. A cooldown a guardban fut tovább.
     communityBaselineRef.current = null;
@@ -2993,6 +3047,7 @@ function RankedJourneyCard({
     if (!stored || !expectedFingerprint || stored.fingerprint !== expectedFingerprint) return;
     setDisplayedJourney(stored.journey);
     bumpNavigationSession();
+    trackNavigationRerouted("earlier_departure");
   };
 
   // "Maradok az eredetinél" — az EREDETI journey VÁLTOZATLAN marad, a
@@ -3900,6 +3955,8 @@ function RankedJourneyCard({
                   // reroute effekt is használ a staleness-guardhoz).
                   bumpNavigationSession();
                   setDisplayedJourney(nextJourney);
+                  // ANALITIKA: csak valódi útvonalváltás számít (a closure még a régi útvonalat látja).
+                  if (hasRouteStructureChanged(displayedJourney, nextJourney)) trackNavigationRerouted("rest_stop");
                 }}
                 onMapStateChange={setRestStopMapState}
                 externalRequestRestToken={restRequestToken}
@@ -4314,6 +4371,7 @@ export default function VedettUtvonalSearchForm({
     setNavigationResumeOffer(null);
     setResumedNavigationOpen(true);
     setResumedNavigationSession(fresh);
+    trackVedettRouteEvent("navigation_resumed", { authState: isAuthenticated ? "authenticated" : "anonymous" });
   };
   const handleDeclineNavigationResume = () => {
     clearNavigationSession();
@@ -5873,7 +5931,16 @@ export default function VedettUtvonalSearchForm({
               key={i}
               ranked={r}
               isOpen={openIndex === i}
-              onToggleMap={() => setOpenIndex((prev) => (prev === i ? null : i))}
+              onToggleMap={() => {
+                // ANALITIKA: csak kinyitáskor (nem bezáráskor), zárt helyezés-kategóriával.
+                if (openIndex !== i) {
+                  trackVedettRouteEvent("route_selected", {
+                    authState: isAuthenticated ? "authenticated" : "anonymous",
+                    rankBucket: toRankBucket(i),
+                  });
+                }
+                setOpenIndex((prev) => (prev === i ? null : i));
+              }}
               serviceAlerts={result.serviceAlerts}
               isAuthenticated={isAuthenticated}
               weights={weights}

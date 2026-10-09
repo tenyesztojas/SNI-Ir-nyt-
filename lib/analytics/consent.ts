@@ -87,6 +87,46 @@ export function clearGoogleAnalyticsCookies(doc: any, hostname: string): void {
   }
 }
 
+// OLDALCÍM-ADATVÉDELEM (2026-10-09). A GA4 csak domaint + útvonalat kaphat:
+// query string (pl. /vedett-utvonal?name=…&lat=…&lon=…) és fragment SOHA.
+// A page_title fix (egy oldal címe tartalmazhat helynevet), a page_referrer
+// üres. A mezőket `gtag("set", …)`-tel is rögzítjük, így a GA4 automatikus
+// (bővített mérés) eseményei is ezeket viszik a böngésző valódi URL-je
+// helyett; kliensoldali navigációkor a hívó (AnalyticsConsent) frissíti.
+export const ANALYTICS_PAGE_TITLE = "VédettSarok";
+
+export interface SanitizedPageFields {
+  page_location: string;
+  page_referrer: "";
+  page_title: string;
+}
+
+export function buildSanitizedPageFields(location: { origin?: string; pathname?: string } | null | undefined): SanitizedPageFields {
+  const origin = typeof location?.origin === "string" ? location.origin : "";
+  let pathname = typeof location?.pathname === "string" ? location.pathname : "/";
+  // Védelem: ha valaki pathname-ként teljes href-et adna át.
+  pathname = pathname.split("?")[0].split("#")[0] || "/";
+  return { page_location: origin + pathname, page_referrer: "", page_title: ANALYTICS_PAGE_TITLE };
+}
+
+/**
+ * Kliensoldali (Next.js) oldalváltás után: a rögzített mezők frissítése +
+ * egy sanitizált page_view. Hozzájárulás nélkül / betöltetlen gtag mellett
+ * NO-OP (false).
+ */
+export function sendSanitizedPageView(win: any, storage?: ConsentStorageLike | null): boolean {
+  try {
+    if (readAnalyticsConsent(storage === undefined ? win?.localStorage : storage) !== "granted") return false;
+    if (typeof win?.gtag !== "function") return false;
+    const fields = buildSanitizedPageFields(win.location);
+    win.gtag("set", fields);
+    win.gtag("event", "page_view", fields);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function applyAnalyticsConsent(state: AnalyticsConsentState, env: ConsentEnv): void {
   const { win, doc, measurementId } = env;
   try {
@@ -104,10 +144,9 @@ export function applyAnalyticsConsent(state: AnalyticsConsentState, env: Consent
       } else {
         win.gtag("consent", "update", CONSENT_GRANTED);
       }
-      win.gtag("config", measurementId, {
-        page_location: win.location.origin + win.location.pathname,
-        page_referrer: "",
-      });
+      const pageFields = buildSanitizedPageFields(win.location);
+      win.gtag("set", pageFields);
+      win.gtag("config", measurementId, { ...pageFields });
       if (!win.__vsGaScriptLoaded) {
         win.__vsGaScriptLoaded = true;
         const s = doc.createElement("script");

@@ -58,7 +58,8 @@ describe("consent state + GA loading", () => {
     assert.deepEqual(dl[0][2], { analytics_storage: "granted", ad_storage: "denied", ad_user_data: "denied", ad_personalization: "denied" });
     const cfg = dl.find((a: any) => a[0] === "config");
     assert.equal(cfg[1], ID);
-    assert.deepEqual(cfg[2], { page_location: "https://www.vedettsarok.hu/vedett-utvonal", page_referrer: "" });
+    // 2026-10-09: fix page_title is (oldalcím helynevet tartalmazhat).
+    assert.deepEqual(cfg[2], { page_location: "https://www.vedettsarok.hu/vedett-utvonal", page_referrer: "", page_title: "VédettSarok" });
   });
   test("7. granted -> denied stops sending and clears only GA cookies", () => {
     const e = mkEnv("_ga=1; _ga_T748C867DW=2; sb-access-token=secret; vu_native=1");
