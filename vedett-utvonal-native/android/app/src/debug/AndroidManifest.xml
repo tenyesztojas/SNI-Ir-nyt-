@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- CSAK DEBUG BUILD: a release APK-ba ez a manifest és a receiver nem kerül be. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <receiver
+            android:name=".navigation.DebugSpeechTestReceiver"
+            android:exported="true" />
+    </application>
+</manifest>

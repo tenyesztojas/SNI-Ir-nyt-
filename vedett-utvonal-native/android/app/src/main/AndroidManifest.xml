@@ -36,6 +36,14 @@
 
         </activity>
 
+        <!-- Védett Útvonal háttérnavigációs MVP: csak a látható appból, a
+             felhasználó navigációindítására induló, "location" típusú
+             foreground service (leszállási figyelmeztetés). -->
+        <service
+            android:name=".navigation.NavigationLocationService"
+            android:exported="false"
+            android:foregroundServiceType="location" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -58,4 +66,9 @@
          background tracking — csak amig az app a kepernyon van. -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <!-- Háttérnavigációs MVP: látható appból indított location foreground
+         service + értesítések. ACCESS_BACKGROUND_LOCATION továbbra sincs. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 </manifest>

@@ -289,7 +289,8 @@ describe("8) hangtámogatás hiányának kezelése", () => {
     const sw = formSrc.indexOf('role="switch"', i);
     assert.ok(i > 0 && sw > i && sw - i < 400, "a switch a támogatás-feltételen belül van");
     assert.equal((formSrc.match(/role="switch"\s*\n\s*aria-checked=\{navigationSpeechPreference\}/g) ?? []).length, 1);
-    assert.match(formSrc, /speechSynthesisSupported === false && \([\s\S]{0,200}Hangos navigáció ezen az eszközön nem érhető el\./);
+    // 2026-10-10: natív okkód esetén részletes magyarázat, egyébként az eredeti szöveg.
+    assert.match(formSrc, /speechSynthesisSupported === false && \([\s\S]{0,400}Hangos navigáció ezen az eszközön nem érhető el\./);
     assert.match(readFileSync("lib/hooks/useNavigationSpeech.ts", "utf8"), /detectSpeechSynthesisSupport\(/);
   });
 });

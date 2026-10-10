@@ -17,6 +17,7 @@
 // után kér pozíciót — nincs automatikus/rejtett lekérdezés.
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { navDebugLog } from "../vedett-route/navigation/navDebugLog.ts";
 
 export type GeolocationStatus =
   | "idle" // még nem kérte a felhasználó
@@ -85,6 +86,7 @@ export function useGeolocation(): UseGeolocationResult {
 
   const previousFixRef = useRef<{ latitude: number; longitude: number; timestampMs: number } | null>(null);
   const smoothedHeadingRef = useRef<number | null>(null);
+  const fixCountRef = useRef(0);
 
   const handleSuccess = useCallback((pos: GeolocationPosition) => {
     const latitude = pos.coords.latitude;
@@ -122,6 +124,10 @@ export function useGeolocation(): UseGeolocationResult {
       }
     }
 
+    // DIAGNOSZTIKA: csak a pozíció érkezésének ténye (első + minden 10.), koordináta nélkül.
+    fixCountRef.current += 1;
+    if (fixCountRef.current === 1 || fixCountRef.current % 10 === 0) navDebugLog("gps_fix_received", { count: fixCountRef.current });
+
     previousFixRef.current = { latitude, longitude, timestampMs };
 
     // Körkörös simítás: 359° -> 1° átmenetnél se forduljon 358°-ot a kamera.
@@ -151,6 +157,7 @@ export function useGeolocation(): UseGeolocationResult {
   }, []);
 
   const handleError = useCallback((err: GeolocationPositionError) => {
+    navDebugLog("gps_error", { code: err?.code ?? null });
     setState(mapError(err));
   }, []);
 
@@ -174,6 +181,8 @@ export function useGeolocation(): UseGeolocationResult {
     }
     if (watchIdRef.current !== null) return; // már fut
     setState((s) => ({ ...s, status: "requesting", errorMessage: null }));
+    fixCountRef.current = 0;
+    navDebugLog("gps_watch_started");
     watchIdRef.current = navigator.geolocation.watchPosition(handleSuccess, handleError, {
       enableHighAccuracy: true,
       timeout: 10_000,
@@ -186,6 +195,7 @@ export function useGeolocation(): UseGeolocationResult {
     if (watchIdRef.current !== null && isGeolocationSupported()) {
       navigator.geolocation.clearWatch(watchIdRef.current);
       watchIdRef.current = null;
+      navDebugLog("gps_watch_cleared", { reason: "stop" });
     }
     setIsWatching(false);
   }, []);
@@ -196,7 +206,15 @@ export function useGeolocation(): UseGeolocationResult {
     return () => {
       if (watchIdRef.current !== null && isGeolocationSupported()) {
         navigator.geolocation.clearWatch(watchIdRef.current);
+        navDebugLog("gps_watch_cleared", { reason: "unmount" });
       }
+      // BUGFIX (2026-10-10): a törölt watch azonosítóját nullázni kell.
+      // Enélkül egy újracsatolás (React StrictMode fejlesztői dupla
+      // effektfuttatása, vagy bármely remount ugyanazzal a hook-példánnyal)
+      // után a startWatching() "már fut" ágon kilépett, miközben valójában
+      // NEM futott GPS-figyelés -> a felület "Helyzet meghatározása…"
+      // állapotban maradt, és a natív szolgáltatás sem indult (nincs fix).
+      watchIdRef.current = null;
     };
   }, []);
 

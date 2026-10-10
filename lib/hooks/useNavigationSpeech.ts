@@ -17,12 +17,23 @@ import { useEffect, useRef, useState } from "react";
 import { normalizeHungarianTransitSpeech } from "@/lib/vedett-route/navigation/hungarianSpeechNormalizer";
 import {
   SPEECH_VOICES_SETTLE_TIMEOUT_MS,
+  describeNativeTtsError,
   describeSpeechSynthesisError,
   detectSpeechSynthesisSupport,
+  resolveSpeechEngine,
   resolveSpeechVoiceAvailability,
   selectHungarianVoice,
+  type SpeechEngine,
   type SpeechVoiceAvailability,
 } from "@/lib/vedett-route/navigation/speechSupport";
+import {
+  getNativeNavigationBridge,
+  getNativeTtsStatus,
+  nativeSpeak,
+  nativeStopSpeaking,
+  onNativeTtsError,
+  type NativeTtsStatus,
+} from "@/lib/vedett-route/native/nativeNavigationBridge";
 import {
   INITIAL_SPEECH_ANNOUNCER_STATE,
   invalidateSpeechAnnouncerState,
@@ -117,6 +128,10 @@ export interface UseNavigationSpeechResult {
   // az utolsó beszédindítási hiba felhasználói üzenete (null = nincs hiba).
   voiceAvailability: SpeechVoiceAvailability;
   lastErrorMessage: string | null;
+  // 2026-10-10: a ténylegesen használt beszédmotor ("pending" = még ismeretlen),
+  // és natív appban a natív TTS elérhetetlenségének zárt oka.
+  engine: SpeechEngine;
+  nativeUnavailableReason: string | null;
 }
 
 /** A hanglista aszinkron betöltésének követése (getVoices + voiceschanged + settle-timeout). */
@@ -158,6 +173,37 @@ export function useNavigationSpeech({ enabled, announcement, resetKey }: UseNavi
   voicesRef.current = voices;
   const [lastErrorMessage, setLastErrorMessage] = useState<string | null>(null);
 
+  // NATÍV TTS (Android app): mount után egyszer lekérdezzük az ellenőrzött
+  // inicializálás eredményét; a webes viselkedés (nincs natív híd) változatlan.
+  const [nativePlatform, setNativePlatform] = useState(false);
+  const [nativeTts, setNativeTts] = useState<NativeTtsStatus | null>(null);
+  const [webSupportedAfterMount, setWebSupportedAfterMount] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+    setWebSupportedAfterMount(isNavigationSpeechSupported());
+    if (!getNativeNavigationBridge()) return;
+    setNativePlatform(true);
+    let alive = true;
+    void getNativeTtsStatus().then((status) => {
+      if (alive) setNativeTts(status);
+    });
+    const unsubscribe = onNativeTtsError((code) => setLastErrorMessage(describeNativeTtsError(code)));
+    return () => {
+      alive = false;
+      unsubscribe();
+    };
+  }, []);
+  const engine: SpeechEngine = mounted
+    ? resolveSpeechEngine({ nativePlatform, nativeTts, webSupported: webSupportedAfterMount })
+    : "pending";
+  const engineRef = useRef<SpeechEngine>(engine);
+  engineRef.current = engine;
+  const cancelAll = () => {
+    getSpeechSynthesis()?.cancel();
+    if (engineRef.current === "native") void nativeStopSpeaking();
+  };
+
   // REROUTE / ÚJ JOURNEY (spec "N" pont) — a régi, esetleg még beszélő
   // instrukciót azonnal megszakítjuk, és a dedupe-identitást eldobjuk, hogy
   // az ÚJ journey aktuális instrukciója (akkor is, ha véletlenül ugyanaz az
@@ -166,8 +212,7 @@ export function useNavigationSpeech({ enabled, announcement, resetKey }: UseNavi
     if (resetKey === undefined || lastResetKeyRef.current === resetKey) return;
     lastResetKeyRef.current = resetKey;
     stateRef.current = invalidateSpeechAnnouncerState();
-    const synth = getSpeechSynthesis();
-    synth?.cancel();
+    cancelAll();
   }, [resetKey]);
 
   // TTS KI / NAVIGÁCIÓ LEÁLLÍTÁSA (spec "navigation stop" / "J" pont) —
@@ -179,8 +224,7 @@ export function useNavigationSpeech({ enabled, announcement, resetKey }: UseNavi
     if (enabled) return;
     setLastErrorMessage(null);
     stateRef.current = INITIAL_SPEECH_ANNOUNCER_STATE;
-    const synth = getSpeechSynthesis();
-    synth?.cancel();
+    cancelAll();
   }, [enabled]);
 
   // A TÉNYLEGES döntés + beszéd — a pure resolveSpeechDecision() dönt, ez a
@@ -192,6 +236,18 @@ export function useNavigationSpeech({ enabled, announcement, resetKey }: UseNavi
     const decision = resolveSpeechDecision(stateRef.current, announcement);
     stateRef.current = decision.state;
     if (!decision.shouldSpeak || !announcement) return;
+
+    // NATÍV ÚT: ugyanaz a döntés (speechAnnouncer dedupe), csak a végrehajtó
+    // a natív magyar TTS (QUEUE_FLUSH -> nincs elavult várólista). Sikeres
+    // felolvasást csak a motor elfogadása után nem jelzünk hibának.
+    if (engineRef.current === "native") {
+      const text = normalizeHungarianTransitSpeech(announcement.text);
+      void nativeSpeak(text, announcement.key).then((ok) => {
+        if (ok) setLastErrorMessage(null);
+        else setLastErrorMessage(describeNativeTtsError("TTS_UNAVAILABLE"));
+      });
+      return;
+    }
 
     const synth = getSpeechSynthesis();
     if (!synth) return;
@@ -222,12 +278,15 @@ export function useNavigationSpeech({ enabled, announcement, resetKey }: UseNavi
   useEffect(() => {
     return () => {
       getSpeechSynthesis()?.cancel();
+      if (engineRef.current === "native") void nativeStopSpeaking();
     };
   }, []);
 
   return {
-    supported,
-    voiceAvailability: resolveSpeechVoiceAvailability(voices, voicesSettled),
+    supported: supported || engine === "native",
+    voiceAvailability: engine === "native" ? "HUNGARIAN" : resolveSpeechVoiceAvailability(voices, voicesSettled),
     lastErrorMessage,
+    engine,
+    nativeUnavailableReason: nativeTts && !nativeTts.available ? nativeTts.reason : null,
   };
 }

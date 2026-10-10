@@ -221,7 +221,7 @@ import {
   saveBackgroundNavigationNoticeAcknowledged,
   shouldShowBackgroundNavigationNotice,
 } from "@/lib/vedett-route/navigation/backgroundNavigationNotice";
-import { SPEECH_NO_HUNGARIAN_VOICE_MESSAGE, detectSpeechSynthesisSupport } from "@/lib/vedett-route/navigation/speechSupport";
+import { SPEECH_NO_HUNGARIAN_VOICE_MESSAGE, describeNativeTtsUnavailable } from "@/lib/vedett-route/navigation/speechSupport";
 // LIVE ALTERNATIVE — SPRINT 8.4 (8.4A pure engine, 8.4B runtime wiring,
 // 2026-09-18). "STAY ON CURRENT ROUTE" az alap — ez a bekötés SOHA nem vált
 // automatikusan journey-t, kizárólag OFFERED állapotban ajánl fel egy
@@ -249,6 +249,14 @@ import {
   type LiveAlternativeTrigger,
 } from "@/lib/vedett-route/navigation/liveAlternative";
 import { computeJourneyFingerprint } from "@/lib/vedett-route/fingerprint";
+import { buildNativeAlertPlan } from "@/lib/vedett-route/navigation/nativeAlertPlan";
+import {
+  ensureNativeNavigationStarted,
+  getNativeNavigationState,
+  stopNativeNavigation,
+  setNativeSpeechEnabled,
+  updateNativeNavigationPlan,
+} from "@/lib/vedett-route/native/nativeNavigationBridge";
 import {
   createNavigationEventOnceGate,
   hasRouteStructureChanged,
@@ -1469,6 +1477,17 @@ function RankedJourneyCard({
       vedettRouteForegroundDebugLog("foreground_reacquisition_started", {
         generation: foregroundRecoveryRef.current.generation,
       });
+      // HÁTTÉRNAVIGÁCIÓS MVP: ha a felhasználó a natív értesítés "Leállítás"
+      // gombjával állította le a követést, a webes navigáció is ugyanúgy
+      // álljon le (egyetlen navigációs állapot). Fail-open: hiba/plugin
+      // hiánya esetén nincs teendő.
+      if (nativeNavigationStartedRef.current) {
+        void getNativeNavigationState().then((state) => {
+          if (state?.stoppedByUser && navigationModeRef.current && nativeNavigationStartedRef.current) {
+            stopNavigationRef.current?.();
+          }
+        });
+      }
     };
     document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
@@ -1831,6 +1850,64 @@ function RankedJourneyCard({
   // selectActiveInstructionWithStopProgress() BYTE-RA a Sprint 2 fallbackra
   // esik vissza.
   const activeLeg = typeof activeLegIndex === "number" ? displayedJourney.legs[activeLegIndex] : undefined;
+  // HÁTTÉRNAVIGÁCIÓS MVP (2026-10-10) — natív (Android) leszállási
+  // figyelmeztetés. A natív service KIZÁRÓLAG aktív navigáció alatt fut
+  // (navigationMode csak startNavigation()/restorePersistedNavigation()
+  // — kifejezett felhasználói művelet — útján lesz true), az első GPS-fix
+  // (= megadott helyengedély) után indul, journey-cserénél a tervet
+  // frissíti, leállításkor/unmountkor megáll. A web marad az egyetlen
+  // állapotforrás; a natív oldal csak a minimális tervet kapja.
+  // Az aktív szakasz változása (leszállás után) frissíti a natív tervet,
+  // így egy figyelmeztetés nélkül elhagyott leszállás nem tartja vissza a
+  // következőt. Útvonalon belül csak előre lép (GPS-ingadozás nem hozza
+  // vissza a régi célpontot); null (bizonytalan) nem vált ki frissítést.
+  const nativePlanLegRef = useRef<{ journey: Journey | null; index: number }>({ journey: null, index: 0 });
+  if (nativePlanLegRef.current.journey !== displayedJourney) nativePlanLegRef.current = { journey: displayedJourney, index: 0 };
+  if (typeof activeLegIndex === "number" && activeLegIndex > nativePlanLegRef.current.index) {
+    nativePlanLegRef.current = { journey: displayedJourney, index: activeLegIndex };
+  }
+  const nativePlanFromLegIndex = nativePlanLegRef.current.index;
+  const nativeNavigationStartedRef = useRef(false);
+  // Navigációnként legfeljebb EGY ellenőrzött indítási kör (benne max. 3
+  // próbálkozás); plugin hiányában / kimerült keretnél nincs újabb kör
+  // (nincs végtelen ciklus). navigationMode=false nullázza.
+  const nativeStartBudgetUsedRef = useRef(false);
+  const navigationModeLiveRef = useRef(navigationMode);
+  navigationModeLiveRef.current = navigationMode;
+  const stopNavigationRef = useRef<(() => void) | null>(null);
+  stopNavigationRef.current = stopNavigation;
+  const geoHasFix = geo.latitude !== null;
+  useEffect(() => {
+    if (!navigationMode) {
+      nativeStartBudgetUsedRef.current = false;
+      if (nativeNavigationStartedRef.current) {
+        nativeNavigationStartedRef.current = false;
+        void stopNativeNavigation();
+      }
+      return;
+    }
+    if (!geoHasFix) return;
+    const plan = buildNativeAlertPlan(displayedJourney, nativePlanFromLegIndex);
+    if (!nativeNavigationStartedRef.current) {
+      if (nativeStartBudgetUsedRef.current) return;
+      nativeStartBudgetUsedRef.current = true;
+      nativeNavigationStartedRef.current = true;
+      void ensureNativeNavigationStarted(plan, { shouldContinue: () => navigationModeLiveRef.current }).then((result) => {
+        if (result !== "started") nativeNavigationStartedRef.current = false;
+      });
+    } else {
+      void updateNativeNavigationPlan(plan);
+    }
+  }, [navigationMode, displayedJourney, geoHasFix, nativePlanFromLegIndex]);
+  useEffect(
+    () => () => {
+      if (nativeNavigationStartedRef.current) void stopNativeNavigation();
+      // Újracsatoláskor (pl. StrictMode) a natív indítás újra mehessen.
+      nativeNavigationStartedRef.current = false;
+      nativeStartBudgetUsedRef.current = false;
+    },
+    [],
+  );
   // SAFETY SPRINT (2026-09-17) — igaz, HA az aktuális aktív leg sínhez/
   // vezetett pályához kötött (RAIL/REGIONAL_RAIL/SUBWAY/TRAM, a NORMALIZÁLT
   // JourneyLeg.transitMode alapján) ÉS a SAJÁT geometriája (activeLegRange.
@@ -2163,16 +2240,9 @@ function RankedJourneyCard({
     [navigationInstructionForDisplay, speechSubState]
   );
   const [navigationSpeechPreference, setNavigationSpeechPreference] = useNavigationSpeechPreference();
-  // HANGOS NAVIGÁCIÓ — tényleges támogatás (2026-10-09). Mount után
-  // detektálunk (SSR/hydration-safe): null = még ismeretlen (semmi nem
-  // jelenik meg), false = nincs Web Speech API -> a kapcsoló NEM jelenik meg
-  // működőként, csak egy rövid tájékoztató sor.
-  const [speechSynthesisSupported, setSpeechSynthesisSupported] = useState<boolean | null>(null);
-  useEffect(() => {
-    setSpeechSynthesisSupported(
-      detectSpeechSynthesisSupport(typeof window === "undefined" ? null : (window as unknown as Record<string, unknown>)),
-    );
-  }, []);
+  // HANGOS NAVIGÁCIÓ — tényleges támogatás: a useNavigationSpeech() által
+  // választott beszédmotorból (natív Android TTS / Web Speech API) derül ki,
+  // lásd lent a speechSynthesisSupported értéket (2026-10-10).
   // HÁTTÉRNAVIGÁCIÓS TÁJÉKOZTATÁS (2026-10-09) — navigációs munkamenetenként
   // (startNavigation / restorePersistedNavigation -> navigationMode true)
   // legfeljebb egyszer; az utasításkártyán BELÜL jelenik meg (nem takar),
@@ -2226,6 +2296,15 @@ function RankedJourneyCard({
     // számláló bevezetve.
     resetKey: rerouteSessionRef.current,
   });
+  // null = még ismeretlen (semmi nem jelenik meg), false = sem natív magyar
+  // TTS, sem Web Speech API -> a kapcsoló NEM jelenik meg működőként.
+  const speechSynthesisSupported: boolean | null =
+    navigationSpeechStatus.engine === "pending" ? null : navigationSpeechStatus.engine !== "none";
+  // A felhasználói beállítás a natív háttér-figyelmeztetésekre is érvényes
+  // (böngészőben/régi appban a hívás csendben no-op).
+  useEffect(() => {
+    void setNativeSpeechEnabled(navigationMode && navigationSpeechPreference);
+  }, [navigationMode, navigationSpeechPreference]);
   // ANALITIKA — beszédindítási hiba navigáció közben (munkamenetenként egyszer).
   useEffect(() => {
     if (!navigationMode || !navigationSpeechStatus.lastErrorMessage) return;
@@ -3703,7 +3782,9 @@ function RankedJourneyCard({
                 )}
                 {speechSynthesisSupported === false && (
                   <p className="mt-2 text-[11px] text-gray-500" data-testid="navigation-speech-unsupported">
-                    Hangos navigáció ezen az eszközön nem érhető el.
+                    {navigationSpeechStatus.nativeUnavailableReason
+                      ? describeNativeTtsUnavailable(navigationSpeechStatus.nativeUnavailableReason)
+                      : "Hangos navigáció ezen az eszközön nem érhető el."}
                   </p>
                 )}
                 {/* 2026-10-09: magyar hang hiánya / beszédindítási hiba — a

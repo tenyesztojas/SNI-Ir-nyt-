@@ -87,3 +87,43 @@ export function describeSpeechSynthesisError(errorCode: string | null | undefine
       return "A hangos utasítást nem sikerült lejátszani. A képernyőn lévő utasítások továbbra is érvényesek.";
   }
 }
+
+// ---------------------------------------------------------------------------
+// BESZÉDMOTOR-VÁLASZTÁS (2026-10-10). Natív (Capacitor Android) appban a
+// natív magyar TextToSpeech az elsődleges (a WebView-ban a Web Speech API
+// jellemzően hiányzik); ha az nem elérhető, de a WebView mégis támogatja a
+// Web Speech API-t, az marad. Böngészőben/iOS-en a webes működés változatlan.
+
+export type SpeechEngine = "pending" | "native" | "web" | "none";
+
+export function resolveSpeechEngine(input: {
+  nativePlatform: boolean;
+  nativeTts: { available: boolean } | null;
+  webSupported: boolean;
+}): SpeechEngine {
+  if (input.nativePlatform) {
+    if (input.nativeTts === null) return "pending";
+    if (input.nativeTts.available) return "native";
+  }
+  return input.webSupported ? "web" : "none";
+}
+
+/** Felhasználói magyarázat, ha a natív magyar hang nem érhető el (zárt okkód -> szöveg). */
+export function describeNativeTtsUnavailable(reason: string | null | undefined): string {
+  switch (reason) {
+    case "LANGUAGE_MISSING_DATA":
+    case "LANGUAGE_NOT_SUPPORTED":
+      return "Magyar hang nincs telepítve ezen az eszközön. A hangos navigációhoz telepítsd a magyar hangot a telefon szövegfelolvasó (TTS) beállításaiban.";
+    case "ENGINE_INIT_FAILED":
+    case "INIT_TIMEOUT":
+      return "A telefon szövegfelolvasó motorja nem indult el, ezért a hangos navigáció most nem érhető el.";
+    default:
+      return "Hangos navigáció ezen az eszközön nem érhető el.";
+  }
+}
+
+/** Natív felolvasási hiba (zárt kód) -> felhasználói üzenet. */
+export function describeNativeTtsError(code: string | null | undefined): string {
+  if (code === "TTS_UNAVAILABLE") return "A hangos utasítást nem sikerült lejátszani, mert a szövegfelolvasó nem érhető el.";
+  return "A hangos utasítást nem sikerült lejátszani. A képernyőn lévő utasítások továbbra is érvényesek.";
+}
