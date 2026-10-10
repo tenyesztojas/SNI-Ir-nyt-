@@ -12,30 +12,16 @@ import android.speech.tts.UtteranceProgressListener;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
-/**
- * Védett Útvonal — natív magyar hangos navigáció (Android TextToSpeech).
- * Egyetlen, alkalmazásszintű példány: a WebView-ból (VedettNavigationPlugin)
- * és a háttérszolgáltatásból (NavigationLocationService) is ezt használjuk.
- *
- * - Ellenőrzött inicializálás: csak akkor READY, ha a motor elindult ÉS a
- *   magyar nyelv (hu-HU) támogatott és az adatai telepítve vannak.
- * - QUEUE_FLUSH: egy új utasítás mindig megszakítja az előzőt (nincs
- *   felhalmozódó, elavult várólista).
- * - Audio focus: rövid, "duckolós" (GAIN_TRANSIENT_MAY_DUCK) fókusz
- *   navigációs célra — a zene halkul, nem áll le; felolvasás után elengedjük.
- * - Nem naplóz szöveget vagy helyadatot.
- */
-public final class NavigationTts implements TextToSpeech.OnInitListener {
+/** Shared Hungarian navigation speech engine. Never call TTS APIs while holding the state lock. */
+public final class NavigationTts {
     public enum State { NOT_STARTED, INITIALIZING, READY, UNAVAILABLE }
 
-    public interface ErrorListener {
-        void onTtsError(String code);
-    }
+    public interface ErrorListener { void onTtsError(String code); }
 
-    /** A WebView/Activity látható-e (a plugin állítja). Háttérben csak a service beszél. */
     public static volatile boolean appInForeground = true;
-
     private static NavigationTts instance;
 
     public static synchronized NavigationTts get(Context context) {
@@ -45,140 +31,170 @@ public final class NavigationTts implements TextToSpeech.OnInitListener {
 
     private final Context appContext;
     private final Handler main = new Handler(Looper.getMainLooper());
+    private final ExecutorService worker = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "VedettNavigationTts");
+        t.setDaemon(true);
+        return t;
+    });
+    private final Object stateLock = new Object();
     private final List<Runnable> waiters = new ArrayList<>();
-    private TextToSpeech tts;
     private volatile State state = State.NOT_STARTED;
-    private volatile String unavailableReason = null;
+    private volatile String unavailableReason;
     private volatile ErrorListener errorListener;
+    // The engine and audio focus are accessed only on the worker thread.
+    private TextToSpeech tts;
     private AudioManager audioManager;
     private AudioFocusRequest focusRequest;
+    private long generation;
 
-    private NavigationTts(Context appContext) {
-        this.appContext = appContext;
-    }
+    private NavigationTts(Context appContext) { this.appContext = appContext; }
 
-    public State state() {
-        return state;
-    }
+    public State state() { return state; }
+    public String unavailableReason() { return unavailableReason; }
+    public void setErrorListener(ErrorListener listener) { errorListener = listener; }
 
-    public String unavailableReason() {
-        return unavailableReason;
-    }
-
-    public void setErrorListener(ErrorListener listener) {
-        this.errorListener = listener;
-    }
-
-    /** Lusta inicializálás; a callback a fő szálon fut, amikor az állapot végleges (READY/UNAVAILABLE). */
-    public synchronized void whenInitialized(Runnable callback) {
-        if (state == State.READY || state == State.UNAVAILABLE) {
-            main.post(callback);
-            return;
-        }
-        waiters.add(callback);
-        if (state == State.NOT_STARTED) {
-            state = State.INITIALIZING;
-            try {
-                tts = new TextToSpeech(appContext, this);
-            } catch (RuntimeException e) {
-                finishInit(State.UNAVAILABLE, "ENGINE_INIT_FAILED");
+    /** Callback always runs on Android's main thread. */
+    public void whenInitialized(Runnable callback) {
+        boolean start = false;
+        synchronized (stateLock) {
+            if (state == State.READY || state == State.UNAVAILABLE) {
+                main.post(callback);
+                return;
+            }
+            waiters.add(callback);
+            if (state == State.NOT_STARTED) {
+                state = State.INITIALIZING;
+                start = true;
             }
         }
+        if (start) worker.execute(this::startEngine);
     }
 
-    @Override
-    public void onInit(int status) {
-        if (status != TextToSpeech.SUCCESS || tts == null) {
-            finishInit(State.UNAVAILABLE, "ENGINE_INIT_FAILED");
-            return;
-        }
-        int lang;
+    private void startEngine() {
+        final long token = ++generation;
         try {
-            lang = tts.setLanguage(new Locale("hu", "HU"));
+            // The callback can arrive on any thread; enqueue all TTS operations on our worker.
+            TextToSpeech engine = new TextToSpeech(appContext,
+                status -> worker.execute(() -> finishEngineInitialization(token, status)));
+            tts = engine;
         } catch (RuntimeException e) {
-            lang = TextToSpeech.LANG_NOT_SUPPORTED;
+            finishInit(token, State.UNAVAILABLE, "ENGINE_INIT_FAILED");
         }
-        if (lang == TextToSpeech.LANG_MISSING_DATA) {
-            finishInit(State.UNAVAILABLE, "LANGUAGE_MISSING_DATA");
+    }
+
+    private void finishEngineInitialization(long token, int status) {
+        if (token != generation) return;
+        TextToSpeech engine = tts;
+        if (status != TextToSpeech.SUCCESS || engine == null) {
+            finishInit(token, State.UNAVAILABLE, "ENGINE_INIT_FAILED");
             return;
         }
-        if (lang == TextToSpeech.LANG_NOT_SUPPORTED) {
-            finishInit(State.UNAVAILABLE, "LANGUAGE_NOT_SUPPORTED");
-            return;
+        try {
+            int lang = engine.setLanguage(new Locale("hu", "HU"));
+            if (lang == TextToSpeech.LANG_MISSING_DATA) {
+                finishInit(token, State.UNAVAILABLE, "LANGUAGE_MISSING_DATA");
+                return;
+            }
+            if (lang == TextToSpeech.LANG_NOT_SUPPORTED) {
+                finishInit(token, State.UNAVAILABLE, "LANGUAGE_NOT_SUPPORTED");
+                return;
+            }
+            engine.setAudioAttributes(navigationAttributes());
+            engine.setOnUtteranceProgressListener(new UtteranceProgressListener() {
+                @Override public void onStart(String id) { }
+                @Override public void onDone(String id) { worker.execute(NavigationTts.this::abandonFocus); }
+                @Override public void onStop(String id, boolean interrupted) {
+                    worker.execute(NavigationTts.this::abandonFocus);
+                }
+                @Override @SuppressWarnings("deprecation") public void onError(String id) {
+                    reportError("SPEAK_FAILED");
+                }
+                @Override public void onError(String id, int errorCode) {
+                    reportError("SPEAK_FAILED_" + errorCode);
+                }
+            });
+            finishInit(token, State.READY, null);
+        } catch (RuntimeException e) {
+            finishInit(token, State.UNAVAILABLE, "ENGINE_INIT_FAILED");
         }
-        tts.setAudioAttributes(navigationAttributes());
-        tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
-            @Override public void onStart(String utteranceId) {}
+    }
 
-            @Override public void onDone(String utteranceId) {
-                main.post(NavigationTts.this::abandonFocus);
+    private void finishInit(long token, State finalState, String reason) {
+        if (token != generation) return;
+        if (finalState == State.UNAVAILABLE) {
+            TextToSpeech engine = tts;
+            tts = null;
+            if (engine != null) {
+                try { engine.shutdown(); } catch (RuntimeException ignored) { }
             }
-
-            @Override public void onStop(String utteranceId, boolean interrupted) {
-                main.post(NavigationTts.this::abandonFocus);
-            }
-
-            @Override @SuppressWarnings("deprecation")
-            public void onError(String utteranceId) {
-                reportError("SPEAK_FAILED");
-            }
-
-            @Override public void onError(String utteranceId, int errorCode) {
-                reportError("SPEAK_FAILED_" + errorCode);
-            }
-        });
-        finishInit(State.READY, null);
+        }
+        List<Runnable> pending;
+        synchronized (stateLock) {
+            state = finalState;
+            unavailableReason = reason;
+            pending = new ArrayList<>(waiters);
+            waiters.clear();
+        }
+        for (Runnable callback : pending) main.post(callback);
     }
 
     private void reportError(String code) {
         main.post(() -> {
-            abandonFocus();
-            ErrorListener l = errorListener;
-            if (l != null) l.onTtsError(code);
+            ErrorListener listener = errorListener;
+            if (listener != null) listener.onTtsError(code);
         });
     }
 
-    private synchronized void finishInit(State finalState, String reason) {
-        state = finalState;
-        unavailableReason = reason;
-        if (finalState == State.UNAVAILABLE && tts != null) {
-            try { tts.shutdown(); } catch (RuntimeException ignored) {}
-            tts = null;
-        }
-        List<Runnable> pending = new ArrayList<>(waiters);
-        waiters.clear();
-        for (Runnable r : pending) main.post(r);
-    }
-
-    /** true = a motor elfogadta a felolvasást. Nem READY állapotban false (nincs "sikeres" állítás). */
-    public synchronized boolean speak(String text, String utteranceId) {
-        if (state != State.READY || tts == null || text == null || text.trim().isEmpty()) return false;
-        requestFocus();
-        int result = tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, utteranceId != null ? utteranceId : "vu");
-        if (result != TextToSpeech.SUCCESS) {
-            abandonFocus();
-            return false;
-        }
+    /** Returns true if a READY engine accepted the request for processing. */
+    public boolean speak(String text, String utteranceId) {
+        if (text == null || text.trim().isEmpty() || state != State.READY) return false;
+        final String spoken = text;
+        final String id = utteranceId != null ? utteranceId : "vu";
+        worker.execute(() -> {
+            if (state != State.READY || tts == null) return;
+            requestFocus();
+            try {
+                if (tts.speak(spoken, TextToSpeech.QUEUE_FLUSH, null, id) != TextToSpeech.SUCCESS) {
+                    abandonFocus();
+                    reportError("SPEAK_FAILED");
+                }
+            } catch (RuntimeException e) {
+                abandonFocus();
+                reportError("SPEAK_FAILED");
+            }
+        });
         return true;
     }
 
-    public synchronized void stop() {
-        if (tts != null) {
-            try { tts.stop(); } catch (RuntimeException ignored) {}
-        }
-        abandonFocus();
+    public void stop() {
+        worker.execute(() -> {
+            if (tts != null) {
+                try { tts.stop(); } catch (RuntimeException ignored) { }
+            }
+            abandonFocus();
+        });
     }
 
-    /** Navigáció leállításakor: erőforrás felszabadítása; a következő használat újra inicializál. */
-    public synchronized void shutdown() {
-        stop();
-        if (tts != null) {
-            try { tts.shutdown(); } catch (RuntimeException ignored) {}
-        }
-        tts = null;
-        state = State.NOT_STARTED;
-        unavailableReason = null;
-        waiters.clear();
+    /** Release the engine without blocking Android's main or Capacitor plugin threads. */
+    public void shutdown() {
+        worker.execute(() -> {
+            ++generation;
+            TextToSpeech engine = tts;
+            tts = null;
+            if (engine != null) {
+                try { engine.stop(); } catch (RuntimeException ignored) { }
+                try { engine.shutdown(); } catch (RuntimeException ignored) { }
+            }
+            abandonFocus();
+            List<Runnable> pending;
+            synchronized (stateLock) {
+                state = State.NOT_STARTED;
+                unavailableReason = null;
+                pending = new ArrayList<>(waiters);
+                waiters.clear();
+            }
+            for (Runnable callback : pending) main.post(callback);
+        });
     }
 
     private static AudioAttributes navigationAttributes() {
@@ -190,17 +206,18 @@ public final class NavigationTts implements TextToSpeech.OnInitListener {
 
     @SuppressWarnings("deprecation")
     private void requestFocus() {
-        if (audioManager == null) audioManager = (AudioManager) appContext.getSystemService(Context.AUDIO_SERVICE);
+        if (audioManager == null)
+            audioManager = (AudioManager) appContext.getSystemService(Context.AUDIO_SERVICE);
         if (audioManager == null) return;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             if (focusRequest == null) {
                 focusRequest = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
-                    .setAudioAttributes(navigationAttributes())
-                    .build();
+                    .setAudioAttributes(navigationAttributes()).build();
             }
             audioManager.requestAudioFocus(focusRequest);
         } else {
-            audioManager.requestAudioFocus(null, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK);
+            audioManager.requestAudioFocus(null, AudioManager.STREAM_MUSIC,
+                AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK);
         }
     }
 

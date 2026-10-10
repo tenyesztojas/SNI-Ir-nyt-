@@ -274,7 +274,7 @@ public class NavigationLocationService extends Service {
         speechEnabled = false;
         cancelDebugSpeechTest();
         instance = null;
-        NavigationTts.get(this).shutdown(); // TTS-erőforrás felszabadítása navigációleállításkor
+        NavigationTts.get(this).stop(); // TTS-erőforrás felszabadítása navigációleállításkor
         handler.removeCallbacks(tick);
         if (locationManager != null) {
             try { locationManager.removeUpdates(listener); } catch (Exception ignored) {}

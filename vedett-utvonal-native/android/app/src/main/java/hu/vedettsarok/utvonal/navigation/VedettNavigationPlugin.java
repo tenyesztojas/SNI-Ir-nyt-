@@ -7,6 +7,8 @@ import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import com.getcapacitor.JSObject;
@@ -24,6 +26,7 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 public class VedettNavigationPlugin extends Plugin {
     private static final int NOTIFICATION_PERMISSION_REQUEST = 4712;
     private static final long TTS_STATUS_TIMEOUT_MS = 5_000L;
+    private static final ExecutorService TTS_EXECUTOR = Executors.newSingleThreadExecutor();
 
     @Override
     public void load() {
@@ -78,7 +81,7 @@ public class VedettNavigationPlugin extends Plugin {
 
     @PluginMethod
     public void stopSpeaking(PluginCall call) {
-        NavigationTts.get(getContext()).stop();
+        TTS_EXECUTOR.execute(() -> NavigationTts.get(getContext()).stop());
         call.resolve();
     }
 
@@ -87,7 +90,7 @@ public class VedettNavigationPlugin extends Plugin {
     public void setSpeechEnabled(PluginCall call) {
         boolean enabled = Boolean.TRUE.equals(call.getBoolean("enabled", false));
         NavigationLocationService.speechEnabled = enabled;
-        if (!enabled) NavigationTts.get(getContext()).stop();
+        if (!enabled) TTS_EXECUTOR.execute(() -> NavigationTts.get(getContext()).stop());
         call.resolve();
     }
 
@@ -138,7 +141,7 @@ public class VedettNavigationPlugin extends Plugin {
 
     @PluginMethod
     public void stop(PluginCall call) {
-        NavigationTts.get(getContext()).stop();
+        TTS_EXECUTOR.execute(() -> NavigationTts.get(getContext()).stop());
         if (NavigationLocationService.running) {
             try {
                 getContext().startService(new Intent(getContext(), NavigationLocationService.class).setAction(NavigationLocationService.ACTION_STOP));
