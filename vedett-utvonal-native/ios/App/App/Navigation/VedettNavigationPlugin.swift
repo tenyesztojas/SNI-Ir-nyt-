@@ -1,4 +1,4 @@
-﻿import Foundation
+import Foundation
 import Capacitor
 
 @objc(VedettNavigationPlugin)
@@ -23,10 +23,12 @@ public class VedettNavigationPlugin: CAPPlugin, CAPBridgedPlugin {
         }
 
         DispatchQueue.main.async {
-            if self.navigation.start(targets: targets) {
-                call.resolve(["active": true])
-            } else {
-                call.reject("A helymeghatározási engedély hiányzik.")
+            self.navigation.start(targets: targets) { success in
+                if success {
+                    call.resolve(["active": true])
+                } else {
+                    call.reject("A navigáció nem indult el. Ellenőrizd a helymeghatározási engedélyt.")
+                }
             }
         }
     }

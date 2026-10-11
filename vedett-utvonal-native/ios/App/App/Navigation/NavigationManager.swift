@@ -1,4 +1,4 @@
-﻿import Foundation
+import Foundation
 import CoreLocation
 
 final class NavigationManager: NSObject, CLLocationManagerDelegate {
@@ -10,6 +10,8 @@ final class NavigationManager: NSObject, CLLocationManagerDelegate {
     private var sessionStartedAt: Date?
     private var isRunning = false
     private var stoppedByUser = false
+    private var pendingStart: ((Bool) -> Void)?
+    private var pendingTargets: [AlertEngine.Target]?
 
     var onAlert: ((AlertEngine.Alert) -> Void)?
 
@@ -30,15 +32,32 @@ final class NavigationManager: NSObject, CLLocationManagerDelegate {
         stoppedByUser
     }
 
-    func start(targets: [AlertEngine.Target]) -> Bool {
+    func start(targets: [AlertEngine.Target], completion: @escaping (Bool) -> Void) {
+        let previousStart = pendingStart
+        pendingStart = nil
+        pendingTargets = nil
+        previousStart?(false)
+
         let authorization = locationManager.authorizationStatus
+
+        if authorization == .notDetermined {
+            pendingStart?(false)
+            pendingStart = completion
+            pendingTargets = targets
+            locationManager.requestWhenInUseAuthorization()
+            return
+        }
 
         guard authorization == .authorizedWhenInUse ||
               authorization == .authorizedAlways else {
-            locationManager.requestWhenInUseAuthorization()
-            return false
+            completion(false)
+            return
         }
 
+        completion(startAuthorized(targets: targets))
+    }
+
+    private func startAuthorized(targets: [AlertEngine.Target]) -> Bool {
         stopInternal(userInitiated: false)
 
         let now = nowMs()
@@ -68,6 +87,10 @@ final class NavigationManager: NSObject, CLLocationManagerDelegate {
     }
 
     func stop() {
+        pendingTargets = nil
+        let completion = pendingStart
+        pendingStart = nil
+        completion?(false)
         stopInternal(userInitiated: true)
     }
 
@@ -140,9 +163,25 @@ final class NavigationManager: NSObject, CLLocationManagerDelegate {
             manager.authorizationStatus.rawValue
         )
 
+        let authorization = manager.authorizationStatus
+
+        if let completion = pendingStart,
+           authorization != .notDetermined {
+            let targets = pendingTargets
+            pendingStart = nil
+            pendingTargets = nil
+
+            if authorization == .authorizedWhenInUse ||
+               authorization == .authorizedAlways {
+                completion(targets.map { startAuthorized(targets: $0) } ?? false)
+            } else {
+                completion(false)
+            }
+        }
+
         if isRunning &&
-           manager.authorizationStatus != .authorizedWhenInUse &&
-           manager.authorizationStatus != .authorizedAlways {
+           authorization != .authorizedWhenInUse &&
+           authorization != .authorizedAlways {
             stopInternal(userInitiated: false)
         }
     }
