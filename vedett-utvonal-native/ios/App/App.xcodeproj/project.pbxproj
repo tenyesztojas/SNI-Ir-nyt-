@@ -22,6 +22,7 @@
         A20000000000000000000003 /* VedettNavigationPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000003 /* VedettNavigationPlugin.swift */; };
         A20000000000000000000004 /* VedettBridgeViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000004 /* VedettBridgeViewController.swift */; };
         A20000000000000000000005 /* NavigationNotifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000005 /* NavigationNotifications.swift */; };
+        A20000000000000000000006 /* NavigationSpeech.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000006 /* NavigationSpeech.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -42,6 +43,7 @@
         A10000000000000000000003 /* VedettNavigationPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VedettNavigationPlugin.swift; sourceTree = "<group>"; };
         A10000000000000000000004 /* VedettBridgeViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VedettBridgeViewController.swift; sourceTree = "<group>"; };
         A10000000000000000000005 /* NavigationNotifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationNotifications.swift; sourceTree = "<group>"; };
+        A10000000000000000000006 /* NavigationSpeech.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationSpeech.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -99,6 +101,7 @@
                 A10000000000000000000003 /* VedettNavigationPlugin.swift */,
                 A10000000000000000000004 /* VedettBridgeViewController.swift */,
                 A10000000000000000000005 /* NavigationNotifications.swift */,
+                A10000000000000000000006 /* NavigationSpeech.swift */,
             );
             path = Navigation;
             sourceTree = "<group>";
@@ -191,6 +194,7 @@
                 A20000000000000000000003 /* VedettNavigationPlugin.swift in Sources */,
                 A20000000000000000000004 /* VedettBridgeViewController.swift in Sources */,
                 A20000000000000000000005 /* NavigationNotifications.swift in Sources */,
+                A20000000000000000000006 /* NavigationSpeech.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

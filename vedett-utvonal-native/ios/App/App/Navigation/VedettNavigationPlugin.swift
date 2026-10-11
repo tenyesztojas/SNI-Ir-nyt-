@@ -10,7 +10,11 @@ public class VedettNavigationPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "start", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "updatePlan", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "stop", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "getState", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "getState", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "ttsStatus", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "speak", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "stopSpeaking", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setSpeechEnabled", returnType: CAPPluginReturnPromise)
     ]
 
     private let navigation = NavigationManager.shared
@@ -65,6 +69,52 @@ public class VedettNavigationPlugin: CAPPlugin, CAPBridgedPlugin {
                 "active": self.navigation.active,
                 "stoppedByUser": self.navigation.userStopped
             ])
+        }
+    }
+
+    @objc func ttsStatus(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            call.resolve(NavigationSpeech.shared.status())
+        }
+    }
+
+    @objc func speak(_ call: CAPPluginCall) {
+        guard let text = call.getString("text") else {
+            call.reject("Missing speech text.")
+            return
+        }
+
+        DispatchQueue.main.async {
+            if NavigationSpeech.shared.speak(text) {
+                call.resolve(["spoken": true])
+            } else {
+                let status = NavigationSpeech.shared.status()
+                let code = status["available"] as? Bool == false
+                    ? "LANGUAGE_NOT_SUPPORTED"
+                    : "SPEAK_FAILED"
+
+                self.notifyListeners("ttsError", data: ["code": code])
+                call.reject(code)
+            }
+        }
+    }
+
+    @objc func stopSpeaking(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            NavigationSpeech.shared.stop()
+            call.resolve()
+        }
+    }
+
+    @objc func setSpeechEnabled(_ call: CAPPluginCall) {
+        guard let enabled = call.getBool("enabled") else {
+            call.reject("Missing enabled parameter.")
+            return
+        }
+
+        DispatchQueue.main.async {
+            NavigationSpeech.shared.setEnabled(enabled)
+            call.resolve(["enabled": enabled])
         }
     }
 
