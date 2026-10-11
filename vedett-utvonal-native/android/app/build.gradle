@@ -4,7 +4,7 @@ apply plugin: 'com.android.application'
 android {
     namespace = "hu.vedettsarok.utvonal"
     compileSdk = rootProject.ext.compileSdkVersion
-    // Debug-only hangteszthez (BuildConfig.DEBUG) — AGP 8 alapból nem generál BuildConfig-ot.
+    // Debug-only hangteszthez (BuildConfig.DEBUG) - AGP 8 alatt a BuildConfig generalasahoz.
     buildFeatures {
         buildConfig true
     }
@@ -13,8 +13,8 @@ android {
         applicationId "hu.vedettsarok.utvonal"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0.0"
+        versionCode 3
+        versionName "1.0.2"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 
         aaptOptions {
@@ -66,3 +66,4 @@ try {
 } catch(Exception e) {
     logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
 }
+
