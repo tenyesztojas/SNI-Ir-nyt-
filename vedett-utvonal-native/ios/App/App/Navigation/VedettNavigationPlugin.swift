@@ -23,6 +23,12 @@ public class VedettNavigationPlugin: CAPPlugin, CAPBridgedPlugin {
         }
 
         DispatchQueue.main.async {
+            self.navigation.onAlert = { alert in
+                NavigationNotifications.shared.show(alert)
+            }
+
+            NavigationNotifications.shared.requestPermission()
+
             self.navigation.start(targets: targets) { success in
                 if success {
                     call.resolve(["active": true])
