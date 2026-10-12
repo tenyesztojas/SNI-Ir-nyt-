@@ -1,0 +1,22 @@
+﻿name: iPad Simulator Discovery
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: macos-26
+    timeout-minutes: 10
+
+    steps:
+      - name: Xcode version
+        run: xcodebuild -version
+
+      - name: Available iPad simulators
+        run: |
+          xcrun simctl list devices available
+          echo "=== Available runtimes ==="
+          xcrun simctl list runtimes
