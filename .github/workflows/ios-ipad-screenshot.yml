@@ -1,4 +1,4 @@
-﻿name: iPad Simulator Discovery
+﻿name: iPad Screenshot
 
 on:
   workflow_dispatch:
@@ -7,16 +7,69 @@ permissions:
   contents: read
 
 jobs:
-  discover:
+  screenshot:
     runs-on: macos-26
-    timeout-minutes: 10
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: vedett-utvonal-native
 
     steps:
-      - name: Xcode version
-        run: xcodebuild -version
+      - uses: actions/checkout@v4
 
-      - name: Available iPad simulators
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: vedett-utvonal-native/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Sync iOS
+        run: npx cap sync ios
+
+      - name: Build simulator app
         run: |
-          xcrun simctl list devices available
-          echo "=== Available runtimes ==="
-          xcrun simctl list runtimes
+          xcodebuild build \
+            -project ios/App/App.xcodeproj \
+            -scheme App \
+            -configuration Release \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY=""
+
+      - name: Boot 13-inch iPad
+        run: |
+          xcrun simctl boot "iPad Pro 13-inch (M5)"
+          xcrun simctl bootstatus "iPad Pro 13-inch (M5)" -b
+
+      - name: Install and launch app
+        run: |
+          APP_PATH="build/DerivedData/Build/Products/Release-iphonesimulator/App.app"
+          xcrun simctl install booted "$APP_PATH"
+          xcrun simctl status_bar booted override \
+            --time "9:41" \
+            --dataNetwork wifi \
+            --wifiMode active \
+            --wifiBars 3 \
+            --batteryState charged \
+            --batteryLevel 100
+          xcrun simctl launch booted hu.vedettsarok.utvonal
+          sleep 25
+
+      - name: Capture screenshot
+        run: |
+          mkdir -p screenshots
+          xcrun simctl io booted screenshot screenshots/vedett-utvonal-ipad-13.png
+          sips -g pixelWidth -g pixelHeight screenshots/vedett-utvonal-ipad-13.png
+
+      - name: Upload screenshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: vedett-utvonal-ipad-13
+          path: vedett-utvonal-native/screenshots/vedett-utvonal-ipad-13.png
+          retention-days: 7
