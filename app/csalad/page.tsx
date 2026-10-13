@@ -10,7 +10,7 @@ import {
 import FamilyOnboarding from "@/components/family/FamilyOnboarding";
 import FamilyCard from "@/components/family/FamilyCard";
 import GuardianInvitationInbox from "@/components/family/GuardianInvitationInbox";
-import ChildScheduleSection from "@/components/family/ChildScheduleSection";
+import ChildTodayView from "@/components/family/ChildTodayView";
 import type { Metadata } from "next";
 
 // /csalad — Family modul, első működő UI verzió a meglévő Family DB
@@ -118,22 +118,8 @@ export default async function CsaladPage() {
   // SOSE látja egy linkelt gyermek-account az owner/guardian JSX-et,
   // még egy jövőbeli, előre nem látott átfedés esetén sem.
   if (childSelf) {
-    return (
-      <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
-        <div className="flex items-center gap-3">
-          <Users className="text-sni-brand-blue" size={32} />
-          <h1 className="text-2xl font-bold text-gray-900">Család</h1>
-        </div>
-
-        <div className="mt-6 rounded-2xl border border-gray-100 bg-white p-6 shadow-soft">
-          <p className="font-medium text-gray-900">{childSelf.firstName}</p>
-          {childSelf.birthYear && (
-            <p className="text-sm text-gray-500">{childSelf.birthYear}</p>
-          )}
-          <ChildScheduleSection child={childSelf} canManage={false} />
-        </div>
-      </div>
-    );
+    // Védett Napom: önálló, csak olvasható gyermeknézet (nincs családkezelés).
+    return <ChildTodayView child={childSelf} />;
   }
 
   return (
