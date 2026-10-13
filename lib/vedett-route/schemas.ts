@@ -134,3 +134,12 @@ export const routeDestinationDeepLinkSchema = z.object({
   lat: z.preprocess((v) => Number(v), latitudeSchema),
   lon: z.preprocess((v) => Number(v), longitudeSchema),
 });
+
+// Opcionális kiindulási hely a mélylinkben (Védett Család napirend ->
+// /vedett-utvonal?...&originName=&originLat=&originLon=). A cél name/lat/lon
+// paramétereitől ELKÜLÖNÍTETT kulcsok, ugyanazzal a validációval.
+export const routeOriginDeepLinkSchema = z.object({
+  originName: z.string().trim().min(1).max(200),
+  originLat: z.preprocess((v) => Number(v), latitudeSchema),
+  originLon: z.preprocess((v) => Number(v), longitudeSchema),
+});

@@ -4,6 +4,7 @@ import { useState } from "react";
 import ScheduleItemForm from "@/components/family/ScheduleItemForm";
 import DeleteScheduleItemButton from "@/components/family/DeleteScheduleItemButton";
 import type { ChildScheduleItemView, FamilyChildView } from "@/lib/family/data";
+import { buildScheduleRouteHref } from "@/lib/family/scheduleLocation";
 
 // Napirend — Család -> Gyermek -> Napirend -> Napirendi elemek
 // hierarchia legalsó szintje. A gyermek nevét MINDIG kiírja a fejlécben
@@ -108,6 +109,26 @@ export default function ChildScheduleSection({
                         {item.originLabel ?? "?"} → {item.destinationLabel ?? "?"}
                       </p>
                     )}
+                    {(() => {
+                      // Védett Útvonal mélylink: csak érvényes célkoordinátával aktív.
+                      const routeHref = buildScheduleRouteHref(item);
+                      return routeHref ? (
+                        <a
+                          href={routeHref}
+                          className="mt-1 inline-flex min-h-[44px] items-center text-sm font-semibold text-sni-brand-blue hover:underline"
+                        >
+                          Útvonal megtervezése
+                        </a>
+                      ) : item.destinationLabel ? (
+                        <span
+                          className="mt-1 inline-flex min-h-[44px] items-center text-sm text-gray-400"
+                          aria-disabled="true"
+                          title="A célállomást a javaslatok közül kiválasztva lehet útvonalat tervezni."
+                        >
+                          Útvonal megtervezése (válaszd ki a célt a javaslatokból)
+                        </span>
+                      ) : null;
+                    })()}
                   </div>
                   {canManage && (
                     <div className="flex flex-col items-end gap-2">

@@ -32,6 +32,11 @@ export type ChildScheduleItemView = {
   daysOfWeek: number[] | null;
   originLabel: string | null;
   destinationLabel: string | null;
+  // Csak a címkeresőből kiválasztott helyhez van koordináta; régi elemeknél null.
+  originLat: number | null;
+  originLon: number | null;
+  destinationLat: number | null;
+  destinationLon: number | null;
   isActive: boolean;
 };
 
@@ -388,7 +393,7 @@ export async function getMyFamilies(
       ? await supabase
           .from("child_schedule_items")
           .select(
-            "id, child_id, title, description, schedule_type, start_date, end_date, time_local, arrival_time_local, days_of_week, origin_label, destination_label, is_active"
+            "id, child_id, title, description, schedule_type, start_date, end_date, time_local, arrival_time_local, days_of_week, origin_label, origin_lat, origin_lon, destination_label, destination_lat, destination_lon, is_active"
           )
           .in("child_id", allChildIds)
       : {
@@ -404,7 +409,11 @@ export async function getMyFamilies(
             arrival_time_local: string | null;
             days_of_week: number[] | null;
             origin_label: string | null;
+            origin_lat: number | null;
+            origin_lon: number | null;
             destination_label: string | null;
+            destination_lat: number | null;
+            destination_lon: number | null;
             is_active: boolean;
           }[],
           error: null as { message: string } | null,
@@ -594,6 +603,10 @@ export async function getMyFamilies(
       daysOfWeek: row.days_of_week,
       originLabel: row.origin_label,
       destinationLabel: row.destination_label,
+      originLat: row.origin_lat ?? null,
+      originLon: row.origin_lon ?? null,
+      destinationLat: row.destination_lat ?? null,
+      destinationLon: row.destination_lon ?? null,
       isActive: row.is_active,
     });
     scheduleItemsByChild.set(row.child_id, list);
@@ -786,7 +799,7 @@ export async function getLinkedChildSelfView(
     supabase
       .from("child_schedule_items")
       .select(
-        "id, child_id, title, description, schedule_type, start_date, end_date, time_local, arrival_time_local, days_of_week, origin_label, destination_label, is_active"
+        "id, child_id, title, description, schedule_type, start_date, end_date, time_local, arrival_time_local, days_of_week, origin_label, origin_lat, origin_lon, destination_label, destination_lat, destination_lon, is_active"
       )
       .eq("child_id", childId),
   ]);
@@ -818,7 +831,11 @@ export async function getLinkedChildSelfView(
         arrival_time_local: string | null;
         days_of_week: number[] | null;
         origin_label: string | null;
+        origin_lat: number | null;
+        origin_lon: number | null;
         destination_label: string | null;
+        destination_lat: number | null;
+        destination_lon: number | null;
         is_active: boolean;
       }) => ({
         id: row.id,
@@ -834,6 +851,10 @@ export async function getLinkedChildSelfView(
         daysOfWeek: row.days_of_week,
         originLabel: row.origin_label,
         destinationLabel: row.destination_label,
+        originLat: row.origin_lat ?? null,
+        originLon: row.origin_lon ?? null,
+        destinationLat: row.destination_lat ?? null,
+        destinationLon: row.destination_lon ?? null,
         isActive: row.is_active,
       })
     )

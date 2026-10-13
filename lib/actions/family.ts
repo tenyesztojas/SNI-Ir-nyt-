@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { parseCoordinatePair } from "@/lib/family/scheduleLocation";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUserAndProfile } from "@/lib/data";
@@ -473,6 +474,12 @@ export async function createChildScheduleItemAction(
   const startDateRaw = String(formData.get("startDate") ?? "").trim();
   const originLabelRaw = String(formData.get("originLabel") ?? "").trim();
   const destinationLabelRaw = String(formData.get("destinationLabel") ?? "").trim();
+  // Koordináta csak a címkeresőből kiválasztott helyhez (rejtett mezők);
+  // üres pár = nincs koordináta (régi/kézi cím), fél pár / hibás érték = hiba.
+  const originCoords = parseCoordinatePair(formData.get("originLat"), formData.get("originLon"));
+  const destinationCoords = parseCoordinatePair(formData.get("destinationLat"), formData.get("destinationLon"));
+  if (!originCoords.ok) return { error: originCoords.error };
+  if (!destinationCoords.ok) return { error: destinationCoords.error };
 
   if (!childId) return { error: "Hiányzó gyermek azonosító." };
   if (!title) return { error: "A megnevezés megadása kötelező." };
@@ -510,6 +517,11 @@ export async function createChildScheduleItemAction(
     p_days_of_week: scheduleType === "recurring" ? daysOfWeek : null,
     p_origin_label: originLabelRaw || null,
     p_destination_label: destinationLabelRaw || null,
+    // Koordináta csak címkével együtt (címke nélküli koordinátát nem mentünk).
+    p_origin_lat: originLabelRaw ? originCoords.lat : null,
+    p_origin_lon: originLabelRaw ? originCoords.lon : null,
+    p_destination_lat: destinationLabelRaw ? destinationCoords.lat : null,
+    p_destination_lon: destinationLabelRaw ? destinationCoords.lon : null,
   });
 
   if (error) {
@@ -544,6 +556,12 @@ export async function updateChildScheduleItemAction(
   const startDateRaw = String(formData.get("startDate") ?? "").trim();
   const originLabelRaw = String(formData.get("originLabel") ?? "").trim();
   const destinationLabelRaw = String(formData.get("destinationLabel") ?? "").trim();
+  // Koordináta csak a címkeresőből kiválasztott helyhez (rejtett mezők);
+  // üres pár = nincs koordináta (régi/kézi cím), fél pár / hibás érték = hiba.
+  const originCoords = parseCoordinatePair(formData.get("originLat"), formData.get("originLon"));
+  const destinationCoords = parseCoordinatePair(formData.get("destinationLat"), formData.get("destinationLon"));
+  if (!originCoords.ok) return { error: originCoords.error };
+  if (!destinationCoords.ok) return { error: destinationCoords.error };
   const isActiveRaw = String(formData.get("isActive") ?? "true").trim();
 
   if (!itemId) return { error: "Hiányzó napirendi elem azonosító." };
@@ -575,6 +593,11 @@ export async function updateChildScheduleItemAction(
     p_days_of_week: scheduleType === "recurring" ? daysOfWeek : null,
     p_origin_label: originLabelRaw || null,
     p_destination_label: destinationLabelRaw || null,
+    // Koordináta csak címkével együtt (címke nélküli koordinátát nem mentünk).
+    p_origin_lat: originLabelRaw ? originCoords.lat : null,
+    p_origin_lon: originLabelRaw ? originCoords.lon : null,
+    p_destination_lat: destinationLabelRaw ? destinationCoords.lat : null,
+    p_destination_lon: destinationLabelRaw ? destinationCoords.lon : null,
     p_is_active: isActiveRaw !== "false",
   });
 

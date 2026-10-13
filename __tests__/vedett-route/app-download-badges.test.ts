@@ -99,6 +99,6 @@ describe("megjelenési helyek", () => {
     const badge = page.lastIndexOf('<AppDownloadBadges className="mt-4"');
     const ws = page.indexOf("<VedettUtvonalWorkspace disabled={!enabled}");
     assert.ok(badge > 0 && ws > badge);
-    assert.match(page, /<VedettUtvonalWorkspace disabled=\{!enabled\} initialDestination=\{initialDestination\} isAuthenticated=\{Boolean\(user\)\} \/>/);
+    assert.match(page, /<VedettUtvonalWorkspace disabled=\{!enabled\} initialDestination=\{initialDestination\} initialOrigin=\{initialOrigin\} isAuthenticated=\{Boolean\(user\)\} \/>/);
   });
 });

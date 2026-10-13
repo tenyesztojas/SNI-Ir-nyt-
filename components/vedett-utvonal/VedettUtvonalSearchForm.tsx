@@ -4237,6 +4237,7 @@ function releasePreviousTextInputFocus(target: EventTarget | null): void {
 export default function VedettUtvonalSearchForm({
   disabled,
   initialDestination = null,
+  initialOrigin = null,
   initialFavoritePreset = null,
   isAuthenticated = true,
   journeyMonitorSimulationEnabled = false,
@@ -4261,6 +4262,10 @@ export default function VedettUtvonalSearchForm({
   // nem végez saját validációt a bemeneten, csak megbízik a hívóban
   // (ugyanaz a minta, mint a `disabled` prop esetén).
   initialDestination?: { name: string; latitude: number; longitude: number } | null;
+  // Opcionális kiindulási hely mélylinkből (validálva a hívóban, lásd
+  // routeOriginDeepLinkSchema) — a „Honnan?” mező MAP_PICKED módban indul,
+  // ugyanúgy, mint egy mentett hely kiválasztásakor.
+  initialOrigin?: { name: string; latitude: number; longitude: number } | null;
   // Kedvenc útvonalak integráció (2026-09-09) — a VedettUtvonalWorkspace
   // adja át, amikor a felhasználó egy kedvenc útvonal "Útvonal
   // megtervezése" gombjára kattint (lásd FavoriteRoutesPanel.tsx). EZ a
@@ -4288,7 +4293,9 @@ export default function VedettUtvonalSearchForm({
   // két módot (MANUAL / CURRENT_LOCATION) megkülönböztető RouteOrigin
   // state — lásd a fájl elején lévő típusdefiníciót és indoklást.
   const [origin, setOrigin] = useState<RouteOrigin>(
-    initialFavoritePreset && initialFavoritePreset.originMode === "MANUAL" && initialFavoritePreset.originManual
+    initialOrigin
+      ? { type: "MAP_PICKED", name: initialOrigin.name, latitude: initialOrigin.latitude, longitude: initialOrigin.longitude }
+      : initialFavoritePreset && initialFavoritePreset.originMode === "MANUAL" && initialFavoritePreset.originManual
       ? {
           type: "MANUAL",
           city: initialFavoritePreset.originManual.city,

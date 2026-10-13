@@ -62,7 +62,7 @@ import { getCurrentUserAndProfile } from "@/lib/data";
 import { signOutAction } from "@/lib/actions/auth";
 import { isVedettRouteFeatureEnabled, VEDETT_ROUTE_ACCESS_LEVEL } from "@/lib/vedett-route/config";
 import { hasVedettRouteBetaAccess } from "@/lib/vedett-route/access";
-import { routeDestinationDeepLinkSchema } from "@/lib/vedett-route/schemas";
+import { routeDestinationDeepLinkSchema, routeOriginDeepLinkSchema } from "@/lib/vedett-route/schemas";
 import VedettUtvonalWorkspace from "@/components/vedett-utvonal/VedettUtvonalWorkspace";
 import AppDownloadBadges from "@/components/vedett-utvonal/AppDownloadBadges";
 import type { Metadata } from "next";
@@ -95,6 +95,22 @@ function parseDeepLinkDestination(
   const parsed = routeDestinationDeepLinkSchema.safeParse({ name, lat, lon });
   if (!parsed.success) return null;
   return { name: parsed.data.name, latitude: parsed.data.lat, longitude: parsed.data.lon };
+}
+
+// Opcionális kiindulási hely (originName/originLat/originLon) — érvénytelen
+// vagy hiányzó adatnál null, és a „Honnan?” mező alapértelmezése marad.
+function parseDeepLinkOrigin(
+  searchParams: Record<string, string | string[] | undefined>
+): { name: string; latitude: number; longitude: number } | null {
+  const originName = searchParams.originName;
+  const originLat = searchParams.originLat;
+  const originLon = searchParams.originLon;
+  if (typeof originName !== "string" || typeof originLat !== "string" || typeof originLon !== "string") {
+    return null;
+  }
+  const parsed = routeOriginDeepLinkSchema.safeParse({ originName, originLat, originLon });
+  if (!parsed.success) return null;
+  return { name: parsed.data.originName, latitude: parsed.data.originLat, longitude: parsed.data.originLon };
 }
 
 const PREVIEW_FEATURES: { icon: typeof Bus; title: string; desc: string }[] = [
@@ -203,6 +219,7 @@ export default async function VedettUtvonalPage({
   // kereső form, tehát a destinationnak sincs hova kerülnie; nincs szükség
   // rá, hogy egy DENY ágon is validáljunk egy query paramétert.
   const initialDestination = hasLevelAccess ? parseDeepLinkDestination(searchParams) : null;
+  const initialOrigin = hasLevelAccess ? parseDeepLinkOrigin(searchParams) : null;
 
   if (!hasLevelAccess) {
     return (
@@ -275,7 +292,7 @@ export default async function VedettUtvonalPage({
             meg (spec 34. pont illusztratív UX flow-ja). A
             VedettUtvonalWorkspace felelős a "1 kattintásos újratervezés"
             React-key-remount mintájáért — lásd a komponens fejlécét. */}
-        <VedettUtvonalWorkspace disabled={!enabled} initialDestination={initialDestination} isAuthenticated={Boolean(user)} />
+        <VedettUtvonalWorkspace disabled={!enabled} initialDestination={initialDestination} initialOrigin={initialOrigin} isAuthenticated={Boolean(user)} />
       </div>
 
       {/* Kompakt, saját lábléc (2026-10-03) — a globális VédettSarok Footer

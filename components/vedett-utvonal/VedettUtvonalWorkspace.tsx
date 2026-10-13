@@ -79,10 +79,13 @@ type CarRouteResult = {
 export default function VedettUtvonalWorkspace({
   disabled,
   initialDestination,
+  initialOrigin = null,
   isAuthenticated = true,
 }: {
   disabled: boolean;
   initialDestination: { name: string; latitude: number; longitude: number } | null;
+  // Opcionális, a page.tsx-ben már validált kiindulási hely (originName/originLat/originLon).
+  initialOrigin?: { name: string; latitude: number; longitude: number } | null;
   // false = anonim látogató (public read-only mód): a perzisztens funkciók
   // (kedvencek, saját pihenőpont mentés) UI-ja nem jelenik meg — az API
   // ettől függetlenül 401-gyel védi őket. Alapértelmezés true (admin oldal).
@@ -277,6 +280,7 @@ export default function VedettUtvonalWorkspace({
             key={selectedPreset?.key ?? "initial"}
             disabled={disabled}
             initialDestination={selectedPreset ? null : initialDestination}
+            initialOrigin={selectedPreset ? null : initialOrigin}
             initialFavoritePreset={selectedPreset?.preset ?? null}
             isAuthenticated={isAuthenticated}
             navigationResumeEnabled
