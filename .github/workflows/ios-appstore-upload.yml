@@ -34,7 +34,7 @@ jobs:
           RUN_INFO="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}")"
 
           echo "$RUN_INFO" | jq -e \
-            --arg sha "2a9c812" \
+            --arg sha "8bb2857" \
             '.status == "completed" and
              .conclusion == "success" and
              .path == ".github/workflows/ios-release.yml" and
