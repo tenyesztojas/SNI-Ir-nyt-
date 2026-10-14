@@ -89,9 +89,14 @@ public class VedettNavigationPlugin: CAPPlugin, CAPBridgedPlugin {
                 call.resolve(["spoken": true])
             } else {
                 let status = NavigationSpeech.shared.status()
-                let code = status["available"] as? Bool == false
-                    ? "LANGUAGE_NOT_SUPPORTED"
-                    : "SPEAK_FAILED"
+                let code: String
+                if status["enabled"] as? Bool == false {
+                    code = "SPEECH_DISABLED"
+                } else if status["available"] as? Bool == false {
+                    code = "LANGUAGE_NOT_SUPPORTED"
+                } else {
+                    code = "SPEAK_FAILED"
+                }
 
                 self.notifyListeners("ttsError", data: ["code": code])
                 call.reject(code)

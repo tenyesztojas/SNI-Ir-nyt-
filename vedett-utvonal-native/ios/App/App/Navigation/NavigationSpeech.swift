@@ -48,8 +48,18 @@ final class NavigationSpeech: NSObject, AVSpeechSynthesizerDelegate {
         }
     }
 
+    private func hungarianVoice() -> AVSpeechSynthesisVoice? {
+        if let voice = AVSpeechSynthesisVoice(language: "hu-HU") {
+            return voice
+        }
+
+        return AVSpeechSynthesisVoice.speechVoices().first {
+            $0.language.lowercased() == "hu" ||
+            $0.language.lowercased().hasPrefix("hu-")
+        }
+    }
     func status() -> [String: Any] {
-        let available = AVSpeechSynthesisVoice(language: "hu-HU") != nil
+        let available = hungarianVoice() != nil
         let reason: Any = available ? NSNull() : "LANGUAGE_NOT_SUPPORTED"
         return [
             "available": available,
@@ -70,7 +80,7 @@ final class NavigationSpeech: NSObject, AVSpeechSynthesizerDelegate {
     func speak(_ text: String) -> Bool {
         guard enabled,
               !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              let voice = AVSpeechSynthesisVoice(language: "hu-HU") else {
+              let voice = hungarianVoice() else {
             return false
         }
 
@@ -86,11 +96,9 @@ final class NavigationSpeech: NSObject, AVSpeechSynthesizerDelegate {
             )
             try AVAudioSession.sharedInstance().setActive(true)
         } catch {
-            NSLog("VedettUtvonal audio session error: %@", error.localizedDescription)
-            currentUtterance = nil
-            synthesizer.stopSpeaking(at: .immediate)
-            releaseAudioSession()
-            return false
+            // Do not block speech solely because audio session setup failed.
+            // AVSpeechSynthesizer may still be able to play using the active session.
+            NSLog("VedettUtvonal audio session setup warning: %@", error.localizedDescription)
         }
 
         let utterance = AVSpeechUtterance(string: text)

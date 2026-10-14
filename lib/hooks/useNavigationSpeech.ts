@@ -232,7 +232,7 @@ export function useNavigationSpeech({ enabled, announcement, resetKey }: UseNavi
   // cancel() az új speak() előtt, lásd a modul fejlécének "SPEECH QUEUE"
   // pontja — nincs felhalmozódó várólista).
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || engine === "pending") return;
     const decision = resolveSpeechDecision(stateRef.current, announcement);
     stateRef.current = decision.state;
     if (!decision.shouldSpeak || !announcement) return;
@@ -272,7 +272,7 @@ export function useNavigationSpeech({ enabled, announcement, resetKey }: UseNavi
       setLastErrorMessage(describeSpeechSynthesisError("synthesis-failed"));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, announcement?.key, announcement?.text]);
+  }, [enabled, announcement?.key, announcement?.text, engine]);
 
   // Unmount / navigáció-kártya eltűnése — sosem maradhat beszélő utterance.
   useEffect(() => {
