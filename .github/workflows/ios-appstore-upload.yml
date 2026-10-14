@@ -34,11 +34,11 @@ jobs:
           RUN_INFO="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}")"
 
           echo "$RUN_INFO" | jq -e \
-            --arg sha "70737e8" \
+            --arg branch "fix/ios-testflight-tts-layout" \
             '.status == "completed" and
              .conclusion == "success" and
              .path == ".github/workflows/ios-release.yml" and
-             (.head_sha | startswith($sha))' > /dev/null || {
+             .head_branch == $branch' > /dev/null || {
             echo "::error::Release run does not match the approved iOS fix"
             exit 1
           }
