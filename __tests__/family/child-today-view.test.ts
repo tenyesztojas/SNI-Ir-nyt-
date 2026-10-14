@@ -69,17 +69,20 @@ describe("időrend és következő program", () => {
 
 describe("jogosultság szerinti megjelenítés", () => {
   const page = read("app/csalad/page.tsx");
-  const view = read("components/family/ChildTodayView.tsx");
+  const shell = read("components/family/ChildTodayView.tsx");
+  const view = read("components/family/ChildTodayLive.tsx");
   test("gyermekfiók: szerveroldali getLinkedChildSelfView után a Védett Napom, az owner/guardian JSX előtt", () => {
-    const child = page.indexOf("return <ChildTodayView child={childSelf} />;");
+    const child = page.indexOf("return <ChildTodayView child={childSelf}");
     assert.ok(page.indexOf("getLinkedChildSelfView(user.id)") < child && child > 0);
     assert.ok(child < page.indexOf("<FamilyCard"));
   });
   test("gyermeknézet: nincs szerkesztés/törlés/családkezelés, nincs kliens-komponens", () => {
-    assert.doesNotMatch(view, /"use client"|ScheduleItemForm|DeleteScheduleItemButton|canManage|lib\/actions|FamilyCard|Invitation/);
+    assert.doesNotMatch(shell, /"use client"/);
+    for (const src of [shell, view]) assert.doesNotMatch(src, /ScheduleItemForm|DeleteScheduleItemButton|canManage|lib\/actions|FamilyCard|Invitation/);
   });
   test("Útvonal gomb csak a meglévő buildScheduleRouteHref()-ből", () => {
-    assert.match(view, /const routeHref = buildScheduleRouteHref\(item\);/);
+    assert.match(read("lib/family/travelCard.ts"), /routeHref: buildScheduleRouteHref\(item\),/);
+    assert.match(view, /const routeHref = card\.routeHref;/);
     assert.match(view, /\{routeHref && \(\s*<a\s+href=\{routeHref\}/);
     assert.doesNotMatch(view, /\/vedett-utvonal\?/);
   });

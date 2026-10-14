@@ -4,13 +4,21 @@ import ChildCard from "@/components/family/ChildCard";
 import ChildScheduleSection from "@/components/family/ChildScheduleSection";
 import ChildAccountSection from "@/components/family/ChildAccountSection";
 import GuardianManagement from "@/components/family/GuardianManagement";
+import ChildTravelStatusSummary from "@/components/family/ChildTravelStatusSummary";
+import type { TravelStatusWithTitle } from "@/lib/family/travelStatusData";
 
 const ROLE_LABEL: Record<string, string> = {
   owner: "Tulajdonos",
   guardian: "Gondviselő",
 };
 
-export default function FamilyCard({ family }: { family: FamilyView }) {
+export default function FamilyCard({
+  family,
+  travelStatusByChild = {},
+}: {
+  family: FamilyView;
+  travelStatusByChild?: Record<string, TravelStatusWithTitle>;
+}) {
   return (
     <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-soft">
       <h2 className="text-lg font-bold text-gray-900">
@@ -43,6 +51,7 @@ export default function FamilyCard({ family }: { family: FamilyView }) {
             {family.children.map((child) => (
               <div key={child.id}>
                 <ChildCard child={child} canEdit={family.myRole === "owner"} />
+                <ChildTravelStatusSummary childId={child.id} status={travelStatusByChild[child.id]} />
                 {/* Napirend create/edit/delete: owner-családnál mindig
                     true, guardian-családnál a SAJÁT aktív
                     can_manage_schedule jogosultság dönt (lásd

@@ -1,11 +1,10 @@
 "use client";
 
 // Védett Napom — indulás előtti figyelmeztetések a nyitott oldalon.
-// Percenként (a következő perchatárra igazítva) számol újra; rejtett
-// lapon nem ütemez, visszatéréskor azonnal frissít; unmountkor leáll.
+// Saját időzítő NINCS: az órát a ChildTodayLive egyetlen useVisibleTick-je
+// adja (perchatárra igazítva, rejtett lapon áll, unmountkor leáll).
 // Nincs push, nincs hálózati hívás, nincs logolás.
 
-import { useEffect, useState } from "react";
 import { BellRing } from "lucide-react";
 import type { ChildScheduleItemView } from "@/lib/family/data";
 import { buildScheduleRouteHref } from "@/lib/family/scheduleLocation";
@@ -15,30 +14,7 @@ function alertText(a: DepartureAlert): string {
   return a.level === "now" ? "Most kell indulnod!" : `${a.minutesLeft} perc múlva indulás`;
 }
 
-export default function DepartureAlerts({ items }: { items: ChildScheduleItemView[] }) {
-  const [now, setNow] = useState<Date | null>(null);
-
-  useEffect(() => {
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    const tick = () => {
-      setNow(new Date());
-      if (timer) clearTimeout(timer);
-      timer = null;
-      if (document.visibilityState === "hidden") return;
-      timer = setTimeout(tick, 60_000 - (Date.now() % 60_000) + 50);
-    };
-    const onVisibility = () => {
-      if (document.visibilityState === "visible") tick();
-    };
-    tick();
-    document.addEventListener("visibilitychange", onVisibility);
-    return () => {
-      if (timer) clearTimeout(timer);
-      document.removeEventListener("visibilitychange", onVisibility);
-    };
-  }, []);
-
-  if (!now) return null;
+export default function DepartureAlerts({ items, now }: { items: ChildScheduleItemView[]; now: Date }) {
   const alerts = todayDepartureAlerts(items, now);
   if (alerts.length === 0) return null;
   const byId = new Map(items.map((i) => [i.id, i]));

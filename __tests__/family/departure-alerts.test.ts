@@ -57,13 +57,16 @@ describe("napváltás", () => {
 describe("komponens", () => {
   const c = readFileSync("components/family/DepartureAlerts.tsx", "utf8");
   test("percenként frissít, rejtett lapon nem ütemez, unmountkor leáll, meglévő útvonallinkkel", () => {
-    assert.match(c, /setTimeout\(tick, 60_000 - \(Date\.now\(\) % 60_000\) \+ 50\)/);
-    assert.match(c, /visibilityState === "hidden"\) return;/);
-    assert.match(c, /return \(\) => \{\s*if \(timer\) clearTimeout\(timer\);\s*document\.removeEventListener/);
+    // Saját időzítő nincs: az órát a ChildTodayLive egyetlen useVisibleTick-je adja.
+    assert.doesNotMatch(c, /setTimeout|setInterval|useEffect/);
+    const h = readFileSync("lib/hooks/useVisibleTick.ts", "utf8");
+    assert.match(h, /return 60_000 - \(nowMs % 60_000\) \+ 50;/);
+    assert.match(h, /if \(stopped \|\| document\.visibilityState === "hidden"\) return;/);
+    assert.match(h, /return \(\) => \{\s*stopped = true;\s*if \(timer\) clearTimeout\(timer\);\s*document\.removeEventListener/);
     assert.match(c, /buildScheduleRouteHref\(item\)/);
     assert.doesNotMatch(c, /console\.|fetch\(|Notification/);
   });
   test("a gyermeknézet beköti", () => {
-    assert.match(readFileSync("components/family/ChildTodayView.tsx", "utf8"), /<DepartureAlerts items=\{child\.scheduleItems\} \/>/);
+    assert.match(readFileSync("components/family/ChildTodayLive.tsx", "utf8"), /<DepartureAlerts items=\{child\.scheduleItems\} now=\{now\} \/>/);
   });
 });
