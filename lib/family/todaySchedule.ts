@@ -69,3 +69,31 @@ export function nextScheduleItemId(sortedToday: ChildScheduleItemView[], nowMinu
   }
   return null;
 }
+
+// ---- Indulás előtti, alkalmazáson belüli figyelmeztetések ----
+// Ablakok (perc indulásig): 15–11, 10–6, 5–1, 0 (indulás perce).
+// Eseményenként egy pillanatban legfeljebb EGY figyelmeztetés.
+export type DepartureAlertLevel = "15" | "10" | "5" | "now";
+export type DepartureAlert = { itemId: string; level: DepartureAlertLevel; minutesLeft: number };
+
+export function departureAlertLevel(minutesLeft: number): DepartureAlertLevel | null {
+  if (!Number.isInteger(minutesLeft)) return null;
+  if (minutesLeft === 0) return "now";
+  if (minutesLeft >= 1 && minutesLeft <= 5) return "5";
+  if (minutesLeft >= 6 && minutesLeft <= 10) return "10";
+  if (minutesLeft >= 11 && minutesLeft <= 15) return "15";
+  return null;
+}
+
+// Csak a MAI (budapesti), aktív, érvényes eseményekre; időrendben.
+export function todayDepartureAlerts(items: ChildScheduleItemView[], now: Date): DepartureAlert[] {
+  const day = budapestLocalDay(now);
+  const alerts: DepartureAlert[] = [];
+  for (const item of todayScheduleItems(items, day)) {
+    const start = timeToMinutes(item.timeLocal);
+    if (start === null) continue;
+    const level = departureAlertLevel(start - day.minutes);
+    if (level) alerts.push({ itemId: item.id, level, minutesLeft: start - day.minutes });
+  }
+  return alerts;
+}

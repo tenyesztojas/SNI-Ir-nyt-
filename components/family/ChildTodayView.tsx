@@ -5,6 +5,7 @@
 import { MapPin, Navigation, Sun } from "lucide-react";
 import type { FamilyChildView } from "@/lib/family/data";
 import { buildScheduleRouteHref } from "@/lib/family/scheduleLocation";
+import DepartureAlerts from "@/components/family/DepartureAlerts";
 import { FAMILY_TIME_ZONE, budapestLocalDay, nextScheduleItemId, todayScheduleItems } from "@/lib/family/todaySchedule";
 
 const hhmm = (t: string | null) => (t ? t.slice(0, 5) : "");
@@ -31,6 +32,8 @@ export default function ChildTodayView({ child, now = new Date() }: { child: Fam
           </p>
         </div>
       </header>
+
+      <DepartureAlerts items={child.scheduleItems} />
 
       {items.length === 0 ? (
         <p className="mt-8 rounded-2xl bg-white p-6 text-lg text-gray-700 shadow-soft">
