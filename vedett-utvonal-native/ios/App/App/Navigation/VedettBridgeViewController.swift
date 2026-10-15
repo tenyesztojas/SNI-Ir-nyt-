@@ -109,6 +109,31 @@ final class VedettBridgeViewController: CAPBridgeViewController {
               max-width: 100% !important;
               overflow-wrap: anywhere !important;
             }
+            div.fixed.inset-0.z-50.bg-black div[role="status"].absolute.right-14.z-20 {
+              margin-left: 0 !important;
+              margin-right: 0 !important;
+              left: 12px !important;
+              right: 12px !important;
+              width: calc(100% - 24px) !important;
+              max-width: none !important;
+              transform: none !important;
+            }
+
+            div.fixed.inset-0.z-50.bg-black div[role="status"].absolute.right-14.z-20 > div {
+              max-width: 100% !important;
+              min-width: 0 !important;
+              white-space: normal !important;
+              overflow-wrap: anywhere !important;
+              word-break: break-word !important;
+            }
+
+            div.fixed.inset-0.z-50.bg-black div.absolute.bottom-3.left-3.z-10 {
+              left: 12px !important;
+              right: auto !important;
+              margin-left: 0 !important;
+              transform: none !important;
+              width: min(170px, calc(100% - 24px)) !important;
+            }
             div.fixed.right-3.flex.flex-col.items-end {
               bottom: calc(env(safe-area-inset-bottom, 0px) + 12px) !important;
               left: auto !important;
@@ -218,7 +243,7 @@ final class VedettBridgeViewController: CAPBridgeViewController {
             const availableHeight = Math.floor(bottomLimit - cardTop - 12);
             const viewportLimit = Math.floor(window.innerHeight * 0.30);
             const nextMaxHeight = Math.max(
-              0,
+              100,
               Math.min(viewportLimit, availableHeight)
             ) + 'px';
 
