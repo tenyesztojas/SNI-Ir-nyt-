@@ -14,7 +14,8 @@ public class VedettNavigationPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "ttsStatus", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "speak", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "stopSpeaking", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "setSpeechEnabled", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "setSpeechEnabled", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getSafeAreaInsets", returnType: CAPPluginReturnPromise)
     ]
 
     private let navigation = NavigationManager.shared
@@ -53,6 +54,31 @@ public class VedettNavigationPlugin: CAPPlugin, CAPBridgedPlugin {
         DispatchQueue.main.async {
             self.navigation.updatePlan(targets: targets)
             call.resolve()
+        }
+    }
+
+    // iOS navigációs elrendezés v2: a web a biztonsági sávokat közvetlenül a
+    // UIKit-ből kapja (nincs CSS-injektálás, nincs UA-találgatás). A webes
+    // oldal csak akkor vált az új elrendezésre, ha ez a metódus létezik.
+    @objc func getSafeAreaInsets(_ call: CAPPluginCall) {
+        DispatchQueue.main.async {
+            guard let view = self.bridge?.viewController?.view,
+                  let scrollView = self.bridge?.webView?.scrollView else {
+                call.reject("SAFE_AREA_UNAVAILABLE")
+                return
+            }
+            let safe = view.safeAreaInsets
+            let adjusted = scrollView.adjustedContentInset
+            call.resolve([
+                "safe": [
+                    "top": Double(safe.top), "right": Double(safe.right),
+                    "bottom": Double(safe.bottom), "left": Double(safe.left)
+                ],
+                "adjusted": [
+                    "top": Double(adjusted.top), "right": Double(adjusted.right),
+                    "bottom": Double(adjusted.bottom), "left": Double(adjusted.left)
+                ]
+            ])
         }
     }
 
