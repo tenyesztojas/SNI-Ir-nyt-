@@ -83,11 +83,37 @@ final class VedettBridgeViewController: CAPBridgeViewController {
               min-width: 0 !important;
               overflow-wrap: anywhere !important;
             }
+            div.fixed.inset-0.z-50.bg-black div[role="status"].absolute.right-14.z-20 {
+              overflow-x: hidden !important;
+              padding: 12px !important;
+              font-size: 14px !important;
+              line-height: 1.35 !important;
+            }
+
+            div.fixed.inset-0.z-50.bg-black div[role="status"].absolute.right-14.z-20 * {
+              max-width: 100% !important;
+              white-space: normal !important;
+              overflow-wrap: anywhere !important;
+              word-break: normal !important;
+              box-sizing: border-box !important;
+            }
+
+            div.fixed.inset-0.z-50.bg-black div.absolute.bottom-3.left-3.z-10 {
+              max-width: min(170px, calc(100vw - 24px)) !important;
+              padding: 10px !important;
+              box-sizing: border-box !important;
+              overflow-wrap: anywhere !important;
+            }
+
+            div.fixed.inset-0.z-50.bg-black div.absolute.bottom-3.left-3.z-10 * {
+              max-width: 100% !important;
+              overflow-wrap: anywhere !important;
+            }
             div.fixed.right-3.flex.flex-col.items-end {
               bottom: calc(env(safe-area-inset-bottom, 0px) + 12px) !important;
               left: auto !important;
               right: 12px !important;
-              width: min(280px, calc(100vw - 24px)) !important;
+              width: min(210px, calc(100vw - 24px)) !important;
               max-width: calc(100vw - 24px) !important;
               align-items: stretch !important;
               flex-direction: column !important;
@@ -192,7 +218,7 @@ final class VedettBridgeViewController: CAPBridgeViewController {
             const availableHeight = Math.floor(bottomLimit - cardTop - 12);
             const viewportLimit = Math.floor(window.innerHeight * 0.30);
             const nextMaxHeight = Math.max(
-              96,
+              0,
               Math.min(viewportLimit, availableHeight)
             ) + 'px';
 
