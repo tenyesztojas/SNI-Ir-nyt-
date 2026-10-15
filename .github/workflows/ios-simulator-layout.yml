@@ -1,0 +1,154 @@
+name: iOS Simulator Navigation Layout
+
+# NEM tölt fel TestFlightra, NEM
+# módosít buildszámot, NEM érinti az éles weboldalt és az Androidot:
+#   - a web a futtatón, a checkoutolt branch kódjából fut (next dev, localhost:3000);
+#   - a szimulátoros app capacitor.config.json server.url-je CSAK a futtatón,
+#     a `cap sync` UTÁN íródik át a helyi tesztoldalra (a repo fájljai nem változnak);
+#   - nincs Supabase / éles adat: a tesztoldal a keresést és a GPS-t mockolja.
+
+# Indítás: GitHub csak az alapértelmezett (main) branchen lévő workflow-t engedi
+# kézzel indítani. Mivel a main nem módosítható, a workflow KIZÁRÓLAG a
+# feature branch pusholásakor fut (és csak a releváns fájlok változásakor);
+# a workflow_dispatch a későbbi, main-be került változathoz marad meg.
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - fix/ios-testflight-tts-layout
+    paths:
+      - ".github/workflows/ios-simulator-layout.yml"
+      - "e2e/ios-navigation-layout.mjs"
+      - "app/(vu-test-harness)/**"
+      - "components/vedett-utvonal/VedettUtvonalSearchForm.tsx"
+      - "lib/hooks/useIosNavigationLayout.ts"
+      - "lib/vedett-route/native/nativeNavigationBridge.ts"
+      - "vedett-utvonal-native/ios/App/App/Navigation/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-simulator-layout-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  layout:
+    runs-on: macos-26
+    timeout-minutes: 75
+    env:
+      HARNESS_URL: http://localhost:3000/vu-nav-layout-harness
+      NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-dummy
+      NEXT_TELEMETRY_DISABLED: "1"
+      # A tesztoldal CSAK ezzel él (minden más környezetben 404).
+      VU_LAYOUT_HARNESS: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install web dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Start local Next.js from this branch (no production)
+        run: |
+          # A middleware Supabase-munkamenetet frissítene — a tesztoldalhoz nem kell.
+          mv middleware.ts /tmp/middleware.ts.ci-disabled
+          nohup npx next dev -p 3000 > "$RUNNER_TEMP/next.log" 2>&1 &
+          for i in $(seq 1 120); do
+            if curl -sf -o /dev/null "$HARNESS_URL"; then echo "Next ready after ${i} tries"; break; fi
+            sleep 2
+          done
+          curl -sf "$HARNESS_URL" -o "$RUNNER_TEMP/harness.html"
+          # Bizonyíték: a helyi szerver a branch új kódját szolgálja ki (ez az oldal
+          # productionben 404, és csak ebben a branchben létezik).
+          grep -qE "Szent Gellért tér|vu-nav-layout-harness" "$RUNNER_TEMP/harness.html" && echo "Harness served from local branch code"
+
+      - name: Chromium layout test (simulated safe areas)
+        run: |
+          npm i --no-save --no-audit --no-fund playwright@1.56.0
+          npx playwright install chromium
+          mkdir -p layout-screenshots/chromium layout-screenshots/chromium-legacycss
+          SCREENSHOT_DIR=layout-screenshots/chromium BASE_URL=http://localhost:3000 node e2e/ios-navigation-layout.mjs
+          # Ugyanez a meglévő Swift CSS/JS-injekcióval együtt (koegzisztencia-próba).
+          INJECT_LEGACY_IOS_CSS=1 SCREENSHOT_DIR=layout-screenshots/chromium-legacycss BASE_URL=http://localhost:3000 node e2e/ios-navigation-layout.mjs
+
+      - name: Install native dependencies, sync iOS, point app to local harness (runner only)
+        working-directory: vedett-utvonal-native
+        run: |
+          npm ci
+          npx cap sync ios
+          CFG=ios/App/App/capacitor.config.json
+          /usr/bin/python3 - "$CFG" "$HARNESS_URL?autostart=1" <<'PY'
+          import json, sys
+          path, url = sys.argv[1], sys.argv[2]
+          cfg = json.load(open(path))
+          cfg["server"]["url"] = url
+          json.dump(cfg, open(path, "w"), indent=2)
+          PY
+          echo "--- capacitor.config.json (runner only) ---"
+          cat "$CFG"
+          grep -q '"url": "http://localhost:3000/vu-nav-layout-harness?autostart=1"' "$CFG"
+          # A buildszám NEM változik:
+          grep -m1 "CURRENT_PROJECT_VERSION" ios/App/App.xcodeproj/project.pbxproj
+
+      - name: Build simulator app (Debug, unsigned)
+        working-directory: vedett-utvonal-native
+        run: |
+          xcodebuild build \
+            -project ios/App/App.xcodeproj \
+            -scheme App \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" | tail -40
+          APP_PATH="build/DerivedData/Build/Products/Debug-iphonesimulator/App.app"
+          echo "--- capacitor.config.json BUNDLED in App.app ---"
+          cat "$APP_PATH/capacitor.config.json"
+          grep -q "localhost:3000/vu-nav-layout-harness" "$APP_PATH/capacitor.config.json"
+          if grep -q "www.vedettsarok.hu" "$APP_PATH/capacitor.config.json"; then echo "HIBA: a szimulátoros app a production URL-t töltené be"; exit 1; fi
+
+      - name: Run app on iPhone simulators and capture screenshots
+        working-directory: vedett-utvonal-native
+        run: |
+          APP_PATH="build/DerivedData/Build/Products/Debug-iphonesimulator/App.app"
+          OUT=../layout-screenshots/simulator
+          mkdir -p "$OUT"
+          xcrun simctl list devices available | tee "$OUT/available-devices.txt"
+          COUNT=0
+          for DEVICE in "iPhone SE (3rd generation)" "iPhone 16e" "iPhone 17" "iPhone Air" "iPhone 17 Pro Max" "iPhone 16" "iPhone 16 Pro Max"; do
+            UDID=$(xcrun simctl list devices available | grep -F "    $DEVICE (" | head -1 | grep -oE '[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}' || true)
+            if [ -z "$UDID" ]; then echo "Nem elérhető szimulátor: $DEVICE"; continue; fi
+            echo "=== $DEVICE ($UDID) ==="
+            xcrun simctl boot "$UDID" || true
+            xcrun simctl bootstatus "$UDID" -b
+            xcrun simctl install "$UDID" "$APP_PATH"
+            xcrun simctl privacy "$UDID" grant location hu.vedettsarok.utvonal || true
+            xcrun simctl location "$UDID" set 47.4979,19.0544 || true
+            xcrun simctl launch "$UDID" hu.vedettsarok.utvonal
+            sleep 50
+            NAME=$(echo "$DEVICE" | tr ' ()' '___')
+            xcrun simctl io "$UDID" screenshot "$OUT/${NAME}-portrait.png"
+            xcrun simctl shutdown "$UDID" || true
+            COUNT=$((COUNT + 1))
+            [ "$COUNT" -ge 4 ] && break
+          done
+          echo "Képernyőképek: $COUNT"
+          [ "$COUNT" -ge 2 ] || { echo "HIBA: kevesebb mint 2 szimulátoron futott"; exit 1; }
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-navigation-layout-${{ github.run_number }}
+          path: |
+            layout-screenshots
+            ${{ runner.temp }}/next.log
+          retention-days: 14
