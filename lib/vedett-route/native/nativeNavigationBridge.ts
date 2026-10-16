@@ -255,8 +255,29 @@ export function isIosNativePlatform(win: unknown = typeof window === "undefined"
   }
 }
 
-export async function getNativeSafeAreaLayout(win?: unknown): Promise<NativeSafeAreaLayout | null> {
-  if (!isIosNativePlatform(win)) return null;
-  const outcome = await callDetailed("getSafeAreaInsets", undefined, win);
-  return outcome.ok ? parseNativeSafeAreaLayout(outcome.value) : null;
+// FÜGGŐ HÍVÁSOK KORLÁTOZÁSA (2026-10-16). A getSafeAreaInsets-et nem ismerő
+// iOS-buildekben (<= 10) a Capacitor natív oldala ("No method found" naplózás
+// után) NEM válaszol: a Promise sosem teljesül, és a visszahívás a
+// window.Capacitor belső tárában marad. Ezért bridge-enként legfeljebb EGY
+// lekérés lehet folyamatban — a további hívások (forgatás, átméretezés,
+// újramountolás) ugyanazt a Promise-t kapják. Régi buildben így
+// oldalbetöltésenként pontosan egy függő natív hívás marad (layout null → v1,
+// változatlanul); az új buildben a válasz után a következő lekérés friss natív
+// hívást indít. Nincs időkorlát-heurisztika: egy lassú válasz is megérkezik
+// minden várakozóhoz. Böngészőben és Androidon natív hívás nem indul.
+const safeAreaInflight = new WeakMap<object, Promise<NativeSafeAreaLayout | null>>();
+
+export function getNativeSafeAreaLayout(win?: unknown): Promise<NativeSafeAreaLayout | null> {
+  if (!isIosNativePlatform(win)) return Promise.resolve(null);
+  const bridge = getNativeNavigationBridge(win);
+  if (!bridge) return Promise.resolve(null);
+  const pending = safeAreaInflight.get(bridge);
+  if (pending) return pending;
+  const request = callDetailed("getSafeAreaInsets", undefined, win)
+    .then((outcome) => (outcome.ok ? parseNativeSafeAreaLayout(outcome.value) : null))
+    .finally(() => {
+      safeAreaInflight.delete(bridge);
+    });
+  safeAreaInflight.set(bridge, request);
+  return request;
 }

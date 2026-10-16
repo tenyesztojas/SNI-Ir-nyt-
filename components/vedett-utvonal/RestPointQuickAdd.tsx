@@ -141,7 +141,7 @@ export default function RestPointQuickAdd({ onCreated }: { onCreated?: (rp: Rest
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="pl. Pad a Duna-parton"
-            className="mt-1 w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+            className="mt-1 w-full rounded border border-gray-300 px-2 py-1.5 text-base sm:text-sm"
           />
         </div>
 
@@ -152,7 +152,7 @@ export default function RestPointQuickAdd({ onCreated }: { onCreated?: (rp: Rest
               type="text"
               value={latitude}
               onChange={(e) => setLatitude(e.target.value)}
-              className="mt-1 w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+              className="mt-1 w-full rounded border border-gray-300 px-2 py-1.5 text-base sm:text-sm"
             />
           </div>
           <div className="flex-1">
@@ -161,7 +161,7 @@ export default function RestPointQuickAdd({ onCreated }: { onCreated?: (rp: Rest
               type="text"
               value={longitude}
               onChange={(e) => setLongitude(e.target.value)}
-              className="mt-1 w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+              className="mt-1 w-full rounded border border-gray-300 px-2 py-1.5 text-base sm:text-sm"
             />
           </div>
           <button type="button" onClick={handleUseGps} className="btn-secondary whitespace-nowrap text-xs">
@@ -188,7 +188,7 @@ export default function RestPointQuickAdd({ onCreated }: { onCreated?: (rp: Rest
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={2}
-            className="mt-1 w-full rounded border border-gray-300 px-2 py-1.5 text-sm"
+            className="mt-1 w-full rounded border border-gray-300 px-2 py-1.5 text-base sm:text-sm"
           />
         </div>
 

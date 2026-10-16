@@ -159,7 +159,7 @@ export default function SavedPlacesPanel({
                     onChange={(e) => setRenameValue(e.target.value)}
                     maxLength={SAVED_PLACE_NAME_MAX}
                     aria-label="Új név"
-                    className="min-h-[44px] flex-1 rounded-lg border border-gray-300 px-3 text-sm"
+                    className="min-h-[44px] flex-1 rounded-lg border border-gray-300 px-3 text-base sm:text-sm"
                   />
                   <button type="button" className={BTN} disabled={busy || !renameValue.trim()} onClick={() => void handleRename(p.id)}>
                     Mentés
@@ -257,7 +257,7 @@ export default function SavedPlacesPanel({
               maxLength={SAVED_PLACE_NAME_MAX}
               placeholder="Név (pl. Nagyi, Edzés)"
               aria-label="A mentett hely neve"
-              className="min-h-[44px] w-full rounded-lg border border-gray-300 px-3 text-sm"
+              className="min-h-[44px] w-full rounded-lg border border-gray-300 px-3 text-base sm:text-sm"
             />
             <div className="flex flex-wrap gap-2">
               {NAME_SUGGESTIONS.map((s) => (

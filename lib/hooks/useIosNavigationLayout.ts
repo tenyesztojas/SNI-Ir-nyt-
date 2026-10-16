@@ -31,9 +31,26 @@ export function useIosNavigationLayout(): { enabled: boolean; insets: EdgeInsets
     if (!isIosNativePlatform()) return;
     let cancelled = false;
     let frame = 0;
+    // Egyszerre legfeljebb egy lekérés: régi (<= 10) buildben a natív hívás
+    // sosem válaszol, így forgatásonként/átméretezésenként sem halmozódnak a
+    // függő hívások. Ha lekérés közben újabb esemény jön, a válasz után
+    // egyszer újrakérdezünk (az új buildben a forgatás utáni értékekért).
+    let inflight = false;
+    let dirty = false;
     const refresh = () => {
+      if (inflight) {
+        dirty = true;
+        return;
+      }
+      inflight = true;
       void getNativeSafeAreaLayout().then((next) => {
-        if (!cancelled && next) setLayout((prev) => (sameLayout(prev, next) ? prev : next));
+        inflight = false;
+        if (cancelled) return;
+        if (next) setLayout((prev) => (sameLayout(prev, next) ? prev : next));
+        if (dirty) {
+          dirty = false;
+          schedule();
+        }
       });
     };
     const schedule = () => {
