@@ -174,7 +174,9 @@ describe("szimulátoros gépi riport-ellenőrzés", async () => {
     const cli = read("e2e/assert-simulator-report.mjs");
     assert.match(cli, /evaluateDeviceReports\(entries, \{ orientation \}\)/);
     const h = read("app/(vu-test-harness)/vu-nav-layout-harness/Harness.tsx");
-    assert.match(h, /const run = async \(phase: string, withRestFlow: boolean\) => \{\s*lastOrientation = currentOrientation\(\);/);
+    // A resize-méréseket a mérésütemező kezeli (kezdeti mérés után, sorosan) — lásd ios-harness-measure-scheduler.test.ts.
+    assert.match(h, /window\.addEventListener\("resize", scheduler\.onResize\);/);
+    assert.match(h, /await scheduler\.runInitial\(\);/);
   });
   test("tesztoldal: a natív navigációs start elkülönítve, a getSafeAreaInsets átengedve; riport-végpont csak CI-ben", () => {
     const h = read("app/(vu-test-harness)/vu-nav-layout-harness/Harness.tsx");

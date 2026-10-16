@@ -9,6 +9,7 @@
 
 import { useEffect, useState } from "react";
 import VedettUtvonalSearchForm from "@/components/vedett-utvonal/VedettUtvonalSearchForm";
+import { createMeasureScheduler, type Orientation } from "./measureScheduler";
 import {
   getNativeSafeAreaLayout,
   isIosNativePlatform,
@@ -144,6 +145,9 @@ const toRect = (el: Element | null | undefined): Rect | null => {
   if (!r.width || !r.height) return null;
   return { left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height };
 };
+// A térképvezérlők megjelenésére legfeljebb ennyit várunk mérés előtt.
+const MAP_CONTROLS_TIMEOUT_MS = 15_000;
+const visibleMapControlCount = () => [...document.querySelectorAll(".maplibregl-ctrl")].filter((el) => toRect(el) !== null).length;
 const overlaps = (a: Rect, b: Rect) => a.left < b.right - 0.5 && b.left < a.right - 0.5 && a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5;
 
 type LayoutReport = {
@@ -285,20 +289,33 @@ export default function Harness() {
     installFetchMock();
     installGeolocationMock();
     isolateNativeNavigationCalls();
-    // A mérés kezdetekor rögzítjük a tájolást: egy, a (hosszabb) első mérés
-    // KÖZBEN érkező, tájolást NEM változtató resize (pl. a WKWebView kezdeti
-    // átméretezése) így nem indít felesleges második riportot.
-    const currentOrientation = () => (window.innerWidth > window.innerHeight ? "landscape" : "portrait");
-    let lastOrientation = "";
-    const run = async (phase: string, withRestFlow: boolean) => {
-      lastOrientation = currentOrientation();
+    // Mérésütemező (measureScheduler.ts): resize CSAK a kezdeti mérés
+    // befejezése után indíthat mérést, a mérések sorosan futnak, és egy
+    // resize-mérés csak tényleges tájolásváltáskor fut. (Korábban az
+    // induláskori WKWebView-átméretezés a kezdeti mérés ELŐTT, a térkép
+    // betöltődése előtt mért — ios-navigation-layout-4, mapControls: [].)
+    const currentOrientation = (): Orientation => (window.innerWidth > window.innerHeight ? "landscape" : "portrait");
+    const run = async (phase: string, withRestFlow: boolean): Promise<Orientation> => {
       const restFlowOk = withRestFlow ? await checkRestFlow() : null;
       await new Promise((r) => setTimeout(r, 800));
+      // A térképvezérlők (MapLibre, dinamikusan betöltött modul) megjelenésére
+      // KORLÁTOZOTT ideig várunk; ha addig sem jelennek meg, a mérés ezt
+      // valódi hibaként ("hiányzó elem: térképvezérlők") rögzíti.
+      await waitFor(() => visibleMapControlCount() > 0, MAP_CONTROLS_TIMEOUT_MS);
       const report = await measure(phase, restFlowOk);
-      lastOrientation = report.viewport.orientation;
       await postReport(report);
       setReport(`${report.layout} · ${report.viewport.innerWidth}×${report.viewport.innerHeight} · ${report.ok ? "ELRENDEZÉS OK" : report.problems.join(", ")}`);
+      return report.viewport.orientation;
     };
+    const scheduler = createMeasureScheduler({
+      currentOrientation,
+      measure: run,
+      setTimer: (fn, ms) => window.setTimeout(fn, ms),
+      clearTimer: (handle) => window.clearTimeout(handle as number | undefined),
+      resizeDebounceMs: 3000,
+    });
+    // A resize-figyelő azonnal él, de az ütemező a kezdeti mérésig figyelmen kívül hagyja.
+    window.addEventListener("resize", scheduler.onResize);
     (async () => {
       // A süti-tájékoztatóra a legszűkebb választ adjuk (ha megjelenik).
       await clickButton((t) => t === "Csak szükséges sütik", 3000);
@@ -307,18 +324,8 @@ export default function Harness() {
       await clickButton((t) => t.includes("Navigáció indítása"));
       await waitFor(() => Boolean(document.querySelector("[data-vu-nav-layout], [data-vu-nav-top-bar]")), 15_000);
       await new Promise((r) => setTimeout(r, 4000));
-      await run("initial", true);
+      await scheduler.runInitial();
     })();
-    // Forgatás után (pl. fekvő teszt) újramérés és új riport.
-    let timer: number | undefined;
-    const onResize = () => {
-      window.clearTimeout(timer);
-      timer = window.setTimeout(() => {
-        const orientation = currentOrientation();
-        if (orientation !== lastOrientation) void run(`after-resize-${orientation}`, false);
-      }, 3000);
-    };
-    window.addEventListener("resize", onResize);
   }, []);
 
   return (
