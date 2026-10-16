@@ -18,7 +18,7 @@ on:
       - fix/ios-testflight-tts-layout
     paths:
       - ".github/workflows/ios-simulator-layout.yml"
-      - "e2e/ios-navigation-layout.mjs"
+      - "e2e/**"
       - "app/(vu-test-harness)/**"
       - "components/vedett-utvonal/VedettUtvonalSearchForm.tsx"
       - "lib/hooks/useIosNavigationLayout.ts"
@@ -43,6 +43,8 @@ jobs:
       NEXT_TELEMETRY_DISABLED: "1"
       # A tesztoldal CSAK ezzel él (minden más környezetben 404).
       VU_LAYOUT_HARNESS: "1"
+      # A tesztoldal gépi mérési riportjai ide kerülnek (a CI ebből dönt).
+      VU_LAYOUT_REPORT_DIR: /tmp/vu-layout-reports
 
     steps:
       - uses: actions/checkout@v4
@@ -115,33 +117,12 @@ jobs:
           grep -q "localhost:3000/vu-nav-layout-harness" "$APP_PATH/capacitor.config.json"
           if grep -q "www.vedettsarok.hu" "$APP_PATH/capacitor.config.json"; then echo "HIBA: a szimulátoros app a production URL-t töltené be"; exit 1; fi
 
-      - name: Run app on iPhone simulators and capture screenshots
-        working-directory: vedett-utvonal-native
+      - name: Run app on iPhone simulators (4 portrait + 1 landscape) with machine-checked reports
         run: |
-          APP_PATH="build/DerivedData/Build/Products/Debug-iphonesimulator/App.app"
-          OUT=../layout-screenshots/simulator
-          mkdir -p "$OUT"
-          xcrun simctl list devices available | tee "$OUT/available-devices.txt"
-          COUNT=0
-          for DEVICE in "iPhone SE (3rd generation)" "iPhone 16e" "iPhone 17" "iPhone Air" "iPhone 17 Pro Max" "iPhone 16" "iPhone 16 Pro Max"; do
-            UDID=$(xcrun simctl list devices available | grep -F "    $DEVICE (" | head -1 | grep -oE '[0-9A-F]{8}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{4}-[0-9A-F]{12}' || true)
-            if [ -z "$UDID" ]; then echo "Nem elérhető szimulátor: $DEVICE"; continue; fi
-            echo "=== $DEVICE ($UDID) ==="
-            xcrun simctl boot "$UDID" || true
-            xcrun simctl bootstatus "$UDID" -b
-            xcrun simctl install "$UDID" "$APP_PATH"
-            xcrun simctl privacy "$UDID" grant location hu.vedettsarok.utvonal || true
-            xcrun simctl location "$UDID" set 47.4979,19.0544 || true
-            xcrun simctl launch "$UDID" hu.vedettsarok.utvonal
-            sleep 50
-            NAME=$(echo "$DEVICE" | tr ' ()' '___')
-            xcrun simctl io "$UDID" screenshot "$OUT/${NAME}-portrait.png"
-            xcrun simctl shutdown "$UDID" || true
-            COUNT=$((COUNT + 1))
-            [ "$COUNT" -ge 4 ] && break
-          done
-          echo "Képernyőképek: $COUNT"
-          [ "$COUNT" -ge 2 ] || { echo "HIBA: kevesebb mint 2 szimulátoron futott"; exit 1; }
+          chmod +x e2e/ios-simulator-run.sh
+          e2e/ios-simulator-run.sh \
+            "vedett-utvonal-native/build/DerivedData/Build/Products/Debug-iphonesimulator/App.app" \
+            layout-screenshots/simulator
 
       - name: Upload artifacts
         if: always()
@@ -151,4 +132,5 @@ jobs:
           path: |
             layout-screenshots
             ${{ runner.temp }}/next.log
+            /tmp/vu-layout-reports
           retention-days: 14

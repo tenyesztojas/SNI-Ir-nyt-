@@ -114,3 +114,48 @@ describe("forrás: szimulátoros tesztkörnyezet elkülönítése", () => {
     assert.match(code, /if grep -q "www\.vedettsarok\.hu" "\$APP_PATH\/capacitor\.config\.json"; then/);
   });
 });
+
+describe("szimulátoros gépi riport-ellenőrzés", async () => {
+  const { evaluateReport } = await import("../../e2e/assert-simulator-report.mjs");
+  const rect = { left: 10, top: 70, right: 100, bottom: 120, width: 90, height: 50 };
+  const good = {
+    schema: 1, ok: true, problems: [], layout: "ios-v2",
+    native: { platformIos: true, ok: true, raw: { safe: { top: 59, right: 0, bottom: 34, left: 0 }, adjusted: { top: 0, right: 0, bottom: 0, left: 0 } } },
+    viewport: { orientation: "portrait", innerWidth: 393, innerHeight: 852, scrollWidth: 393 },
+    rects: { topBar: rect, instruction: rect, eta: rect, bottomBar: rect },
+    restButtons: { restNeed: rect, restAdd: rect },
+    mapControls: [rect], restFlowOk: true,
+    nativeCalls: [{ method: "start", outcome: "suppressed" }, { method: "VedettNavigation.getSafeAreaInsets", outcome: "passed" }],
+  };
+  test("hibátlan riport → nincs hiba", () => {
+    assert.deepEqual(evaluateReport(good, { orientation: "portrait" }), []);
+  });
+  test("sikertelen getSafeAreaInsets, v1 elrendezés, rossz tájolás, mérési hiba → mind hibát ad", () => {
+    assert.ok(evaluateReport({ ...good, native: { platformIos: true, ok: false, raw: null } }, { orientation: "portrait" }).some((f: string) => f.includes("getSafeAreaInsets")));
+    assert.ok(evaluateReport({ ...good, layout: "v1" }, { orientation: "portrait" }).some((f: string) => f.includes("ios-v2")));
+    assert.ok(evaluateReport(good, { orientation: "landscape" }).some((f: string) => f.includes("tájolás")));
+    assert.ok(evaluateReport({ ...good, ok: false, problems: ["átfedés: topBar × mapControl0"] }, { orientation: "portrait" }).some((f: string) => f.includes("átfedés")));
+    assert.ok(evaluateReport({ ...good, restButtons: { restNeed: rect, restAdd: null } }, { orientation: "portrait" }).some((f: string) => f.includes("restAdd")));
+    assert.ok(evaluateReport({ ...good, nativeCalls: [{ method: "start", outcome: "passed" }] }, { orientation: "portrait" }).some((f: string) => f.includes("értesítési")));
+    assert.ok(evaluateReport(null, { orientation: "portrait" }).length > 0);
+  });
+  test("tesztoldal: a natív navigációs start elkülönítve, a getSafeAreaInsets átengedve; riport-végpont csak CI-ben", () => {
+    const h = read("app/(vu-test-harness)/vu-nav-layout-harness/Harness.tsx");
+    assert.match(h, /const PASS_THROUGH = new Set\(\["getSafeAreaInsets"\]\);/);
+    assert.match(h, /plugin === "VedettNavigation" && !PASS_THROUGH\.has\(method\)/);
+    const route = read("app/(vu-test-harness)/vu-nav-layout-harness/report/route.ts");
+    assert.match(route, /if \(process\.env\.VU_LAYOUT_HARNESS !== "1"\) return notFound\(\);/);
+    assert.match(route, /if \(process\.env\.VERCEL_ENV === "production"\) return notFound\(\);/);
+    assert.match(route, /export function GET\(\) \{\s*return notFound\(\);/);
+  });
+  test("szimulátoros futtató: ≥4 álló + 1 fekvő, gépi ellenőrzés, hibánál 1-es kilépési kód", () => {
+    const sh = read("e2e/ios-simulator-run.sh");
+    const wf = read(".github/workflows/ios-simulator-layout.yml");
+    assert.match(sh, /MIN_PORTRAIT=4/);
+    assert.match(sh, /node "\$ASSERT" "\$OUT\/reports\/\$NAME-portrait" portrait "\$DEVICE" \|\| FAIL=1/);
+    assert.match(sh, /node "\$ASSERT" "\$OUT\/reports\/\$LAST_NAME-landscape" landscape/);
+    assert.match(sh, /exit \$FAIL/);
+    assert.match(wf, /e2e\/ios-simulator-run\.sh/);
+    assert.match(wf, /VU_LAYOUT_REPORT_DIR: \/tmp\/vu-layout-reports/);
+  });
+});
