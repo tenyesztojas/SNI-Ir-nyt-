@@ -368,7 +368,7 @@ describe("TASK — Validáció (6. pont) — kulturált magyar hibaüzenet, NEM 
     // (funkcionális logika, value/onChange változatlan).
     const minWFullInputCount = (
       formSrc.match(
-        /placeholder="pl\. Astoria vagy Váci utca 12"\s*\n\s*disabled=\{disabled\}\s*\n\s*className="mt-0\.5 w-full min-w-0 rounded border border-gray-300 px-2 py-1\.5 text-sm disabled:bg-gray-100"/g
+        /placeholder="pl\. Astoria vagy Váci utca 12"\s*\n\s*disabled=\{disabled\}\s*\n\s*className="mt-0\.5 w-full min-w-0 rounded border border-gray-300 px-2 py-1\.5 text-base sm:text-sm disabled:bg-gray-100"/g
       ) ?? []
     ).length;
     assert.equal(minWFullInputCount, 2, "mindkét 'Cím vagy hely' inputnak w-full ÉS min-w-0 osztállyal kell rendelkeznie");

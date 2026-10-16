@@ -179,7 +179,7 @@ export default function SettlementAutocomplete({
           onBlur={handleBlur}
           placeholder={placeholder}
           disabled={disabled}
-          className="mt-0.5 w-full min-w-0 rounded border border-gray-300 px-2 py-1.5 pr-6 text-sm disabled:bg-gray-100"
+          className="mt-0.5 w-full min-w-0 rounded border border-gray-300 px-2 py-1.5 pr-6 text-base sm:text-sm disabled:bg-gray-100"
         />
         {selected && (
           <span
