@@ -116,7 +116,7 @@ describe("forrás: szimulátoros tesztkörnyezet elkülönítése", () => {
 });
 
 describe("szimulátoros gépi riport-ellenőrzés", async () => {
-  const { evaluateReport } = await import("../../e2e/assert-simulator-report.mjs");
+  const { evaluateReport, evaluateDeviceReports } = await import("../../e2e/assert-simulator-report.mjs");
   const rect = { left: 10, top: 70, right: 100, bottom: 120, width: 90, height: 50 };
   const good = {
     schema: 1, ok: true, problems: [], layout: "ios-v2",
@@ -138,6 +138,38 @@ describe("szimulátoros gépi riport-ellenőrzés", async () => {
     assert.ok(evaluateReport({ ...good, restButtons: { restNeed: rect, restAdd: null } }, { orientation: "portrait" }).some((f: string) => f.includes("restAdd")));
     assert.ok(evaluateReport({ ...good, nativeCalls: [{ method: "start", outcome: "passed" }] }, { orientation: "portrait" }).some((f: string) => f.includes("értesítési")));
     assert.ok(evaluateReport(null, { orientation: "portrait" }).length > 0);
+  });
+  test("készülékszint (iPhone 16e eset): initial restFlowOk:true + after-resize restFlowOk:null → sikeres", () => {
+    const entries = [
+      { file: "a.json", data: { ...good, phase: "initial", restFlowOk: true } },
+      { file: "b.json", data: { ...good, phase: "after-resize-portrait", restFlowOk: null } },
+    ];
+    assert.deepEqual(evaluateDeviceReports(entries, { orientation: "portrait" }), []);
+  });
+  test("készülékszint: nem gyengül — kötelező ≥1 restFlowOk:true, minden riport hibátlan, false tilos, várt tájolás kell", () => {
+    const only = (data: Record<string, unknown>) => [{ file: "x.json", data: { ...good, ...data } }];
+    assert.ok(evaluateDeviceReports(only({ restFlowOk: null }), { orientation: "portrait" }).some((f: string) => f.includes("restFlowOk: true hiányzik")));
+    assert.ok(evaluateDeviceReports(only({ restFlowOk: false }), { orientation: "portrait" }).some((f: string) => f.includes("nem nyitotta meg")));
+    const secondBad = [
+      { file: "a.json", data: { ...good, restFlowOk: true } },
+      { file: "b.json", data: { ...good, phase: "after-resize-portrait", restFlowOk: null, ok: false, problems: ["átfedés: eta × restNeed"] } },
+    ];
+    assert.ok(evaluateDeviceReports(secondBad, { orientation: "portrait" }).some((f: string) => f.includes("b.json") && f.includes("átfedés")));
+    assert.ok(evaluateDeviceReports(only({ restFlowOk: true }), { orientation: "landscape" }).some((f: string) => f.includes("nincs landscape")));
+    assert.deepEqual(evaluateDeviceReports([], { orientation: "portrait" }), ["nem érkezett riport"]);
+  });
+  test("készülékszint fekvő: álló initial (panelpróba) + fekvő riport → sikeres; hibás fekvő riport → hiba", () => {
+    const landscape = { ...good, phase: "after-resize-landscape", restFlowOk: null, viewport: { orientation: "landscape", innerWidth: 852, innerHeight: 393, scrollWidth: 852 } };
+    const okSet = [{ file: "a.json", data: { ...good, restFlowOk: true } }, { file: "b.json", data: landscape }];
+    assert.deepEqual(evaluateDeviceReports(okSet, { orientation: "landscape" }), []);
+    const badSet = [{ file: "a.json", data: { ...good, restFlowOk: true } }, { file: "b.json", data: { ...landscape, layout: "v1" } }];
+    assert.ok(evaluateDeviceReports(badSet, { orientation: "landscape" }).some((f: string) => f.includes("ios-v2")));
+  });
+  test("CLI a készülék ÖSSZES riportját értékeli (nem csak az utolsót)", () => {
+    const cli = read("e2e/assert-simulator-report.mjs");
+    assert.match(cli, /evaluateDeviceReports\(entries, \{ orientation \}\)/);
+    const h = read("app/(vu-test-harness)/vu-nav-layout-harness/Harness.tsx");
+    assert.match(h, /const run = async \(phase: string, withRestFlow: boolean\) => \{\s*lastOrientation = currentOrientation\(\);/);
   });
   test("tesztoldal: a natív navigációs start elkülönítve, a getSafeAreaInsets átengedve; riport-végpont csak CI-ben", () => {
     const h = read("app/(vu-test-harness)/vu-nav-layout-harness/Harness.tsx");

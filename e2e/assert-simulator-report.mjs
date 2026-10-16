@@ -3,6 +3,8 @@
 //
 // Használat:
 //   node e2e/assert-simulator-report.mjs <riport-könyvtár> <portrait|landscape> [eszköznév]
+// A könyvtár EGY készülékfutás összes riportját tartalmazza; mindegyiket
+// ellenőrizzük (lásd evaluateDeviceReports).
 // Kilépési kód: 0 = minden feltétel teljesül; 1 = hiba (a részletek a kimeneten).
 
 import { readdirSync, readFileSync } from "node:fs";
@@ -28,10 +30,38 @@ export function evaluateReport(report, { orientation }) {
   if (!Array.isArray(report.problems)) failures.push("hiányzó problems lista");
   else for (const p of report.problems) failures.push(`mérés: ${p}`);
   if (report.ok !== true) failures.push("a riport ok mezője nem true (ELRENDEZÉS OK hiányzik)");
-  if (orientation === "portrait" && report.restFlowOk !== true) failures.push("a pihenőpont-gomb nem nyitotta meg a panelt");
+  // A pihenőpont-panel próbája készülékenként EGYSZER fut (az első riportban);
+  // a későbbi (pl. átméretezés utáni) riportokban null. Itt csak a kifejezett
+  // kudarcot utasítjuk el — a készülékszintű „legalább egy true” szabályt az
+  // evaluateDeviceReports() érvényesíti.
+  if (report.restFlowOk === false) failures.push("a pihenőpont-gomb nem nyitotta meg a panelt");
   if (Array.isArray(report.nativeCalls) && report.nativeCalls.some((c) => c.method === "start" && c.outcome !== "suppressed"))
     failures.push("a natív navigációs start nem lett elkülönítve (értesítési engedélykérés)");
   return [...new Set(failures)];
+}
+
+// Egy készülékfutás ÖSSZES riportjának értékelése:
+//   - minden riport elrendezése hibátlan a SAJÁT tájolásában (nincs kivétel);
+//   - van legalább egy riport a várt tájolásban;
+//   - van legalább egy riport restFlowOk: true értékkel (a panelpróba igazolva),
+//     és egyik riportban sem false.
+export function evaluateDeviceReports(entries, { orientation }) {
+  if (!Array.isArray(entries) || entries.length === 0) return ["nem érkezett riport"];
+  const failures = [];
+  for (const { file, data } of entries) {
+    const own = data?.viewport?.orientation;
+    for (const f of evaluateReport(data, { orientation: own })) failures.push(`${file} (${data?.phase ?? "?"}, ${own}): ${f}`);
+  }
+  if (!entries.some((e) => e.data?.viewport?.orientation === orientation)) failures.push(`nincs ${orientation} tájolású riport`);
+  if (!entries.some((e) => e.data?.restFlowOk === true)) failures.push("a készüléken egyetlen riport sem igazolta a pihenőpont-panelt (restFlowOk: true hiányzik)");
+  return [...new Set(failures)];
+}
+
+export function readReports(dir) {
+  return readdirSync(dir)
+    .filter((f) => f.endsWith(".json"))
+    .sort()
+    .map((f) => ({ file: f, data: JSON.parse(readFileSync(path.join(dir, f), "utf8")) }));
 }
 
 export function pickReport(dir, orientation) {
@@ -47,16 +77,21 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     console.error("Használat: node e2e/assert-simulator-report.mjs <dir> <portrait|landscape> [eszköz]");
     process.exit(2);
   }
-  let picked = null;
+  let entries = [];
+  let readError = null;
   try {
-    picked = pickReport(dir, orientation);
+    entries = readReports(dir);
   } catch (e) {
-    console.error(`Riport nem olvasható: ${e}`);
+    readError = `Riport nem olvasható: ${e}`;
   }
-  const failures = picked ? evaluateReport(picked.data, { orientation }) : ["nem érkezett riport"];
-  const v = picked?.data?.viewport;
-  console.log(`[${device}] ${orientation} — ${picked?.file ?? "nincs riport"} — ${v ? `${v.innerWidth}×${v.innerHeight}` : ""} layout=${picked?.data?.layout} native=${picked?.data?.native?.ok}`);
-  if (picked?.data?.native?.raw) console.log(`  natív safe-area: ${JSON.stringify(picked.data.native.raw)}`);
+  const failures = readError ? [readError] : evaluateDeviceReports(entries, { orientation });
+  console.log(`[${device}] ${orientation} — ${entries.length} riport`);
+  for (const { file, data } of entries) {
+    const v = data?.viewport;
+    console.log(`  ${file}: phase=${data?.phase} ${v ? `${v.innerWidth}×${v.innerHeight} ${v.orientation}` : ""} layout=${data?.layout} native=${data?.native?.ok} ok=${data?.ok} restFlowOk=${data?.restFlowOk}`);
+  }
+  const raw = entries.find((e) => e.data?.native?.raw)?.data?.native?.raw;
+  if (raw) console.log(`  natív safe-area: ${JSON.stringify(raw)}`);
   if (failures.length) {
     console.log(`  HIBA:\n   - ${failures.join("\n   - ")}`);
     process.exit(1);

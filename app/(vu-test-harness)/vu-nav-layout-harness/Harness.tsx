@@ -285,8 +285,13 @@ export default function Harness() {
     installFetchMock();
     installGeolocationMock();
     isolateNativeNavigationCalls();
+    // A mérés kezdetekor rögzítjük a tájolást: egy, a (hosszabb) első mérés
+    // KÖZBEN érkező, tájolást NEM változtató resize (pl. a WKWebView kezdeti
+    // átméretezése) így nem indít felesleges második riportot.
+    const currentOrientation = () => (window.innerWidth > window.innerHeight ? "landscape" : "portrait");
     let lastOrientation = "";
     const run = async (phase: string, withRestFlow: boolean) => {
+      lastOrientation = currentOrientation();
       const restFlowOk = withRestFlow ? await checkRestFlow() : null;
       await new Promise((r) => setTimeout(r, 800));
       const report = await measure(phase, restFlowOk);
@@ -309,7 +314,7 @@ export default function Harness() {
     const onResize = () => {
       window.clearTimeout(timer);
       timer = window.setTimeout(() => {
-        const orientation = window.innerWidth > window.innerHeight ? "landscape" : "portrait";
+        const orientation = currentOrientation();
         if (orientation !== lastOrientation) void run(`after-resize-${orientation}`, false);
       }, 3000);
     };
