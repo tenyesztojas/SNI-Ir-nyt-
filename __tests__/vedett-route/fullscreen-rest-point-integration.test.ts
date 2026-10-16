@@ -133,7 +133,7 @@ describe("G) A fullscreen bottom sheet NEM remounteli a térképet — a <Vedett
     // ("!navigationMode &&" blokk) UTÁN kell közvetlenül következnie a
     // pihenőpont wrapper-nek — ugyanazon szülő ("mt-3 space-y-3...")
     // gyermekeként, nem egymásba ágyazva.
-    const mapWrapperDivStart = cardSrc.indexOf('className={mapFullscreen ? "fixed inset-0 z-50 bg-black" : "relative"}');
+    const mapWrapperDivStart = cardSrc.indexOf('mapFullscreen ? "fixed inset-0 z-50 bg-black" : "relative"}');
     assert.ok(mapWrapperDivStart !== -1, "meg kell találni a fullscreen map wrapper <div>-et");
     assert.ok(wrapperStart > mapWrapperDivStart, "a pihenőpont wrapper-nek a map wrapper UTÁN kell következnie a forrásban");
   });
@@ -578,7 +578,7 @@ describe("Q-Z) Mobil + PWA kibővítés (2026-09-13, második kör) — 'Pihenő
     assert.ok(safeAreaPatterns.length >= 2, "a safe-area mintának több helyen, KONZISZTENSEN kell megjelennie, nem egy elszigetelt, egyedi megoldásként");
     // A fullscreen map wrapper (z-50) a forrásban a mi wrapperünk (z-[60])
     // ELŐTT áll — tehát ez utóbbi valóban FÖLÉ kerül vizuálisan.
-    const mapWrapperIdx = cardSrc.indexOf('className={mapFullscreen ? "fixed inset-0 z-50 bg-black" : "relative"}');
+    const mapWrapperIdx = cardSrc.indexOf('mapFullscreen ? "fixed inset-0 z-50 bg-black" : "relative"}');
     assert.ok(mapWrapperIdx !== -1 && mapWrapperIdx < desktopCtaWrapperMatch!.index!);
   });
 

@@ -203,3 +203,81 @@ export function onNativeTtsError(callback: (code: string) => void, win?: unknown
     return () => {};
   }
 }
+
+// ---- iOS NATÍV NAVIGÁCIÓS ELRENDEZÉS v2 (2026-10-15) ----
+// A teljes képernyős navigáció új, egységes React-elrendezése CSAK akkor
+// kapcsol be, ha a natív iOS app ezt a képességet ténylegesen jelzi: a
+// VedettNavigation plugin `getSafeAreaInsets` metódusa válaszol. Böngészőben,
+// Androidon és a metódust nem ismerő (régebbi) iOS-buildekben null → a
+// meglévő elrendezés változatlan. Nincs User-Agent- vagy viewport-találgatás:
+// az értékek közvetlenül a UIKit-ből jönnek (view.safeAreaInsets és a
+// WKWebView scrollView.adjustedContentInset).
+
+export type EdgeInsets = { top: number; right: number; bottom: number; left: number };
+export type NativeSafeAreaLayout = { safe: EdgeInsets; adjusted: EdgeInsets };
+
+const ZERO_INSETS: EdgeInsets = { top: 0, right: 0, bottom: 0, left: 0 };
+
+function parseEdgeInsets(value: unknown): EdgeInsets | null {
+  if (!value || typeof value !== "object") return null;
+  const v = value as Record<string, unknown>;
+  const out = { ...ZERO_INSETS };
+  for (const key of ["top", "right", "bottom", "left"] as const) {
+    const n = v[key];
+    if (typeof n !== "number" || !Number.isFinite(n) || n < 0 || n > 300) return null;
+    out[key] = n;
+  }
+  return out;
+}
+
+export function parseNativeSafeAreaLayout(value: unknown): NativeSafeAreaLayout | null {
+  if (!value || typeof value !== "object") return null;
+  const v = value as Record<string, unknown>;
+  const safe = parseEdgeInsets(v.safe);
+  const adjusted = parseEdgeInsets(v.adjusted);
+  return safe && adjusted ? { safe, adjusted } : null;
+}
+
+// A web tartalom számára MÉG ki nem takart biztonsági sáv élenként: amit a
+// WKWebView tartalom-inset már levon, azt nem számoljuk kétszer.
+export function residualSafeAreaInsets(layout: NativeSafeAreaLayout): EdgeInsets {
+  const r = (k: keyof EdgeInsets) => Math.max(0, Math.ceil(layout.safe[k] - layout.adjusted[k]));
+  return { top: r("top"), right: r("right"), bottom: r("bottom"), left: r("left") };
+}
+
+export function isIosNativePlatform(win: unknown = typeof window === "undefined" ? null : window): boolean {
+  if (!getNativeNavigationBridge(win)) return false;
+  const cap = (win as { Capacitor?: { getPlatform?: () => unknown } } | null)?.Capacitor;
+  try {
+    return typeof cap?.getPlatform === "function" && cap.getPlatform() === "ios";
+  } catch {
+    return false;
+  }
+}
+
+// FÜGGŐ HÍVÁSOK KORLÁTOZÁSA (2026-10-16). A getSafeAreaInsets-et nem ismerő
+// iOS-buildekben (<= 10) a Capacitor natív oldala ("No method found" naplózás
+// után) NEM válaszol: a Promise sosem teljesül, és a visszahívás a
+// window.Capacitor belső tárában marad. Ezért bridge-enként legfeljebb EGY
+// lekérés lehet folyamatban — a további hívások (forgatás, átméretezés,
+// újramountolás) ugyanazt a Promise-t kapják. Régi buildben így
+// oldalbetöltésenként pontosan egy függő natív hívás marad (layout null → v1,
+// változatlanul); az új buildben a válasz után a következő lekérés friss natív
+// hívást indít. Nincs időkorlát-heurisztika: egy lassú válasz is megérkezik
+// minden várakozóhoz. Böngészőben és Androidon natív hívás nem indul.
+const safeAreaInflight = new WeakMap<object, Promise<NativeSafeAreaLayout | null>>();
+
+export function getNativeSafeAreaLayout(win?: unknown): Promise<NativeSafeAreaLayout | null> {
+  if (!isIosNativePlatform(win)) return Promise.resolve(null);
+  const bridge = getNativeNavigationBridge(win);
+  if (!bridge) return Promise.resolve(null);
+  const pending = safeAreaInflight.get(bridge);
+  if (pending) return pending;
+  const request = callDetailed("getSafeAreaInsets", undefined, win)
+    .then((outcome) => (outcome.ok ? parseNativeSafeAreaLayout(outcome.value) : null))
+    .finally(() => {
+      safeAreaInflight.delete(bridge);
+    });
+  safeAreaInflight.set(bridge, request);
+  return request;
+}

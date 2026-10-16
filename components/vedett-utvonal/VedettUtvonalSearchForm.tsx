@@ -10,6 +10,7 @@ import { useWalkToTransitBoundary } from "@/lib/hooks/useWalkToTransitBoundary";
 import { resolveTransitProgress } from "@/lib/vedett-route/navigation/transitProgress";
 import { useStableTransitProgress } from "@/lib/hooks/useStableTransitProgress";
 import { useScreenWakeLock } from "@/lib/hooks/useScreenWakeLock";
+import { useIosNavigationLayout } from "@/lib/hooks/useIosNavigationLayout";
 import { journeyLegsToNavigationRoute } from "@/lib/vedett-route/geometry";
 import {
   buildLegStopProgress,
@@ -1127,6 +1128,13 @@ function RankedJourneyCard({
   // manualFullscreen önmagában is elég a nagy nézethez navigáció nélkül.
   const [manualFullscreen, setManualFullscreen] = useState(false);
   const mapFullscreen = navigationMode || manualFullscreen;
+  // iOS NATÍV NAVIGÁCIÓS ELRENDEZÉS v2 (2026-10-15) — egységes, flex-alapú
+  // teljes képernyős navigáció (felső sáv + utasítás a térképterületen, ETA
+  // és pihenőpont-gombok külön alsó sávban). KIZÁRÓLAG akkor aktív, ha a natív
+  // iOS app getSafeAreaInsets képessége válaszol (useIosNavigationLayout);
+  // böngészőben, Androidon és régi iOS-buildben a meglévő (v1) elrendezés marad.
+  const iosNavLayout = useIosNavigationLayout();
+  const navLayoutV2 = iosNavLayout.enabled && mapFullscreen;
   // NAVIGATION PANEL OVERLAP FIX (2026-10-06) — a felső gombsor (Navigáció
   // befejezése / Jelzés / állapot-címkék) flex-wrap miatt keskeny kijelzőn
   // több sorba törhet, így a fix `top-14` instrukciós kártya rálógott. A
@@ -3340,9 +3348,28 @@ function RankedJourneyCard({
               dvh a mobil böngészők dinamikus cím/eszközsávjaival is
               helyesen viselkedik, nem csak a statikus vh). */}
           <div
-            className={mapFullscreen ? "fixed inset-0 z-50 bg-black" : "relative"}
-            style={mapFullscreen ? { height: "100dvh" } : undefined}
+            className={navLayoutV2 ? "fixed inset-0 z-50 flex flex-col" : mapFullscreen ? "fixed inset-0 z-50 bg-black" : "relative"}
+            style={
+              navLayoutV2
+                ? {
+                    backgroundColor: "#000",
+                    paddingTop: `${iosNavLayout.insets.top}px`,
+                    paddingLeft: `${iosNavLayout.insets.left}px`,
+                    paddingRight: `${iosNavLayout.insets.right}px`,
+                  }
+                : mapFullscreen ? { height: "100dvh" } : undefined
+            }
+            data-vu-nav-layout={navLayoutV2 ? "ios-v2" : undefined}
           >
+            {/* Térképterület: v2-ben a térkép + felső sáv + utasításkártya +
+                bannerek közös, relatív doboza, amely az alsó sáv FÖLÖTT ér
+                véget; v1-ben `contents` (nincs saját doboz → a korábbi
+                pozicionálás változatlan). MINDIG ugyanaz a div → a térkép
+                fullscreen-váltáskor sem remountol. */}
+            {/* v2: a (kötelezően látható) térkép-attribúció a térképterület
+                bal ALSÓ sarkába kerül — ott semmi nem takarja (az alsó sáv a
+                térképterületen kívül van), és nem ütközik a felső sávval. */}
+            <div className={navLayoutV2 ? "relative min-h-0 flex-1 overflow-hidden [&_.maplibregl-ctrl-top-left]:bottom-0 [&_.maplibregl-ctrl-top-left]:top-auto" : "contents"} data-vu-nav-map-area={navLayoutV2 ? "" : undefined}>
             <VedettUtvonalMap
               legs={restStopMapState.active && restStopMapState.legsOverride ? restStopMapState.legsOverride : displayedJourney.legs}
               // METRO GPS LOSS + MAP CAMERA SAFETY SPRINT (2026-09-17) — a
@@ -3368,6 +3395,9 @@ function RankedJourneyCard({
               onUserGestureCancelFollow={handleUserGestureCancelFollow}
             />
 
+            {/* v1 (változatlan): abszolút ETA-kártya; v2-ben az alsó sáv mutatja. */}
+            {!navLayoutV2 && (
+              <>
             {navigationMode && navigationEta && (
               <div className="absolute bottom-3 left-3 z-10 w-[42vw] max-w-[180px] rounded-xl bg-white/95 px-3 py-2 text-center shadow-lg backdrop-blur md:bottom-4 md:left-1/2 md:w-auto md:min-w-[180px] md:-translate-x-1/2 md:px-4">
                 {navigationRemainingDistance !== null && navigationRemainingMinutes !== null && (
@@ -3385,6 +3415,8 @@ function RankedJourneyCard({
                       : "GPS-alapú útvonalhaladás becslése"}
                 </div>
               </div>
+            )}
+              </>
             )}
 
             {/* TRANSIT NAVIGATION HOTFIX (2026-09-21, spec 4. pont) — a
@@ -3677,7 +3709,14 @@ function RankedJourneyCard({
                             : `${topActionBarBottomPx + 10}px`,
                       }
                     : {}),
+                  // v2: a kártya sosem nyúlhat a térképterület aljára (az alsó
+                  // sávra és a bal alsó attribúcióra: +44px tartalék) —
+                  // hosszú szövegnél saját görgetés.
+                  ...(navLayoutV2
+                    ? { maxHeight: `calc(100% - ${(topActionBarBottomPx ?? 56) + 18 + 44}px)`, overflowY: "auto" as const }
+                    : {}),
                 }}
+                data-vu-nav-instruction=""
               >
                 <div className="flex items-center justify-center gap-2">
                   {navigationInstructionIconType && <NavigationInstructionIcon type={navigationInstructionIconType} />}
@@ -3820,7 +3859,7 @@ function RankedJourneyCard({
             )}
 
             {mapFullscreen && (
-              <div ref={topActionBarRef} className="absolute left-2 right-2 top-2 z-10 flex flex-wrap items-center gap-2">
+              <div ref={topActionBarRef} className="absolute left-2 right-2 top-2 z-10 flex flex-wrap items-center gap-2" style={navLayoutV2 ? { right: "3.5rem" } : undefined} data-vu-nav-top-bar="">
                 {navigationMode ? (
                   <button type="button" onClick={stopNavigation} className="btn-secondary bg-white text-xs shadow">
                     ✕ Navigáció befejezése
@@ -3867,6 +3906,55 @@ function RankedJourneyCard({
                   >
                     📍 Kövesd a helyzetem
                   </button>
+                )}
+              </div>
+            )}
+            </div>
+            {/* v2 alsó sáv: ETA + pihenőpont-gombok közös, tördelődő sorban —
+                a térképterület ALATT, így egyik elem sem fedheti a másikat. */}
+            {navLayoutV2 && (
+              <div
+                data-vu-nav-bottom-bar=""
+                className="flex flex-wrap items-end justify-between gap-2 px-2 pt-2"
+                style={{ paddingBottom: `calc(${iosNavLayout.insets.bottom}px + 8px)` }}
+              >
+                {navigationMode && navigationEta && (
+                  <div data-vu-nav-eta="" className="min-w-[8.5rem] max-w-[11rem] shrink-0 rounded-xl bg-white/95 px-3 py-2 text-center shadow-lg">
+                    {navigationRemainingDistance !== null && navigationRemainingMinutes !== null && (
+                      <div className="mb-0.5 text-sm font-semibold tabular-nums text-sni-text">
+                        {(navigationRemainingDistance / 1000).toLocaleString("hu-HU", { maximumFractionDigits: 1 })} km · {navigationRemainingMinutes} perc
+                      </div>
+                    )}
+                    <div className="text-[11px] font-medium uppercase tracking-wide text-gray-500">Várható érkezés</div>
+                    <div className="text-2xl font-bold tabular-nums text-sni-text">{navigationEta}</div>
+                    <div className="text-[10px] text-gray-500">
+                      {navigationEtaResult.basis === "TRANSIT_SCHEDULE"
+                        ? "Menetrend és valós idejű járatadatok alapján"
+                        : navigationEtaResult.basis === "JOURNEY_ARRIVAL"
+                          ? "Az útiterv tervezett érkezése"
+                          : "GPS-alapú útvonalhaladás becslése"}
+                    </div>
+                  </div>
+                )}
+                {!restPanelVisible && !communityReportOpen && (
+                  <div data-vu-nav-rest-ctas="" className="flex min-w-[10rem] flex-1 flex-wrap items-stretch justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={handleRequestRestCta}
+                      aria-label="Pihenőpontok keresése a közelemben"
+                      className="flex min-h-[44px] min-w-[9rem] flex-1 items-center justify-center rounded-full bg-sni-brand-navy px-3 text-center text-sm font-semibold leading-tight text-white shadow-2xl transition-colors duration-200 hover:bg-sni-brand-blue focus:outline-none focus-visible:ring-2 focus-visible:ring-sni-brand-teal focus-visible:ring-offset-2"
+                    >
+                      Pihenőre van szükségem
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleAddRestPointCta}
+                      aria-label="Pihenőpont hozzáadása"
+                      className="flex min-h-[44px] min-w-[9rem] flex-1 items-center justify-center rounded-full border-2 border-sni-brand-teal bg-white px-3 text-center text-sm font-semibold leading-tight text-sni-brand-blue shadow-2xl"
+                    >
+                      Pihenőpont hozzáadása
+                    </button>
+                  </div>
                 )}
               </div>
             )}
@@ -4108,6 +4196,9 @@ function RankedJourneyCard({
               jobbra-igazítás (`items-end` mobilon) a leghosszabb feliratú
               gomb szélességéhez igazodik, sosem feszíti túl a viewport
               szélességét. */}
+          {/* v1 (változatlan): lebegő pihenőpont-gombok; v2-ben az alsó sáv része. */}
+          {!navLayoutV2 && (
+            <>
           {mapFullscreen && !restPanelVisible && !communityReportOpen && (
             <div
               className="fixed right-3 z-[60] flex flex-col items-end gap-2 md:flex-row md:items-center"
@@ -4130,6 +4221,8 @@ function RankedJourneyCard({
                 Pihenőpont hozzáadása
               </button>
             </div>
+          )}
+            </>
           )}
         </div>
       )}

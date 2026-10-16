@@ -103,7 +103,9 @@ describe("J) Fullscreen Mobile Map — CSS-fixed fullscreen, nem Fullscreen API"
     // tehát a benne élő <VedettUtvonalMap> instance nem veszik el fullscreen be/kikapcsoláskor.
     assert.match(
       formSrc,
-      /<div\s*\n\s*className=\{mapFullscreen \? "fixed inset-0 z-50 bg-black" : "relative"\}\s*\n\s*style=\{mapFullscreen \? \{ height: "100dvh" \} : undefined\}\s*\n\s*>/
+      // iOS v2 (2026-10-15): a v1-ág változatlan; a natív iOS v2-elrendezés
+      // UGYANEZT a div-et kapja más osztállyal (nincs feltételes wrapper).
+      /<div\s*\n\s*className=\{navLayoutV2 \? "fixed inset-0 z-50 flex flex-col" : mapFullscreen \? "fixed inset-0 z-50 bg-black" : "relative"\}\s*\n\s*style=\{[\s\S]{0,400}?: mapFullscreen \? \{ height: "100dvh" \} : undefined\s*\}\s*\n\s*data-vu-nav-layout=\{navLayoutV2 \? "ios-v2" : undefined\}\s*\n\s*>/
     );
   });
 });
