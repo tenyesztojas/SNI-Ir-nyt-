@@ -1,16 +1,62 @@
 import Foundation
 import AVFoundation
 
+/// A háttérbeli (pl. zárt képernyős) leszállási riasztás bemondásának
+/// feltételei. Mind teljesülnie kell; ellenkező esetben csak a helyi
+/// értesítés jelenik meg (az MINDIG megmarad, a beszéd nem helyettesíti).
+enum BackgroundAlertSpeechPolicy {
+    static func shouldSpeak(
+        navigationActive: Bool,
+        alertBelongsToCurrentPlan: Bool,
+        appIsActive: Bool,
+        userEnabledSpeech: Bool,
+        alreadySpoken: Bool
+    ) -> Bool {
+        navigationActive &&
+            alertBelongsToCurrentPlan &&
+            !appIsActive &&
+            userEnabledSpeech &&
+            !alreadySpoken
+    }
+}
+
+/// Natív magyar hangos navigáció (AVSpeechSynthesizer).
+///
+/// Audio session: CSAK tényleges beszéd alatt aktív (speak → setActive(true),
+/// a mondat végén / megszakításakor setActive(false)). Nincs néma hang,
+/// nincs folyamatos lejátszás: az `audio` háttérmód kizárólag azt teszi
+/// lehetővé, hogy egy elkezdett vagy háttérben indított navigációs mondat
+/// zárt képernyőn is elhangozzon.
 final class NavigationSpeech: NSObject, AVSpeechSynthesizerDelegate {
     static let shared = NavigationSpeech()
 
     private let synthesizer = AVSpeechSynthesizer()
     private var enabled = true
+    // Csak a WebView kifejezett setSpeechEnabled(true) hívása kapcsolja be
+    // (alapértéke false), így a háttérbeli bemondás sosem indulhat a
+    // felhasználói beállítás ismerete nélkül (pl. hidegindítás után).
+    private var userEnabledByWebView = false
     private var currentUtterance: AVSpeechUtterance?
+    private var currentIsBackgroundAlert = false
+    private var spokenBackgroundAlertKeys = Set<String>()
 
     private override init() {
         super.init()
         synthesizer.delegate = self
+
+        let session = AVAudioSession.sharedInstance()
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleInterruption(_:)),
+            name: AVAudioSession.interruptionNotification,
+            object: session
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleMediaServicesReset(_:)),
+            name: AVAudioSession.mediaServicesWereResetNotification,
+            object: session
+        )
     }
 
     func speechSynthesizer(
@@ -19,6 +65,7 @@ final class NavigationSpeech: NSObject, AVSpeechSynthesizerDelegate {
     ) {
         if utterance === currentUtterance {
             currentUtterance = nil
+            currentIsBackgroundAlert = false
             releaseAudioSession()
         }
     }
@@ -29,7 +76,36 @@ final class NavigationSpeech: NSObject, AVSpeechSynthesizerDelegate {
     ) {
         if utterance === currentUtterance {
             currentUtterance = nil
+            currentIsBackgroundAlert = false
             releaseAudioSession()
+        }
+    }
+
+    // Telefonhívás, Siri, ébresztő, más app kizárólagos hangja: a
+    // félbeszakadt mondatot NEM folytatjuk utólag (addigra elavult lehet),
+    // és a megszakítás végén sem indítunk automatikusan semmit — a
+    // következő bemondás aktiválja újra a sessiont.
+    @objc private func handleInterruption(_ notification: Notification) {
+        guard let raw = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+              let type = AVAudioSession.InterruptionType(rawValue: raw) else {
+            return
+        }
+
+        DispatchQueue.main.async {
+            switch type {
+            case .began:
+                self.stop()
+            case .ended:
+                self.releaseAudioSession()
+            @unknown default:
+                break
+            }
+        }
+    }
+
+    @objc private func handleMediaServicesReset(_ notification: Notification) {
+        DispatchQueue.main.async {
+            self.stop()
         }
     }
 
@@ -71,8 +147,45 @@ final class NavigationSpeech: NSObject, AVSpeechSynthesizerDelegate {
 
     func setEnabled(_ value: Bool) {
         enabled = value
+        userEnabledByWebView = value
 
         if !value {
+            stop()
+        }
+    }
+
+    /// A WebView által kifejezetten engedélyezett hang (navigáció közben,
+    /// bekapcsolt hangbeállítással — lásd setNativeSpeechEnabled a JS-ben).
+    func isUserSpeechEnabled() -> Bool {
+        enabled && userEnabledByWebView
+    }
+
+    func hasSpokenBackgroundAlert(_ key: String) -> Bool {
+        spokenBackgroundAlertKeys.contains(key)
+    }
+
+    /// Háttérbeli leszállási riasztás bemondása; kulcsonként legfeljebb egyszer.
+    func speakBackgroundAlert(_ text: String, key: String) -> Bool {
+        guard isUserSpeechEnabled(), !spokenBackgroundAlertKeys.contains(key) else {
+            return false
+        }
+
+        spokenBackgroundAlertKeys.insert(key)
+
+        guard speak(text) else {
+            return false
+        }
+
+        currentIsBackgroundAlert = true
+        return true
+    }
+
+    /// Navigáció indításakor/leállításakor: a duplikációszűrő ürül, és egy
+    /// még szóló háttérbeli riasztás azonnal elhallgat.
+    func endNavigationSession() {
+        spokenBackgroundAlertKeys.removeAll()
+
+        if currentIsBackgroundAlert {
             stop()
         }
     }
@@ -89,10 +202,12 @@ final class NavigationSpeech: NSObject, AVSpeechSynthesizerDelegate {
         }
 
         do {
+            // Navigációs hangutasítás: rövid bemondás, más alkalmazás hangját
+            // lehalkítja, a beszédalapú hangot (podcast, hangoskönyv) megszakítja.
             try AVAudioSession.sharedInstance().setCategory(
                 .playback,
-                mode: .spokenAudio,
-                options: [.duckOthers]
+                mode: .voicePrompt,
+                options: [.duckOthers, .interruptSpokenAudioAndMixWithOthers]
             )
             try AVAudioSession.sharedInstance().setActive(true)
         } catch {
@@ -107,12 +222,14 @@ final class NavigationSpeech: NSObject, AVSpeechSynthesizerDelegate {
         utterance.volume = 1.0
 
         currentUtterance = utterance
+        currentIsBackgroundAlert = false
         synthesizer.speak(utterance)
         return true
     }
 
     func stop() {
         currentUtterance = nil
+        currentIsBackgroundAlert = false
 
         if synthesizer.isSpeaking || synthesizer.isPaused {
             synthesizer.stopSpeaking(at: .immediate)

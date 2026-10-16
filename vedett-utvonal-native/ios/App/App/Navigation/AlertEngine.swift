@@ -42,6 +42,12 @@ final class AlertEngine {
         fired
     }
 
+    /// Igaz, ha a cél az AKTUÁLIS tervben szerepel (újratervezés után a
+    /// régi terv riasztása már nem számít aktuálisnak).
+    func hasTarget(_ id: String) -> Bool {
+        targets.contains { $0.id == id }
+    }
+
     private func activeTarget(nowMs: Int64) -> Target? {
         targets.first { target in
             if fired.contains(target.id) { return false }

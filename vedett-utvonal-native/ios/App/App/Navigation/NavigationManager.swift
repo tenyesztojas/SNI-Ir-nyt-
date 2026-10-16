@@ -15,6 +15,10 @@ final class NavigationManager: NSObject, CLLocationManagerDelegate {
 
     var onAlert: ((AlertEngine.Alert) -> Void)?
 
+    /// Minden indításkor és leállításkor nő: a háttérbeli bemondás
+    /// duplikációszűrő kulcsa ehhez a navigációs munkamenethez kötött.
+    private(set) var sessionGeneration = 0
+
     private override init() {
         super.init()
         locationManager.delegate = self
@@ -30,6 +34,11 @@ final class NavigationManager: NSObject, CLLocationManagerDelegate {
 
     var userStopped: Bool {
         stoppedByUser
+    }
+
+    /// Igaz, ha fut a navigáció, és a riasztás célja az aktuális tervhez tartozik.
+    func isCurrentTarget(_ id: String) -> Bool {
+        isRunning && (engine?.hasTarget(id) ?? false)
     }
 
     func start(targets: [AlertEngine.Target], completion: @escaping (Bool) -> Void) {
@@ -65,6 +74,7 @@ final class NavigationManager: NSObject, CLLocationManagerDelegate {
         newEngine.setPlan(targets, nowMs: now)
 
         engine = newEngine
+        sessionGeneration += 1
         sessionStartedAt = Date()
         stoppedByUser = false
         isRunning = true
@@ -99,6 +109,7 @@ final class NavigationManager: NSObject, CLLocationManagerDelegate {
         timer?.invalidate()
         timer = nil
         engine = nil
+        sessionGeneration += 1
         sessionStartedAt = nil
         isRunning = false
         stoppedByUser = userInitiated

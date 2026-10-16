@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 import Capacitor
 
 @objc(VedettNavigationPlugin)
@@ -28,8 +29,12 @@ public class VedettNavigationPlugin: CAPPlugin, CAPBridgedPlugin {
         }
 
         DispatchQueue.main.async {
-            self.navigation.onAlert = { alert in
+            // Új navigációs munkamenet: a háttérbeli bemondások duplikációszűrője ürül.
+            NavigationSpeech.shared.endNavigationSession()
+            self.navigation.onAlert = { [weak self] alert in
+                // A helyi értesítés MINDIG megjelenik; a beszéd csak kiegészíti.
                 NavigationNotifications.shared.show(alert)
+                self?.speakBackgroundAlertIfAllowed(alert)
             }
 
             NavigationNotifications.shared.requestPermission()
@@ -85,7 +90,38 @@ public class VedettNavigationPlugin: CAPPlugin, CAPBridgedPlugin {
     @objc func stop(_ call: CAPPluginCall) {
         DispatchQueue.main.async {
             self.navigation.stop()
+            // Leállítás után nincs háttérbeli bemondás, és egy éppen szóló elhallgat.
+            NavigationSpeech.shared.endNavigationSession()
             call.resolve()
+        }
+    }
+
+    /// Háttérben (pl. zárt képernyőn) a natív leszállási riasztás hangosan is
+    /// elhangzik — de csak aktív navigáció, az aktuális tervhez tartozó cél,
+    /// a felhasználó által engedélyezett hang és háttérben lévő alkalmazás
+    /// esetén, munkamenetenként és célonként legfeljebb egyszer. Előtérben a
+    /// WebView saját hangos navigációja szól, ezért ott nincs natív bemondás.
+    private func speakBackgroundAlertIfAllowed(_ alert: AlertEngine.Alert) {
+        let work = { [weak self] in
+            guard let self = self else { return }
+            let speech = NavigationSpeech.shared
+            let key = "\(self.navigation.sessionGeneration):\(alert.targetId)"
+            guard BackgroundAlertSpeechPolicy.shouldSpeak(
+                navigationActive: self.navigation.active,
+                alertBelongsToCurrentPlan: self.navigation.isCurrentTarget(alert.targetId),
+                appIsActive: UIApplication.shared.applicationState == .active,
+                userEnabledSpeech: speech.isUserSpeechEnabled(),
+                alreadySpoken: speech.hasSpokenBackgroundAlert(key)
+            ) else {
+                return
+            }
+            _ = speech.speakBackgroundAlert(alert.text, key: key)
+        }
+
+        if Thread.isMainThread {
+            work()
+        } else {
+            DispatchQueue.main.async(execute: work)
         }
     }
 
