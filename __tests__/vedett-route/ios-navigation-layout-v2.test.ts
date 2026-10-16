@@ -85,7 +85,12 @@ describe("forrás: v1 változatlan, v2 elkülönített", () => {
     assert.ok(!v2Outer.includes("bg-black"), "div.fixed.inset-0.z-50.bg-black nem illeszkedhet");
     const bar = form.slice(form.indexOf('data-vu-nav-bottom-bar=""'), form.indexOf('data-vu-nav-bottom-bar=""') + 4000);
     assert.doesNotMatch(bar, /fixed right-3|absolute bottom-3 left-3/);
-    assert.match(swiftInjection, /div\.fixed\.inset-0\.z-50\.bg-black/, "a régi injekció még bent van (eltávolítás csak eszközös igazolás után)");
+  });
+  test("Swift: a régi CSS/JS elrendezés-injekció eltávolítva; a plugin-regisztráció és a WKWebView inset-beállítás megmaradt", () => {
+    assert.doesNotMatch(swiftInjection, /safeAreaScript|WKUserScript|evaluateJavaScript|vedett-ios-safe-area|div\.fixed\.inset-0/);
+    assert.match(swiftInjection, /bridge\?\.registerPluginInstance\(VedettNavigationPlugin\(\)\)/);
+    assert.match(swiftInjection, /webView\?\.scrollView\.contentInsetAdjustmentBehavior = \.automatic/);
+    assert.match(swiftInjection, /super\.capacitorDidLoad\(\)/);
   });
   test("Swift: getSafeAreaInsets regisztrálva, safe + adjusted értékeket ad", () => {
     assert.match(swiftPlugin, /CAPPluginMethod\(name: "getSafeAreaInsets", returnType: CAPPluginReturnPromise\)/);

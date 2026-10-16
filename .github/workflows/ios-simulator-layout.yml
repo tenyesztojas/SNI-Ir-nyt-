@@ -76,8 +76,12 @@ jobs:
           npx playwright install chromium
           mkdir -p layout-screenshots/chromium layout-screenshots/chromium-legacycss
           SCREENSHOT_DIR=layout-screenshots/chromium BASE_URL=http://localhost:3000 node e2e/ios-navigation-layout.mjs
-          # Ugyanez a meglévő Swift CSS/JS-injekcióval együtt (koegzisztencia-próba).
-          INJECT_LEGACY_IOS_CSS=1 SCREENSHOT_DIR=layout-screenshots/chromium-legacycss BASE_URL=http://localhost:3000 node e2e/ios-navigation-layout.mjs
+          # Koegzisztencia-próba a régi Swift CSS/JS-injekcióval — csak ha még létezik.
+          if grep -q "vedett-ios-safe-area" vedett-utvonal-native/ios/App/App/Navigation/VedettBridgeViewController.swift; then
+            INJECT_LEGACY_IOS_CSS=1 SCREENSHOT_DIR=layout-screenshots/chromium-legacycss BASE_URL=http://localhost:3000 node e2e/ios-navigation-layout.mjs
+          else
+            echo "A régi Swift CSS/JS-injekció eltávolítva — a koegzisztencia-próba nem releváns, kihagyva."
+          fi
 
       - name: Install native dependencies, sync iOS, point app to local harness (runner only)
         working-directory: vedett-utvonal-native
