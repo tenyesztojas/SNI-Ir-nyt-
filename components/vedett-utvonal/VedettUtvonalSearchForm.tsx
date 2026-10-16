@@ -5340,7 +5340,7 @@ export default function VedettUtvonalSearchForm({
                 onChange={(e) => updateOriginManualField("districtOrPostalCode", e.target.value)}
                 placeholder="pl. 1136 vagy XIII. kerület"
                 disabled={disabled}
-                className="mt-0.5 w-full min-w-0 rounded border border-gray-300 px-2 py-1.5 text-sm disabled:bg-gray-100"
+                className="mt-0.5 w-full min-w-0 rounded border border-gray-300 px-2 py-1.5 text-base sm:text-sm disabled:bg-gray-100"
               />
             </div>
             {/* UI/SZÖVEGEZÉSI KORREKCIÓ (2026-09-11, "utolsó, kizárólag
@@ -5365,7 +5365,7 @@ export default function VedettUtvonalSearchForm({
                   onBlur={() => setTimeout(() => setShowOriginStreetSuggestions(false), 150)}
                   placeholder="pl. Astoria vagy Váci utca 12"
                   disabled={disabled}
-                  className="mt-0.5 w-full min-w-0 rounded border border-gray-300 px-2 py-1.5 text-sm disabled:bg-gray-100"
+                  className="mt-0.5 w-full min-w-0 rounded border border-gray-300 px-2 py-1.5 text-base sm:text-sm disabled:bg-gray-100"
                 />
                 {/* CÍM AUTOCOMPLETE (2026-09-14) — a MEGLÉVŐ address-search
                     végpontból kapott javaslatok, kattintásra a teljes cím
@@ -5411,7 +5411,7 @@ export default function VedettUtvonalSearchForm({
                 onChange={(e) => handleDestinationOverrideChange(e.target.value)}
                 placeholder="Cím vagy VédettSarok hely"
                 disabled={disabled}
-                className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-sm disabled:bg-gray-100"
+                className="mt-1 w-full rounded border border-gray-300 px-3 py-2 text-base sm:text-sm disabled:bg-gray-100"
               />
               {destination.type === "KNOWN_PLACE" ? (
                 <p className="mt-1 text-xs text-green-700">
@@ -5455,7 +5455,7 @@ export default function VedettUtvonalSearchForm({
                     onChange={(e) => updateDestinationManualField("districtOrPostalCode", e.target.value)}
                     placeholder="pl. 1136 vagy XIII. kerület"
                     disabled={disabled}
-                    className="mt-0.5 w-full min-w-0 rounded border border-gray-300 px-2 py-1.5 text-sm disabled:bg-gray-100"
+                    className="mt-0.5 w-full min-w-0 rounded border border-gray-300 px-2 py-1.5 text-base sm:text-sm disabled:bg-gray-100"
                   />
                 </div>
                 {/* UI/SZÖVEGEZÉSI KORREKCIÓ (2026-09-11) — az origin
@@ -5473,7 +5473,7 @@ export default function VedettUtvonalSearchForm({
                       onBlur={() => setTimeout(() => setShowDestinationStreetSuggestions(false), 150)}
                       placeholder="pl. Astoria vagy Váci utca 12"
                       disabled={disabled}
-                      className="mt-0.5 w-full min-w-0 rounded border border-gray-300 px-2 py-1.5 text-sm disabled:bg-gray-100"
+                      className="mt-0.5 w-full min-w-0 rounded border border-gray-300 px-2 py-1.5 text-base sm:text-sm disabled:bg-gray-100"
                     />
                     {/* CÍM AUTOCOMPLETE (2026-09-14) — lásd az origin mezőnél
                         lévő komment, ugyanaz a MEGLÉVŐ address-search
@@ -5522,7 +5522,7 @@ export default function VedettUtvonalSearchForm({
                 value={datetime}
                 onChange={(e) => setDatetime(e.target.value)}
                 disabled={disabled}
-                className="rounded border border-gray-300 px-2 py-1 text-sm"
+                className="rounded border border-gray-300 px-2 py-1 text-base sm:text-sm"
               />
             )}
           </div>
@@ -5736,7 +5736,7 @@ export default function VedettUtvonalSearchForm({
                 value={bikePropulsion}
                 disabled={disabled}
                 onChange={(e) => setBikePropulsion(e.target.value as "ANY" | "HUMAN" | "ELECTRIC_ASSIST")}
-                className="mt-1 w-full rounded border border-gray-300 p-2 text-sm"
+                className="mt-1 w-full rounded border border-gray-300 p-2 text-base sm:text-sm"
               >
                 <option value="ANY">Mindegy</option>
                 <option value="HUMAN">Hagyományos kerékpár</option>
@@ -5791,7 +5791,7 @@ export default function VedettUtvonalSearchForm({
                 value={favoriteNameInput}
                 onChange={(e) => setFavoriteNameInput(e.target.value)}
                 disabled={favoriteSaving}
-                className="w-full rounded border border-gray-300 px-2 py-1.5 text-sm disabled:bg-gray-100"
+                className="w-full rounded border border-gray-300 px-2 py-1.5 text-base sm:text-sm disabled:bg-gray-100"
               />
               <div className="flex flex-wrap items-center gap-3">
                 <button

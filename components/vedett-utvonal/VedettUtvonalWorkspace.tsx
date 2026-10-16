@@ -176,7 +176,7 @@ export default function VedettUtvonalWorkspace({
               onBlur={() => setTimeout(() => setShowOriginSuggestions(false), 150)}
               placeholder="Indulási cím"
               disabled={disabled || carLoading}
-              className="mt-0.5 w-full min-w-0 rounded border border-gray-300 px-2 py-1.5 text-sm disabled:bg-gray-100"
+              className="mt-0.5 w-full min-w-0 rounded border border-gray-300 px-2 py-1.5 text-base sm:text-sm disabled:bg-gray-100"
             />
             {showOriginSuggestions && originSuggestions.length > 0 && (
               <ul className="absolute z-10 mt-0.5 w-full rounded border border-gray-200 bg-white text-sm shadow-sm">
@@ -211,7 +211,7 @@ export default function VedettUtvonalWorkspace({
               onBlur={() => setTimeout(() => setShowDestinationSuggestions(false), 150)}
               placeholder="Célcím"
               disabled={disabled || carLoading}
-              className="mt-0.5 w-full min-w-0 rounded border border-gray-300 px-2 py-1.5 text-sm disabled:bg-gray-100"
+              className="mt-0.5 w-full min-w-0 rounded border border-gray-300 px-2 py-1.5 text-base sm:text-sm disabled:bg-gray-100"
             />
             {showDestinationSuggestions && destinationSuggestions.length > 0 && (
               <ul className="absolute z-10 mt-0.5 w-full rounded border border-gray-200 bg-white text-sm shadow-sm">

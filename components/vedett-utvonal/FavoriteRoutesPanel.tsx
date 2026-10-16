@@ -172,7 +172,7 @@ export default function FavoriteRoutesPanel({ onSelect }: { onSelect: (preset: F
                     type="text"
                     value={renameValue}
                     onChange={(e) => setRenameValue(e.target.value)}
-                    className="min-w-0 flex-1 rounded border border-gray-300 px-2 py-1 text-sm"
+                    className="min-w-0 flex-1 rounded border border-gray-300 px-2 py-1 text-base sm:text-sm"
                   />
                   <button type="button" onClick={() => handleRenameSubmit(favorite.id)} className="btn-secondary text-xs">
                     Mentés
