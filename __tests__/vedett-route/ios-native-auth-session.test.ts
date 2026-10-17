@@ -131,7 +131,7 @@ describe("képességvizsgálat (hívás nélkül, PluginHeaders alapján)", () =
 });
 
 describe("iOS ASWebAuthenticationSession út", () => {
-  test("sikeres callback → /auth/callback a kóddal; nincs Browser és appUrlOpen", async () => {
+  test("sikeres callback → /vedett-utvonal/auth/callback a kóddal (WebView-ban marad); nincs Browser és appUrlOpen", async () => {
     const e = iosEnv();
     let returning = 0;
     const run = startNativeGoogleLogin(e.supabase, { win: e.win, onError: () => assert.fail("nincs hiba"), onReturning: () => returning++ });
@@ -141,7 +141,7 @@ describe("iOS ASWebAuthenticationSession út", () => {
     assert.deepEqual(e.oauthArgs, [{ provider: "google", options: { redirectTo: "hu.vedettsarok.utvonal://auth/callback", skipBrowserRedirect: true } }]);
     e.pendingAuth[0].resolve({ url: `hu.vedettsarok.utvonal://auth/callback?code=${CODE}` });
     await run;
-    assert.deepEqual(e.assigned, [`/auth/callback?code=${CODE}&next=%2Fvedett-utvonal`]);
+    assert.deepEqual(e.assigned, [`/vedett-utvonal/auth/callback?code=${CODE}&next=%2Fvedett-utvonal`]);
     assert.equal(returning, 1);
     assert.ok(!e.calls.some((c) => c.plugin === "Browser"));
   });
@@ -154,8 +154,10 @@ describe("iOS ASWebAuthenticationSession út", () => {
     e.pendingAuth[0].resolve({ url: `hu.vedettsarok.utvonal://auth/callback?code=${CODE}` });
     await run;
     assert.equal(e.oauthArgs.length, 1, "a callback után nincs új signInWithOAuth (a verifier nem íródik felül)");
-    const route = readFileSync("app/auth/callback/route.ts", "utf8");
-    assert.match(route, /const supabase = createClient\(\);\s*const \{ data, error \} = await supabase\.auth\.exchangeCodeForSession\(code\);/);
+    // Az iOS út callbackje ugyanazzal a szerveroldali (sütis) klienssel cserél kódot.
+    const route = readFileSync("app/vedett-utvonal/auth/callback/route.ts", "utf8");
+    assert.match(route, /const supabase = createClient\(\);/);
+    assert.match(route, /exchangeCodeForSession: \(code\) => supabase\.auth\.exchangeCodeForSession\(code\)/);
   });
 
   test("megszakítás (AUTH_CANCELLED) → onCancel, nincs navigáció", async () => {
@@ -197,7 +199,7 @@ describe("iOS ASWebAuthenticationSession út", () => {
     assert.equal(e.assigned.length, 0, "a lezárt kísérlet kódja nem navigál");
     e.pendingAuth[1].resolve({ url: `hu.vedettsarok.utvonal://auth/callback?code=${CODE2}` });
     await second;
-    assert.deepEqual(e.assigned, [`/auth/callback?code=${CODE2}&next=%2Fvedett-utvonal`]);
+    assert.deepEqual(e.assigned, [`/vedett-utvonal/auth/callback?code=${CODE2}&next=%2Fvedett-utvonal`]);
     assert.deepEqual(msgs, []);
   });
 });
