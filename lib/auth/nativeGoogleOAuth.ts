@@ -33,12 +33,16 @@ export const NATIVE_GOOGLE_ERRORS = {
   unavailable: "A Google-belépés ebben az alkalmazásban jelenleg nem érhető el. Lépj be e-mailben.",
   failed: "A Google-belépés nem sikerült. Próbáld újra, vagy lépj be e-mailben.",
   cancelled: "A Google-belépés megszakadt.",
+  timeout: "A belépés nem fejeződött be. Próbáld újra.",
 } as const;
 
 type BridgeListener = { remove: () => Promise<void> | void };
 
 export interface CapacitorBridge {
   isNativePlatform?: () => boolean;
+  getPlatform?: () => string;
+  /** A natív oldal által injektált plugin-leírók (név + metódusok). */
+  PluginHeaders?: unknown[];
   nativePromise?: (plugin: string, method: string, options?: Record<string, unknown>) => Promise<unknown>;
   addListener?: (plugin: string, event: string, callback: (data: { url?: string } | undefined) => void) => BridgeListener;
 }
@@ -124,11 +128,60 @@ export interface NativeGoogleLoginOptions {
   cancelGraceMs?: number;
 }
 
+// ---------------------------------------------------------------------------
+// iOS NATÍV HITELESÍTÉSI MUNKAMENET (2026-10-17, 13-as build). A régi
+// iOS-utat (Capacitor Browser = SFSafariViewController + egyedi URL-séma)
+// az iOS nem mindig adja vissza az appnak; az Apple OAuth-ra szánt
+// ASWebAuthenticationSession-je a callback URL-t KÖZVETLENÜL a natív
+// metódusnak adja (nincs appUrlOpen, nincs visszajátszható esemény).
+// Képességvizsgálat: a natív VedettNavigation plugin `authenticate`
+// metódusa a Capacitor által injektált PluginHeaders-ben szerepel-e. Ezt
+// NEM hívással próbáljuk ki: a metódust nem ismerő régi iOS-build a hívásra
+// sosem válaszolna. Androidon és régebbi iOS-buildeken a meglévő Browser út
+// marad.
+export const NATIVE_AUTH_SESSION_PLUGIN = "VedettNavigation";
+export const NATIVE_AUTH_SESSION_METHOD = "authenticate";
+
+/** A "Belépés folyamatban…" takaró legfeljebb ennyi ideig látszik (ms). */
+export const NATIVE_LOGIN_RETURN_TIMEOUT_MS = 20_000;
+
+type PluginHeader = { name?: unknown; methods?: Array<{ name?: unknown }> };
+
+export function supportsNativeAuthSession(win: NativeOAuthWindow | null = currentWindow()): boolean {
+  const bridge = getCapacitorBridge(win);
+  if (!bridge) return false;
+  try {
+    if (typeof bridge.getPlatform !== "function" || bridge.getPlatform() !== "ios") return false;
+  } catch {
+    return false;
+  }
+  const headers = bridge.PluginHeaders;
+  if (!Array.isArray(headers)) return false;
+  return (headers as PluginHeader[]).some(
+    (h) =>
+      h?.name === NATIVE_AUTH_SESSION_PLUGIN &&
+      Array.isArray(h.methods) &&
+      h.methods.some((m) => m?.name === NATIVE_AUTH_SESSION_METHOD),
+  );
+}
+
+function isCancelledNativeAuth(err: unknown): boolean {
+  const e = err as { message?: unknown; code?: unknown } | null;
+  return e?.message === "AUTH_CANCELLED" || e?.code === "AUTH_CANCELLED";
+}
+
 let activeCleanup: (() => void) | null = null;
 
 /**
  * Natív Google belépés indítása. SOHA nem navigál a WebView-val a Google-re;
  * ha a híd/plugin nem elérhető, hibát jelez (nincs beágyazott WebView fallback).
+ *
+ * Egyszerre egy kísérlet él: egy új indítás az előzőt lezárja, és a lezárt
+ * kísérlet semmilyen későn érkező eredménye nem navigál, nem nyit böngészőt
+ * és nem jelez hibát. A PKCE code_verifier-t a signInWithOAuth a WebView-ban
+ * (sütiben) tárolja; mivel a kísérlet a kódot csak a SAJÁT signInWithOAuth
+ * hívása után fogadja el, a /auth/callback kódcseréje ugyanahhoz a
+ * verifierhez tartozik.
  */
 export async function startNativeGoogleLogin(
   supabase: Pick<SupabaseClient, "auth">,
@@ -138,18 +191,24 @@ export async function startNativeGoogleLogin(
   const bridge = getCapacitorBridge(win);
   const next = options.next ?? NATIVE_OAUTH_NEXT;
 
-  if (!win || !bridge || typeof bridge.nativePromise !== "function" || typeof bridge.addListener !== "function") {
+  if (!win || !bridge || typeof bridge.nativePromise !== "function") {
     options.onError(NATIVE_GOOGLE_ERRORS.unavailable);
     return;
   }
+  const useAuthSession = supportsNativeAuthSession(win);
+  if (!useAuthSession && typeof bridge.addListener !== "function") {
+    options.onError(NATIVE_GOOGLE_ERRORS.unavailable);
+    return;
+  }
+
   const nativePromise = bridge.nativePromise.bind(bridge);
-  const addListener = bridge.addListener.bind(bridge);
 
   activeCleanup?.();
   activeCleanup = null;
 
   const listeners: BridgeListener[] = [];
   let settled = false;
+  let acceptCallbacks = false;
   let cancelTimer: ReturnType<typeof setTimeout> | null = null;
 
   const cleanup = () => {
@@ -170,38 +229,61 @@ export async function startNativeGoogleLogin(
     void nativePromise("Browser", "close", {}).catch(() => undefined);
   };
 
-  try {
-    listeners.push(
-      addListener("App", "appUrlOpen", (event) => {
-        if (settled) return;
-        const parsed = parseNativeOAuthCallback(event?.url);
-        if (!parsed) return; // idegen URL: figyelmen kívül hagyjuk
-        cleanup();
-        closeBrowser();
-        if (parsed.kind === "code") {
-          options.onReturning?.();
-          win.location.assign(buildWebViewCallbackPath(parsed.code, next));
-        } else if (parsed.error === "access_denied") {
-          options.onError(NATIVE_GOOGLE_ERRORS.cancelled);
-        } else {
-          options.onError(NATIVE_GOOGLE_ERRORS.failed);
-        }
-      })
-    );
-    listeners.push(
-      addListener("Browser", "browserFinished", () => {
-        if (settled || cancelTimer) return;
-        cancelTimer = setTimeout(() => {
-          if (settled) return;
+  const handleCallback = (parsed: NativeOAuthCallback | null) => {
+    if (!parsed) {
+      options.onError(NATIVE_GOOGLE_ERRORS.failed);
+    } else if (parsed.kind === "code") {
+      options.onReturning?.();
+      win.location.assign(buildWebViewCallbackPath(parsed.code, next));
+    } else if (parsed.error === "access_denied") {
+      options.onError(NATIVE_GOOGLE_ERRORS.cancelled);
+    } else {
+      options.onError(NATIVE_GOOGLE_ERRORS.failed);
+    }
+  };
+
+  if (!useAuthSession) {
+    const addListener = (bridge.addListener as NonNullable<CapacitorBridge["addListener"]>).bind(bridge);
+    try {
+      listeners.push(
+        addListener("App", "appUrlOpen", (event) => {
+          // Visszajátszott (korábbi kísérletből megőrzött) vagy lezárt
+          // kísérlethez érkező callback: figyelmen kívül.
+          if (settled || !acceptCallbacks) return;
+          const parsed = parseNativeOAuthCallback(event?.url);
+          if (!parsed) return; // idegen URL: figyelmen kívül hagyjuk
           cleanup();
-          (options.onCancel ?? (() => options.onError(NATIVE_GOOGLE_ERRORS.cancelled)))();
-        }, options.cancelGraceMs ?? 1500);
-      })
-    );
-  } catch {
-    cleanup();
-    options.onError(NATIVE_GOOGLE_ERRORS.unavailable);
-    return;
+          closeBrowser();
+          handleCallback(parsed);
+        })
+      );
+      listeners.push(
+        addListener("Browser", "browserFinished", () => {
+          if (settled || cancelTimer) return;
+          cancelTimer = setTimeout(() => {
+            if (settled) return;
+            cleanup();
+            (options.onCancel ?? (() => options.onError(NATIVE_GOOGLE_ERRORS.cancelled)))();
+          }, options.cancelGraceMs ?? 1500);
+        })
+      );
+    } catch {
+      cleanup();
+      options.onError(NATIVE_GOOGLE_ERRORS.unavailable);
+      return;
+    }
+
+    // A Capacitor App plugin a figyelő nélkül érkezett appUrlOpen eseményt
+    // megőrzi, és a feliratkozáskor azonnal kiküldi. Egy natív oda-vissza
+    // hívás után (ugyanazon a plugin-soron, sorrendben) a visszajátszás már
+    // lezajlott; csak az ezután érkező callback tartozhat ehhez a kísérlethez.
+    try {
+      await nativePromise("App", "getState", {});
+    } catch {
+      await new Promise((r) => setTimeout(r, 250));
+    }
+    if (settled) return;
+    acceptCallbacks = true;
   }
 
   let authUrl: string | null | undefined;
@@ -214,6 +296,8 @@ export async function startNativeGoogleLogin(
   } catch {
     authUrl = null;
   }
+  // Közben új kísérlet indult: ez már nem nyithat böngészőt.
+  if (settled) return;
 
   let parsedAuthUrl: URL | null = null;
   try {
@@ -227,9 +311,33 @@ export async function startNativeGoogleLogin(
     return;
   }
 
+  if (useAuthSession) {
+    let result: unknown;
+    try {
+      result = await nativePromise(NATIVE_AUTH_SESSION_PLUGIN, NATIVE_AUTH_SESSION_METHOD, {
+        url: parsedAuthUrl.toString(),
+        callbackScheme: NATIVE_OAUTH_SCHEME,
+      });
+    } catch (err) {
+      if (settled) return;
+      cleanup();
+      if (isCancelledNativeAuth(err)) {
+        (options.onCancel ?? (() => options.onError(NATIVE_GOOGLE_ERRORS.cancelled)))();
+      } else {
+        options.onError(NATIVE_GOOGLE_ERRORS.failed);
+      }
+      return;
+    }
+    if (settled) return;
+    cleanup();
+    handleCallback(parseNativeOAuthCallback((result as { url?: unknown } | null)?.url));
+    return;
+  }
+
   try {
     await nativePromise("Browser", "open", { url: parsedAuthUrl.toString() });
   } catch {
+    if (settled) return;
     cleanup();
     options.onError(NATIVE_GOOGLE_ERRORS.unavailable);
   }

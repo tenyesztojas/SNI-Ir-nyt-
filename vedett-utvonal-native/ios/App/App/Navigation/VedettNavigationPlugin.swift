@@ -1,5 +1,6 @@
 import Foundation
 import UIKit
+import AuthenticationServices
 import Capacitor
 
 @objc(VedettNavigationPlugin)
@@ -16,10 +17,17 @@ public class VedettNavigationPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "speak", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "stopSpeaking", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setSpeechEnabled", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "getSafeAreaInsets", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "getSafeAreaInsets", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "authenticate", returnType: CAPPluginReturnPromise)
     ]
 
     private let navigation = NavigationManager.shared
+
+    // Google-belépés (ASWebAuthenticationSession): csak a saját URL-séma
+    // fogadható el visszatérési címként; egyszerre egy munkamenet él.
+    static let allowedAuthCallbackScheme = "hu.vedettsarok.utvonal"
+    private var authSession: ASWebAuthenticationSession?
+    private var authPresentationContext: VedettAuthPresentationContext?
 
     @objc func start(_ call: CAPPluginCall) {
         guard let plan = call.getObject("plan"),
@@ -65,6 +73,74 @@ public class VedettNavigationPlugin: CAPPlugin, CAPBridgedPlugin {
     // iOS navigációs elrendezés v2: a web a biztonsági sávokat közvetlenül a
     // UIKit-ből kapja (nincs CSS-injektálás, nincs UA-találgatás). A webes
     // oldal csak akkor vált az új elrendezésre, ha ez a metódus létezik.
+    /// Hitelesítés az Apple OAuth-ra szánt ASWebAuthenticationSession-nel.
+    /// A rendszer a visszatérési (callback) URL-t KÖZVETLENÜL ide adja vissza
+    /// — nincs appUrlOpen, nincs SFSafariViewController. A WebView a kapott
+    /// URL-ből a meglévő /auth/callback kódcserét végzi (ugyanaz a PKCE
+    /// code_verifier, amelyet a WebView signInWithOAuth hívása hozott létre).
+    /// Hibakódok: AUTH_INVALID_REQUEST, AUTH_CANCELLED, AUTH_FAILED,
+    /// AUTH_UNAVAILABLE.
+    @objc func authenticate(_ call: CAPPluginCall) {
+        guard let rawUrl = call.getString("url"),
+              let url = URL(string: rawUrl),
+              url.scheme?.lowercased() == "https",
+              call.getString("callbackScheme") == Self.allowedAuthCallbackScheme else {
+            call.reject("AUTH_INVALID_REQUEST")
+            return
+        }
+
+        DispatchQueue.main.async {
+            // Egy korábbi, még nyitott munkamenet lezárul (annak hívása
+            // AUTH_CANCELLED-del tér vissza; a WebView ezt elavultként kezeli).
+            self.authSession?.cancel()
+
+            var session: ASWebAuthenticationSession?
+            session = ASWebAuthenticationSession(
+                url: url,
+                callbackURLScheme: Self.allowedAuthCallbackScheme
+            ) { [weak self] callbackURL, error in
+                DispatchQueue.main.async {
+                    if let finished = session, self?.authSession === finished {
+                        self?.authSession = nil
+                        self?.authPresentationContext = nil
+                    }
+                    session = nil
+
+                    if let callbackURL = callbackURL {
+                        call.resolve(["url": callbackURL.absoluteString])
+                    } else if let authError = error as? ASWebAuthenticationSessionError,
+                              authError.code == .canceledLogin {
+                        call.reject("AUTH_CANCELLED")
+                    } else {
+                        call.reject("AUTH_FAILED")
+                    }
+                }
+            }
+
+            guard let newSession = session else {
+                call.reject("AUTH_UNAVAILABLE")
+                return
+            }
+
+            let context = VedettAuthPresentationContext(
+                window: self.bridge?.viewController?.view.window
+            )
+            newSession.presentationContextProvider = context
+            // A meglévő Safari-munkamenet (Google-fiók) használható maradjon.
+            newSession.prefersEphemeralWebBrowserSession = false
+
+            self.authSession = newSession
+            self.authPresentationContext = context
+
+            if !newSession.start() {
+                self.authSession = nil
+                self.authPresentationContext = nil
+                session = nil
+                call.reject("AUTH_UNAVAILABLE")
+            }
+        }
+    }
+
     @objc func getSafeAreaInsets(_ call: CAPPluginCall) {
         DispatchQueue.main.async {
             guard let view = self.bridge?.viewController?.view,
@@ -235,5 +311,26 @@ public class VedettNavigationPlugin: CAPPlugin, CAPBridgedPlugin {
         }
 
         return targets
+    }
+}
+
+/// Az ASWebAuthenticationSession megjelenítési ablaka: az alkalmazás saját
+/// (Capacitor) ablaka; ha az nem elérhető, az aktív jelenet kulcsablaka.
+final class VedettAuthPresentationContext: NSObject, ASWebAuthenticationPresentationContextProviding {
+    private weak var window: UIWindow?
+
+    init(window: UIWindow?) {
+        self.window = window
+    }
+
+    func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
+        if let window = window {
+            return window
+        }
+        let keyWindow = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap { $0.windows }
+            .first { $0.isKeyWindow }
+        return keyWindow ?? ASPresentationAnchor()
     }
 }
