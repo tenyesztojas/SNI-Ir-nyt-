@@ -1,10 +1,15 @@
 "use client";
 
 import { trackVedettRouteEvent } from "@/lib/vedett-route/analytics";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { safeReturnPath } from "@/lib/pwa/safeReturnPath";
-import { isNativeCapacitor, startNativeGoogleLogin } from "@/lib/auth/nativeGoogleOAuth";
+import {
+  NATIVE_GOOGLE_ERRORS,
+  NATIVE_LOGIN_RETURN_TIMEOUT_MS,
+  isNativeCapacitor,
+  startNativeGoogleLogin,
+} from "@/lib/auth/nativeGoogleOAuth";
 
 // `next` NÉLKÜL a viselkedés a normál VédettSarok webes Google belépés
 // (VÁLTOZATLAN). `next`-tel (Védett Útvonal /belepes mód):
@@ -18,9 +23,22 @@ export default function GoogleLoginButton({ next }: { next?: string } = {}) {
   // egyszerű "Belépés folyamatban…" állapot jelenik meg (nincs villanó /belepes).
   const [returning, setReturning] = useState(false);
 
+  // Biztonsági időkorlát: ha a /auth/callback navigáció nem fejeződik be
+  // (sikeres belépésnél az oldal lecserélődik, így ez nem fut le), a takaró
+  // eltűnik, hibaüzenet jelenik meg, és a gomb újra megnyomható.
+  useEffect(() => {
+    if (!returning) return;
+    const timer = setTimeout(() => {
+      setReturning(false);
+      setErrorMessage(NATIVE_GOOGLE_ERRORS.timeout);
+    }, NATIVE_LOGIN_RETURN_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [returning]);
+
   async function handleLogin() {
     trackVedettRouteEvent("login_started", { authState: "anonymous" });
     setErrorMessage(null);
+    setReturning(false);
     const supabase = createClient();
 
     if (next === undefined) {
