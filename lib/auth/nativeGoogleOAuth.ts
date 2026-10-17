@@ -29,6 +29,17 @@ export const NATIVE_OAUTH_PATH = "/callback";
 export const NATIVE_OAUTH_REDIRECT_URI = "hu.vedettsarok.utvonal://auth/callback";
 export const NATIVE_OAUTH_NEXT = "/vedett-utvonal";
 
+/** A meglévő (webes / Android / régi iOS Browser út) callback útvonal. */
+export const WEB_OAUTH_CALLBACK_PATH = "/auth/callback";
+/**
+ * iOS ASWebAuthenticationSession út: a Capacitor iOS csak a server.url
+ * (https://www.vedettsarok.hu/vedett-utvonal) előtagú navigációt tartja a
+ * WebView-ban — a /auth/callback-et a rendszer-Safariban nyitná meg, ahol nincs
+ * PKCE verifier. Ezért ez az út a /vedett-utvonal alatti callbacket használja
+ * (app/vedett-utvonal/auth/callback/route.ts).
+ */
+export const NATIVE_IOS_WEBVIEW_CALLBACK_PATH = "/vedett-utvonal/auth/callback";
+
 export const NATIVE_GOOGLE_ERRORS = {
   unavailable: "A Google-belépés ebben az alkalmazásban jelenleg nem érhető el. Lépj be e-mailben.",
   failed: "A Google-belépés nem sikerült. Próbáld újra, vagy lépj be e-mailben.",
@@ -110,9 +121,13 @@ export function parseNativeOAuthCallback(rawUrl: unknown): NativeOAuthCallback |
  * A WebView-ban megnyitandó, SAME-ORIGIN callback útvonal. A code URL-kódolt;
  * a next a safeReturnPath-szel egyező elven csak "/"-lel kezdődő relatív út.
  */
-export function buildWebViewCallbackPath(code: string, next: string = NATIVE_OAUTH_NEXT): string {
+export function buildWebViewCallbackPath(
+  code: string,
+  next: string = NATIVE_OAUTH_NEXT,
+  callbackPath: typeof WEB_OAUTH_CALLBACK_PATH | typeof NATIVE_IOS_WEBVIEW_CALLBACK_PATH = WEB_OAUTH_CALLBACK_PATH
+): string {
   const safeNext = next.startsWith("/") && !next.startsWith("//") && !next.includes("://") ? next : NATIVE_OAUTH_NEXT;
-  return `/auth/callback?code=${encodeURIComponent(code)}&next=${encodeURIComponent(safeNext)}`;
+  return `${callbackPath}?code=${encodeURIComponent(code)}&next=${encodeURIComponent(safeNext)}`;
 }
 
 export interface NativeGoogleLoginOptions {
@@ -229,12 +244,15 @@ export async function startNativeGoogleLogin(
     void nativePromise("Browser", "close", {}).catch(() => undefined);
   };
 
+  const callbackPath = useAuthSession ? NATIVE_IOS_WEBVIEW_CALLBACK_PATH : WEB_OAUTH_CALLBACK_PATH;
   const handleCallback = (parsed: NativeOAuthCallback | null) => {
     if (!parsed) {
       options.onError(NATIVE_GOOGLE_ERRORS.failed);
     } else if (parsed.kind === "code") {
+      // iOS hitelesítési munkamenet: a /vedett-utvonal alatti callback (a
+      // WebView-ban marad); Browser út (Android / régi iOS): VÁLTOZATLAN.
       options.onReturning?.();
-      win.location.assign(buildWebViewCallbackPath(parsed.code, next));
+      win.location.assign(buildWebViewCallbackPath(parsed.code, next, callbackPath));
     } else if (parsed.error === "access_denied") {
       options.onError(NATIVE_GOOGLE_ERRORS.cancelled);
     } else {
