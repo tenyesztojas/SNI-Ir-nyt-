@@ -200,8 +200,9 @@ export type ReportEntityType = "user" | "help_request" | "help_offer" | "comment
 
 export interface CommunityUserReport {
   id: string;
-  reporter_user_id: string;
-  reported_user_id: string;
+  // NULL: a felhasználó fiókja törölve, vagy (bejelentő) a bejelentés anonimizálva.
+  reporter_user_id: string | null;
+  reported_user_id: string | null;
   entity_type: ReportEntityType;
   entity_id: string | null;
   related_help_setting_id: string | null;
@@ -244,6 +245,9 @@ export interface ReportAppeal {
   appeal_text: string;
   status: "pending" | "under_review" | "upheld" | "rejected";
   admin_response: string | null;
+  // A lezárás (upheld/rejected) tényleges időpontja; a 3 éves megőrzés alapja.
+  // Csak a closed_at migráció után létezik; régi lezárt soroknál NULL lehet.
+  closed_at?: string | null;
   reviewed_by: string | null;
   reviewed_at: string | null;
   created_at: string;

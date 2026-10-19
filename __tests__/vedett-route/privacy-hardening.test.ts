@@ -77,14 +77,20 @@ describe("account deletion", () => {
   test("user comes only from the authenticated session", () => {
     assert.match(route, /supabase\.auth\.getUser\(\)/);
     assert.match(route, /status: 401/);
-    assert.match(route, /deleteUser\(user\.id\)/);
+    // Tranzakciós törlés: a user JWT-jével futó delete_own_account RPC (auth.uid()),
+    // nincs admin.deleteUser / service role ebben az útvonalban.
+    assert.match(route, /rpc\("delete_own_account"/);
+    assert.doesNotMatch(route, /deleteUser\(|createAdminClient|SERVICE_ROLE/);
     assert.doesNotMatch(route, /body\.(user_?id|id)|searchParams|params\./);
   });
   test("requires confirmation and fails closed on Family data", () => {
     assert.match(route, /body\.confirm !== true/);
     // A Family-állapotot a DB RPC dönti el (fail closed), nem kliens-állítás.
-    assert.match(route, /prepare_account_deletion/);
-    assert.match(route, /status: 409/);
+    // (A régi prepare_account_deletion + admin.deleteUser lánc kivezetve.)
+    assert.doesNotMatch(route, /prepare_account_deletion/);
+    assert.match(route, /interpretDeleteOwnAccountRpc/);
+    const states = read("lib/account/deletionState.ts");
+    assert.match(states, /status: 409/);
   });
   test("service role never reaches client code", () => {
     const ui = read("components/DeleteAccountSection.tsx");

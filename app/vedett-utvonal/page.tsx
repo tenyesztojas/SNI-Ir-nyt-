@@ -65,6 +65,7 @@ import { hasVedettRouteBetaAccess } from "@/lib/vedett-route/access";
 import { routeDestinationDeepLinkSchema, routeOriginDeepLinkSchema } from "@/lib/vedett-route/schemas";
 import VedettUtvonalWorkspace from "@/components/vedett-utvonal/VedettUtvonalWorkspace";
 import AppDownloadBadges from "@/components/vedett-utvonal/AppDownloadBadges";
+import IosAccountLink from "@/components/vedett-utvonal/IosAccountLink";
 import type { Metadata } from "next";
 
 // Lásd app/admin/vedett-utvonal/page.tsx fejlécét — ugyanaz a build-time
@@ -249,12 +250,14 @@ export default async function VedettUtvonalPage({
         {/* ACCOUNT ACCESS (2026-10-03) — ugyanaz a VédettSarok fiók/session.
             Anonim: Belépés link; bejelentkezve: név/email + Kilépés
             (kilépés után /vedett-utvonal, nem a főoldal). */}
-        <div className="ml-auto flex items-center gap-3 text-sm" data-testid="vedett-utvonal-account">
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-x-3 gap-y-1 text-sm" data-testid="vedett-utvonal-account">
           {user ? (
             <>
               <span className="max-w-[10rem] truncate font-semibold text-gray-700" title={profile?.displayName || user.email}>
                 {profile?.displayName || user.email}
               </span>
+              {/* Csak a natív iOS appban látszik (App Review fióktörlés). */}
+              <IosAccountLink />
               <form action={signOutAction}>
                 <input type="hidden" name="next" value="/vedett-utvonal" />
                 <button type="submit" className="font-semibold text-sni-brand-blue hover:underline">

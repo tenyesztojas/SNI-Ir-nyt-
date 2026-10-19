@@ -20,7 +20,7 @@ describe("API contract", () => {
     assert.deepEqual([...states.ACCOUNT_DELETION_STATES], [
       "READY", "GUARDIAN_READY", "OTHER_OWNER_READY", "OWNER_TRANSFER_REQUIRED",
       "SOLE_OWNER_FAMILY_DELETE_CONFIRMATION_REQUIRED", "COMPLEX_FAMILY_MANUAL_REVIEW",
-      "CHILD_ACCOUNT_MANUAL_REVIEW", "CHILD_ACCOUNT_USER",
+      "CHILD_ACCOUNT_MANUAL_REVIEW", "CHILD_ACCOUNT_USER", "RECORDS_MANUAL_REVIEW",
     ]);
     assert.equal(states.parseAccountDeletionStatus({ state: "NOPE" }), null);
     assert.equal(states.parseAccountDeletionStatus(null), null);
@@ -34,8 +34,9 @@ describe("API contract", () => {
       assert.doesNotMatch(src, /body\??\.(user_?id|userId|id)\b|searchParams/);
     }
     const del = strip(read("app/api/account/delete/route.ts"));
-    assert.match(del, /deleteUser\(user\.id\)/);
-    assert.ok(del.indexOf("prepare_account_deletion") < del.indexOf("deleteUser("), "RPC runs before auth deletion");
+    // Egyetlen tranzakciós RPC törli az auth.users sort is (auth.uid() alapján).
+    assert.match(del, /rpc\("delete_own_account", \{\s*p_confirm_family_deletion: confirmFamilyDeletion,?\s*\}\)/);
+    assert.doesNotMatch(del, /deleteUser\(|prepare_account_deletion|createAdminClient/);
   });
   test("transfer route delegates authz to the RPC (target is a candidate, not identity)", () => {
     const src = strip(read("app/api/account/transfer-owner/route.ts"));

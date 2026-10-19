@@ -5,13 +5,17 @@ import { clearNavigationSession } from "@/lib/vedett-route/navigation/navigation
 import {
   CHILD_ACCOUNT_USER_MESSAGE,
   MANUAL_REVIEW_MESSAGE,
+  RECORDS_MANUAL_REVIEW_MESSAGE,
   parseAccountDeletionStatus,
   type AccountDeletionStatus,
 } from "@/lib/account/deletionState";
 
 const GENERIC_ERROR = "A fiók törlése most nem sikerült. Próbáld újra később.";
 
-export default function DeleteAccountSection() {
+// afterDeleteHref: a sikeres törlés utáni cél. Alapértelmezés VÁLTOZATLANUL "/"
+// (webes /profil). A Védett Útvonal fiókoldala (/vedett-utvonal/fiok)
+// "/vedett-utvonal"-t ad át, hogy a natív iOS WebView-ban maradjon.
+export default function DeleteAccountSection({ afterDeleteHref = "/" }: { afterDeleteHref?: "/" | "/vedett-utvonal" } = {}) {
   const [open, setOpen] = useState(false);
   const [status, setStatus] = useState<AccountDeletionStatus | null>(null);
   const [busy, setBusy] = useState(false);
@@ -65,7 +69,7 @@ export default function DeleteAccountSection() {
         return;
       }
       clearNavigationSession();
-      window.location.assign("/");
+      window.location.assign(afterDeleteHref);
     } catch {
       setError(GENERIC_ERROR);
       setBusy(false);
@@ -185,6 +189,13 @@ export default function DeleteAccountSection() {
           {(state === "COMPLEX_FAMILY_MANUAL_REVIEW" || state === "CHILD_ACCOUNT_MANUAL_REVIEW") && (
             <p>
               {MANUAL_REVIEW_MESSAGE.replace(" Kérjük, írj a kapcsolat@vedettsarok.hu címre.", "")} Kapcsolat:{" "}
+              <a href="mailto:kapcsolat@vedettsarok.hu" className="underline">kapcsolat@vedettsarok.hu</a>
+            </p>
+          )}
+
+          {state === "RECORDS_MANUAL_REVIEW" && (
+            <p>
+              {RECORDS_MANUAL_REVIEW_MESSAGE.replace(" Kérjük, írj a kapcsolat@vedettsarok.hu címre.", "")} Kapcsolat:{" "}
               <a href="mailto:kapcsolat@vedettsarok.hu" className="underline">kapcsolat@vedettsarok.hu</a>
             </p>
           )}
