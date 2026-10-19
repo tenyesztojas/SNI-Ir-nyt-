@@ -178,8 +178,8 @@ async function ReportCard({
 
       {/* Metaadatok */}
       <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-500 mb-3">
-        <div><span className="font-semibold">Bejelentő:</span> {r.reporter_user_id.slice(0, 8)}…</div>
-        <div><span className="font-semibold">Bejelentett:</span> {r.reported_user_id.slice(0, 8)}…</div>
+        <div><span className="font-semibold">Bejelentő:</span> {r.reporter_user_id ? `${r.reporter_user_id.slice(0, 8)}…` : r.anonymized_at ? "Anonimizálva" : "Törölt felhasználó"}</div>
+        <div><span className="font-semibold">Bejelentett:</span> {r.reported_user_id ? `${r.reported_user_id.slice(0, 8)}…` : "Törölt felhasználó"}</div>
         <div className="col-span-2"><span className="font-semibold">Kategória:</span> {categoryLabel}</div>
         {r.retention_until && (
           <div className="col-span-2">

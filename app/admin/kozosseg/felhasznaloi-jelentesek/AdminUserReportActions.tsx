@@ -10,7 +10,8 @@ import {
 
 interface Props {
   reportId: string;
-  reportedUserId: string;
+  /** NULL: a bejelentett felhasználó fiókja törölve — felhasználói szankció nem alkalmazható. */
+  reportedUserId: string | null;
   currentStatus: string;
   currentSeverity: string;
   isHidden: boolean;
@@ -62,10 +63,16 @@ export default function AdminUserReportActions({
         severityChanged ? severity : undefined,
         justification
       );
-      if (status === "resolved_help_disabled") {
+      if (status === "resolved_help_disabled" && reportedUserId) {
         await adminDisableHelpSettings(reportedUserId);
       }
-      setMsg({ ok: true, text: "Mentve." });
+      setMsg({
+        ok: true,
+        text:
+          status === "resolved_help_disabled" && !reportedUserId
+            ? "Mentve. A bejelentett fiók már törölve, segítségnyújtás letiltása nem szükséges."
+            : "Mentve.",
+      });
     } finally {
       setSaving(false);
     }
