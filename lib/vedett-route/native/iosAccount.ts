@@ -20,7 +20,15 @@ interface PlatformBridge {
 
 /** Igaz, ha a kód a natív iOS Védett Útvonal app WebView-jában fut. */
 export function isIosNativeApp(win: unknown = typeof window === "undefined" ? null : window): boolean {
-  const cap = (win as { Capacitor?: PlatformBridge } | null)?.Capacitor;
+  const context = win as {
+    Capacitor?: PlatformBridge;
+    navigator?: { userAgent?: string };
+  } | null;
+
+  const userAgent = context?.navigator?.userAgent ?? "";
+  if (/VedettUtvonalNative\/\S+\s+iOS\b/.test(userAgent)) return true;
+
+  const cap = context?.Capacitor;
   if (!cap || typeof cap.isNativePlatform !== "function" || typeof cap.getPlatform !== "function") return false;
   try {
     return cap.isNativePlatform() === true && cap.getPlatform() === "ios";

@@ -1,6 +1,7 @@
 "use client";
 
 import { trackVedettRouteEvent } from "@/lib/vedett-route/analytics";
+import { isIosNativeApp } from "@/lib/vedett-route/native/iosAccount";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { safeReturnPath } from "@/lib/pwa/safeReturnPath";
@@ -18,7 +19,12 @@ import {
 //  - Capacitor natív shell: Browser (Custom Tab) + deep link flow
 //    (lib/auth/nativeGoogleOAuth.ts); a WebView SOHA nem navigál a Google-re.
 export default function GoogleLoginButton({ next }: { next?: string } = {}) {
+  const [iosNative, setIosNative] = useState<boolean | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    setIosNative(isIosNativeApp());
+  }, []);
   // Natív visszatérés: a /auth/callback átirányítás 1-2 mp-ig tart; addig egy
   // egyszerű "Belépés folyamatban…" állapot jelenik meg (nincs villanó /belepes).
   const [returning, setReturning] = useState(false);
@@ -36,6 +42,7 @@ export default function GoogleLoginButton({ next }: { next?: string } = {}) {
   }, [returning]);
 
   async function handleLogin() {
+    if (isIosNativeApp()) return;
     trackVedettRouteEvent("login_started", { authState: "anonymous" });
     setErrorMessage(null);
     setReturning(false);
@@ -65,6 +72,8 @@ export default function GoogleLoginButton({ next }: { next?: string } = {}) {
       },
     });
   }
+
+  if (iosNative !== false) return null;
 
   return (
     <>

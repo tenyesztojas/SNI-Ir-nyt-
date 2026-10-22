@@ -7,6 +7,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { isIosNativeApp } from "@/lib/vedett-route/native/iosAccount";
 import { usePathname } from "next/navigation";
 import {
   ANALYTICS_CONSENT_CHANGE_EVENT,
@@ -25,6 +26,7 @@ export default function AnalyticsConsent({
   nonce?: string;
 }) {
   const [visible, setVisible] = useState(false);
+  const [iosNative, setIosNative] = useState(false);
 
   const apply = useCallback(() => {
     applyAnalyticsConsent(readAnalyticsConsent(), {
@@ -36,9 +38,13 @@ export default function AnalyticsConsent({
   }, [measurementId, nonce]);
 
   useEffect(() => {
+    const nativeIos = isIosNativeApp();
+    setIosNative(nativeIos);
     apply();
-    setVisible(readAnalyticsConsent() === "unset");
-    const onOpen = () => setVisible(true);
+    setVisible(!nativeIos && readAnalyticsConsent() === "unset");
+    const onOpen = () => {
+      if (!isIosNativeApp()) setVisible(true);
+    };
     window.addEventListener(ANALYTICS_CONSENT_OPEN_EVENT, onOpen);
     return () => window.removeEventListener(ANALYTICS_CONSENT_OPEN_EVENT, onOpen);
   }, [apply]);
@@ -71,7 +77,7 @@ export default function AnalyticsConsent({
     }
   }
 
-  if (!visible) return null;
+  if (iosNative || !visible) return null;
 
   return (
     <div

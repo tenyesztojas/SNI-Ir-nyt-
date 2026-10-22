@@ -145,6 +145,13 @@ export function trackVedettRouteEvent(
 ): void {
   try {
     if (typeof window === "undefined") return;
+    // App Review 5.1.2(i): natív iOS-ben nincs eseményküldés — UA-jelölő VAGY
+    // (régebbi build esetén) a Capacitor natív híd alapján.
+    if (detectAnalyticsPlatform(window.navigator.userAgent) === "ios") return;
+    {
+      const cap = (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean; getPlatform?: () => string } }).Capacitor;
+      if (cap?.isNativePlatform?.() === true && cap.getPlatform?.() === "ios") return;
+    }
     if (!VEDETT_ROUTE_EVENTS.includes(event)) return;
     if (isAnalyticsSuppressedPath(window.location?.pathname)) return;
     // Fail-closed: hozzájárulás (granted) nélkül NO-OP. A kulcs azonos a
