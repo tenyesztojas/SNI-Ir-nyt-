@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { isIosNativeApp } from "@/lib/vedett-route/native/iosAccount";
 import { useFormState, useFormStatus } from "react-dom";
 import { LogIn, Mail, ChevronDown, Users } from "lucide-react";
 import { signInAction, signUpAction, AuthActionState } from "@/lib/actions/auth";
@@ -41,6 +42,11 @@ export default function LoginPage({
         ? "A Google-belépés megszakadt."
         : null;
   const [mode, setMode] = useState<"belepes" | "regisztracio">("belepes");
+  // App Review 4.8: natív iOS-ben nincs Google-belépés, így a "vagy" elválasztó sem.
+  const [iosNative, setIosNative] = useState<boolean | null>(null);
+  useEffect(() => {
+    setIosNative(isIosNativeApp());
+  }, []);
   const [showEmail, setShowEmail] = useState(true);
   const [joinCommunity, setJoinCommunity] = useState(false);
   const [communityRole, setCommunityRole] = useState("szulo");
@@ -78,11 +84,13 @@ export default function LoginPage({
           <div className="mt-5 flex flex-col gap-3">
             <GoogleLoginButton next={safeNext} />
           </div>
-          <div className="mt-5 flex items-center gap-3">
-            <div className="h-px flex-1 bg-gray-200" />
-            <span className="text-xs font-medium uppercase tracking-wide text-gray-400">vagy</span>
-            <div className="h-px flex-1 bg-gray-200" />
-          </div>
+          {iosNative === false && (
+            <div className="mt-5 flex items-center gap-3">
+              <div className="h-px flex-1 bg-gray-200" />
+              <span className="text-xs font-medium uppercase tracking-wide text-gray-400">vagy</span>
+              <div className="h-px flex-1 bg-gray-200" />
+            </div>
+          )}
         </div>
       ) : (
         <>
@@ -96,11 +104,13 @@ export default function LoginPage({
             <GoogleLoginButton />
           </div>
 
-          <div className="mt-5 flex items-center gap-3">
-            <div className="h-px flex-1 bg-gray-200" />
-            <span className="text-xs font-medium uppercase tracking-wide text-gray-400">vagy</span>
-            <div className="h-px flex-1 bg-gray-200" />
-          </div>
+          {iosNative === false && (
+            <div className="mt-5 flex items-center gap-3">
+              <div className="h-px flex-1 bg-gray-200" />
+              <span className="text-xs font-medium uppercase tracking-wide text-gray-400">vagy</span>
+              <div className="h-px flex-1 bg-gray-200" />
+            </div>
+          )}
         </>
       )}
 

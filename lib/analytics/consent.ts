@@ -3,6 +3,19 @@
 // nem fut, és semmilyen GA kérés nem indul. Nincs Advanced Consent Mode
 // (cookieless ping). A tárolt érték KIZÁRÓLAG a választást tartalmazza.
 
+// App Review 5.1.2(i): natív iOS-ben (Védett Útvonal app) semmilyen GA nem fut.
+// Szándékosan import nélkül (a modul Node-tesztekből is betölthető); a logika
+// azonos a lib/vedett-route/native/iosAccount.ts isIosNativeApp()-jával.
+function isIosNativeApp(win: unknown): boolean {
+  const ctx = win as { Capacitor?: { isNativePlatform?: () => boolean; getPlatform?: () => string }; navigator?: { userAgent?: string } } | null;
+  if (/VedettUtvonalNative\/\S+\s+iOS\b/.test(ctx?.navigator?.userAgent ?? "")) return true;
+  try {
+    return ctx?.Capacitor?.isNativePlatform?.() === true && ctx.Capacitor.getPlatform?.() === "ios";
+  } catch {
+    return false;
+  }
+}
+
 export const ANALYTICS_CONSENT_KEY = "vs-analytics-consent";
 export const ANALYTICS_CONSENT_CHANGE_EVENT = "vs-analytics-consent-change";
 export const ANALYTICS_CONSENT_OPEN_EVENT = "vs-analytics-consent-open";
@@ -115,6 +128,7 @@ export function buildSanitizedPageFields(location: { origin?: string; pathname?:
  * NO-OP (false).
  */
 export function sendSanitizedPageView(win: any, storage?: ConsentStorageLike | null): boolean {
+  if (isIosNativeApp(win)) return false;
   try {
     if (readAnalyticsConsent(storage === undefined ? win?.localStorage : storage) !== "granted") return false;
     if (typeof win?.gtag !== "function") return false;
@@ -129,6 +143,17 @@ export function sendSanitizedPageView(win: any, storage?: ConsentStorageLike | n
 
 export function applyAnalyticsConsent(state: AnalyticsConsentState, env: ConsentEnv): void {
   const { win, doc, measurementId } = env;
+  if (isIosNativeApp(win)) {
+    try {
+      win[`ga-disable-${measurementId}`] = true;
+      win.gtag?.("consent", "update", CONSENT_DENIED);
+      win.gtag = undefined;
+      clearGoogleAnalyticsCookies(doc, win.location.hostname);
+    } catch {
+      // Az analitika tiltása nem akadályozhatja az alkalmazást.
+    }
+    return;
+  }
   try {
     const disableKey = `ga-disable-${measurementId}`;
     if (state === "granted") {
