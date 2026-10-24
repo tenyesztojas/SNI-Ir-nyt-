@@ -11,6 +11,10 @@ import FamilyOnboarding from "@/components/family/FamilyOnboarding";
 import FamilyCard from "@/components/family/FamilyCard";
 import GuardianInvitationInbox from "@/components/family/GuardianInvitationInbox";
 import ChildTodayView from "@/components/family/ChildTodayView";
+import TravelStatusLive from "@/components/family/TravelStatusLive";
+import { budapestLocalDay } from "@/lib/family/todaySchedule";
+import { latestTravelByChild, previousDate } from "@/lib/family/travelStatus";
+import { getChildTravelStatusesForDates, getRecentTravelStatuses } from "@/lib/family/travelStatusData";
 import type { Metadata } from "next";
 
 // /csalad — Family modul, első működő UI verzió a meglévő Family DB
@@ -119,8 +123,19 @@ export default async function CsaladPage() {
   // még egy jövőbeli, előre nem látott átfedés esetén sem.
   if (childSelf) {
     // Védett Napom: önálló, csak olvasható gyermeknézet (nincs családkezelés).
-    return <ChildTodayView child={childSelf} />;
+    const now = new Date();
+    const today = budapestLocalDay(now).date;
+    // Mai + tegnapi sorok: újratöltés után visszaáll a mentett állapot, és a
+    // tegnap megkezdett, nyitott út is lezárható (RLS: csak a saját gyermek).
+    const travelRows = await getChildTravelStatusesForDates(childSelf.id, [today, previousDate(today)]);
+    return <ChildTodayView child={childSelf} now={now} travelRows={travelRows} />;
   }
+
+
+  // Szülői/gondviselői nézet: gyermekenként a legfrissebb utazási jelzés
+  // (RLS szűr; a migráció hiányában üres, a felület változatlan).
+  const visibleChildIds = families.flatMap((f) => f.children.map((c) => c.id));
+  const travelStatusByChild = Object.fromEntries(latestTravelByChild(await getRecentTravelStatuses(visibleChildIds)));
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
@@ -151,9 +166,11 @@ export default async function CsaladPage() {
 
       {!error && families.length > 0 && (
         <div className="mt-6 flex flex-col gap-6">
-          {families.map((family) => (
-            <FamilyCard key={family.id} family={family} />
-          ))}
+          <TravelStatusLive childIds={visibleChildIds} initial={travelStatusByChild}>
+            {families.map((family) => (
+              <FamilyCard key={family.id} family={family} travelStatusByChild={travelStatusByChild} />
+            ))}
+          </TravelStatusLive>
         </div>
       )}
     </div>
