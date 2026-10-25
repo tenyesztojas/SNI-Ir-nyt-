@@ -5,6 +5,8 @@ import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { safeReturnPath, isVedettUtvonalReturnPath } from "@/lib/pwa/safeReturnPath";
+import { detachBrowserPushOnSignOut } from "@/lib/pushSignOutServer";
+import { PUSH_DETACHED_COOKIE, PUSH_ENDPOINT_FIELD } from "@/lib/pushSignOut";
 import { upsertCommunityProfile } from "@/app/kozosseg/actions";
 import type { CommunityRole } from "@/lib/community/types";
 
@@ -172,9 +174,29 @@ export async function changePasswordAction(
 // next=/vedett-utvonal mezőt küld; safeReturnPath() nyílt redirect ellen véd.
 export async function signOutAction(formData?: FormData): Promise<void> {
   const supabase = createClient();
+  // Push: a kijelentkező böngésző végpontjának leválasztása MÉG a session
+  // megszüntetése előtt (szerveroldalon, csak a saját sor). Hiba esetén is
+  // kijelentkeztetünk — a kilépés nem blokkolható —, de sikert csak megerősített
+  // leválasztásnál jelzünk; a kliens (SignOutDataCleanup) a böngészős
+  // feliratkozást is bontja, és ha az sem sikerül, figyelmeztet.
+  let pushDetach: Awaited<ReturnType<typeof detachBrowserPushOnSignOut>> = "none";
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    pushDetach = await detachBrowserPushOnSignOut(
+      user?.id ?? null,
+      formData ? formData.get(PUSH_ENDPOINT_FIELD) : null
+    );
+  } catch {
+    pushDetach = "failed";
+  }
   await supabase.auth.signOut();
   // Jelző a kliensnek: töröld a készüléken tárolt navigációs sessiont (SignOutDataCleanup).
   cookies().set({ name: "vu_signed_out", value: "1", path: "/", maxAge: 60, sameSite: "lax" });
+  if (pushDetach === "detached") {
+    cookies().set({ name: PUSH_DETACHED_COOKIE, value: "1", path: "/", maxAge: 60, sameSite: "lax" });
+  }
   const nextPath = safeReturnPath(
     formData ? String(formData.get("next") ?? "") : "",
     "/"

@@ -60,6 +60,7 @@ import Link from "next/link";
 import { Bus, Footprints, Repeat2, HeartPulse, MapPinned, Sparkles, ArrowRight } from "lucide-react";
 import { getCurrentUserAndProfile } from "@/lib/data";
 import { signOutAction } from "@/lib/actions/auth";
+import PushEndpointField from "@/components/PushEndpointField";
 import { isVedettRouteFeatureEnabled, VEDETT_ROUTE_ACCESS_LEVEL } from "@/lib/vedett-route/config";
 import { hasVedettRouteBetaAccess } from "@/lib/vedett-route/access";
 import { routeDestinationDeepLinkSchema, routeOriginDeepLinkSchema } from "@/lib/vedett-route/schemas";
@@ -260,6 +261,7 @@ export default async function VedettUtvonalPage({
               <IosAccountLink />
               <form action={signOutAction}>
                 <input type="hidden" name="next" value="/vedett-utvonal" />
+                <PushEndpointField />
                 <button type="submit" className="font-semibold text-sni-brand-blue hover:underline">
                   Kilépés
                 </button>

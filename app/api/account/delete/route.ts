@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { PUSH_DETACHED_COOKIE } from "@/lib/pushSignOut";
 import { createClient } from "@/lib/supabase/server";
 import { interpretDeleteOwnAccountRpc, interpretDeletionStateRpc } from "@/lib/account/deletionState";
 
@@ -57,5 +58,9 @@ export async function POST(request: Request) {
     await supabase.auth.signOut();
   } catch {}
   cookies().set({ name: "vu_signed_out", value: "1", path: "/", maxAge: 60, sameSite: "lax" });
+  // A push_subscriptions sorok az auth.users törlésével kaszkádban törlődnek
+  // (20240715_push_subscriptions.sql: ON DELETE CASCADE); a kliens a böngészős
+  // feliratkozást is bontja.
+  cookies().set({ name: PUSH_DETACHED_COOKIE, value: "1", path: "/", maxAge: 60, sameSite: "lax" });
   return NextResponse.json({ ok: true });
 }

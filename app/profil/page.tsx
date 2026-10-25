@@ -2,6 +2,7 @@ import Link from "next/link";
 import { UserCircle } from "lucide-react";
 import { getCurrentUserAndProfile, getOwnPlaces, getOwnReviews } from "@/lib/data";
 import { signOutAction } from "@/lib/actions/auth";
+import PushEndpointField from "@/components/PushEndpointField";
 import { hasFamilyBetaAccess } from "@/lib/family/config";
 import { hasAnyFamilyAccessSignal } from "@/lib/family/data";
 import ProfileNameForm from "@/components/ProfileNameForm";
@@ -75,6 +76,7 @@ export default async function ProfilePage() {
           ← Vissza a Védett Útvonalhoz
         </Link>
         <form action={signOutAction}>
+          <PushEndpointField />
           <button type="submit" className="btn-secondary">Kijelentkezés</button>
         </form>
       </div>

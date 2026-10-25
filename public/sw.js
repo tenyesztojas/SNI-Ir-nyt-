@@ -54,8 +54,10 @@ self.addEventListener("push", (e) => {
       body: data.body,
       icon: "/icon-192.png",
       badge: "/icon-192.png",
-      tag: "admin-notification",
+      // Admin payloadban nincs tag/requireInteraction -> v├íltozatlan viselked├ęs.
+      tag: typeof data.tag === "string" ? data.tag : "admin-notification",
       renotify: true,
+      requireInteraction: data.requireInteraction === true,
       data: { url: data.url },
     })
   );

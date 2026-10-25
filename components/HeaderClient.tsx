@@ -5,6 +5,7 @@ import { useState, useRef, useEffect } from "react";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import { Menu, X, LogOut, ChevronDown, BookOpen, MapPin } from "lucide-react";
 import { signOutAction } from "@/lib/actions/auth";
+import PushEndpointField from "@/components/PushEndpointField";
 import AccessibilityButton from "@/components/accessibility/AccessibilityButton";
 
 // ── Védett Helyek dropdown ──────────────────────────────────────────────────
@@ -295,6 +296,7 @@ export default function HeaderClient({
                 </Link>
               )}
               <form action={signOutAction}>
+                <PushEndpointField />
                 <button
                   type="submit"
                   className="ml-1 inline-flex items-center gap-1.5 rounded-full border border-gray-200 px-4 py-2 text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-50"
@@ -466,6 +468,7 @@ export default function HeaderClient({
                   </Link>
                 )}
                 <form action={signOutAction}>
+                  <PushEndpointField />
                   <button
                     type="submit"
                     className="w-full rounded-xl px-4 py-3 text-left text-base font-semibold text-red-500"

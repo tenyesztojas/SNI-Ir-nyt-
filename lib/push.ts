@@ -12,6 +12,13 @@ function initVapid() {
   vapidInitialized = true;
 }
 
+// A VAPID-konfigur├íci├│ ├║jrahasznos├şt├ísa m├ís (pl. V├ędett Csal├íd) ├ęrtes├şt├ęsekhez;
+// a sendAdminPush m┼▒k├Âd├ęse v├íltozatlan.
+export function ensureVapidConfigured(): boolean {
+  initVapid();
+  return vapidInitialized;
+}
+
 export async function sendAdminPush(title: string, body: string, url = "/admin") {
   try {
     initVapid();

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Bell, BellOff, Loader2 } from "lucide-react";
+import { postPushJson, subscribeAndSave, syncPushSubscription, unsubscribeAndDelete, type PushFlowDeps } from "@/lib/pushClientFlow";
 
 const PUBLIC_VAPID_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!;
 
@@ -14,8 +15,22 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
 
 type Status = "unsupported" | "loading" | "subscribed" | "unsubscribed" | "denied";
 
+// Siker csak a szerver igazolt válasza után (lásd lib/pushClientFlow.ts).
+function flowDeps(reg: ServiceWorkerRegistration): PushFlowDeps {
+  return {
+    getSubscription: () => reg.pushManager.getSubscription(),
+    subscribe: () =>
+      reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(PUBLIC_VAPID_KEY),
+      }),
+    post: postPushJson,
+  };
+}
+
 export default function PushNotifButton() {
   const [status, setStatus] = useState<Status>("loading");
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
@@ -26,47 +41,50 @@ export default function PushNotifButton() {
       setStatus("denied");
       return;
     }
-    navigator.serviceWorker.ready.then(async (reg) => {
-      const sub = await reg.pushManager.getSubscription();
-      setStatus(sub ? "subscribed" : "unsubscribed");
-    });
+    navigator.serviceWorker.ready
+      .then(async (reg) => {
+        const state = await syncPushSubscription(flowDeps(reg));
+        if (state === "error") setError("Az értesítési állapotot nem sikerült ellenőrizni.");
+        setStatus(state === "on" ? "subscribed" : "unsubscribed");
+      })
+      .catch(() => setStatus("unsubscribed"));
   }, []);
 
   async function subscribe() {
     setStatus("loading");
+    setError(null);
     try {
+      if (!PUBLIC_VAPID_KEY) throw new Error("vapid");
       const reg = await navigator.serviceWorker.ready;
-      const sub = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(PUBLIC_VAPID_KEY),
-      });
-      const subJson = sub.toJSON() as { endpoint: string; keys: { p256dh: string; auth: string } };
-      await fetch("/api/push/subscribe", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(subJson),
-      });
-      setStatus("subscribed");
+      if (await subscribeAndSave(flowDeps(reg))) {
+        setStatus("subscribed");
+      } else {
+        setError("A feliratkozást nem sikerült menteni. Próbáld újra később.");
+        setStatus("unsubscribed");
+      }
     } catch {
-      setStatus(Notification.permission === "denied" ? "denied" : "unsubscribed");
+      if (Notification.permission === "denied") {
+        setStatus("denied");
+      } else {
+        setError("A feliratkozást nem sikerült menteni. Próbáld újra később.");
+        setStatus("unsubscribed");
+      }
     }
   }
 
   async function unsubscribe() {
     setStatus("loading");
+    setError(null);
     try {
       const reg = await navigator.serviceWorker.ready;
-      const sub = await reg.pushManager.getSubscription();
-      if (sub) {
-        await fetch("/api/push/subscribe", {
-          method: "DELETE",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ endpoint: sub.endpoint }),
-        });
-        await sub.unsubscribe();
+      if (await unsubscribeAndDelete(flowDeps(reg))) {
+        setStatus("unsubscribed");
+      } else {
+        setError("A leiratkozást nem sikerült menteni. Próbáld újra később.");
+        setStatus("subscribed");
       }
-      setStatus("unsubscribed");
     } catch {
+      setError("A leiratkozást nem sikerült menteni. Próbáld újra később.");
       setStatus("subscribed");
     }
   }
@@ -84,6 +102,11 @@ export default function PushNotifButton() {
             ? "A böngésző letiltotta az értesítéseket. Engedélyezd a beállításokban."
             : "Engedélyezd, hogy értesítést kapj minden új beküldésről."}
         </p>
+        {error && (
+          <p role="alert" className="mt-1 text-xs text-red-700">
+            {error}
+          </p>
+        )}
       </div>
 
       {status === "loading" && (

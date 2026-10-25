@@ -4,6 +4,8 @@
 // set_child_travel_status() SECURITY DEFINER RPC ellenőrzi (a hívó saját
 // aktív gyermekfiókja, saját, mai, aktív napirendi eseménye). Itt csak
 // bemenet-validáció és hibaüzenet-leképezés történik. Nincs logolás.
+// Sikeres írás után célzott szülői/gondviselői push (lib/family/travelPushServer):
+// címzett és duplikáció-védelem a DB-ben; hibája nem érinti az eredményt.
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
@@ -15,6 +17,8 @@ import {
   type TravelState,
   type TravelStatusRow,
 } from "@/lib/family/travelStatus";
+import { travelNotifyEventFor } from "@/lib/family/travelNotify";
+import { notifyChildTravelEvent } from "@/lib/family/travelPushServer";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -38,6 +42,16 @@ export async function setTravelStatusAction(scheduleItemId: unknown, action: unk
   });
   if (error || !data) return { ok: false, error: travelErrorCode(error?.message) };
 
+  const row = data as TravelStatusRow & { id?: unknown };
+  const event = travelNotifyEventFor(action, row);
+  if (event) {
+    try {
+      await notifyChildTravelEvent(row.id as string, event);
+    } catch {
+      // az értesítés hibája nem akadályozhatja az állapot rögzítését
+    }
+  }
+
   revalidatePath("/csalad");
-  return { ok: true, state: rowToTravelState(data as TravelStatusRow) };
+  return { ok: true, state: rowToTravelState(row) };
 }

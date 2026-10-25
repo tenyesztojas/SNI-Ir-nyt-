@@ -11,7 +11,7 @@ import { applyTravelAction, parseChildIds, type TravelState } from "../../lib/fa
 import { budapestLocalDay, nextScheduleItemId, todayScheduleItems } from "../../lib/family/todaySchedule.ts";
 
 const read = (p: string) => readFileSync(p, "utf8");
-const sql = read("supabase/migrations/20261014_child_travel_status.sql");
+const sql = read("supabase/migrations/20261014_child_travel_status.sql").replace(/\r\n/g, "\n");
 const fnBody = sql.slice(sql.indexOf("create or replace function public.set_child_travel_status"));
 
 describe("egység: időzítés és napváltás", () => {

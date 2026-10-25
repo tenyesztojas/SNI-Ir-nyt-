@@ -12,6 +12,11 @@ import FamilyCard from "@/components/family/FamilyCard";
 import GuardianInvitationInbox from "@/components/family/GuardianInvitationInbox";
 import ChildTodayView from "@/components/family/ChildTodayView";
 import TravelStatusLive from "@/components/family/TravelStatusLive";
+import TravelPushCard from "@/components/family/TravelPushCard";
+import FamilySubscriptionCard from "@/components/family/FamilySubscriptionCard";
+import { getFamilySubscriptionState } from "@/lib/family/entitlementsServer";
+import { buildSubscriptionView } from "@/lib/family/subscriptionView";
+import { hasTravelNotificationEligibility } from "@/lib/family/travelPushEligibility";
 import { budapestLocalDay } from "@/lib/family/todaySchedule";
 import { latestTravelByChild, previousDate } from "@/lib/family/travelStatus";
 import { getChildTravelStatusesForDates, getRecentTravelStatuses } from "@/lib/family/travelStatusData";
@@ -136,6 +141,19 @@ export default async function CsaladPage() {
   // (RLS szűr; a migráció hiányában üres, a felület változatlan).
   const visibleChildIds = families.flatMap((f) => f.children.map((c) => c.id));
   const travelStatusByChild = Object.fromEntries(latestTravelByChild(await getRecentTravelStatuses(visibleChildIds)));
+  // Utazási push-kártya: csak értesítésre jogosító aktív gyermekkapcsolattal
+  // (aktív owner gyermekkel / aktív, megtekintési joggal bíró guardian).
+  // A gyermek-saját ág fentebb már visszatért; meghívott, még nem tag user
+  // families-e üres. A küldéskor a DB újra ellenőrzi a jogosultságot.
+  const showTravelPush = !error && families.length > 0 && (await hasTravelNotificationEligibility(user.id, families));
+  // Előfizetési állapot: session-kliens + get_family_subscription_state (csak a
+  // család aktív tagjának válaszol). Csak tájékoztat, semmit nem korlátoz.
+  const subscriptionNow = new Date();
+  const subscriptionViews = !error
+    ? await Promise.all(
+        families.map(async (f) => ({ family: f, view: buildSubscriptionView(await getFamilySubscriptionState(f.id), subscriptionNow) }))
+      )
+    : [];
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
@@ -166,6 +184,10 @@ export default async function CsaladPage() {
 
       {!error && families.length > 0 && (
         <div className="mt-6 flex flex-col gap-6">
+          {showTravelPush && <TravelPushCard />}
+          {subscriptionViews.map(({ family, view }) => (
+            <FamilySubscriptionCard key={`sub-${family.id}`} familyName={family.name} view={view} />
+          ))}
           <TravelStatusLive childIds={visibleChildIds} initial={travelStatusByChild}>
             {families.map((family) => (
               <FamilyCard key={family.id} family={family} travelStatusByChild={travelStatusByChild} />
