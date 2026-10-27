@@ -1,6 +1,6 @@
 // Védett Család — gyermek utazási állapot (pure, tesztelhető).
 // A szerveroldali igazság a set_child_travel_status() RPC
-// (supabase/migrations/20261014_child_travel_status.sql); ez a modul annak
+// (supabase/migrations/20261027000000_child_travel_status.sql); ez a modul annak
 // átmeneti szabályait tükrözi, és a felületi szövegeket adja.
 
 export type TravelAction = "depart" | "arrive" | "help";

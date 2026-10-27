@@ -18,8 +18,8 @@ import {
 import { hasFamilyBetaAccess } from "../../lib/family/config.ts";
 
 const read = (p: string) => readFileSync(p, "utf8").replace(/\r\n/g, "\n");
-const SQL = read("supabase/migrations/20261021_family_subscriptions_foundation.sql");
-const TRIAL = read("supabase/migrations/20261022_family_trial_protection.sql");
+const SQL = read("supabase/migrations/20261027000200_family_subscriptions_foundation.sql");
+const TRIAL = read("supabase/migrations/20261027000300_family_trial_protection.sql");
 const PW = new Set<FamilyFeature>(["family.notification.advanced"]);
 const st = (o: Partial<Record<string, unknown>> = {}) =>
   parseFamilySubscriptionState({ status: "active", plan_key: "family_plus", effective_plan_key: "family_plus", paid_access: true, features: ["family.notification.advanced"], ...o });

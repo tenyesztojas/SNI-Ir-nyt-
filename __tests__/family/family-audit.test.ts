@@ -9,7 +9,7 @@ import { budapestLocalDay, todayDepartureAlerts } from "../../lib/family/todaySc
 import { latestTravelByChild, travelErrorCode } from "../../lib/family/travelStatus.ts";
 
 const read = (p: string) => readFileSync(p, "utf8");
-const sql = read("supabase/migrations/20261014_child_travel_status.sql");
+const sql = read("supabase/migrations/20261027000000_child_travel_status.sql");
 const item = (o: Record<string, unknown>) =>
   ({ id: "a", title: "T", description: null, scheduleType: "recurring", startDate: null, endDate: null,
     timeLocal: "08:00", arrivalTimeLocal: null, daysOfWeek: [1, 2, 3, 4, 5, 6, 7], originLabel: null,

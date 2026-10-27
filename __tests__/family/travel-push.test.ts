@@ -172,7 +172,7 @@ describe("notifyTravelEvent", () => {
 describe("bekötés és migráció (statikus)", () => {
   const action = read("lib/actions/travelStatus.ts");
   const server = read("lib/family/travelPushServer.ts");
-  const sql = read("supabase/migrations/20261019_child_travel_notifications.sql");
+  const sql = read("supabase/migrations/20261027000100_child_travel_notifications.sql");
   test("értesítés csak sikeres RPC után, hibája elnyelve, válasz változatlan", () => {
     const i = (s: string) => action.indexOf(s);
     assert.ok(i('supabase.rpc("set_child_travel_status"') < i("if (error || !data) return"));

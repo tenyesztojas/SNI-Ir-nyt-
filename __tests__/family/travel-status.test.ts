@@ -74,7 +74,7 @@ describe("ismételt műveletek", () => {
 });
 
 describe("jogosultság és adatvédelem (migráció + szerverakció)", () => {
-  const sql = read("supabase/migrations/20261014_child_travel_status.sql");
+  const sql = read("supabase/migrations/20261027000000_child_travel_status.sql");
   test("RLS bekapcsolva, csak SELECT policy, közvetlen írás visszavonva, anon semmi", () => {
     assert.match(sql, /alter table public\.child_travel_statuses enable row level security;/);
     assert.match(sql, /revoke all on public\.child_travel_statuses from anon;/);

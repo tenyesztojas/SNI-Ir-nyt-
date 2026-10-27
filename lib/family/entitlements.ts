@@ -9,7 +9,7 @@ export const FAMILY_SUBSCRIPTION_STATUSES = ["free", "trialing", "active", "past
 export type FamilySubscriptionStatus = (typeof FAMILY_SUBSCRIPTION_STATUSES)[number];
 
 // Jogosultság-kulcsok — egyezik a DB subscription_plan_features tartalmával
-// (20261022_family_trial_protection.sql; teszt-DB: 4 ingyenes + 8 Plusz).
+// (20261027000300_family_trial_protection.sql; teszt-DB: 4 ingyenes + 8 Plusz).
 export const FREE_FAMILY_FEATURES = [
   "family.child_profile.basic",
   "family.schedule.basic",

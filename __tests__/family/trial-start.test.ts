@@ -65,7 +65,7 @@ describe("szerveroldali mag", () => {
 
 describe("bekötés és migráció (statikus)", () => {
   const a = read("lib/actions/familyTrial.ts");
-  const sql = read("supabase/migrations/20261023_start_family_trial_rpc.sql");
+  const sql = read("supabase/migrations/20261027000400_start_family_trial_rpc.sql");
   test("alapértelmezetten kikapcsolva, a kapcsoló a kliens létrehozása előtt", () => {
     assert.equal(isFamilyTrialStartEnabled({}), false);
     assert.equal(isFamilyTrialStartEnabled({ FAMILY_TRIAL_START_ENABLED: "1" }), false);

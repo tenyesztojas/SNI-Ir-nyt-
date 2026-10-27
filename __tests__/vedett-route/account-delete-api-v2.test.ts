@@ -12,7 +12,7 @@ const ROOT = process.cwd();
 const read = (p: string) => readFileSync(join(ROOT, p), "utf8");
 const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
 const S: any = await import(pathToFileURL(resolve(ROOT, "lib/account/deletionState.ts")).href);
-const DRAFT = "docs/account-deletion/migration/20261020000000_delete_own_account.DRAFT.sql";
+const DRAFT = "supabase/migrations/20261020000000_delete_own_account.sql";
 
 describe("GET: get_account_deletion_state_v2 mapping", () => {
   test("ready state passes through", () => {
