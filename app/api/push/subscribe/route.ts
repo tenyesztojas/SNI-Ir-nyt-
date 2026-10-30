@@ -3,12 +3,12 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { decideSubscribeWrite, parsePushEndpoint, parsePushSubscriptionBody } from "@/lib/pushSubscription";
 
-// Push-feliratkoz├ís ment├ęse/t├Ârl├ęse (admin ├ęs V├ędett Csal├íd k├Âz├Âs ├║tja).
-// A user KIZ├üR├ôLAG a session-b┼Ĺl j├Ân. M├ís user sor├ít a bek├╝ld├Âtt v├ęgpont
-// alapj├ín SEM ├ítvenni, SEM t├Âr├Âlni nem lehet: saj├ít sor friss├şthet┼Ĺ, ├║j sor
-// besz├║rhat├│, idegen sor eset├ęn 409 (a kliens el┼Ĺbb a b├Âng├ęsz┼Ĺs
-// unsubscribe()-bal ├║j v├ęgpontot k├ęr). Hogy KINEK megy csal├ídi ├ęrtes├şt├ęs, azt
-// a k├╝ld├ęskor a claim_child_travel_notification() d├Ânti el (DB).
+// Push-feliratkozás mentése/törlése (admin és Védett Család közös útja).
+// A user KIZÁRÓLAG a session-ből jön. Más user sorát a beküldött végpont
+// alapján SEM átvenni, SEM törölni nem lehet: saját sor frissíthető, új sor
+// beszúrható, idegen sor esetén 409 (a kliens előbb a böngészős
+// unsubscribe()-bal új végpontot kér). Hogy KINEK megy családi értesítés, azt
+// a küldéskor a claim_child_travel_notification() dönti el (DB).
 
 export async function POST(request: Request) {
   const supabase = createClient();
@@ -37,7 +37,7 @@ export async function POST(request: Request) {
     write === "update"
       ? await admin.from("push_subscriptions").update({ keys: sub.keys }).eq("endpoint", sub.endpoint).eq("user_id", user.id)
       : await admin.from("push_subscriptions").insert({ endpoint: sub.endpoint, keys: sub.keys, user_id: user.id });
-  // P├írhuzamosan besz├║rt (m├ís user) sor: egyedi kulcs ├╝tk├Âz├ęs -> nincs ├ítv├ętel.
+  // Párhuzamosan beszúrt (más user) sor: egyedi kulcs ütközés -> nincs átvétel.
   if (error?.code === "23505") {
     return NextResponse.json({ ok: false, error: "Endpoint in use" }, { status: 409 });
   }

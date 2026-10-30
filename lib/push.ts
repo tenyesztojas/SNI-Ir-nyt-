@@ -12,8 +12,8 @@ function initVapid() {
   vapidInitialized = true;
 }
 
-// A VAPID-konfigur├íci├│ ├║jrahasznos├şt├ísa m├ís (pl. V├ędett Csal├íd) ├ęrtes├şt├ęsekhez;
-// a sendAdminPush m┼▒k├Âd├ęse v├íltozatlan.
+// A VAPID-konfiguráció újrahasznosítása más (pl. Védett Család) értesítésekhez;
+// a sendAdminPush működése változatlan.
 export function ensureVapidConfigured(): boolean {
   initVapid();
   return vapidInitialized;

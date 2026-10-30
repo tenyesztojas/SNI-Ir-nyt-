@@ -3,6 +3,7 @@
 import { useState } from "react";
 import ScheduleItemForm from "@/components/family/ScheduleItemForm";
 import DeleteScheduleItemButton from "@/components/family/DeleteScheduleItemButton";
+import ChildWeekSchedule from "@/components/family/ChildWeekSchedule";
 import type { ChildScheduleItemView, FamilyChildView } from "@/lib/family/data";
 import { buildScheduleRouteHref } from "@/lib/family/scheduleLocation";
 
@@ -47,6 +48,7 @@ export default function ChildScheduleSection({
       <button
         type="button"
         onClick={() => setExpanded(true)}
+        aria-expanded={false}
         className="btn-secondary mt-3 w-fit min-h-[44px] text-sm"
       >
         Napirend megtekintése — {child.firstName}
@@ -66,12 +68,18 @@ export default function ChildScheduleSection({
             setExpanded(false);
             setFormMode("none");
           }}
-          className="text-xs text-gray-500 underline"
+          aria-expanded={true}
+          className="min-h-[44px] px-2 text-sm text-gray-600 underline"
         >
-          Elrejtés
+          Napirend elrejtése
         </button>
       </div>
 
+      <ChildWeekSchedule childName={child.firstName} items={child.scheduleItems} />
+
+      <h5 className="mt-4 text-sm font-semibold text-gray-700">
+        Összes napirendi elem{canManage ? " (szerkesztés)" : ""}
+      </h5>
       {child.scheduleItems.length === 0 ? (
         <p className="mt-2 text-sm text-gray-500">
           Még nincs napirendi elem.
