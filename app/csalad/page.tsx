@@ -14,7 +14,8 @@ import ChildTodayView from "@/components/family/ChildTodayView";
 import TravelStatusLive from "@/components/family/TravelStatusLive";
 import TravelPushCard from "@/components/family/TravelPushCard";
 import FamilySubscriptionCard from "@/components/family/FamilySubscriptionCard";
-import { getFamilySubscriptionState } from "@/lib/family/entitlementsServer";
+import { getFamilyCapacity, getFamilySubscriptionState } from "@/lib/family/entitlementsServer";
+import { buildFamilyCapacityView } from "@/lib/family/capacity";
 import { buildSubscriptionView } from "@/lib/family/subscriptionView";
 import { hasTravelNotificationEligibility } from "@/lib/family/travelPushEligibility";
 import { budapestLocalDay } from "@/lib/family/todaySchedule";
@@ -151,7 +152,14 @@ export default async function CsaladPage() {
   const subscriptionNow = new Date();
   const subscriptionViews = !error
     ? await Promise.all(
-        families.map(async (f) => ({ family: f, view: buildSubscriptionView(await getFamilySubscriptionState(f.id), subscriptionNow) }))
+        families.map(async (f) => {
+          const [state, capacity] = await Promise.all([getFamilySubscriptionState(f.id), getFamilyCapacity(f.id)]);
+          return {
+            family: f,
+            view: buildSubscriptionView(state, subscriptionNow),
+            capacity: capacity ? buildFamilyCapacityView(capacity) : null,
+          };
+        })
       )
     : [];
 
@@ -185,8 +193,8 @@ export default async function CsaladPage() {
       {!error && families.length > 0 && (
         <div className="mt-6 flex flex-col gap-6">
           {showTravelPush && <TravelPushCard />}
-          {subscriptionViews.map(({ family, view }) => (
-            <FamilySubscriptionCard key={`sub-${family.id}`} familyName={family.name} view={view} />
+          {subscriptionViews.map(({ family, view, capacity }) => (
+            <FamilySubscriptionCard key={`sub-${family.id}`} familyName={family.name} view={view} capacity={capacity} />
           ))}
           <TravelStatusLive childIds={visibleChildIds} initial={travelStatusByChild}>
             {families.map((family) => (

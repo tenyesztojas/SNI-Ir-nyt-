@@ -45,6 +45,10 @@ export interface FamilySubscriptionState {
   // A DB szerint; NULL = a próbaidő még nem indult (a trigger a két dátumot együtt kezeli).
   trialEndsAt: string | null;
   currentPeriodEnd: string | null;
+  // 20261030000000: családszintű kiadások (pl. pilot_grandfather). Régebbi
+  // DB-válaszban hiányozhatnak -> üres lista / false.
+  grantedFeatures: string[];
+  pilot: boolean;
 }
 
 // Szigorú értelmezés: bármilyen eltérés -> null (a hívó fail closed kezeli).
@@ -59,6 +63,8 @@ export function parseFamilySubscriptionState(raw: unknown): FamilySubscriptionSt
   const trialEndsAt = optDate(r.trial_ends_at);
   const currentPeriodEnd = optDate(r.current_period_end);
   if (trialEndsAt === undefined || currentPeriodEnd === undefined) return null;
+  if (r.granted_features != null && (!Array.isArray(r.granted_features) || !r.granted_features.every((f) => typeof f === "string"))) return null;
+  if (r.pilot != null && typeof r.pilot !== "boolean") return null;
   return {
     status: r.status as FamilySubscriptionStatus,
     planKey: r.plan_key,
@@ -67,6 +73,8 @@ export function parseFamilySubscriptionState(raw: unknown): FamilySubscriptionSt
     features: r.features as string[],
     trialEndsAt,
     currentPeriodEnd,
+    grantedFeatures: (r.granted_features as string[] | undefined) ?? [],
+    pilot: r.pilot === true,
   };
 }
 

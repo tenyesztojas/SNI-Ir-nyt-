@@ -8,8 +8,17 @@ import {
   formatHuf,
   type SubscriptionView,
 } from "@/lib/family/subscriptionView";
+import type { FamilyCapacityView } from "@/lib/family/capacity";
 
-export default function FamilySubscriptionCard({ familyName, view }: { familyName: string | null; view: SubscriptionView }) {
+export default function FamilySubscriptionCard({
+  familyName,
+  view,
+  capacity = null,
+}: {
+  familyName: string | null;
+  view: SubscriptionView;
+  capacity?: FamilyCapacityView | null;
+}) {
   return (
     <section aria-label="Előfizetés" className="rounded-2xl border border-gray-100 bg-white p-5 shadow-soft">
       <h2 className="font-semibold text-gray-900">Előfizetés{familyName ? ` – ${familyName}` : ""}</h2>
@@ -26,6 +35,19 @@ export default function FamilySubscriptionCard({ familyName, view }: { familyNam
           {view.trial.kind === "active" && <p className="mt-1">Próbaidő vége: {view.trial.endsAt}</p>}
           {view.trial.kind === "used" && <p className="mt-1 text-gray-500">A 14 napos próbaidőt ez a család már felhasználta.</p>}
           {view.periodEndLabel && <p className="mt-1">Az aktuális időszak vége: {view.periodEndLabel}</p>}
+          {view.pilot && (
+            <p className="mt-1 text-gray-700">
+              Pilot-család: a több gyermek és több gondviselő lehetősége lejárat nélkül megmarad.
+            </p>
+          )}
+        </div>
+      )}
+
+      {capacity && (
+        <div className="mt-3 rounded-xl bg-gray-50 p-3 text-sm text-gray-700" aria-label="Családi létszám">
+          <p>{capacity.childrenLine}</p>
+          <p>{capacity.adultsLine}</p>
+          {capacity.hint && <p className="mt-1 text-gray-600">{capacity.hint}</p>}
         </div>
       )}
 
@@ -51,7 +73,9 @@ export default function FamilySubscriptionCard({ familyName, view }: { familyNam
       </div>
 
       <p className="mt-3 text-xs text-gray-500">
-        A meglévő Védett Család funkciók továbbra is ingyenesen használhatók. Az árak tervezettek; fizetés még nem lehetséges.
+        Az ingyenes csomagban egy gyermek és két felnőtt (a tulajdonos és egy gondviselő) vehető fel. A gyermek utazási
+        jelzései, segítségkérése, napirendje és az alapértesítések minden csomagban elérhetők. A csomag lejártakor semmi
+        nem törlődik, csak új családtag felvétele korlátozott. Az árak tervezettek; fizetés még nem lehetséges.
       </p>
 
       <div className="mt-3 flex flex-wrap gap-2">

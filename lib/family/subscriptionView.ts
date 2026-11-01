@@ -9,6 +9,7 @@ export interface SubscriptionStateLike {
   paidAccess: boolean;
   trialEndsAt: string | null;
   currentPeriodEnd: string | null;
+  pilot?: boolean;
 }
 
 // Tervezett díjak — fizetési szolgáltató még nincs, a felület "tervezett"-ként jelöli.
@@ -20,9 +21,9 @@ export const FAMILY_FEATURE_LABELS: ReadonlyArray<{ key: string; label: string; 
   { key: "family.schedule.basic", label: "Napirend alapfunkciók", plan: "free" },
   { key: "family.safety.basic", label: "Biztonsági alapfunkciók (utazási jelzések)", plan: "free" },
   { key: "family.notification.basic", label: "Alap értesítések", plan: "free" },
-  { key: "family.children.multiple", label: "Több gyermek", plan: "plus" },
+  { key: "family.children.multiple", label: "Több gyermek (legfeljebb 10)", plan: "plus" },
   { key: "family.schedule.advanced", label: "Bővített napirend", plan: "plus" },
-  { key: "family.guardians.multiple", label: "Több gondviselő", plan: "plus" },
+  { key: "family.guardians.multiple", label: "Több gondviselő (legfeljebb 10 felnőtt családtag)", plan: "plus" },
   { key: "family.notification.advanced", label: "Bővített értesítések", plan: "plus" },
 ];
 
@@ -59,6 +60,7 @@ export type SubscriptionView =
       paidAccess: boolean;
       trial: TrialView;
       periodEndLabel: string | null;
+      pilot: boolean;
     };
 
 export function buildSubscriptionView(state: SubscriptionStateLike | null, now: Date): SubscriptionView {
@@ -77,5 +79,6 @@ export function buildSubscriptionView(state: SubscriptionStateLike | null, now: 
     paidAccess: state.paidAccess,
     trial,
     periodEndLabel: showPeriod ? formatDateHu(state.currentPeriodEnd as string) : null,
+    pilot: state.pilot === true,
   };
 }

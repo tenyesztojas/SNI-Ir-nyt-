@@ -1,5 +1,5 @@
 -- Gyermekutazási értesítések SQL-tesztje. FUTTATÁS: KIZÁRÓLAG eldobható
--- (scratch) Postgres adatbázison, a Family-migrációk + 20261014 + 20261019
+-- (scratch) Postgres adatbázison, a Family-migrációk + 20261014 + 20261019 (ma: 20261027000000, 20261027000100) + 20261030000000
 -- után, a _bootstrap_stub.sql stubjával. SOHA nem production DB-n.
 
 create schema if not exists t;
@@ -16,6 +16,9 @@ begin
   o := t.mkuser(n||'_owner'); kid := t.mkuser(n||'_kid');
   insert into public.families(name, created_by) values ('fam', o) returning id into f;
   insert into public.family_members(family_id,user_id,role,status) values (f, o,'owner','active');
+  -- teszt-fixture: több gondviselő kell, ezért Plusz-szintű létszám (20261030000000)
+  insert into public.family_feature_grants(family_id, feature_key, source)
+    values (f, 'family.guardians.multiple', 'test_fixture'), (f, 'family.children.multiple', 'test_fixture');
   insert into public.child_profiles(first_name, created_by) values ('kid', o) returning id into c;
   insert into public.family_children(family_id, child_id) values (f, c);
   insert into public.child_schedule_items(child_id,title,schedule_type,time_local,start_date,origin_label,origin_lat,origin_lon)

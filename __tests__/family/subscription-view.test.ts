@@ -52,7 +52,8 @@ describe("jogosultság nélküli hozzáférés / hibás adat", () => {
   });
   test("adatforrás: session-kliens RPC, nincs service role a felületen", () => {
     const page = read("app/csalad/page.tsx");
-    assert.match(page, /buildSubscriptionView\(await getFamilySubscriptionState\(f\.id\), subscriptionNow\)/);
+    assert.match(page, /Promise\.all\(\[getFamilySubscriptionState\(f\.id\), getFamilyCapacity\(f\.id\)\]\)/);
+    assert.match(page, /buildSubscriptionView\(state, subscriptionNow\)/);
     for (const f of ["components/family/FamilySubscriptionCard.tsx", "lib/family/subscriptionView.ts", "app/csalad/page.tsx", "lib/family/entitlementsServer.ts"]) {
       assert.doesNotMatch(read(f), /createAdminClient|SERVICE_ROLE|service_role/, f);
     }

@@ -6,6 +6,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUserAndProfile } from "@/lib/data";
 import { hasFamilyBetaAccess } from "@/lib/family/config";
+import { parseFamilyCapacity, type FamilyCapacity } from "@/lib/family/capacity";
 import {
   decideFamilyFeatureAccess,
   parseFamilySubscriptionState,
@@ -19,6 +20,14 @@ export async function getFamilySubscriptionState(familyId: string): Promise<Fami
   const { data, error } = await supabase.rpc("get_family_subscription_state", { p_family_id: familyId });
   if (error) return null;
   return parseFamilySubscriptionState(data);
+}
+
+// Létszám (gyermek / felnőtt) — get_family_capacity(): csak családtagnak válaszol.
+export async function getFamilyCapacity(familyId: string): Promise<FamilyCapacity | null> {
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc("get_family_capacity", { p_family_id: familyId });
+  if (error) return null;
+  return parseFamilyCapacity(data);
 }
 
 export async function checkFamilyFeature(familyId: string, feature: FamilyFeature): Promise<FamilyAccessDecision> {

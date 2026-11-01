@@ -1,7 +1,7 @@
 -- Gyermekutazási státusz: hozzáférés, családok közötti izoláció és állapotgép.
 -- FUTTATÁS: KIZÁRÓLAG eldobható (scratch) Postgres adatbázison, a
 -- _bootstrap_stub.sql + Family-migrációk + 20261027000000_child_travel_status
--- után. SOHA nem production DB-n.
+-- és 20261030000000 után. SOHA nem production DB-n.
 --
 -- A Supabase alapértelmezett táblajogait emuláljuk a családi alaptáblákra
 -- (ezekre a migrációk nem adnak/vonnak explicit jogot), hogy az RLS-policy
@@ -24,6 +24,9 @@ begin
   o := ts.mkuser(n||'_owner'); kid := ts.mkuser(n||'_kid');
   insert into public.families(name, created_by) values ('fam', o) returning id into f;
   insert into public.family_members(family_id,user_id,role,status) values (f, o,'owner','active');
+  -- teszt-fixture: több gondviselő kell, ezért Plusz-szintű létszám (20261030000000)
+  insert into public.family_feature_grants(family_id, feature_key, source)
+    values (f, 'family.guardians.multiple', 'test_fixture'), (f, 'family.children.multiple', 'test_fixture');
   insert into public.child_profiles(first_name, created_by) values ('kid', o) returning id into c;
   insert into public.family_children(family_id, child_id) values (f, c);
   insert into public.child_schedule_items(child_id,title,schedule_type,time_local,start_date)
