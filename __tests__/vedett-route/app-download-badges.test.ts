@@ -7,7 +7,9 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   GOOGLE_PLAY_URL,
-  APP_STORE_URL_ENV,
+  APP_STORE_URL,
+  STORE_BADGE_IMAGES,
+  STORE_LABELS,
   getVedettAppStoreLinks,
   normalizeAppStoreUrl,
 } from "../../lib/vedett-route/appStoreLinks.ts";
@@ -15,27 +17,40 @@ import {
 const read = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
 
 describe("letöltési linkek konfigurációja", () => {
-  test("Google Play: az éles, hivatalos URL", () => {
+  test("Google Play: az éles, hivatalos URL (változatlan)", () => {
     assert.equal(GOOGLE_PLAY_URL, "https://play.google.com/store/apps/details?id=hu.vedettsarok.utvonal");
-    const links = getVedettAppStoreLinks({});
-    assert.deepEqual(links.googlePlay.status, "available");
-    assert.equal(links.googlePlay.status === "available" && links.googlePlay.href, GOOGLE_PLAY_URL);
+    assert.equal(getVedettAppStoreLinks().googlePlay.href, GOOGLE_PLAY_URL);
   });
 
-  test("App Store: env nélkül 'coming_soon', nincs href", () => {
-    const { appStore } = getVedettAppStoreLinks({});
-    assert.equal(appStore.status, "coming_soon");
-    assert.ok(!("href" in appStore));
+  test("App Store: az éles, hivatalos URL, pontosan", () => {
+    assert.equal(APP_STORE_URL, "https://apps.apple.com/hu/app/védett-útvonal/id6821697394?l=hu");
+    assert.equal(getVedettAppStoreLinks().appStore.href, APP_STORE_URL);
+    const u = new URL(APP_STORE_URL);
+    assert.equal(u.protocol, "https:");
+    assert.equal(u.hostname, "apps.apple.com");
+    assert.match(u.pathname, /\/id6821697394$/);
+    assert.equal(u.searchParams.get("l"), "hu");
+    assert.notEqual(normalizeAppStoreUrl(APP_STORE_URL), null);
   });
 
-  test("App Store: érvényes apps.apple.com URL beállításakor kattintható", () => {
-    const url = "https://apps.apple.com/hu/app/vedett-utvonal/id1234567890";
-    const { appStore } = getVedettAppStoreLinks({ [APP_STORE_URL_ENV]: url });
-    assert.equal(appStore.status, "available");
-    assert.equal(appStore.status === "available" && appStore.href, url);
+  test("feliratok (akadálymentes név)", () => {
+    assert.equal(STORE_LABELS.googlePlay, "Letöltés a Google Playből");
+    assert.equal(STORE_LABELS.appStore, "Letöltés az App Store-ból");
+    const l = getVedettAppStoreLinks();
+    assert.equal(l.googlePlay.label, STORE_LABELS.googlePlay);
+    assert.equal(l.appStore.label, STORE_LABELS.appStore);
   });
 
-  test("App Store: hibás / idegen / nem https URL elutasítva", () => {
+  test("jelvényképek: létező PNG-k, az eredeti méretekkel", () => {
+    for (const b of Object.values(STORE_BADGE_IMAGES)) {
+      const buf = readFileSync(join(process.cwd(), "public", b.src));
+      assert.equal(buf.subarray(0, 8).toString("hex"), "89504e470d0a1a0a", b.src);
+      assert.equal(buf.readUInt32BE(16), b.width, b.src);
+      assert.equal(buf.readUInt32BE(20), b.height, b.src);
+    }
+  });
+
+  test("normalizeAppStoreUrl: hibás / idegen / nem https URL elutasítva", () => {
     for (const bad of [
       "",
       "   ",
@@ -46,7 +61,6 @@ describe("letöltési linkek konfigurációja", () => {
       "nem url",
     ]) {
       assert.equal(normalizeAppStoreUrl(bad), null, bad);
-      assert.equal(getVedettAppStoreLinks({ [APP_STORE_URL_ENV]: bad }).appStore.status, "coming_soon");
     }
   });
 });
@@ -59,24 +73,25 @@ describe("AppDownloadBadges komponens", () => {
     assert.match(c, /getVedettAppStoreLinks\(\)/);
   });
 
-  test("Google Play link új lapon, biztonságos rel-lel, akadálymentes névvel", () => {
+  test("mindkét áruház link: új lapon, biztonságos rel-lel, akadálymentes névvel", () => {
+    assert.match(c, /<StoreBadge link=\{googlePlay\} testId="google-play-badge" \/>/);
+    assert.match(c, /<StoreBadge link=\{appStore\} testId="app-store-badge" \/>/);
     assert.match(c, /target="_blank"/);
     assert.match(c, /rel="noopener noreferrer"/);
-    assert.match(c, /Letöltés a Google Playről|"Google Playről"/);
+    assert.match(c, /aria-label=\{`\$\{link\.label\}/);
     assert.match(c, /focus-visible:ring-2/);
   });
 
-  test("App Store 'Hamarosan iPhone-ra is': nem link, nem gomb", () => {
-    const i = c.indexOf('data-testid="app-store-coming-soon"');
-    assert.ok(i > 0);
-    const start = c.lastIndexOf("<span", i);
-    const block = c.slice(start, c.indexOf("</span>\n      )}", i));
-    assert.match(block, /Hamarosan iPhone-ra is/);
-    assert.doesNotMatch(block, /<a\b|href=|<button|onClick|tabIndex/);
+  test("nincs „Hamarosan” jelzés, nincs ismételt szöveges felirat a jelvény mellett", () => {
+    assert.doesNotMatch(c, /Hamarosan|coming_soon|iPhone-ra is/);
+    assert.doesNotMatch(c, /Google Playről|App Store-ból|StoreButtonContent/);
   });
 
-  test("hivatalos jelvénykép nem torzul (fix magasság, w-auto)", () => {
-    assert.match(c, /<img src=\{link\.badgeSrc\}[^>]*className="h-12 w-auto"/);
+  test("jelvénykép nem torzul (fix magasság, w-auto, eredeti méret-attribútumok), dekoratív alt", () => {
+    assert.match(c, /width=\{link\.badge\.width\}/);
+    assert.match(c, /height=\{link\.badge\.height\}/);
+    assert.match(c, /alt=""/);
+    assert.match(c, /className="h-12 w-auto"/);
   });
 
   test("natív appon belül nem jelenik meg", () => {
