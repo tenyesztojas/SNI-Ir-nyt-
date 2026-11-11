@@ -1,15 +1,23 @@
 import { NextResponse } from "next/server";
 import { sendAdminPush } from "@/lib/push";
+import { isCurrentUserAdmin } from "@/lib/data";
+import { handleAdminNotify } from "@/lib/pushAdminNotify";
 
-// Called server-side only (from server actions or internal API calls)
-// Not exposed publicly - only used for program submissions from client
+// Admin push értesítés: KIZÁRÓLAG bejelentkezett adminnak (lib/pushAdminNotify.ts).
+// A programajánló értesítését a szerveroldali beküldés küldi
+// (app/programajanlok/actions.ts), nem ez a végpont.
+// A rate limitet a middleware (/api/ általános szabály) változatlanul adja.
+export const dynamic = "force-dynamic";
+
 export async function POST(request: Request) {
-  const { title, body, url } = await request.json() as {
-    title: string;
-    body: string;
-    url?: string;
-  };
+  let raw: unknown = null;
+  try {
+    raw = await request.json();
+  } catch {
+    raw = null;
+  }
 
-  await sendAdminPush(title, body, url ?? "/admin");
-  return NextResponse.json({ ok: true });
+  const res = await handleAdminNotify(raw, { isAdmin: isCurrentUserAdmin, send: sendAdminPush });
+
+  return NextResponse.json(res.body, { status: res.status, headers: { "Cache-Control": "no-store" } });
 }

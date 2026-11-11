@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { submitProgramAction } from "./actions";
 
 export default function ProgramForm() {
   const [name, setName] = useState("");
@@ -18,32 +18,20 @@ export default function ProgramForm() {
     setStatus("loading");
     setError("");
 
-    const supabase = createClient();
-    const { error: dbError } = await supabase.from("programs").insert({
-      name,
-      location,
-      event_date: eventDate,
-      description,
-      url: url || null,
-      contact: contact || null,
-    });
+    // Szerveroldali beküldés: validálás, sebességkorlát, beszúrás, majd a
+    // szerver küldi az admin pusht (lásd ./actions.ts).
+    let result: Awaited<ReturnType<typeof submitProgramAction>>;
+    try {
+      result = await submitProgramAction({ name, location, eventDate, description, url, contact });
+    } catch {
+      result = { ok: false, error: "Hiba történt a beküldés során. Próbáld újra." };
+    }
 
-    if (dbError) {
-      setError("Hiba történt a beküldés során. Próbáld újra.");
+    if (!result.ok) {
+      setError(result.error);
       setStatus("error");
       return;
     }
-
-    // Admin push értesítés
-    fetch("/api/push/notify", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title: "📅 Új programajánlás",
-        body: `${name} - ${location}`,
-        url: "/admin/programok",
-      }),
-    }).catch(() => {});
 
     setStatus("success");
     setName(""); setLocation(""); setEventDate("");
