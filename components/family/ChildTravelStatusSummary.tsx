@@ -58,7 +58,10 @@ export default function ChildTravelStatusSummary({
         <p className="mt-1 font-semibold text-red-800">Útközben segítséget kért: {fmt(status.help_requested_at)}</p>
       )}
       {(helpActive || helpEarlier) && (
-        <p className="mt-1 text-xs">A jelzésről nem megy automatikus értesítés; szükség esetén vedd fel a kapcsolatot a gyermekkel.</p>
+        <p className="mt-1 text-xs">
+          A push-értesítésre feliratkozott családtagok értesítést kaphatnak, de a kézbesítést nem tudjuk garantálni. Ez nem
+          segélyhívás: szükség esetén vedd fel a kapcsolatot a gyermekkel, vészhelyzetben hívd a 112-t.
+        </p>
       )}
       <p className="mt-1 text-xs text-gray-500">
         {live?.failed

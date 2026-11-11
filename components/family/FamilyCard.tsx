@@ -5,7 +5,13 @@ import ChildScheduleSection from "@/components/family/ChildScheduleSection";
 import ChildAccountSection from "@/components/family/ChildAccountSection";
 import GuardianManagement from "@/components/family/GuardianManagement";
 import ChildTravelStatusSummary from "@/components/family/ChildTravelStatusSummary";
+import FamilyMemberActions from "@/components/family/FamilyMemberActions";
+import { canLeaveFamily, canRemoveMember } from "@/lib/family/memberRemoval";
+import OwnershipHandover from "@/components/family/OwnershipHandover";
+import { handoverCandidates } from "@/lib/family/ownershipHandover";
 import type { TravelStatusWithTitle } from "@/lib/family/travelStatusData";
+import type { TravelStatusRow } from "@/lib/family/travelStatus";
+import ChildDayOverview from "@/components/family/ChildDayOverview";
 
 const ROLE_LABEL: Record<string, string> = {
   owner: "Tulajdonos",
@@ -15,10 +21,23 @@ const ROLE_LABEL: Record<string, string> = {
 export default function FamilyCard({
   family,
   travelStatusByChild = {},
+  currentUserId,
+  travelRowsByChild,
+  travelDataAvailable = false,
+  nowIso,
 }: {
   family: FamilyView;
   travelStatusByChild?: Record<string, TravelStatusWithTitle>;
+  currentUserId?: string;
+  // Szülői napi áttekintés: gyermekenként a mai + tegnapi utazási sorok.
+  // Hiányában (pl. régi hívó) az áttekintés nem jelenik meg.
+  travelRowsByChild?: Record<string, TravelStatusRow[]>;
+  travelDataAvailable?: boolean;
+  nowIso?: string;
 }) {
+  const viewer = currentUserId ? { userId: currentUserId, role: family.myRole } : null;
+  const familyName = family.name?.trim() ? family.name : "Elnevezés nélküli család";
+  const candidates = handoverCandidates(viewer, family.members);
   return (
     <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-soft">
       <h2 className="text-lg font-bold text-gray-900">
@@ -31,15 +50,38 @@ export default function FamilyCard({
           {family.members.map((member) => (
             <li
               key={member.userId}
-              className="flex items-center justify-between gap-3 text-sm text-gray-700"
+              className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 text-sm text-gray-700"
             >
               <span>{member.displayName}</span>
-              <span className="text-gray-500">
-                {ROLE_LABEL[member.role] ?? member.role}
+              <span className="flex items-center gap-3">
+                <span className="text-gray-500">
+                  {ROLE_LABEL[member.role] ?? member.role}
+                </span>
+                {canRemoveMember(viewer, member) && (
+                  <FamilyMemberActions
+                    mode="remove"
+                    familyId={family.id}
+                    memberUserId={member.userId}
+                    memberName={member.displayName}
+                  />
+                )}
               </span>
             </li>
           ))}
         </ul>
+        {candidates.length > 0 && (
+          <div className="mt-3">
+            <OwnershipHandover
+              familyId={family.id}
+              candidates={candidates.map((c) => ({ userId: c.userId, displayName: c.displayName }))}
+            />
+          </div>
+        )}
+        {canLeaveFamily(viewer) && (
+          <div className="mt-3">
+            <FamilyMemberActions mode="leave" familyId={family.id} familyName={familyName} />
+          </div>
+        )}
       </div>
 
       <div className="mt-6">
@@ -52,6 +94,16 @@ export default function FamilyCard({
               <div key={child.id}>
                 <ChildCard child={child} canEdit={family.myRole === "owner"} />
                 <ChildTravelStatusSummary childId={child.id} status={travelStatusByChild[child.id]} />
+                {travelRowsByChild && nowIso && (
+                  <ChildDayOverview
+                    childId={child.id}
+                    childName={child.firstName}
+                    scheduleItems={child.scheduleItems}
+                    initialRows={travelRowsByChild[child.id] ?? []}
+                    initialDataAvailable={travelDataAvailable}
+                    nowIso={nowIso}
+                  />
+                )}
                 {/* Napirend create/edit/delete: owner-családnál mindig
                     true, guardian-családnál a SAJÁT aktív
                     can_manage_schedule jogosultság dönt (lásd

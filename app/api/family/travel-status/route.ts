@@ -28,7 +28,20 @@ export async function GET(request: Request) {
   return NextResponse.json(
     {
       ok: true,
-      // Csak a megjelenítéshez szükséges mezők (nincs schedule_item_id).
+      // Napi áttekintéshez: a mai és tegnapi sorok programonként. Csak az
+      // állapot és az időbélyegek (program címe, hely és más adat nélkül); a
+      // schedule_item_id a hívó által már látható napirendi elemhez köt.
+      rows: res.rows.map((r) => ({
+        child_id: r.child_id,
+        schedule_item_id: r.schedule_item_id,
+        travel_date: r.travel_date,
+        status: r.status,
+        departed_at: r.departed_at,
+        arrived_at: r.arrived_at,
+        help_requested_at: r.help_requested_at,
+        updated_at: r.updated_at,
+      })),
+      // Gyermekenként a legfrissebb jelzés (nincs schedule_item_id).
       statuses: Object.fromEntries(
         Array.from(latestTravelByChild(res.rows), ([childId, r]) => [
           childId,

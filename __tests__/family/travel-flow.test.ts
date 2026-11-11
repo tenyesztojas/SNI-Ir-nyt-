@@ -99,10 +99,15 @@ describe("statikus: hibakezelés és jogosultság", () => {
     const p = read("app/csalad/page.tsx");
     assert.match(p, /getChildTravelStatusesForDates\(childSelf\.id, \[today, previousDate\(today\)\]\)/);
   });
-  test("API: nem ad vissza schedule_item_id-t; bejelentkezés kötelező", () => {
+  test("API: az összegző statuses nem ad schedule_item_id-t; a rows csak minimális mezőket; bejelentkezés kötelező", () => {
     const r = read("app/api/family/travel-status/route.ts");
     const out = r.slice(r.indexOf("statuses: Object.fromEntries("));
     assert.doesNotMatch(out, /schedule_item_id/);
+    // A napi áttekintéshez soronként kell a schedule_item_id, de cím nem.
+    const rowsSrc = r.slice(r.indexOf("rows: res.rows.map("), r.indexOf("statuses: Object.fromEntries("));
+    assert.ok(rowsSrc.length > 0);
+    assert.match(rowsSrc, /schedule_item_id/);
+    assert.doesNotMatch(rowsSrc, /title/);
     assert.match(r, /status: 401/);
   });
   test("szülői nézet: indulás, lezárás, saját visszajelzés jelölése", () => {

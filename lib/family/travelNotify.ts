@@ -209,3 +209,59 @@ function safeLog(deps: TravelNotifyDeps, message: string, detail?: Record<string
     // a naplózás hibája sem akadályozhatja a folyamatot
   }
 }
+
+// ---------------------------------------------------------------------------
+// Értesítési szakaszok — őszinte címkék a child_travel_notifications
+// delivery_status értékéhez. A szakaszok szétválasztva:
+//   recorded  – az esemény rögzült (utazási jelzés), értesítés még nincs
+//   prepared  – az értesítés előkészítve (claim megtörtént, küldés folyamatban)
+//   accepted  – a push-szolgáltató ELFOGADTA (nem kézbesítési visszaigazolás!)
+//   not_sent  – nem ment ki, ismert ok (nincs címzett / feliratkozás / beállítás)
+//   failed    – a szolgáltató hibát adott vagy belső hiba történt
+// „delivered” szakasz SZÁNDÉKOSAN nincs: a Web Push nem ad megbízható
+// kézbesítési visszaigazolást, így kézbesítettnek sosem jelölünk semmit.
+export type TravelNotificationStage = "recorded" | "prepared" | "accepted" | "not_sent" | "failed";
+
+export interface TravelNotificationStageView {
+  stage: TravelNotificationStage;
+  label: string;
+  detail: string | null;
+}
+
+const NOT_SENT_DETAIL: Record<string, string> = {
+  no_recipients: "Nincs értesítésre jogosult családtag.",
+  no_subscriptions: "A jogosult családtagok egyik eszköze sem iratkozott fel értesítésre.",
+  skipped_config: "Az értesítési szolgáltatás nincs beállítva.",
+};
+
+export function travelNotificationStage(deliveryStatus: string | null | undefined): TravelNotificationStageView {
+  switch (deliveryStatus) {
+    case null:
+    case undefined:
+      return { stage: "recorded", label: "Jelzés rögzítve", detail: null };
+    case "pending":
+      return { stage: "prepared", label: "Értesítés előkészítve", detail: null };
+    case "sent":
+      return {
+        stage: "accepted",
+        label: "Az értesítési szolgáltató átvette",
+        detail: "A kézbesítést a szolgáltató nem igazolja vissza.",
+      };
+    case "partial":
+      return {
+        stage: "accepted",
+        label: "Az értesítési szolgáltató részben átvette",
+        detail: "Néhány eszközre nem sikerült elküldeni; a kézbesítést a szolgáltató nem igazolja vissza.",
+      };
+    case "no_recipients":
+    case "no_subscriptions":
+    case "skipped_config":
+      return { stage: "not_sent", label: "Értesítés nem ment ki", detail: NOT_SENT_DETAIL[deliveryStatus] };
+    case "failed":
+    case "error":
+      return { stage: "failed", label: "Értesítés küldése sikertelen", detail: null };
+    default:
+      // Ismeretlen érték: nem állítunk sikert.
+      return { stage: "failed", label: "Az értesítés állapota ismeretlen", detail: null };
+  }
+}

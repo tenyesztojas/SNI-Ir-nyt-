@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Users } from "lucide-react";
 import { getCurrentUserAndProfile } from "@/lib/data";
 import { hasFamilyBetaAccess } from "@/lib/family/config";
+import { MEMBER_ACTION_NOTICE_PARAM, memberActionNotice } from "@/lib/family/memberRemoval";
 import {
   getMyFamilies,
   getPendingGuardianInvitationsForUser,
@@ -20,7 +21,8 @@ import { buildSubscriptionView } from "@/lib/family/subscriptionView";
 import { hasTravelNotificationEligibility } from "@/lib/family/travelPushEligibility";
 import { budapestLocalDay } from "@/lib/family/todaySchedule";
 import { latestTravelByChild, previousDate } from "@/lib/family/travelStatus";
-import { getChildTravelStatusesForDates, getRecentTravelStatuses } from "@/lib/family/travelStatusData";
+import { fetchRecentTravelStatuses, getChildTravelStatusesForDates } from "@/lib/family/travelStatusData";
+import type { TravelStatusRow } from "@/lib/family/travelStatus";
 import type { Metadata } from "next";
 
 // /csalad — Family modul, első működő UI verzió a meglévő Family DB
@@ -54,8 +56,13 @@ export const metadata: Metadata = {
   title: "Család – VédettSarok",
 };
 
-export default async function CsaladPage() {
+export default async function CsaladPage({
+  searchParams,
+}: {
+  searchParams?: Record<string, string | string[] | undefined>;
+}) {
   const { user, profile } = await getCurrentUserAndProfile();
+  const memberNotice = memberActionNotice(searchParams?.[MEMBER_ACTION_NOTICE_PARAM]);
 
   if (!user) {
     return (
@@ -110,9 +117,15 @@ export default async function CsaladPage() {
       <div className="mx-auto max-w-2xl px-4 py-16 text-center sm:px-6">
         <Users className="mx-auto text-gray-400" size={40} />
         <h1 className="mt-4 text-2xl font-bold text-gray-900">Család</h1>
-        <p className="mt-3 text-gray-600">
-          Ez a funkció még nem elérhető a fiókodhoz.
-        </p>
+        {memberNotice ? (
+          <p role="status" className="mt-3 text-gray-600">
+            {memberNotice}
+          </p>
+        ) : (
+          <p className="mt-3 text-gray-600">
+            Ez a funkció még nem elérhető a fiókodhoz.
+          </p>
+        )}
       </div>
     );
   }
@@ -141,7 +154,20 @@ export default async function CsaladPage() {
   // Szülői/gondviselői nézet: gyermekenként a legfrissebb utazási jelzés
   // (RLS szűr; a migráció hiányában üres, a felület változatlan).
   const visibleChildIds = families.flatMap((f) => f.children.map((c) => c.id));
-  const travelStatusByChild = Object.fromEntries(latestTravelByChild(await getRecentTravelStatuses(visibleChildIds)));
+  // Egyetlen lekérdezés: a legfrissebb jelzés (összegzés) és a napi
+  // áttekintés soronkénti állapota is ebből készül. Hiba esetén ok=false:
+  // az áttekintés „nincs friss adat” állapotot mutat, nem „még nem indult”-at.
+  const travelRes = await fetchRecentTravelStatuses(visibleChildIds);
+  const recentTravelRows = travelRes.ok ? travelRes.rows : [];
+  const travelStatusByChild = Object.fromEntries(latestTravelByChild(recentTravelRows));
+  const travelRowsByChild: Record<string, TravelStatusRow[]> = {};
+  for (const r of recentTravelRows) {
+    // Csak a megjelenítéshez szükséges mezők (a cím nem kerül át újra).
+    const { title: _title, ...row } = r;
+    void _title;
+    (travelRowsByChild[r.child_id] ??= []).push(row);
+  }
+  const nowIso = new Date().toISOString();
   // Utazási push-kártya: csak értesítésre jogosító aktív gyermekkapcsolattal
   // (aktív owner gyermekkel / aktív, megtekintési joggal bíró guardian).
   // A gyermek-saját ág fentebb már visszatért; meghívott, még nem tag user
@@ -169,6 +195,12 @@ export default async function CsaladPage() {
         <Users className="text-sni-brand-blue" size={32} />
         <h1 className="text-2xl font-bold text-gray-900">Család</h1>
       </div>
+
+      {memberNotice && (
+        <p role="status" className="mt-4 rounded-2xl border border-green-100 bg-green-50 p-4 text-sm text-green-800">
+          {memberNotice}
+        </p>
+      )}
 
       {(error || invitationsError || childSelfError) && (
         <p className="mt-4 rounded-2xl border border-red-100 bg-red-50 p-4 text-sm text-red-700">
@@ -198,7 +230,14 @@ export default async function CsaladPage() {
           ))}
           <TravelStatusLive childIds={visibleChildIds} initial={travelStatusByChild}>
             {families.map((family) => (
-              <FamilyCard key={family.id} family={family} travelStatusByChild={travelStatusByChild} />
+              <FamilyCard key={family.id}
+                family={family}
+                travelStatusByChild={travelStatusByChild}
+                currentUserId={user.id}
+                travelRowsByChild={travelRowsByChild}
+                travelDataAvailable={travelRes.ok}
+                nowIso={nowIso}
+              />
             ))}
           </TravelStatusLive>
         </div>

@@ -6,6 +6,9 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUserAndProfile } from "@/lib/data";
 import { hasFamilyBetaAccess } from "@/lib/family/config";
+import { MEMBER_ACTION_NOTICE_PARAM, parseLeaveFamilyInput, parseRemoveMemberInput } from "@/lib/family/memberRemoval";
+import { parseHandoverInput } from "@/lib/family/ownershipHandover";
+import { decideFamilyRoleAccess, familyAccessDeniedMessage, type AllowedFamilyRole, type FamilyRoleOrNone } from "@/lib/family/familyAccess";
 
 export type FamilyActionState =
   | null
@@ -24,6 +27,60 @@ export type FamilyActionState =
     };
 
 const CURRENT_YEAR = new Date().getFullYear();
+
+// ── Meglévő család kezelése: szerepkör szerinti előszűrés ──────────────────
+// A személyes pilotjog (family_db_beta) CSAK az új család létrehozásához kell
+// (createFamilyAction). Meglévő családnál a hívó AKTÍV szerepe az ADOTT
+// családban dönt (vagy admin). A család azonosítását a felhasználó saját,
+// RLS alatti munkamenete végzi: amit nem láthat, ahhoz nem kap hozzáférést.
+// A végső döntést az adatbázis (RPC/RLS) hozza meg.
+type SessionClient = ReturnType<typeof createClient>;
+
+async function familyIdForChild(supabase: SessionClient, childId: string): Promise<string | null> {
+  if (!childId) return null;
+  const { data } = await supabase.from("family_children").select("family_id").eq("child_id", childId).maybeSingle();
+  return (data?.family_id as string | undefined) ?? null;
+}
+
+async function familyIdForScheduleItem(supabase: SessionClient, itemId: string): Promise<string | null> {
+  if (!itemId) return null;
+  const { data } = await supabase.from("child_schedule_items").select("child_id").eq("id", itemId).maybeSingle();
+  return data?.child_id ? familyIdForChild(supabase, data.child_id as string) : null;
+}
+
+async function familyIdForGuardianInvitation(supabase: SessionClient, invitationId: string): Promise<string | null> {
+  if (!invitationId) return null;
+  const { data } = await supabase.from("family_guardian_invitations").select("family_id").eq("id", invitationId).maybeSingle();
+  return (data?.family_id as string | undefined) ?? null;
+}
+
+async function familyIdForChildAccountInvitation(supabase: SessionClient, invitationId: string): Promise<string | null> {
+  if (!invitationId) return null;
+  const { data } = await supabase.from("child_account_invitations").select("child_id").eq("id", invitationId).maybeSingle();
+  return data?.child_id ? familyIdForChild(supabase, data.child_id as string) : null;
+}
+
+async function checkFamilyRole(
+  supabase: SessionClient,
+  userId: string,
+  profile: { role?: string | null } | null | undefined,
+  familyId: string | null,
+  allowed: readonly AllowedFamilyRole[]
+): Promise<string | null> {
+  const isAdmin = profile?.role === "admin";
+  let role: FamilyRoleOrNone = null;
+  if (!isAdmin && familyId) {
+    const { data } = await supabase
+      .from("family_members")
+      .select("role")
+      .eq("family_id", familyId)
+      .eq("user_id", userId)
+      .eq("status", "active")
+      .maybeSingle();
+    role = data?.role === "owner" || data?.role === "guardian" ? data.role : null;
+  }
+  return decideFamilyRoleAccess({ isAdmin, role, allowed }) ? null : familyAccessDeniedMessage(allowed);
+}
 
 // A Supabase/Postgres NYERS hibaüzeneteit sosem adjuk vissza a
 // felhasználónak — csak a mi SAJÁT, tudatosan magyar nyelvű RAISE
@@ -101,9 +158,6 @@ export async function addChildAction(
 ): Promise<FamilyActionState> {
   const { user, profile } = await getCurrentUserAndProfile();
   if (!user) return { error: "Nem vagy bejelentkezve." };
-  if (!hasFamilyBetaAccess(profile)) {
-    return { error: "Ez a funkció még nem elérhető a fiókodhoz." };
-  }
 
   const familyId = String(formData.get("familyId") ?? "").trim();
   const firstName = String(formData.get("firstName") ?? "").trim();
@@ -116,6 +170,8 @@ export async function addChildAction(
   if ("error" in birthYearResult) return { error: birthYearResult.error };
 
   const supabase = createClient();
+  const denied = await checkFamilyRole(supabase, user.id, profile, familyId, ["owner"]);
+  if (denied) return { error: denied };
   // KIZÁRÓLAG a meglévő create_child_profile_for_family(uuid,text,integer)
   // RPC — nincs kliensoldali/szerver akcióbeli direkt INSERT a
   // child_profiles vagy family_children táblára.
@@ -147,9 +203,6 @@ export async function updateChildAction(
 ): Promise<FamilyActionState> {
   const { user, profile } = await getCurrentUserAndProfile();
   if (!user) return { error: "Nem vagy bejelentkezve." };
-  if (!hasFamilyBetaAccess(profile)) {
-    return { error: "Ez a funkció még nem elérhető a fiókodhoz." };
-  }
 
   const childId = String(formData.get("childId") ?? "").trim();
   const firstName = String(formData.get("firstName") ?? "").trim();
@@ -174,6 +227,8 @@ export async function updateChildAction(
   // ezért a .select("id")-t explicit ellenőrizzük, hogy ezt észleljük
   // és ne mutassunk hamis sikert.
   const supabase = createClient();
+  const denied = await checkFamilyRole(supabase, user.id, profile, await familyIdForChild(supabase, childId), ["owner"]);
+  if (denied) return { error: denied };
   const { data, error } = await supabase
     .from("child_profiles")
     .update({ first_name: firstName, birth_year: birthYearResult.value })
@@ -204,9 +259,6 @@ export async function inviteGuardianAction(
 ): Promise<FamilyActionState> {
   const { user, profile } = await getCurrentUserAndProfile();
   if (!user) return { error: "Nem vagy bejelentkezve." };
-  if (!hasFamilyBetaAccess(profile)) {
-    return { error: "Ez a funkció még nem elérhető a fiókodhoz." };
-  }
 
   const familyId = String(formData.get("familyId") ?? "").trim();
   const emailRaw = String(formData.get("email") ?? "").trim();
@@ -215,6 +267,8 @@ export async function inviteGuardianAction(
   if (!emailRaw) return { error: "Az e-mail-cím megadása kötelező." };
 
   const supabase = createClient();
+  const denied = await checkFamilyRole(supabase, user.id, profile, familyId, ["owner"]);
+  if (denied) return { error: denied };
   // KIZÁRÓLAG a meglévő invite_family_guardian(uuid,text) RPC — nincs
   // kliensoldali/szerver akcióbeli direkt INSERT a
   // family_guardian_invitations táblára. Az RPC saját maga ellenőrzi
@@ -243,14 +297,13 @@ export async function revokeGuardianInvitationAction(
 ): Promise<FamilyActionState> {
   const { user, profile } = await getCurrentUserAndProfile();
   if (!user) return { error: "Nem vagy bejelentkezve." };
-  if (!hasFamilyBetaAccess(profile)) {
-    return { error: "Ez a funkció még nem elérhető a fiókodhoz." };
-  }
 
   const invitationId = String(formData.get("invitationId") ?? "").trim();
   if (!invitationId) return { error: "Hiányzó meghívás azonosító." };
 
   const supabase = createClient();
+  const denied = await checkFamilyRole(supabase, user.id, profile, await familyIdForGuardianInvitation(supabase, invitationId), ["owner"]);
+  if (denied) return { error: denied };
   // KIZÁRÓLAG a meglévő revoke_family_guardian_invitation(uuid) RPC —
   // nincs kliensoldali/szerver akcióbeli direkt UPDATE a
   // family_guardian_invitations táblára. Az RPC saját maga ellenőrzi,
@@ -277,9 +330,9 @@ export async function revokeGuardianInvitationAction(
 // KIZÁRÓLAG a meglévő upsert_guardian_child_permission(...) RPC-t hívja
 // (lásd supabase/migrations/20260927_child_account_foundation.sql) — a
 // tényleges owner-jogosultságot ott, az RPC belsejében ellenőrzi
-// (is_child_family_owner(p_child_id) + has_pilot_access('family_db_beta'),
-// ugyanaz a beta-flag, amit a hasFamilyBetaAccess() FE-gate is megkövetel
-// MINDEN family actionnél, tehát ez nem új/extra korlátozás). Soha NEM
+// (is_child_family_owner(p_child_id)); a szerveroldali előszűrés a
+// checkFamilyRole() (aktív owner az ADOTT családban, pilotjog nélkül,
+// 20261105 óta). Soha NEM
 // hívja a revoke_guardian_child_permission(...) RPC-t — az a teljes sort
 // visszavonja és MINDEN flaget (a jövőbeli journey/GPS flageket is)
 // false-ra állítja, ami ennek a célnak (csak a két schedule-flag
@@ -302,9 +355,6 @@ export async function updateGuardianChildScheduleAccessAction(
 ): Promise<FamilyActionState> {
   const { user, profile } = await getCurrentUserAndProfile();
   if (!user) return { error: "Nem vagy bejelentkezve." };
-  if (!hasFamilyBetaAccess(profile)) {
-    return { error: "Ez a funkció még nem elérhető a fiókodhoz." };
-  }
 
   const childId = String(formData.get("childId") ?? "").trim();
   const guardianUserId = String(formData.get("guardianUserId") ?? "").trim();
@@ -332,6 +382,8 @@ export async function updateGuardianChildScheduleAccessAction(
   }
 
   const supabase = createClient();
+  const denied = await checkFamilyRole(supabase, user.id, profile, await familyIdForChild(supabase, childId), ["owner"]);
+  if (denied) return { error: denied };
 
   // A jövőbeli (journey/GPS) flagek megőrzése — lásd a fenti megjegyzést.
   const { data: existingRow, error: existingRowError } = await supabase
@@ -376,9 +428,8 @@ export async function updateGuardianChildScheduleAccessAction(
   return { success: true, childId };
 }
 
-// MEGHÍVOTT (recipiens) oldali elfogadás/elutasítás — SZÁNDÉKOSAN NEM
-// gateli hasFamilyBetaAccess()-szel, ellentétben a modul fenti, owner-
-// oldali actionjeivel. Ez a kör-függőségi hibajegy LÉNYEGE: egy
+// MEGHÍVOTT (recipiens) oldali elfogadás/elutasítás — SZÁNDÉKOSAN NINCS
+// béta- vagy családszerep-előszűrése (a meghívott még nem tag). Ez a kör-függőségi hibajegy LÉNYEGE: egy
 // meghívott, NEM béta-userhez szóló meghívást pontosan EZEKKEL az
 // actionökkel kell tudnia elfogadni/elutasítani, a béta-kaputól
 // FÜGGETLENÜL — a tényleges jogosultságot a MEGLÉVŐ
@@ -448,6 +499,95 @@ export async function declineGuardianInvitationAction(
   return { success: true };
 }
 
+// Családtag eltávolítása (owner) — KIZÁRÓLAG a remove_family_member RPC-n
+// át: az ellenőrzi, hogy a hívó aktív owner, a cél nem owner és ugyanebben a
+// családban aktív tag, és egy tranzakcióban visszavonja a tag gyermekenkénti
+// jogait és függő meghívóit. Nincs közvetlen family_members írás. A béta-kapu
+// szándékosan nincs itt: hozzáférés-szűkítés pilotjog nélkül is engedett.
+export async function removeFamilyMemberAction(
+  _prevState: FamilyActionState,
+  formData: FormData
+): Promise<FamilyActionState> {
+  const { user } = await getCurrentUserAndProfile();
+  if (!user) return { error: "Nem vagy bejelentkezve." };
+
+  const input = parseRemoveMemberInput((k) => formData.get(k));
+  if (!input) return { error: "Hiányzó vagy hibás adat." };
+
+  const supabase = createClient();
+  const { error } = await supabase.rpc("remove_family_member", {
+    p_family_id: input.familyId,
+    p_user_id: input.userId,
+  });
+
+  if (error) {
+    return {
+      error: friendlyRpcError(error, "Nem sikerült eltávolítani a családtagot. Próbáld újra."),
+    };
+  }
+
+  revalidatePath("/csalad");
+  redirect(`/csalad?${MEMBER_ACTION_NOTICE_PARAM}=eltavolitva`);
+}
+
+// Önkéntes kilépés (gondviselő) — a leave_family RPC kizárólag a hívó SAJÁT
+// tagságára hat (nincs felhasználó-paramétere). Béta-kapu nincs: a meghívott
+// gondviselőnek gyakran nincs pilotjoga.
+export async function leaveFamilyAction(
+  _prevState: FamilyActionState,
+  formData: FormData
+): Promise<FamilyActionState> {
+  const { user } = await getCurrentUserAndProfile();
+  if (!user) return { error: "Nem vagy bejelentkezve." };
+
+  const input = parseLeaveFamilyInput((k) => formData.get(k));
+  if (!input) return { error: "Hiányzó vagy hibás adat." };
+
+  const supabase = createClient();
+  const { error } = await supabase.rpc("leave_family", { p_family_id: input.familyId });
+
+  if (error) {
+    return {
+      error: friendlyRpcError(error, "Nem sikerült kilépni a családból. Próbáld újra."),
+    };
+  }
+
+  revalidatePath("/csalad");
+  revalidatePath("/profil");
+  redirect(`/csalad?${MEMBER_ACTION_NOTICE_PARAM}=kilepve`);
+}
+
+// Tulajdonjog átadása (owner) — KIZÁRÓLAG a handover_family_ownership RPC-n
+// át: az a zárak megszerzése után ellenőrzi, hogy a hívó aktív owner, a
+// célszemély ugyanennek a családnak aktív gondviselője (nem gyermekfiók), és
+// egy tranzakcióban előbb előlépteti az új ownert, majd gondviselővé teszi a
+// hívót. Béta-kapu nincs: a művelet nem bővít hozzáférést.
+export async function handOverFamilyOwnershipAction(
+  _prevState: FamilyActionState,
+  formData: FormData
+): Promise<FamilyActionState> {
+  const { user } = await getCurrentUserAndProfile();
+  if (!user) return { error: "Nem vagy bejelentkezve." };
+
+  const input = parseHandoverInput((k) => formData.get(k));
+  if (!input) return { error: "Válaszd ki, kinek adod át a tulajdonjogot." };
+
+  const supabase = createClient();
+  const { error } = await supabase.rpc("handover_family_ownership", {
+    p_family_id: input.familyId,
+    p_new_owner_user_id: input.newOwnerUserId,
+  });
+
+  if (error) {
+    return {
+      error: friendlyRpcError(error, "Nem sikerült átadni a tulajdonjogot. Próbáld újra."),
+    };
+  }
+
+  revalidatePath("/csalad");
+  redirect(`/csalad?${MEMBER_ACTION_NOTICE_PARAM}=atadva`);
+}
+
 function parseDaysOfWeek(formData: FormData): number[] {
   return formData
     .getAll("daysOfWeek")
@@ -461,9 +601,6 @@ export async function createChildScheduleItemAction(
 ): Promise<FamilyActionState> {
   const { user, profile } = await getCurrentUserAndProfile();
   if (!user) return { error: "Nem vagy bejelentkezve." };
-  if (!hasFamilyBetaAccess(profile)) {
-    return { error: "Ez a funkció még nem elérhető a fiókodhoz." };
-  }
 
   const childId = String(formData.get("childId") ?? "").trim();
   const title = String(formData.get("title") ?? "").trim();
@@ -496,6 +633,8 @@ export async function createChildScheduleItemAction(
   }
 
   const supabase = createClient();
+  const denied = await checkFamilyRole(supabase, user.id, profile, await familyIdForChild(supabase, childId), ["owner", "guardian"]);
+  if (denied) return { error: denied };
   // KIZÁRÓLAG a meglévő create_child_schedule_item(...) RPC — nincs
   // kliensoldali/szerver akcióbeli direkt INSERT a
   // child_schedule_items táblára. Az RPC saját maga ellenőrzi az
@@ -543,9 +682,6 @@ export async function updateChildScheduleItemAction(
 ): Promise<FamilyActionState> {
   const { user, profile } = await getCurrentUserAndProfile();
   if (!user) return { error: "Nem vagy bejelentkezve." };
-  if (!hasFamilyBetaAccess(profile)) {
-    return { error: "Ez a funkció még nem elérhető a fiókodhoz." };
-  }
 
   const itemId = String(formData.get("itemId") ?? "").trim();
   const title = String(formData.get("title") ?? "").trim();
@@ -579,6 +715,8 @@ export async function updateChildScheduleItemAction(
   }
 
   const supabase = createClient();
+  const denied = await checkFamilyRole(supabase, user.id, profile, await familyIdForScheduleItem(supabase, itemId), ["owner", "guardian"]);
+  if (denied) return { error: denied };
   // KIZÁRÓLAG a meglévő update_child_schedule_item(...) RPC — ugyanaz
   // az elv, mint a create actionnél: a jogosultság-ellenőrzés és a
   // schedule-specifikus validáció teljes egészében az RPC-ben történik.
@@ -620,9 +758,6 @@ export async function deleteChildScheduleItemAction(
 ): Promise<FamilyActionState> {
   const { user, profile } = await getCurrentUserAndProfile();
   if (!user) return { error: "Nem vagy bejelentkezve." };
-  if (!hasFamilyBetaAccess(profile)) {
-    return { error: "Ez a funkció még nem elérhető a fiókodhoz." };
-  }
 
   const itemId = String(formData.get("itemId") ?? "").trim();
   if (!itemId) return { error: "Hiányzó napirendi elem azonosító." };
@@ -638,6 +773,8 @@ export async function deleteChildScheduleItemAction(
   // sort érint — ezért a .select("id")-t explicit ellenőrizzük
   // (ugyanaz a minta, mint updateChildAction-ben).
   const supabase = createClient();
+  const denied = await checkFamilyRole(supabase, user.id, profile, await familyIdForScheduleItem(supabase, itemId), ["owner", "guardian"]);
+  if (denied) return { error: denied };
   const { data, error } = await supabase
     .from("child_schedule_items")
     .delete()
@@ -667,12 +804,9 @@ export async function deleteChildScheduleItemAction(
 // ────────────────────────────────────────────────────────────────
 // Gyermekfiók — OWNER-oldali meghívás/visszavonás (lásd
 // supabase/migrations/20260927_child_account_foundation.sql). Ugyanaz
-// a beta-gate minta, mint a modul fenti összes owner-oldali actionjénél
-// — a create_child_account_invitation RPC saját maga is megköveteli a
-// has_pilot_access('family_db_beta')-t, a revoke_child_account_invitation
-// és a revoke_child_account RPC-k nem, de a konzisztencia kedvéért
-// (ugyanaz a UI-gate minden owner-oldali Family actionnél) ide is
-// kirakjuk.
+// a családhoz kötött owner-előszűrés (checkFamilyRole), mint a modul többi
+// owner-oldali actionjénél; a végső döntés az RPC-ké
+// (is_child_family_owner).
 // ────────────────────────────────────────────────────────────────
 
 export async function createChildAccountInvitationAction(
@@ -681,14 +815,13 @@ export async function createChildAccountInvitationAction(
 ): Promise<FamilyActionState> {
   const { user, profile } = await getCurrentUserAndProfile();
   if (!user) return { error: "Nem vagy bejelentkezve." };
-  if (!hasFamilyBetaAccess(profile)) {
-    return { error: "Ez a funkció még nem elérhető a fiókodhoz." };
-  }
 
   const childId = String(formData.get("childId") ?? "").trim();
   if (!childId) return { error: "Hiányzó gyermek azonosító." };
 
   const supabase = createClient();
+  const denied = await checkFamilyRole(supabase, user.id, profile, await familyIdForChild(supabase, childId), ["owner"]);
+  if (denied) return { error: denied };
   // KIZÁRÓLAG a meglévő create_child_account_invitation(uuid, integer)
   // RPC — nincs kliensoldali/szerver akcióbeli direkt INSERT a
   // child_account_invitations táblára. Az RPC saját maga ellenőrzi az
@@ -733,14 +866,13 @@ export async function revokeChildAccountInvitationAction(
 ): Promise<FamilyActionState> {
   const { user, profile } = await getCurrentUserAndProfile();
   if (!user) return { error: "Nem vagy bejelentkezve." };
-  if (!hasFamilyBetaAccess(profile)) {
-    return { error: "Ez a funkció még nem elérhető a fiókodhoz." };
-  }
 
   const invitationId = String(formData.get("invitationId") ?? "").trim();
   if (!invitationId) return { error: "Hiányzó meghívás azonosító." };
 
   const supabase = createClient();
+  const denied = await checkFamilyRole(supabase, user.id, profile, await familyIdForChildAccountInvitation(supabase, invitationId), ["owner"]);
+  if (denied) return { error: denied };
   // KIZÁRÓLAG a meglévő revoke_child_account_invitation(uuid) RPC — az
   // RPC saját maga ellenőrzi, hogy a hívó a meghívás mögötti child
   // family aktív ownerje-e, és hogy a meghívó még pending státuszú.
@@ -774,14 +906,13 @@ export async function revokeChildAccountAction(
 ): Promise<FamilyActionState> {
   const { user, profile } = await getCurrentUserAndProfile();
   if (!user) return { error: "Nem vagy bejelentkezve." };
-  if (!hasFamilyBetaAccess(profile)) {
-    return { error: "Ez a funkció még nem elérhető a fiókodhoz." };
-  }
 
   const childId = String(formData.get("childId") ?? "").trim();
   if (!childId) return { error: "Hiányzó gyermek azonosító." };
 
   const supabase = createClient();
+  const denied = await checkFamilyRole(supabase, user.id, profile, await familyIdForChild(supabase, childId), ["owner"]);
+  if (denied) return { error: denied };
   // KIZÁRÓLAG a meglévő revoke_child_account(uuid) RPC — az RPC saját
   // maga ellenőrzi, hogy a hívó a child family aktív ownerje-e.
   const { error } = await supabase.rpc("revoke_child_account", {

@@ -10,6 +10,14 @@
 // supabase/migrations/20260926_family_db_foundation.sql) — minden
 // tábla és RPC saját maga is ellenőrzi a hozzáférést, ettől a
 // konstanstól függetlenül.
+//
+// ELFOGADOTT SZABÁLY (2026-11, 44–45. lépés): a személyes family_db_beta
+// pilotjog KIZÁRÓLAG az ÚJ család létrehozását engedélyezi
+// (createFamilyAction + create_family_with_owner). Visszavonása csak ezt
+// akadályozza: a meglévő család aktív tagjai a családon belüli szerepük
+// szerint tovább használhatják a családot (lásd lib/family/familyAccess.ts
+// és supabase/migrations/20261105000000_family_owner_access_and_ownership_log.sql).
+// Családszintű felfüggesztés nincs.
 
 export const FAMILY_DB_BETA_FEATURE_KEY = "family_db_beta";
 
