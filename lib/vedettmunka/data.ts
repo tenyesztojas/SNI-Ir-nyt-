@@ -4,6 +4,7 @@ import type { Employer, JobPost, JobAlert, JobReport, JobApplicationLog } from "
 import type { JobFilters } from "./categories";
 import type { VmAttribute, VmJobAttributeValue, VmWorkProfile } from "./attributes";
 import { deriveAttributesFromJobPost } from "./attributes";
+import { countyQueryVariants } from "../geo/countyName";
 
 // ─── Publikus lekérdezések ──────────────────────────────────────
 
@@ -33,7 +34,8 @@ export async function getPublishedJobs(filters: Partial<{
   if (filters.work_type) query = query.eq("work_type", filters.work_type);
   if (filters.category) query = query.eq("job_category", filters.category);
   if (filters.city) query = query.ilike("city", `%${filters.city}%`);
-  if (filters.county) query = query.eq("county", filters.county);
+  // Régi („Pest vármegye”) és új tárolt alak is találat.
+  if (filters.county) query = query.in("county", countyQueryVariants(filters.county));
   if (filters.work_location_type) query = query.eq("work_location_type", filters.work_location_type);
   if (filters.open_to_neurodivergent) query = query.eq("open_to_neurodivergent", true);
   if (filters.open_to_disabled) query = query.eq("open_to_disabled", true);

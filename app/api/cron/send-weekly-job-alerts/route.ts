@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createHmac } from "crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getResend } from "@/lib/resend";
+import { countiesEqual, formatCountyLabel } from "@/lib/geo/countyName";
 
 export const runtime = "nodejs";
 
@@ -104,7 +105,7 @@ export async function GET(request: Request) {
       }
       if (alert.work_type && job.work_type !== alert.work_type) return false;
       if (alert.city && job.city !== alert.city) return false;
-      if (alert.county && job.county !== alert.county) return false;
+      if (alert.county && !countiesEqual(job.county, alert.county)) return false;
       if (alert.home_office && !job.home_office) return false;
       if (alert.hybrid && !job.hybrid) return false;
       if (alert.part_time && !job.part_time) return false;
@@ -128,7 +129,7 @@ export async function GET(request: Request) {
           <tr>
             <td style="padding:8px 0; border-bottom:1px solid #f0f0f0">
               <a href="${baseUrl}/vedettmunka/allasok/${job.id}" style="font-weight:700;color:#123A5C;text-decoration:none">${job.title}</a><br>
-              <span style="font-size:12px;color:#666">${company}${job.city ? ` · ${job.city}` : ""}${job.county ? ` · ${job.county}` : ""}</span>
+              <span style="font-size:12px;color:#666">${company}${job.city ? ` · ${job.city}` : ""}${job.county ? ` · ${formatCountyLabel(job.county)}` : ""}</span>
             </td>
           </tr>`;
       })

@@ -7,6 +7,7 @@ import { findCityCoordinates, BUDAPEST_DISTRICT_COORDINATES } from "@/lib/commun
 import type { CommunityRole, MessagePrivacy } from "@/lib/community/types";
 import { getReportSeverity, calcRetentionUntil } from "@/lib/community/types";
 import { sendAdminPush } from "@/lib/push";
+import { normalizeCountyName } from "@/lib/geo/countyName";
 
 // ── Nominatim geocoding (szerver oldalon, API kulcs nélkül) ──
 async function geocodeWithNominatim(
@@ -146,7 +147,8 @@ export async function upsertCommunityProfile(formData: {
     intro_text: formData.intro_text ?? null,
     profile_image_url: formData.profile_image_url ?? null,
     avatar_type: formData.avatar_type ?? "icon",
-    county: formData.county ?? null,
+    // Megye: kanonikus név tárolása („Pest vármegye” / „Pest megye” → „Pest”).
+    county: formData.county === undefined ? null : (normalizeCountyName(formData.county) ?? ""),
     city: formData.city ?? null,
     district: formData.district ?? null,
     map_display_enabled: formData.map_display_enabled ?? true,

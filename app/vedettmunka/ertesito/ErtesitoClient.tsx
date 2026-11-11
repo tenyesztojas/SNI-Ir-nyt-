@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { upsertJobAlert } from "@/app/vedettmunka/actions";
 import { SZELLEMI_KATEGORIAK, FIZIKAI_KATEGORIAK, HUNGARIAN_COUNTIES } from "@/lib/vedettmunka/categories";
 import type { JobAlert } from "@/lib/vedettmunka/types";
+import { formatCountyLabel, normalizeCountyName } from "@/lib/geo/countyName";
 
 function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
   return (
@@ -28,7 +29,7 @@ export default function ErtesitoClient({ initialAlert }: { initialAlert: JobAler
   const [enabled, setEnabled] = useState(initialAlert?.enabled ?? true);
   const [workType, setWorkType] = useState(initialAlert?.work_type ?? "");
   const [city, setCity] = useState(initialAlert?.city ?? "");
-  const [county, setCounty] = useState(initialAlert?.county ?? "");
+  const [county, setCounty] = useState(normalizeCountyName(initialAlert?.county) ?? "");
   const [homeOffice, setHomeOffice] = useState(initialAlert?.home_office ?? false);
   const [hybrid, setHybrid] = useState(initialAlert?.hybrid ?? false);
   const [partTime, setPartTime] = useState(initialAlert?.part_time ?? false);
@@ -97,7 +98,7 @@ export default function ErtesitoClient({ initialAlert }: { initialAlert: JobAler
         <select value={county} onChange={(e) => setCounty(e.target.value)}
           className="rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-sni-brand-teal">
           <option value="">Mindegy</option>
-          {HUNGARIAN_COUNTIES.map((c) => <option key={c} value={c}>{c}</option>)}
+          {HUNGARIAN_COUNTIES.map((c) => <option key={c} value={c}>{formatCountyLabel(c)}</option>)}
         </select>
       </label>
 

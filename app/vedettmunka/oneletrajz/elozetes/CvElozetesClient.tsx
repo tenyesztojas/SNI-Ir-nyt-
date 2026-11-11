@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import type { CvData } from "@/lib/vedettmunka/types";
 import { EMPTY_CV } from "@/lib/vedettmunka/types";
+import { formatCountyLabel } from "@/lib/geo/countyName";
 
 const CV_KEY = "vk_bemutatkozo_draft";
 
@@ -224,8 +225,8 @@ export default function CvElozetesClient() {
                 {cv.email && <div style={{ fontSize: 10, color: "#e2e8f0", wordBreak: "break-all" }}>✉ {cv.email}</div>}
                 {(cv.lakhely || cv.lakhely_megye) && (
                   <div style={{ fontSize: 10, color: "#e2e8f0" }}>
-                    📍 {cv.lakhely || cv.lakhely_megye}
-                    {cv.lakhely && cv.lakhely_megye && ` (${cv.lakhely_megye})`}
+                    📍 {cv.lakhely || formatCountyLabel(cv.lakhely_megye)}
+                    {cv.lakhely && cv.lakhely_megye && ` (${formatCountyLabel(cv.lakhely_megye)})`}
                   </div>
                 )}
                 {cv.szuletesi_datum && <div style={{ fontSize: 10, color: "#e2e8f0" }}>🎂 {formatDatum(cv.szuletesi_datum)}</div>}

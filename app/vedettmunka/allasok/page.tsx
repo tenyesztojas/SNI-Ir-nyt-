@@ -4,6 +4,7 @@ import { getPublishedJobs, getPublishedJobLocations } from "@/lib/vedettmunka/da
 import { ATTRIBUTE_LABELS, deriveAttributesFromJobPost } from "@/lib/vedettmunka/attributes";
 import type { JobPost } from "@/lib/vedettmunka/types";
 import AllasokFilterClient from "./AllasokFilterClient";
+import { formatCountyLabel, normalizeCountyName } from "@/lib/geo/countyName";
 
 export const metadata = { title: "Lehetőségek keresése – Védett Karrier" };
 export const dynamic = "force-dynamic";
@@ -23,7 +24,8 @@ export default async function AllasokPage({
     work_type:          searchParams.work_type || undefined,
     category:           searchParams.category  || undefined,
     city:               searchParams.city      || undefined,
-    county:             searchParams.county    || undefined,
+    // „Pest vármegye” / „Pest megye” / „Pest” → ugyanaz a szűrés.
+    county:             normalizeCountyName(searchParams.county) ?? undefined,
     work_location_type: searchParams.location  || undefined,
     part_time:          searchParams.part_time  === "1",
     mentor:             searchParams.mentor     === "1" || searchParams.betanitas === "1",
@@ -106,7 +108,7 @@ export default async function AllasokPage({
                       {(job.city || job.county) && (
                         <span className="flex items-center gap-1">
                           <MapPin size={13} />
-                          {job.city}{job.county ? `, ${job.county}` : ""}
+                          {job.city}{job.county ? `, ${formatCountyLabel(job.county)}` : ""}
                         </span>
                       )}
                       {job.daily_hours && (

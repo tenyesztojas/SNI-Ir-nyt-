@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { SZELLEMI_KATEGORIAK, FIZIKAI_KATEGORIAK } from "@/lib/vedettmunka/categories";
+import { countiesEqual, formatCountyLabel, normalizeCountyName } from "@/lib/geo/countyName";
 
 interface Props {
   defaults: Record<string, string | undefined>;
@@ -24,21 +25,22 @@ const VM_FILTERS: { label: string; param: string }[] = [
 
 export default function AllasokFilterClient({ defaults, locations }: Props) {
   const [workType, setWorkType] = useState(defaults.work_type ?? "");
-  const [selectedCounty, setSelectedCounty] = useState(defaults.county ?? "");
+  const [selectedCounty, setSelectedCounty] = useState(normalizeCountyName(defaults.county) ?? "");
 
   const kategoriak =
     workType === "szellemi" ? SZELLEMI_KATEGORIAK
     : workType === "fizikai" ? FIZIKAI_KATEGORIAK
     : [];
 
-  const availableCounties = [...new Set(locations.map((l) => l.county))].sort((a, b) =>
+  // Kanonikus megyenév (régi „… vármegye” tárolt alak is egy opció alá kerül).
+  const availableCounties = [...new Set(locations.map((l) => normalizeCountyName(l.county) ?? l.county))].sort((a, b) =>
     a.localeCompare(b, "hu")
   );
 
   const citiesForCounty = selectedCounty
     ? [...new Set(
         locations
-          .filter((l) => l.county === selectedCounty)
+          .filter((l) => countiesEqual(l.county, selectedCounty))
           .map((l) => l.city)
       )].sort((a, b) => a.localeCompare(b, "hu"))
     : [];
@@ -107,7 +109,7 @@ export default function AllasokFilterClient({ defaults, locations }: Props) {
         >
           <option value="">Mindegy</option>
           {availableCounties.map((c) => (
-            <option key={c} value={c}>{c}</option>
+            <option key={c} value={c}>{formatCountyLabel(c)}</option>
           ))}
         </select>
       </label>

@@ -1,4 +1,4 @@
-// Magyarország vármegyéi és települései
+// Magyarország megyéi (és Budapest) és települései
 // Tartalmazza az összes várost és a fontosabb nagyközségeket.
 // Az "– Egyéb –" opciónál szabad szöveges megadás lehetséges.
 

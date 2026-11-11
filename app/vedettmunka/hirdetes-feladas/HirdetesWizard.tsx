@@ -6,6 +6,7 @@ import { submitJobPostWizard } from "@/app/vedettmunka/actions";
 import { SZELLEMI_KATEGORIAK, FIZIKAI_KATEGORIAK, HUNGARIAN_COUNTIES } from "@/lib/vedettmunka/categories";
 import { WIZARD_STEP_ATTRIBUTES, ATTRIBUTE_LABELS } from "@/lib/vedettmunka/attributes";
 import VmIcon from "@/components/vedettmunka/VmIcon";
+import { formatCountyLabel } from "@/lib/geo/countyName";
 
 // ─── Típusok ────────────────────────────────────────────────────
 type WizardData = Record<string, string | boolean | string[]>;
@@ -227,7 +228,7 @@ export default function HirdetesWizard() {
               </Field>
               <Field label="Megye">
                 <Select name="county" value={data.county as string} onChange={(v) => set("county", v)}
-                  options={[{ value: "", label: "Válassz..." }, ...HUNGARIAN_COUNTIES.map((c) => ({ value: c, label: c }))]}
+                  options={[{ value: "", label: "Válassz..." }, ...HUNGARIAN_COUNTIES.map((c) => ({ value: c, label: formatCountyLabel(c) ?? c }))]}
                 />
               </Field>
             </div>
@@ -462,7 +463,7 @@ export default function HirdetesWizard() {
             <p className="text-sm text-gray-600">Ellenőrizd az adatokat, majd küldd be jóváhagyásra.</p>
             <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 flex flex-col gap-2 text-sm">
               <p><span className="font-semibold">Állás:</span> {data.title as string}</p>
-              <p><span className="font-semibold">Helyszín:</span> {data.city as string}{data.county ? `, ${data.county}` : ""}</p>
+              <p><span className="font-semibold">Helyszín:</span> {data.city as string}{data.county ? `, ${formatCountyLabel(data.county as string)}` : ""}</p>
               <p><span className="font-semibold">Munkatípus:</span> {data.work_type === "szellemi" ? "Szellemi" : "Fizikai"}</p>
               <p><span className="font-semibold">Munkaidő:</span> {data.daily_hours as string}</p>
               <p><span className="font-semibold">Bér:</span> {data.salary_range as string}</p>

@@ -3,6 +3,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { countyQueryVariants } from "@/lib/geo/countyName";
 import type {
   CommunityProfile,
   CommunityConnection,
@@ -58,7 +59,8 @@ export async function getActiveCommunityMembers(filters?: {
     .eq("profile_visibility", "active");
 
   if (filters?.city) query = query.eq("city", filters.city);
-  if (filters?.county) query = query.eq("county", filters.county);
+  // Régi („Pest vármegye”) és új („Pest megye” / „Pest”) tárolt alak is találat.
+  if (filters?.county) query = query.in("county", countyQueryVariants(filters.county));
   if (filters?.district) query = query.eq("district", filters.district);
   if (filters?.role) query = query.eq("role", filters.role);
   if (filters?.goal) query = query.contains("connection_goals", [filters.goal]);

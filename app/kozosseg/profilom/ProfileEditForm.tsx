@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { normalizeCountyName } from "@/lib/geo/countyName";
 import {
   upsertCommunityProfile,
   setCommunityProfileVisibility,
@@ -23,7 +24,7 @@ export default function ProfileEditForm({ profile }: { profile: CommunityProfile
   const [displayName, setDisplayName] = useState(profile.display_name);
   const [role, setRole] = useState<CommunityRole>(profile.role);
   const [introText, setIntroText] = useState(profile.intro_text ?? "");
-  const [county, setCounty] = useState(profile.county ?? "");
+  const [county, setCounty] = useState(normalizeCountyName(profile.county) ?? "");
   const [city, setCity] = useState(profile.city ?? "");
   const [district, setDistrict] = useState(profile.district ?? "");
   const [mapEnabled, setMapEnabled] = useState(profile.map_display_enabled);
@@ -90,7 +91,7 @@ export default function ProfileEditForm({ profile }: { profile: CommunityProfile
 
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
-          <label className="label-field">Vármegye</label>
+          <label className="label-field">Megye</label>
           <input className="input-field" value={county} onChange={(e) => setCounty(e.target.value)} />
         </div>
         <div>

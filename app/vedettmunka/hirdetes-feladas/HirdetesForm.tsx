@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { submitJobPost } from "@/app/vedettmunka/actions";
+import { formatCountyLabel } from "@/lib/geo/countyName";
 import { SZELLEMI_KATEGORIAK, FIZIKAI_KATEGORIAK, ALL_KATEGORIAK, HUNGARIAN_COUNTIES } from "@/lib/vedettmunka/categories";
 
 function Field({ label, name, type = "text", required = false, placeholder = "", hint = "", as: As = "input", rows = 3 }: {
@@ -117,7 +118,7 @@ export default function HirdetesForm() {
           <span className="text-sm font-semibold text-gray-700">Megye <span className="text-red-500">*</span></span>
           <select name="county" required className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-sni-brand-teal">
             <option value="">— Válassz —</option>
-            {HUNGARIAN_COUNTIES.map((c) => <option key={c} value={c}>{c}</option>)}
+            {HUNGARIAN_COUNTIES.map((c) => <option key={c} value={c}>{formatCountyLabel(c)}</option>)}
           </select>
         </label>
       </div>

@@ -19,6 +19,7 @@
 
 import { NextResponse } from "next/server";
 import { requireVedettRoutePublicRead } from "@/lib/vedett-route/access";
+import { replaceVarmegyeInText } from "@/lib/geo/countyName";
 
 function optionalStringField(body: unknown, field: string): string | undefined {
   const value = (body as Record<string, unknown> | null)?.[field];
@@ -76,10 +77,11 @@ export async function POST(request: Request) {
     return NextResponse.json(null);
   }
 
-  const label =
+  // Megjelenítési címke: „… vármegye” → „… megye” (lásd lib/geo/countyName.ts).
+  const label = replaceVarmegyeInText(
     (typeof feature?.properties?.full_address === "string" && feature.properties.full_address) ||
     (typeof feature?.properties?.name === "string" && feature.properties.name) ||
-    "";
+    "");
 
   return NextResponse.json({ lat, lon, label });
 }

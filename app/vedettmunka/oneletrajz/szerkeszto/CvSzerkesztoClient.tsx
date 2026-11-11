@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import type { CvData } from "@/lib/vedettmunka/types";
 import { EMPTY_CV } from "@/lib/vedettmunka/types";
 import { MEGYEK, TELEPULESEK, EGYEB_OPCIO } from "@/lib/vedettmunka/telepulesek";
+import { formatCountyLabel, normalizeCountyName } from "@/lib/geo/countyName";
 
 const CV_KEY = "vk_bemutatkozo_draft";
 
@@ -104,7 +105,8 @@ function migrateLegacyCv(raw: Record<string, unknown>): CvData {
       if (!d) return "";
       return d.length > 4 ? d.slice(0, 4) : d;
     })(),
-    lakhely_megye: str(raw.lakhely_megye),
+    // Régi „Pest vármegye” / „Pest megye” érték → a legördülő kulcsa („Pest”).
+    lakhely_megye: normalizeCountyName(str(raw.lakhely_megye)) ?? "",
     weboldal: str(raw.weboldal),
     vegzettsegek,
     szakmak,
@@ -313,12 +315,12 @@ export default function CvSzerkesztoClient() {
             <div className="flex flex-col gap-3">
               <label className="flex flex-col gap-1">
                 <span className="text-sm font-semibold text-gray-700">Honnan keresel munkalehetőséget?</span>
-                <span className="text-xs text-gray-400">Elég a vármegyét megadni. Pontos címet ne írj ide.</span>
+                <span className="text-xs text-gray-400">Elég a megyét megadni. Pontos címet ne írj ide.</span>
                 <select value={cv.lakhely_megye}
                   onChange={(e) => { setLakhelyEgyeb(false); save({ ...cv, lakhely_megye: e.target.value, lakhely: "" }); }}
                   className="rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-sni-brand-teal bg-white">
                   <option value="">– Válassz –</option>
-                  {MEGYEK.map((m) => <option key={m} value={m}>{m}</option>)}
+                  {MEGYEK.map((m) => <option key={m} value={m}>{formatCountyLabel(m)}</option>)}
                 </select>
               </label>
               {cv.lakhely_megye && (

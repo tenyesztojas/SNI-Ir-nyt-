@@ -4,6 +4,7 @@ import { MapPin, Clock, Calendar, ArrowRight, AlertTriangle } from "lucide-react
 import { getPublishedJobById, getJobAttributes } from "@/lib/vedettmunka/data";
 import { ATTRIBUTE_LABELS, deriveAttributesFromJobPost } from "@/lib/vedettmunka/attributes";
 import JobReportButton from "./JobReportButton";
+import { formatCountyLabel } from "@/lib/geo/countyName";
 
 export const dynamic = "force-dynamic";
 
@@ -105,7 +106,7 @@ export default async function AllasAdatlapPage({ params }: { params: { id: strin
 
         <div className="mt-3 flex flex-wrap gap-4 text-sm text-blue-100">
           {(job.city || job.county) && (
-            <span className="flex items-center gap-1.5"><MapPin size={14} /> {job.city}{job.county ? `, ${job.county}` : ""}</span>
+            <span className="flex items-center gap-1.5"><MapPin size={14} /> {job.city}{job.county ? `, ${formatCountyLabel(job.county)}` : ""}</span>
           )}
           {job.daily_hours && (
             <span className="flex items-center gap-1.5"><Clock size={14} /> {job.daily_hours}</span>
@@ -177,7 +178,7 @@ export default async function AllasAdatlapPage({ params }: { params: { id: strin
           <div className="space-y-1.5">
             {job.work_location_type && <p><span className="font-semibold">Helyszín:</span> {label(job.work_location_type)}</p>}
             {job.workplace_address && <p><span className="font-semibold">Cím:</span> {job.workplace_address}</p>}
-            {(job.city || job.county) && <p><span className="font-semibold">Település:</span> {job.city}{job.county ? `, ${job.county}` : ""}</p>}
+            {(job.city || job.county) && <p><span className="font-semibold">Település:</span> {job.city}{job.county ? `, ${formatCountyLabel(job.county)}` : ""}</p>}
           </div>
         </Section>
 

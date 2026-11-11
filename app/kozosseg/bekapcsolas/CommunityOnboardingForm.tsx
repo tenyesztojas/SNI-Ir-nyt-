@@ -141,7 +141,7 @@ export default function CommunityOnboardingForm() {
           </p>
 
           <div>
-            <label className="label-field">Vármegye</label>
+            <label className="label-field">Megye</label>
             <input className="input-field" value={county} onChange={(e) => setCounty(e.target.value)} placeholder="pl. Pest" />
           </div>
           <div>

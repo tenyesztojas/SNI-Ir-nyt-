@@ -5,6 +5,7 @@ import type {
   CarRestStopType,
 } from "./types.ts";
 import { encodePolyline6 } from "./polyline.ts";
+import { replaceVarmegyeInText } from "../../../geo/countyName.ts";
 
 const SEARCH_BOX_BASE = "https://api.mapbox.com/search/searchbox/v1";
 const CATEGORY_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
@@ -68,7 +69,8 @@ function normalizeFeature(
 
   const properties = isRecord(feature.properties) ? feature.properties : {};
   const mapboxId = asString(properties.mapbox_id) ?? asString(feature.id);
-  const name =
+  // Megjelenítés: a Mapbox „… vármegye” szövege „… megye” (lásd lib/geo/countyName.ts).
+  const name = replaceVarmegyeInText(
     asString(properties.name) ??
     asString(properties.full_address) ??
     asString(properties.address) ??
@@ -76,12 +78,12 @@ function normalizeFeature(
       ? "Benzinkút"
       : type === "RESTAURANT"
         ? "Étterem"
-        : "Nyilvános WC");
+        : "Nyilvános WC"));
 
-  const address =
+  const address = replaceVarmegyeInText(
     asString(properties.full_address) ??
     asString(properties.address) ??
-    asString(properties.place_formatted);
+    asString(properties.place_formatted));
 
   return {
     id: mapboxId ? `mapbox:${mapboxId}` : fallbackId,

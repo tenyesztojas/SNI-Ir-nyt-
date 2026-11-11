@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { Resend } from "resend";
 import { sendAdminPush } from "@/lib/push";
+import { countiesEqual, normalizeCountyName } from "@/lib/geo/countyName";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -122,7 +123,7 @@ export async function submitJobPost(formData: FormData) {
     employer_id: employer.id,
     title: (formData.get("title") as string).trim(),
     city: (formData.get("city") as string).trim(),
-    county: (formData.get("county") as string).trim(),
+    county: normalizeCountyName(formData.get("county") as string) ?? "",
     workplace_address: (formData.get("workplace_address") as string)?.trim() || null,
     work_type: formData.get("work_type") as string,
     job_category: (formData.get("job_category") as string).trim(),
@@ -205,7 +206,7 @@ export async function submitJobPostWizard(
       employer_id: employer.id,
       title:                    (data.title as string ?? "").trim(),
       city:                     (data.city as string ?? "").trim(),
-      county:                   (data.county as string ?? "").trim(),
+      county:                   normalizeCountyName(data.county as string) ?? "",
       workplace_address:        (data.workplace_address as string)?.trim() || null,
       work_type:                (data.work_type as string) || "szellemi",
       job_category:             (data.job_category as string ?? "").trim(),
@@ -315,7 +316,7 @@ export async function upsertJobAlert(formData: FormData) {
     categories,
     work_type: (formData.get("work_type") as string) || null,
     city: (formData.get("city") as string)?.trim() || null,
-    county: (formData.get("county") as string)?.trim() || null,
+    county: normalizeCountyName(formData.get("county") as string | null),
     home_office: formData.get("home_office") === "true",
     hybrid: formData.get("hybrid") === "true",
     part_time: formData.get("part_time") === "true",
@@ -623,7 +624,7 @@ async function sendJobAlertEmails(jobId: string) {
     const parentsMatch = !alert.open_to_parents || job.open_to_parents;
     const ptMatch = !alert.part_time || job.part_time_available === "igen";
     const cityMatch = !alert.city || job.city.toLowerCase().includes(alert.city.toLowerCase());
-    const countyMatch = !alert.county || job.county === alert.county;
+    const countyMatch = !alert.county || countiesEqual(job.county, alert.county);
 
     if (workTypeMatch && ndMatch && disabledMatch && parentsMatch && ptMatch && cityMatch && countyMatch) {
       const companyName = (job.employers as { company_name: string } | null)?.company_name ?? "";
