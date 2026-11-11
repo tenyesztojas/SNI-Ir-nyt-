@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { rateLimiter } from "./lib/rate-limit/index";
 import { MAP_STYLE_URL } from "./lib/vedett-route/mapStyle";
+import { checkSupabaseEnv, readSupabaseEnv } from "./lib/supabase/envGuard";
 
 const supabaseUrl     = process.env.NEXT_PUBLIC_SUPABASE_URL  ?? "";
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
@@ -151,6 +152,27 @@ const SECURITY_HEADERS: Record<string, string> = {
 
 export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname;
+
+  // ── Preview / teszt-projekt ≠ Production Supabase-őr (lib/supabase/envGuard.ts)
+  // Preview deploymenten hibás/hiányos Supabase-konfigurációnál MINDEN kérés
+  // (oldal, Server Action, API) 503-at kap, mielőtt bármilyen Supabase-kliens
+  // létrejönne: nincs visszaesés production kapcsolatra. Productionben és
+  // helyben az őr nem ellenőriz (változatlan viselkedés). Titok nem kerül ki.
+  const supabaseEnv = checkSupabaseEnv(readSupabaseEnv());
+  if (!supabaseEnv.ok) {
+    console.error(`[SupabaseEnvGuard] ${supabaseEnv.env} konfiguráció hibás:`, supabaseEnv.problems.join(","));
+    return new NextResponse(
+      "A teszt- vagy Preview-környezet Supabase-konfigurációja hibás vagy hiányos, ezért az alkalmazás nem indul el.",
+      {
+        status: 503,
+        headers: {
+          "Content-Type": "text/plain; charset=utf-8",
+          "Cache-Control": "no-store",
+          "X-Robots-Tag": "noindex, nofollow",
+        },
+      }
+    );
+  }
   const ip   = getClientIp(request);
 
   // ── Rate limiting ──────────────────────────────────────────────────────────

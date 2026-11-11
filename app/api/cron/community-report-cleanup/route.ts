@@ -15,6 +15,7 @@
 
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { isCleanupCronAuthorized } from "@/lib/community/cronAuth";
 import {
   ANONYMIZED_REPORT_DELETE_AFTER_MONTHS,
   OPEN_REPORT_STATUSES,
@@ -30,9 +31,8 @@ export const runtime = "nodejs";
 const OPEN_STATUS_FILTER = `(${OPEN_REPORT_STATUSES.join(",")})`;
 
 export async function GET(request: Request) {
-  // Vercel cron authorization
-  const authHeader = request.headers.get("authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+  // Vercel cron authorization — fail-closed: hiányzó/üres CRON_SECRET → 401
+  if (!isCleanupCronAuthorized(request.headers.get("authorization"), process.env.CRON_SECRET)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

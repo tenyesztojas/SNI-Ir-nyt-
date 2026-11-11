@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import { assertSupabaseEnv } from "./envGuard";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
@@ -7,6 +8,8 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
 // Szerver oldali (Server Component / Server Action / Route Handler) kliens.
 // Cookie-alapú session-t kezel az @supabase/ssr segítségével.
 export function createClient() {
+  // Preview: csak a teszt Supabase-projekt (lásd envGuard.ts); hibánál fail closed.
+  assertSupabaseEnv();
   const cookieStore = cookies();
 
   return createServerClient(supabaseUrl, supabaseAnonKey, {
