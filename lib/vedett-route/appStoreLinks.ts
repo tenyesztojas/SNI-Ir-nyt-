@@ -1,37 +1,47 @@
-// VÉDETT ÚTVONAL — alkalmazásletöltési linkek EGYETLEN forrása (2026-10-09).
+// VÉDETT ÚTVONAL — alkalmazásletöltési linkek EGYETLEN forrása (2026-10-09,
+// App Store-aktiválás: 2026-11-05).
 //
 // Minden letöltési jelzés (főoldali kártya, /vedett-utvonal aloldal) ezt
 // használja a components/vedett-utvonal/AppDownloadBadges.tsx komponensen
 // keresztül — URL-t és megjelenítési döntést máshol NEM duplikálunk.
 //
-// - Google Play: az Android-app ÉLES, hivatalos listája (fix URL).
-// - App Store: az iOS-app MÉG NEM jelent meg. URL-t nem találunk ki: amíg a
-//   VEDETT_UTVONAL_APP_STORE_URL env változó nincs beállítva (vagy nem
-//   érvényes apps.apple.com https URL), a gomb "Hamarosan iPhone-ra is"
-//   jelzés, NEM link. Az éles URL beállításakor (szerver-oldali env, a
-//   force-dynamic oldalak futásidőben olvassák) a gomb kattinthatóvá válik.
-// - Hivatalos jelvényképek: ha a public/badges/ mappába bekerül a gyártó
-//   által kiadott, VÁLTOZTATÁS NÉLKÜLI jelvényfájl, az útvonalát itt kell
-//   megadni; addig a komponens logó nélküli, szöveges gombot mutat.
+// - Google Play: az Android-app ÉLES, hivatalos listája (fix URL, változatlan).
+// - App Store: az iOS-app ÉLES, hivatalos listája (fix URL).
+// - Áruházi jelvények: public/badges/ alatt, az átadott PNG-k változatlanul
+//   (mindkettő 612×169 px; a komponens fix magassággal, arányosan jeleníti meg).
 
 export const GOOGLE_PLAY_URL = "https://play.google.com/store/apps/details?id=hu.vedettsarok.utvonal";
 
-export const APP_STORE_URL_ENV = "VEDETT_UTVONAL_APP_STORE_URL";
+export const APP_STORE_URL = "https://apps.apple.com/hu/app/védett-útvonal/id6821697394?l=hu";
 
-/** Hivatalos jelvényképek (public/ alatti útvonal) — null: szöveges gomb. */
-export const STORE_BADGE_IMAGES: { googlePlay: string | null; appStore: string | null } = {
-  googlePlay: null, // pl. "/badges/google-play-badge-hu.png"
-  appStore: null, // pl. "/badges/app-store-badge-hu.svg"
-};
+/** Hivatalos jelvényképek (public/ alatti útvonal) és eredeti pixelméretük. */
+export const STORE_BADGE_IMAGES = {
+  googlePlay: { src: "/badges/google_play_badge.png", width: 612, height: 169 },
+  appStore: { src: "/badges/apple_app_store_badge.png", width: 612, height: 169 },
+} as const;
 
-export type StoreLink =
-  | { status: "available"; href: string; badgeSrc: string | null }
-  | { status: "coming_soon"; badgeSrc: string | null };
+export interface StoreBadgeImage {
+  src: string;
+  width: number;
+  height: number;
+}
+
+export interface StoreLink {
+  href: string;
+  badge: StoreBadgeImage;
+  /** Akadálymentes név (a jelvény képe angol feliratú, ezért a név magyar). */
+  label: string;
+}
 
 export interface VedettAppStoreLinks {
   googlePlay: StoreLink;
   appStore: StoreLink;
 }
+
+export const STORE_LABELS = {
+  googlePlay: "Letöltés a Google Playből",
+  appStore: "Letöltés az App Store-ból",
+} as const;
 
 /** Csak valódi, https apps.apple.com alkalmazás-URL fogadható el. */
 export function normalizeAppStoreUrl(raw: string | null | undefined): string | null {
@@ -47,14 +57,9 @@ export function normalizeAppStoreUrl(raw: string | null | undefined): string | n
   }
 }
 
-export function getVedettAppStoreLinks(
-  env: Record<string, string | undefined> = process.env
-): VedettAppStoreLinks {
-  const appStoreUrl = normalizeAppStoreUrl(env[APP_STORE_URL_ENV]);
+export function getVedettAppStoreLinks(): VedettAppStoreLinks {
   return {
-    googlePlay: { status: "available", href: GOOGLE_PLAY_URL, badgeSrc: STORE_BADGE_IMAGES.googlePlay },
-    appStore: appStoreUrl
-      ? { status: "available", href: appStoreUrl, badgeSrc: STORE_BADGE_IMAGES.appStore }
-      : { status: "coming_soon", badgeSrc: null },
+    googlePlay: { href: GOOGLE_PLAY_URL, badge: STORE_BADGE_IMAGES.googlePlay, label: STORE_LABELS.googlePlay },
+    appStore: { href: APP_STORE_URL, badge: STORE_BADGE_IMAGES.appStore, label: STORE_LABELS.appStore },
   };
 }
