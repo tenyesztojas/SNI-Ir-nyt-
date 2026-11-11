@@ -24,6 +24,16 @@ create or replace function td.mkfamily(owner_id uuid, nchildren int) returns uui
 declare f uuid; c uuid; i int; begin
   insert into public.families(name, created_by) values ('fam', owner_id) returning id into f;
   insert into public.family_members(family_id, user_id, role, status) values (f, owner_id, 'owner', 'active');
+  -- teszt-fixture (KIZÁRÓLAG eldobható scratch DB): a 20261030000000 létszámkorlát
+  -- mellett a több gyermekes / több gondviselős tesztcsaládok Plusz-szintű létszámot kapnak.
+  -- Valódi Supabase auth.users (sok oszlop) esetén a fixture megáll, nem ad jogosultságot.
+  if to_regclass('public.family_feature_grants') is not null then
+    if (select count(*) from information_schema.columns where table_schema = 'auth' and table_name = 'users') > 2 then
+      raise exception 'test_fixture: csak eldobható scratch adatbázison futtatható';
+    end if;
+    insert into public.family_feature_grants(family_id, feature_key, source)
+    values (f, 'family.children.multiple', 'test_fixture'), (f, 'family.guardians.multiple', 'test_fixture');
+  end if;
   for i in 1..nchildren loop
     insert into public.child_profiles(first_name, created_by) values ('kid' || i, owner_id) returning id into c;
     insert into public.family_children(family_id, child_id) values (f, c);

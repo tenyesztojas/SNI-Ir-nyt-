@@ -1,0 +1,23 @@
+# Fióktörlési + létszámkorlát scratch-tesztcsomagok. Formátum: <suite>: <fájlok sorrendben>
+# Minden suite FRISS, üres, eldobható Postgres adatbázison fut (lásd run_scratch_suites.sh).
+# Útvonalak a repó gyökeréhez képest. Külső SQL-segéd nincs: minden fájl a repóban van.
+# Közös alap: Supabase-stubok + a családi és fióktörlési migrációk + 20261027* + 20261030000000.
+@base: supabase/tests/_bootstrap_stub.sql supabase/tests/_supabase_default_privileges_stub.sql supabase/migrations/20260926000000_family_db_foundation.sql supabase/migrations/20260926000100_child_schedule_items_foundation.sql supabase/migrations/20260927000000_child_account_foundation.sql supabase/migrations/20260927000100_family_guardian_invitation_foundation.sql supabase/migrations/20260927000200_guardian_child_permission_hardening_v1.sql supabase/migrations/20261001000000_family_guardian_invitation_remove_pilot_gate.sql supabase/migrations/20261001000100_family_schedule_authorization_completion.sql supabase/migrations/20261001000200_guardian_child_permission_remove_pilot_gate.sql supabase/migrations/20261002000000_child_account_invitation_preview.sql supabase/migrations/20261002000100_child_account_invitation_source_and_beta_gate.sql supabase/migrations/20261003000000_child_account_reactivation_after_revoke.sql supabase/migrations/20261004_account_deletion_lifecycle.sql
+@family_new: supabase/migrations/20261027000000_child_travel_status.sql supabase/migrations/20261027000100_child_travel_notifications.sql supabase/migrations/20261027000200_family_subscriptions_foundation.sql supabase/migrations/20261027000300_family_trial_protection.sql supabase/migrations/20261027000400_start_family_trial_rpc.sql
+@limits: supabase/migrations/20261030000000_family_entitlement_enforcement.sql
+@removal: supabase/migrations/20261103000000_family_member_removal.sql
+@handover: supabase/migrations/20261104000000_family_ownership_handover.sql
+@owner_access: supabase/migrations/20261105000000_family_owner_access_and_ownership_log.sql
+@role_separation: supabase/migrations/20261106000000_family_child_account_role_separation.sql
+@delete: supabase/tests/account-deletion/delete_own_account_stubs.sql supabase/migrations/20261020000000_delete_own_account.sql
+lifecycle: @base @family_new @limits supabase/tests/account_deletion_lifecycle.sql
+delete_own_account: @base supabase/tests/account-deletion/delete_own_account_stubs.sql supabase/migrations/20261020000000_delete_own_account.sql @family_new @limits supabase/tests/account-deletion/delete_own_account_scratch_test.sql
+community_retention: @base supabase/tests/account-deletion/delete_own_account_stubs.sql supabase/migrations/20261020000000_delete_own_account.sql supabase/tests/account-deletion/community_retention_stubs.sql supabase/migrations/20261021000000_community_report_retention_fk.sql supabase/migrations/20261021000100_community_report_appeals_closed_at.sql @family_new @limits supabase/tests/account-deletion/community_retention_test.sql
+free_family_deletion: @base supabase/tests/account-deletion/delete_own_account_stubs.sql supabase/migrations/20261020000000_delete_own_account.sql @family_new @limits supabase/tests/account-deletion/free_family_deletion_test.sql
+entitlement_limits: @base @family_new supabase/tests/family_entitlement_limits_pre.sql @limits supabase/tests/family_entitlement_limits_test.sql
+family_core_access: @base @family_new @limits supabase/tests/family_core_access_test.sql
+family_core_access_pre1030: @base @family_new supabase/tests/family_core_access_test.sql
+family_member_removal: @base @delete @family_new @limits @removal supabase/tests/family_member_removal_test.sql
+family_ownership_handover: @base @delete @family_new @limits @removal @handover supabase/tests/family_ownership_handover_test.sql
+family_owner_access: @base @delete @family_new @limits @removal @handover @owner_access supabase/tests/family_owner_access_test.sql
+family_role_separation: @base @delete @family_new @limits @removal @handover @owner_access @role_separation supabase/tests/family_role_separation_test.sql
