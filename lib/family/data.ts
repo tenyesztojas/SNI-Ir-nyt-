@@ -331,7 +331,10 @@ export async function getMyFamilies(
     supabase.from("families").select("id, name").in("id", familyIds),
     supabase
       .from("family_members")
-      .select("family_id, user_id, role, profiles(display_name)")
+      // Explicit FK: a family_members táblának két profiles-kapcsolata van
+      // (user_id és revoked_by, 20261103000000_family_member_removal.sql),
+      // ezért a jelöletlen `profiles(...)` beágyazás PGRST201-gyel elbukik.
+      .select("family_id, user_id, role, profiles!family_members_user_id_fkey(display_name)")
       .in("family_id", familyIds)
       .eq("status", "active"),
     supabase
