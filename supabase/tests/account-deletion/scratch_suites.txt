@@ -9,6 +9,7 @@
 @handover: supabase/migrations/20261104000000_family_ownership_handover.sql
 @owner_access: supabase/migrations/20261105000000_family_owner_access_and_ownership_log.sql
 @role_separation: supabase/migrations/20261106000000_family_child_account_role_separation.sql
+@verified_email: supabase/migrations/20261116000000_family_guardian_invitation_verified_email.sql
 @delete: supabase/tests/account-deletion/delete_own_account_stubs.sql supabase/migrations/20261020000000_delete_own_account.sql
 lifecycle: @base @family_new @limits supabase/tests/account_deletion_lifecycle.sql
 delete_own_account: @base supabase/tests/account-deletion/delete_own_account_stubs.sql supabase/migrations/20261020000000_delete_own_account.sql @family_new @limits supabase/tests/account-deletion/delete_own_account_scratch_test.sql
@@ -21,3 +22,4 @@ family_member_removal: @base @delete @family_new @limits @removal supabase/tests
 family_ownership_handover: @base @delete @family_new @limits @removal @handover supabase/tests/family_ownership_handover_test.sql
 family_owner_access: @base @delete @family_new @limits @removal @handover @owner_access supabase/tests/family_owner_access_test.sql
 family_role_separation: @base @delete @family_new @limits @removal @handover @owner_access @role_separation supabase/tests/family_role_separation_test.sql
+family_invitation_email: @base @delete @family_new @limits @removal @handover @owner_access @role_separation @verified_email supabase/tests/family_guardian_invitation_email_test.sql
