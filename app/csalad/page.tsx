@@ -16,7 +16,7 @@ import TravelStatusLive from "@/components/family/TravelStatusLive";
 import TravelPushCard from "@/components/family/TravelPushCard";
 import FamilySubscriptionCard from "@/components/family/FamilySubscriptionCard";
 import { getFamilyCapacity, getFamilySubscriptionState } from "@/lib/family/entitlementsServer";
-import { buildFamilyCapacityView } from "@/lib/family/capacity";
+import { buildFamilyCapacityView, childAddAvailability } from "@/lib/family/capacity";
 import { buildSubscriptionView } from "@/lib/family/subscriptionView";
 import { hasTravelNotificationEligibility } from "@/lib/family/travelPushEligibility";
 import { budapestLocalDay } from "@/lib/family/todaySchedule";
@@ -184,6 +184,7 @@ export default async function CsaladPage({
             family: f,
             view: buildSubscriptionView(state, subscriptionNow),
             capacity: capacity ? buildFamilyCapacityView(capacity) : null,
+            childAdd: childAddAvailability(capacity),
           };
         })
       )
@@ -237,6 +238,7 @@ export default async function CsaladPage({
                 travelRowsByChild={travelRowsByChild}
                 travelDataAvailable={travelRes.ok}
                 nowIso={nowIso}
+                childAdd={subscriptionViews.find((v) => v.family.id === family.id)?.childAdd}
               />
             ))}
           </TravelStatusLive>

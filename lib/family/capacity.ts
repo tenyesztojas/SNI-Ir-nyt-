@@ -61,3 +61,27 @@ export function buildFamilyCapacityView(c: FamilyCapacity): FamilyCapacityView {
     hint,
   };
 }
+
+// Gyermekfelvételi űrlap elérhetősége. KIZÁRÓLAG a szerveroldali
+// get_family_capacity() eredményéből számoljuk a /csalad szerverkomponensben;
+// kliensállapot nem befolyásolja. Ez csak UX: a korlátot továbbra is a
+// DB-trigger (enforce_family_child_limit) kényszeríti ki. Ismeretlen létszámnál
+// (null) az űrlap megmarad — a szerver ilyenkor is elutasítja a túllépést.
+export interface ChildAddAvailability {
+  canAdd: boolean;
+  notice: string | null;
+}
+
+export const CHILD_LIMIT_FREE_NOTICE =
+  "Az ingyenes csomagban egy gyermek vehető fel, és ez a hely már foglalt. Több gyermek felvételéhez a Védett Család Plusz szükséges, amely hamarosan lesz elérhető.";
+
+export function childAddAvailability(c: FamilyCapacity | null): ChildAddAvailability {
+  if (!c || c.childrenUsed < c.childrenLimit) return { canAdd: true, notice: null };
+  const isFree = c.childrenLimit <= FAMILY_FREE_LIMITS.children;
+  return {
+    canAdd: false,
+    notice: isFree
+      ? CHILD_LIMIT_FREE_NOTICE
+      : `Elérted a családonként felvehető legnagyobb gyermekszámot (${c.childrenLimit}).`,
+  };
+}

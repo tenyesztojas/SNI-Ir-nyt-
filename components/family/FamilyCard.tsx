@@ -12,6 +12,7 @@ import { handoverCandidates } from "@/lib/family/ownershipHandover";
 import type { TravelStatusWithTitle } from "@/lib/family/travelStatusData";
 import type { TravelStatusRow } from "@/lib/family/travelStatus";
 import ChildDayOverview from "@/components/family/ChildDayOverview";
+import type { ChildAddAvailability } from "@/lib/family/capacity";
 
 const ROLE_LABEL: Record<string, string> = {
   owner: "Tulajdonos",
@@ -25,6 +26,7 @@ export default function FamilyCard({
   travelRowsByChild,
   travelDataAvailable = false,
   nowIso,
+  childAdd,
 }: {
   family: FamilyView;
   travelStatusByChild?: Record<string, TravelStatusWithTitle>;
@@ -34,6 +36,9 @@ export default function FamilyCard({
   travelRowsByChild?: Record<string, TravelStatusRow[]>;
   travelDataAvailable?: boolean;
   nowIso?: string;
+  // Szerveroldalon (get_family_capacity) számolt gyermekfelvételi állapot.
+  // Hiányában az űrlap marad; a korlátot a DB-trigger kényszeríti ki.
+  childAdd?: ChildAddAvailability;
 }) {
   const viewer = currentUserId ? { userId: currentUserId, role: family.myRole } : null;
   const familyName = family.name?.trim() ? family.name : "Elnevezés nélküli család";
@@ -129,7 +134,18 @@ export default function FamilyCard({
           </div>
         )}
 
-        {family.myRole === "owner" && <AddChildForm familyId={family.id} />}
+        {family.myRole === "owner" &&
+          (childAdd && !childAdd.canAdd ? (
+            <p
+              role="status"
+              data-testid="child-limit-notice"
+              className="mt-4 border-t border-gray-100 pt-4 text-sm text-gray-600"
+            >
+              {childAdd.notice}
+            </p>
+          ) : (
+            <AddChildForm familyId={family.id} />
+          ))}
       </div>
 
       {family.myRole === "owner" && <GuardianManagement family={family} />}
